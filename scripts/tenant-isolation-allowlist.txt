@@ -62,14 +62,17 @@ routes/fleet-telematics.ts:fleet_video_channels
 routes/fleet.ts:fleet_gps_tracking
 
 # ── [TIGHTER] finance: cip_costs keyed by a CIP id validated vs companyId upstream.
-routes/finance-algorithms.ts:cip_costs
 
 # ── [TIGHTER] inbox: conversation_links keyed by a conversation validated upstream.
 
 # ── [TIGHTER] HR self-service & company-scoped joins (scope.employeeId /
 # activeAssignmentId / userId, or joined through a companyId-scoped driver row).
+# hr-wps:employees kept — employees is the tenant-by-ASSIGNMENT table (an
+# employee may belong across companies); the read is a LEFT-JOIN name display on
+# WPS lines whose run is scope-scoped, so a flat employees.companyId predicate
+# could blank a cross-company name. (wps_runs now carries an explicit companyId
+# predicate on its skipped-entries UPDATE.)
 routes/hr-wps.ts:employees
-routes/hr-wps.ts:wps_runs
 routes/hr.ts:anonymous_upward_reviews
 routes/hr.ts:attendance
 routes/hr.ts:employee_assignments
@@ -81,7 +84,6 @@ routes/hr.ts:hr_excuse_requests
 routes/hr.ts:hr_leave_requests
 routes/hr.ts:hr_leave_types
 routes/hr.ts:peer_evaluations
-routes/hr.ts:shifts
 routes/hr.ts:system_evaluations
 
 # ── [TIGHTER] "my data" self-service — every read keyed by the caller's own
@@ -97,8 +99,6 @@ routes/projects.ts:employees
 
 # ── [TIGHTER] RBAC: dependency/notification reads keyed on an id validated vs
 # companyId in the same handler (role/jit request locked & company-checked).
-routes/rbacV2.ts:rbac_jit_requests
-routes/rbacV2.ts:rbac_user_roles
 
 # ── [TIGHTER] umrah: commission / import reads keyed on a plan or import batch
 # validated vs companyId in the same handler.

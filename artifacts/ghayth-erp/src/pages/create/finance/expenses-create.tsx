@@ -20,6 +20,7 @@ import { amountTaxSplit } from "@/lib/tax-math";
 import { filterAccountsForPaymentMethod, isMoneyAccount } from "@/lib/finance-account-usage";
 import { AlertCircle, Paperclip, Link2, Plus, Trash2, Split, Lock, ChevronDown } from "lucide-react";
 import { usePermission } from "@/components/shared/permission-gate";
+import { AdvancedSection } from "@/components/shared/advanced-section";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { CostCenterSelect, ProjectSelect, BranchSelect, DepartmentSelect, EmployeeSelect, VehicleSelect } from "@/components/shared/entity-selects";
 import { LineAllocationPanel, type LineAllocation, deriveAllocationStatus, buildAllocationPayload } from "@/components/shared/line-allocation-panel";
@@ -204,6 +205,15 @@ export default function ExpensesCreate() {
     value: a.code || String(a.id),
     label: `${a.code} - ${a.name}`,
   }));
+  // اسم الحساب المشتق (للعرض المطويّ للقراءة) — يُجلب من الشجرة بالكود الذي
+  // اشتقّه النظام من نوع المصروف (LiveImpactPreview → suggestedAccountCode).
+  const derivedAccountName = form.accountCode
+    ? accounts.find((a: any) => String(a.code) === String(form.accountCode))?.name
+    : undefined;
+  // مصدر الصرف (الخزنة/البنك) مطويّ تلقائيًا: عند تطابق خزنة واحدة فقط مع طريقة
+  // الدفع (#2230 يختارها تلقائيًا) لا يوجد ما يُختار — تُعرض للقراءة. عند تعدّد
+  // الخزائن يبقى المنتقي (اختيار تشغيلي حقيقي: أيّ خزنة). نفس عقيدة «مساعد لا عائق».
+  const onlySource = sourceOptions.length === 1 ? sourceOptions[0] : null;
 
   // Audit item #2 — per-line allocation overrides. Default state mirrors
   // the auto-derived fields (accountCode + costCenter + relatedEntity)
@@ -255,6 +265,10 @@ export default function ExpensesCreate() {
   // (the operation context + impact preview) is the default for everyone else.
   const canManualOverride = usePermission("finance:approve");
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  // العقيدة «النظام مساعد لا عائق»: الحساب الفرعي يُشتق تلقائيًا من نوع المصروف
+  // ويُعرض مطويًّا (للقراءة) — غير المحاسب لا يختار حسابًا. الاختيار اليدوي
+  // مخبّأ خلف زر «تعديل» لا يظهر إلا لمن يملك صلاحية الاعتماد المالي.
+  const [manualAccountOpen, setManualAccountOpen] = useState(false);
   // #1715 (owner feedback) — purchase/fleet line item: بند / كمية / وحدة /
   // سعر الوحدة. When quantity × unit price is entered the amount auto-fills.
   const [lineItem, setLineItem] = useState({ itemName: "", quantity: "", unit: "", unitPrice: "" });
@@ -334,6 +348,32 @@ export default function ExpensesCreate() {
     }
   }, [isFuelScenario, fuelDerivedAmount]);
 
+  // #2230 — money source follows the payment method: clear a source that no
+  // longer matches the chosen method (cash must not post via a bank account),
+  // and auto-select when exactly ONE account matches (نقدي + صندوق واحد →
+  // يُختار تلقائيًا). Multiple matches → the operator picks from the filtered
+  // list. The backend (financePostingPolicy) remains the hard guard.
+  useEffect(() => {
+    const codes = filterAccountsForPaymentMethod(moneyAccounts, form.paymentMethod)
+      .map((a: any) => a.code || String(a.id));
+    setForm((prev) => {
+      const stillValid = !!prev.sourceAccountCode && codes.includes(prev.sourceAccountCode);
+      if (stillValid) return prev;
+      // غير صالح (قديم لا يطابق الطريقة الجديدة، أو فارغ): اختر الخزنة الوحيدة
+      // فورًا إن وُجدت، وإلا امسح القديم. خطوة واحدة — لا «امسح ثم عُد» (كان
+      // التبديل بين طريقتين أحاديّتي المصدر يترك المصدر فارغًا، Codex P1).
+      if (codes.length === 1) return { ...prev, sourceAccountCode: codes[0] };
+      return prev.sourceAccountCode ? { ...prev, sourceAccountCode: "" } : prev;
+    });
+  }, [form.paymentMethod, moneyAccounts.length]);
+
+  // #2238 — the journal-preview verdict gates save: a critical blocker (account
+  // not found / unbalanced / required dimension missing / illegal money source)
+  // disables the save button so the operator fixes the routing before posting,
+  // instead of hitting the «الحساب غير موجود» error after the save round-trip.
+  // Rules of Hooks: this useState MUST be declared before the early returns below.
+  const [journalBlockers, setJournalBlockers] = useState<{ code: string; message: string }[]>([]);
+
   if (accountsLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
@@ -367,18 +407,14 @@ export default function ExpensesCreate() {
   // description / account / allocation, preserving shared header fields
   // (date, branch, payment method, source treasury). Operators get the
   // multi-line workflow without a second form.
-  // #2238 — the journal-preview verdict gates save: a critical blocker (account
-  // not found / unbalanced / required dimension missing / illegal money source)
-  // disables the save button so the operator fixes the routing before posting,
-  // instead of hitting the «الحساب غير موجود» error after the save round-trip.
-  const [journalBlockers, setJournalBlockers] = useState<{ code: string; message: string }[]>([]);
-
   const handleSubmit = async (opts: { addAnother?: boolean } = {}) => {
     const firstError = validate({
-      accountCode: form.accountCode ? null : "بند المصروفات مطلوب",
+      // بند المصروفات اختياري: إن تُرك فارغًا يُوجّهه المحرّك المالي تلقائيًا
+      // (قاعدة توجيه → «مصروفات عمومية أخرى» 5399 القابلة للترحيل). غير المحاسب
+      // لا يُجبَر على اختيار حساب — النظام يَحضُر لا يُحضَر له.
       amount: form.amount ? null : "المبلغ مطلوب",
-      branchId: form.branchId ? null : "الفرع مطلوب",
-      costCenter: form.costCenter ? null : "مركز التكلفة مطلوب",
+      // الفرع ومركز التكلفة أبعاد اختيارية في الخلفية (.optional) — يُشتقّان من
+      // سياق الدخول والربط؛ لا يُفرضان على المستخدم (النظام يَحضُر لا يُحضَر له).
       attachmentUrl: attachmentRequired && !form.attachmentUrl ? "المرفق إلزامي — هذا النوع من العمليات يتطلب إرفاق مستند داعم" : null,
     });
     if (firstError) {
@@ -635,16 +671,60 @@ export default function ExpensesCreate() {
                 </div>
               </FormFieldWrapper>
             ) : (
-              <FormFieldWrapper label="بند المصروفات" required>
-                <Autocomplete options={expenseOptions} value={form.accountCode}
-                  onChange={(val) => setForm(prev => ({ ...prev, accountCode: String(val) }))}
-                  placeholder="ابحث عن بند مصروفات..." loading={accountsLoading} />
+              <FormFieldWrapper label="بند المصروفات (توجيه تلقائي حسب نوع المصروف)">
+                {/* العقيدة: الحساب الفرعي مطويّ ومُشتق من نوع المصروف — يُعرض
+                    للقراءة، ولا يختاره غير المحاسب. زر «تعديل» (لذوي صلاحية
+                    الاعتماد فقط) يفتح المنتقي اليدوي عند الحاجة النادرة. */}
+                <div className="rounded-md border bg-muted/40 p-2 text-sm flex items-start gap-2">
+                  <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                  <div className="min-w-0 flex-1">
+                    <span className="block">
+                      {form.accountCode
+                        ? `حساب المصروف: ${form.accountCode}${derivedAccountName ? ` — ${derivedAccountName}` : ""}`
+                        : "يُشتق تلقائيًا حسب نوع المصروف عند إدخال المبلغ…"}
+                    </span>
+                    <span className="block text-xs text-muted-foreground mt-0.5">
+                      يحدّده النظام حسب «التصنيف التفصيلي» أعلاه — لا حاجة لاختياره يدويًا.
+                    </span>
+                  </div>
+                  {canManualOverride && (
+                    <button type="button" onClick={() => setManualAccountOpen((v) => !v)}
+                      className="text-xs text-status-info-foreground hover:underline shrink-0 flex items-center gap-1">
+                      {manualAccountOpen ? "إخفاء" : "تعديل"}
+                      <ChevronDown className={`h-3 w-3 transition-transform ${manualAccountOpen ? "rotate-180" : ""}`} />
+                    </button>
+                  )}
+                </div>
+                {canManualOverride && manualAccountOpen && (
+                  <div className="mt-2">
+                    <Autocomplete options={expenseOptions} value={form.accountCode}
+                      onChange={(val) => setForm(prev => ({ ...prev, accountCode: String(val) }))}
+                      placeholder="اتركه فارغًا للتوجيه التلقائي…" loading={accountsLoading} />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      تجاوز يدوي (لذوي الصلاحية) — اتركه فارغًا ليوجّهه النظام تلقائيًا.
+                    </p>
+                  </div>
+                )}
               </FormFieldWrapper>
             )}
             <FormFieldWrapper label="مصدر الصرف (الخزنة / البنك)">
-              <Autocomplete options={sourceOptions} value={form.sourceAccountCode}
-                onChange={(val) => setForm(prev => ({ ...prev, sourceAccountCode: String(val) }))}
-                placeholder="ابحث عن مصدر صرف..." loading={accountsLoading} />
+              {onlySource ? (
+                /* خزنة واحدة متطابقة مع طريقة الدفع — تُعرض مطويّة للقراءة (لا
+                   بديل لاختياره). تغيير «طريقة الدفع» أعلاه يعيد الترشيح. */
+                <div className="rounded-md border bg-muted/40 p-2 text-sm flex items-center gap-2">
+                  <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <span>
+                    {onlySource.label}
+                    <span className="block text-xs text-muted-foreground mt-0.5">
+                      الخزنة الوحيدة المطابقة لطريقة الدفع — تُحدَّد تلقائيًا.
+                    </span>
+                  </span>
+                </div>
+              ) : (
+                <Autocomplete options={sourceOptions} value={form.sourceAccountCode}
+                  onChange={(val) => setForm(prev => ({ ...prev, sourceAccountCode: String(val) }))}
+                  placeholder="ابحث عن مصدر صرف..." loading={accountsLoading} />
+              )}
             </FormFieldWrapper>
           </div>
         </div>
@@ -754,14 +834,22 @@ export default function ExpensesCreate() {
           )}
         </div>
 
-        <div className="border rounded-lg p-4 mb-4 space-y-3">
-          <h3 className="font-semibold text-sm text-muted-foreground">مركز التكلفة والمرجع</h3>
+        <AdvancedSection
+          perm="finance:update"
+          title="مركز التكلفة والمرجع — نمذجة محاسبية (اختياري)"
+          className="mb-4"
+          summary={
+            <span>
+              الأبعاد المحاسبية تُشتقّ تلقائيًا من الفرع والربط
+              {form.costCenter ? <> · مركز التكلفة: <b>{form.costCenter}</b></> : null}.
+            </span>
+          }
+        >
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <BranchSelect
               value={form.branchId}
               onChange={(v) => setForm({ ...form, branchId: v })}
               label="الفرع"
-              required
             />
             <DepartmentSelect
               value={form.departmentId}
@@ -771,7 +859,6 @@ export default function ExpensesCreate() {
             <CostCenterSelect
               value={form.costCenter}
               onChange={(v) => setForm({ ...form, costCenter: v })}
-              required
             />
             <ProjectSelect
               value={form.projectId}
@@ -797,7 +884,7 @@ export default function ExpensesCreate() {
               {derivedRelated.type === "property" && <PropertyUnitContextCard unitId={derivedRelated.id} section="payment" />}
             </div>
           )}
-        </div>
+        </AdvancedSection>
 
         <div className="border rounded-lg p-4 mb-4 space-y-3">
           <div className="flex items-center justify-between">

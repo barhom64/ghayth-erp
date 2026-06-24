@@ -18,8 +18,9 @@ import {
 import { formatCurrency, formatNumber, currentYearRiyadh, currentMonthPaddedRiyadh } from "@/lib/formatters";
 import {
   ArrowLeftRight, TrendingUp, TrendingDown, ChevronRight, Download,
-  RefreshCw, Search,
+  Search,
 } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { DateRangePresets } from "@/components/shared/date-range-presets";
 
@@ -259,7 +260,7 @@ export default function TbComparisonPage() {
 
   return (
     <PageShell
-      title="مقارنة ميزان المراجعة (Trial Balance Comparison)"
+      title="مقارنة ميزان المراجعة"
       subtitle="مقارنة جنباً إلى جنب بين فترتين — لكل حساب: الرصيد الحالي vs السابق + الفرق ونسبته"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
@@ -292,9 +293,7 @@ export default function TbComparisonPage() {
               })),
             })}
           />
-          <Button variant="outline" size="sm" onClick={() => { qCurrent.refetch(); qPrior.refetch(); }}>
-            <RefreshCw className="h-4 w-4 me-1" /> تحديث
-          </Button>
+          <RefreshAction onRefresh={() => { qCurrent.refetch(); qPrior.refetch(); }} />
         </div>
       }
     >

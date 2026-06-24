@@ -1,6 +1,7 @@
 import { useState, useEffect, createContext, useContext, useCallback } from "react";
 import { useLocation } from "wouter";
 import { apiFetch } from "./api";
+import { clearNativeTokens } from "./native-auth";
 import { setObsUser } from "./observability";
 
 interface UserRole {
@@ -31,6 +32,9 @@ interface UserInfo {
   userRoles?: UserRole[];
   preferredCalendar: PreferredCalendar;
   preferredLocale: PreferredLocale;
+  // Per-user table UI prefs from /auth/me. `pageSize` is the persisted
+  // table page size; other keys (future column order / sort) pass through.
+  tablePrefs?: { pageSize?: number } & Record<string, unknown>;
 }
 
 interface Assignment {
@@ -62,6 +66,7 @@ interface AuthContextType {
   setPreferences: (prefs: {
     preferredCalendar?: PreferredCalendar;
     preferredLocale?: PreferredLocale;
+    tablePrefs?: { pageSize?: number } & Record<string, unknown>;
   }) => Promise<void>;
 }
 
@@ -102,6 +107,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // braces for old API responses during deploy windows.
         preferredCalendar: (data.preferredCalendar as PreferredCalendar) ?? "hijri",
         preferredLocale: (data.preferredLocale as PreferredLocale) ?? "ar",
+        // Empty object server-side default → old API responses (deploy
+        // windows) fall back here so consumers read an object, not undefined.
+        tablePrefs: (data.tablePrefs as UserInfo["tablePrefs"]) ?? {},
       });
       // Tie subsequent observability captures to this user. Once a real
       // backend (Sentry / Datadog / …) is wired in, every error after
@@ -143,6 +151,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     apiFetch("/auth/logout", { method: "POST" }).catch(() => {});
     localStorage.removeItem("erp_assignments");
+    // Native: drop the Bearer pair too, or the next app open re-authenticates
+    // off a stale token instead of showing the login screen.
+    clearNativeTokens();
     setUser(null);
     setAssignments([]);
     setObsUser(null);
@@ -160,10 +171,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const setPreferences = async (prefs: {
     preferredCalendar?: PreferredCalendar;
     preferredLocale?: PreferredLocale;
+    tablePrefs?: { pageSize?: number } & Record<string, unknown>;
   }) => {
     // Optimistic update for snappy UX — if the PATCH fails we re-fetch
-    // and restore the truth.
-    setUser((prev) => (prev ? { ...prev, ...prefs } : prev));
+    // and restore the truth. tablePrefs is shallow-merged (not overwritten)
+    // to mirror the server-side jsonb merge, so partial updates like
+    // { tablePrefs: { pageSize } } keep any other table prefs intact.
+    const { tablePrefs, ...rest } = prefs;
+    setUser((prev) =>
+      prev
+        ? {
+            ...prev,
+            ...rest,
+            ...(tablePrefs !== undefined
+              ? { tablePrefs: { ...prev.tablePrefs, ...tablePrefs } }
+              : {}),
+          }
+        : prev,
+    );
     try {
       await apiFetch("/auth/me/preferences", {
         method: "PATCH",
@@ -188,4 +213,14 @@ export function useAuth() {
     throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
+}
+
+/**
+ * Non-throwing auth accessor for shared components (e.g. DataTable) that may
+ * render outside an AuthProvider (tests, storybook). Returns null when there
+ * is no provider instead of throwing, so such components degrade gracefully
+ * (no persisted prefs) rather than crashing the render.
+ */
+export function useOptionalAuth() {
+  return useContext(AuthContext);
 }

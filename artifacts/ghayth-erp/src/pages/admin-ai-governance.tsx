@@ -22,6 +22,8 @@ import {
 import { Link } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -39,8 +41,9 @@ import { formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import {
   Server, Sparkles, ClipboardCheck, BookOpen, Plus, Send, CheckCircle2,
-  XCircle, AlertOctagon, MessageSquare, RefreshCw, Eye, FlaskConical, PlayCircle, TestTube, ExternalLink,
+  XCircle, AlertOctagon, MessageSquare, Eye, FlaskConical, PlayCircle, TestTube, ExternalLink,
 } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 
 type AiCapability = "generation" | "stt" | "embedding" | "image";
 
@@ -159,6 +162,16 @@ function statusLabel(s: string): string {
   } as Record<string, string>)[s] ?? s;
 }
 
+type AiConnTest = {
+  configured: boolean;
+  apiKeySet: boolean;
+  baseUrlSet: boolean;
+  model: string;
+  reachable: boolean;
+  latencyMs: number | null;
+  error: string | null;
+};
+
 export default function AdminAiGovernance() {
   const qc = useQueryClient();
   const [tab, setTab] = useState("overview");
@@ -169,6 +182,24 @@ export default function AdminAiGovernance() {
   const [simulatePromptId, setSimulatePromptId] = useState<number | null>(null);
   const [evaluatePrompt, setEvaluatePrompt] = useState<PromptRow | null>(null);
   const [editProvider, setEditProvider] = useState<ProviderRow | null>(null);
+
+  // حالة/اختبار تفعيل الذكاء الاصطناعي (LLM) — يتحقّق من ضبط المفتاح + استجابة المزوّد.
+  const [connTest, setConnTest] = useState<AiConnTest | null>(null);
+  const [testingConn, setTestingConn] = useState(false);
+  async function runConnectionTest() {
+    setTestingConn(true);
+    try {
+      setConnTest((await apiFetch("/admin/ai-governance/connection-test")) as AiConnTest);
+    } catch (e) {
+      setConnTest({
+        configured: false, apiKeySet: false, baseUrlSet: false, model: "",
+        reachable: false, latencyMs: null,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      setTestingConn(false);
+    }
+  }
 
   const { data: overview, isLoading: ovLoading, error: ovError, refetch: refetchOverview } =
     useApiQuery<Overview>(["ai-governance-overview"], "/admin/ai-governance/overview");
@@ -182,6 +213,10 @@ export default function AdminAiGovernance() {
   const providers = providersResp?.data ?? [];
   const prompts = promptsResp?.data ?? [];
   const reviewQueue = overview?.reviewQueue ?? [];
+
+  // Print wiring — the versioned prompt catalog is the primary records-level
+  // list on this page (providers is a smaller registry/config table).
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<PromptRow>(prompts);
 
   const refreshAll = () => {
     void refetchOverview();
@@ -346,9 +381,7 @@ export default function AdminAiGovernance() {
       ]}
       subtitle="سجلّ المزوّدات، كتالوج الـ prompts، ومركز المراجعة"
       actions={
-        <Button variant="outline" size="sm" onClick={refreshAll}>
-          <RefreshCw className="w-4 h-4 me-1" />تحديث
-        </Button>
+        <RefreshAction onRefresh={refreshAll} />
       }
     >
       <PageStateWrapper isLoading={ovLoading && !overview} error={ovError} onRetry={refetchOverview}>
@@ -362,6 +395,57 @@ export default function AdminAiGovernance() {
 
           {/* ── Overview ──────────────────────────────────────────── */}
           <TabsContent value="overview" className="space-y-4">
+            {/* ── حالة تفعيل الذكاء الاصطناعي (LLM) ─────────────────── */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Sparkles className="w-4 h-4" />حالة تفعيل الذكاء الاصطناعي (LLM)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <Button size="sm" variant="outline" onClick={runConnectionTest} disabled={testingConn}>
+                    {testingConn ? "جاري الاختبار…" : "اختبار الاتصال"}
+                  </Button>
+                  {connTest && (
+                    <span
+                      className={`text-sm font-medium ${
+                        connTest.reachable
+                          ? "text-status-success-foreground"
+                          : connTest.configured
+                            ? "text-status-warning-foreground"
+                            : "text-muted-foreground"
+                      }`}
+                    >
+                      {connTest.reachable
+                        ? `✓ مُفعّل ويستجيب (${connTest.latencyMs} مللي ثانية)`
+                        : connTest.configured
+                          ? "⚠️ مضبوط لكن لا يستجيب"
+                          : "غير مُفعّل"}
+                    </span>
+                  )}
+                </div>
+                {connTest ? (
+                  <div className="text-xs text-muted-foreground space-y-0.5">
+                    <div>
+                      المفتاح: {connTest.apiKeySet ? "مضبوط ✓" : "غير مضبوط ✗"} · عنوان الخدمة:{" "}
+                      {connTest.baseUrlSet ? "مضبوط ✓" : "غير مضبوط ✗"} · النموذج:{" "}
+                      <span className="font-mono">{connTest.model || "—"}</span>
+                    </div>
+                    {connTest.error && (
+                      <div className="text-status-danger-foreground">{connTest.error}</div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    اضغط «اختبار الاتصال» للتحقّق من التفعيل. يتم التفعيل بضبط متغيّرَي البيئة{" "}
+                    <span className="font-mono">AI_INTEGRATIONS_ANTHROPIC_API_KEY</span> و{" "}
+                    <span className="font-mono">AI_INTEGRATIONS_ANTHROPIC_BASE_URL</span> ثم إعادة تشغيل الخادم.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Card>
                 <CardHeader className="pb-2">
@@ -452,7 +536,22 @@ export default function AdminAiGovernance() {
 
           {/* ── Prompts ───────────────────────────────────────────── */}
           <TabsContent value="prompts" className="space-y-3">
-            <div className="flex justify-end">
+            <div className="flex justify-end items-center gap-2">
+              <PrintButton
+                entityType="report_admin_ai_governance"
+                entityId="list"
+                size="icon"
+                payload={() => ({
+                  entity: { title: "كتالوج الموجّهات (Prompts) — حوكمة الذكاء الاصطناعي", total: printRows.length },
+                  items: printRows.map((p: PromptRow) => ({
+                    "المعرّف": p.slug,
+                    "الإصدار": p.version,
+                    "العنوان": p.title,
+                    "الحالة": statusLabel(p.status),
+                    "آخر تحديث": p.updatedAt,
+                  })),
+                })}
+              />
               <Button onClick={() => setNewPromptOpen(true)} size="sm" rateLimitAware>
                 <Plus className="w-4 h-4 me-1" />مسوّدة جديدة
               </Button>
@@ -460,7 +559,7 @@ export default function AdminAiGovernance() {
             <Card>
               <CardContent className="p-0">
                 <PageStateWrapper isLoading={pmLoading && prompts.length === 0} compact onRetry={refetchPrompts}>
-                  <DataTable columns={promptColumns} data={prompts} noToolbar pageSize={0} />
+                  <DataTable columns={promptColumns} data={prompts} onSortedDataChange={setPrintRows} noToolbar pageSize={0} />
                 </PageStateWrapper>
               </CardContent>
             </Card>
@@ -990,7 +1089,7 @@ function SimulatePromptDialog({ promptId, onClose }: {
                 </div>
               ) : (
                 <>
-                  <div className="grid grid-cols-4 gap-2 text-xs">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
                     <div className="bg-surface-subtle p-2 rounded"><span className="text-muted-foreground">المدة</span><br /><span className="font-mono font-semibold">{result.durationMs}ms</span></div>
                     <div className="bg-surface-subtle p-2 rounded"><span className="text-muted-foreground">رموز الموجّه</span><br /><span className="font-mono font-semibold">{result.promptTokens}</span></div>
                     <div className="bg-surface-subtle p-2 rounded"><span className="text-muted-foreground">رموز الإكمال</span><br /><span className="font-mono font-semibold">{result.completionTokens}</span></div>
@@ -1204,11 +1303,11 @@ function NewTestCaseDialog({ open, slug, onClose, onSuccess }: {
           <div><Label>الاسم</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
           <div><Label>الوصف</Label><Textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} /></div>
           <div>
-            <Label>Input (JSON)</Label>
+            <Label>المدخل (JSON)</Label>
             <Textarea rows={4} className="font-mono text-xs" value={inputJson} onChange={(e) => setInputJson(e.target.value)} />
           </div>
           <div>
-            <Label>Expected Contains (اختياري)</Label>
+            <Label>المتوقَّع يحتوي (اختياري)</Label>
             <Input value={expectedContains} onChange={(e) => setExpectedContains(e.target.value)} placeholder="نص يجب أن يحتويه المخرَج" />
           </div>
         </div>

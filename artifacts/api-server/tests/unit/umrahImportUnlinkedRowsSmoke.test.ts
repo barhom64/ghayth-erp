@@ -25,8 +25,10 @@ const ENGINE = readFileSync(
   join(import.meta.dirname!, "../../src/lib/umrahImportEngine.ts"),
   "utf8",
 );
+// U-07 Phase 8: the import-batches listing + unlinked-rows recovery routes were
+// carved verbatim out of umrah-entities.ts into a dedicated sub-router.
 const ENTITIES = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-import-batches.ts"),
   "utf8",
 );
 const WIZARD = readFileSync(

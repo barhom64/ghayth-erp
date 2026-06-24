@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useFilteredNavSections } from "@/components/layout/sidebar-layout";
+import { resolveCanonical } from "@/components/layout/navigation.canonical-map";
 import {
   Search, ArrowRight, Users, Clock, Calendar, DollarSign, GraduationCap,
   Plus, UserPlus, ClipboardCheck, QrCode, Command, Keyboard,
@@ -242,16 +243,23 @@ export function CommandPalette({ open, onClose, initialFilter }: CommandPaletteP
     const seen = new Set<string>();
     return navPages
       .filter(p => { if (seen.has(p.path)) return false; seen.add(p.path); return true; })
-      .map(p => ({
-        id: `page-${p.path}`,
-        label: p.label,
-        subtitle: p.parent ? `${p.parent} ← ${p.section}` : p.section,
-        icon: Navigation,
-        iconColor: "text-sky-600 bg-sky-50",
-        category: "صفحات النظام",
-        action: () => { navigate(p.path); onClose(); },
-        keywords: [p.label, p.section, p.parent || ""].filter(Boolean),
-      }));
+      .map(p => {
+        // Surface the official Arabic name + search-only aliases from
+        // navigation.canonical-map.ts so a page stays findable by any name the
+        // user remembers (e.g. «لوحات BI» / «ما ينتظر إجراءاتي» / «GL Health
+        // Score») even after the menu unified on a single canonical label.
+        const canon = resolveCanonical(p.path);
+        return {
+          id: `page-${p.path}`,
+          label: p.label,
+          subtitle: p.parent ? `${p.parent} ← ${p.section}` : p.section,
+          icon: Navigation,
+          iconColor: "text-sky-600 bg-sky-50",
+          category: "صفحات النظام",
+          action: () => { navigate(p.path); onClose(); },
+          keywords: [p.label, p.section, p.parent || "", canon?.canonicalLabel ?? "", ...(canon?.aliases ?? [])].filter(Boolean),
+        };
+      });
   }, [navPages, navigate]);
 
   const staticItems = useMemo(() => [...quickActions, ...shortcuts, ...pageItems], [quickActions, shortcuts, pageItems]);

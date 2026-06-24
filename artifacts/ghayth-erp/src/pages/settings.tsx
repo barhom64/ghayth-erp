@@ -26,10 +26,11 @@ import { useSettings } from "@/contexts/settings-context";
 import { useToast } from "@/hooks/use-toast";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { useAppContext } from "@/contexts/app-context";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { GovIntegrationsTab } from "./settings/gov-integrations-tab";
 import { ZatcaSettingsTab } from "./settings/zatca-settings-tab";
 import { CommunicationChannelsTab } from "./settings/communication-channels-tab";
-import { WorkflowDefinitionsTab } from "./settings/workflow-definitions-tab";
 import { BranchesTab } from "./settings/branches-tab";
 import { DepartmentsTab } from "./settings/departments-tab";
 import { CompaniesTab } from "./settings/companies-tab";
@@ -37,7 +38,9 @@ import { LetterheadSettings } from "./settings/letterhead-tab";
 import { AccountingMappingsTab } from "./settings/accounting-mappings-tab";
 import { SystemControlsTab } from "./settings/system-controls-tab";
 import { ApprovalWorkflowsTab } from "./settings/approval-workflows-tab";
+import { WorkflowDefinitionsTab } from "./settings/workflow-definitions-tab";
 import { NumberingTab } from "./settings/numbering-tab";
+import { CustomFieldsTab } from "./settings/custom-fields-tab";
 
 // GeneralSettings — 11-field edit form. The server stores values as
 // {key, value} rows; mapping happens in the hydration block below.
@@ -310,14 +313,24 @@ function CrudSection({ title, endpoint, queryKey, fields }: {
 
 
 
-// Multiple routes (/settings/branches, /settings/departments, ...) share this
-// component. Without this seed, every routed URL would land on the "general"
-// tab — same broken-tab pattern fixed on bi / governance / legal.
+// Every tab gets a deep-path so it's directly reachable (URL + nav + search),
+// not only by a manual click inside /settings. The component reads `location`
+// and opens the matching tab.
 const SETTINGS_PATH_TAB: Record<string, string> = {
   "/settings/branches": "branches",
+  "/settings/letterhead": "letterhead",
   "/settings/departments": "departments",
   "/settings/companies": "companies",
+  "/settings/channels": "channels",
+  "/settings/controls": "controls",
+  "/settings/approvals": "approvals",
+  "/settings/numbering": "numbering",
+  "/settings/accounting": "accounting",
   "/settings/audit-log": "audit",
+  "/settings/resolved": "resolved",
+  "/settings/zatca": "zatca",
+  "/settings/gov": "gov",
+  "/settings/custom-fields": "custom-fields",
 };
 
 export default function SettingsPage() {
@@ -332,36 +345,42 @@ export default function SettingsPage() {
       <Tabs defaultValue={initialTab} dir="rtl">
         <TabsList className="flex flex-wrap gap-1">
           <TabsTrigger value="general">عام</TabsTrigger>
-          <TabsTrigger value="branches">الفروع</TabsTrigger>
-          <TabsTrigger value="letterhead">الكليشة</TabsTrigger>
-          <TabsTrigger value="departments">الأقسام</TabsTrigger>
+          {/* الهوية والتنظيم */}
           <TabsTrigger value="companies">الشركات</TabsTrigger>
-          <TabsTrigger value="channels">قنوات الاتصال</TabsTrigger>
+          <TabsTrigger value="branches">الفروع</TabsTrigger>
+          <TabsTrigger value="departments">الأقسام</TabsTrigger>
+          <TabsTrigger value="letterhead">الكليشة</TabsTrigger>
+          {/* الحوكمة والإجراءات */}
           <TabsTrigger value="controls">التحكم</TabsTrigger>
-          <TabsTrigger value="workflows">الإجراءات</TabsTrigger>
           <TabsTrigger value="approvals">الموافقات</TabsTrigger>
+          <TabsTrigger value="workflows">الإجراءات</TabsTrigger>
           <TabsTrigger value="numbering">الترقيم</TabsTrigger>
+          {/* المالية والامتثال */}
           <TabsTrigger value="accounting">التوجيه المحاسبي</TabsTrigger>
-          <TabsTrigger value="audit">التدقيق</TabsTrigger>
-          <TabsTrigger value="resolved">الوراثة</TabsTrigger>
           <TabsTrigger value="zatca">هيئة الزكاة والضريبة</TabsTrigger>
           <TabsTrigger value="gov">التكاملات الحكومية</TabsTrigger>
+          {/* النظام والمراقبة */}
+          <TabsTrigger value="channels">قنوات الاتصال</TabsTrigger>
+          <TabsTrigger value="audit">التدقيق</TabsTrigger>
+          <TabsTrigger value="resolved">الوراثة</TabsTrigger>
+          <TabsTrigger value="custom-fields">الحقول المخصّصة</TabsTrigger>
         </TabsList>
         <TabsContent value="general"><GeneralSettings /></TabsContent>
-        <TabsContent value="branches"><BranchesTab /></TabsContent>
-        <TabsContent value="letterhead"><LetterheadSettings /></TabsContent>
-        <TabsContent value="departments"><DepartmentsTab /></TabsContent>
         <TabsContent value="companies"><CompaniesTab /></TabsContent>
-        <TabsContent value="channels"><CommunicationChannelsTab /></TabsContent>
+        <TabsContent value="branches"><BranchesTab /></TabsContent>
+        <TabsContent value="departments"><DepartmentsTab /></TabsContent>
+        <TabsContent value="letterhead"><LetterheadSettings /></TabsContent>
         <TabsContent value="controls"><SystemControlsTab /></TabsContent>
-        <TabsContent value="workflows"><WorkflowDefinitionsTab /></TabsContent>
         <TabsContent value="approvals"><ApprovalWorkflowsTab /></TabsContent>
+        <TabsContent value="workflows"><WorkflowDefinitionsTab /></TabsContent>
         <TabsContent value="numbering"><NumberingTab /></TabsContent>
         <TabsContent value="accounting"><AccountingMappingsTab /></TabsContent>
-        <TabsContent value="audit"><AuditLogTab /></TabsContent>
-        <TabsContent value="resolved"><ResolvedSettingsTab /></TabsContent>
         <TabsContent value="zatca"><ZatcaSettingsTab /></TabsContent>
         <TabsContent value="gov"><GovIntegrationsTab /></TabsContent>
+        <TabsContent value="channels"><CommunicationChannelsTab /></TabsContent>
+        <TabsContent value="audit"><AuditLogTab /></TabsContent>
+        <TabsContent value="resolved"><ResolvedSettingsTab /></TabsContent>
+        <TabsContent value="custom-fields"><CustomFieldsTab /></TabsContent>
       </Tabs>
     </PageShell>
   );
@@ -376,6 +395,9 @@ const SOURCE_LABELS: Record<string, { label: string; color: string; bg: string }
 function ResolvedSettingsTab() {
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["settings-resolved"], "/settings/resolved");
   const items = data?.data || [];
+  // Print the effective-settings inheritance list (key / value / source). Hook
+  // runs before the early returns below.
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
 
   // GET /settings — raw key/value rows scoped to the current company.
   // GET /settings/resolve?key=... — probe a single key with full
@@ -410,14 +432,32 @@ function ResolvedSettingsTab() {
   const rawSettings: any[] = rawSettingsQ.data?.data ?? rawSettingsQ.data ?? [];
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-semibold flex items-center gap-2">
-        <GitBranch className="w-5 h-5 text-status-info" />
-        وراثة الإعدادات (نظام ← شركة ← فرع)
-      </h3>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-lg font-semibold flex items-center gap-2">
+          <GitBranch className="w-5 h-5 text-status-info" />
+          وراثة الإعدادات (نظام ← شركة ← فرع)
+        </h3>
+        {items.length > 0 && (
+          <PrintButton
+            entityType="report_settings_resolved"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "وراثة الإعدادات الفعلية", total: printRows.length },
+              items: printRows.map((s: any) => ({
+                "المفتاح": s.key,
+                "القيمة": typeof s.value === "object" ? JSON.stringify(s.value) : String(s.value ?? "—"),
+                "المصدر": (SOURCE_LABELS[s.source] || SOURCE_LABELS.system).label,
+              })),
+            })}
+          />
+        )}
+      </div>
       <p className="text-sm text-muted-foreground">يعرض القيمة الفعلية لكل إعداد ومصدرها — القيم الأقرب (فرع) تتغلب على القيم الأعلى (شركة/نظام)</p>
       <DataTable
         data={items as any[]}
         rowKey={(row) => String(row.key)}
+        onSortedDataChange={setPrintRows}
         columns={[
           { key: "key", header: "المفتاح", render: (s) => <span className="font-mono text-xs">{s.key}</span> },
           { key: "value", header: "القيمة", render: (s) => <span className="text-muted-foreground truncate max-w-xs block">{typeof s.value === "object" ? JSON.stringify(s.value) : String(s.value ?? "-")}</span> },

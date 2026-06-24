@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { exportRowsToCsv } from "@/lib/unified-export";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
@@ -281,69 +281,51 @@ export default function VendorStatementPrintPage() {
               <CardTitle className="text-base">حركة الحساب — {label}</CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-xs text-muted-foreground">
-                    <th className="text-start py-2 px-2 w-24">التاريخ</th>
-                    <th className="text-start py-2 px-2 w-28">المرجع</th>
-                    <th className="text-start py-2 px-2">الوصف</th>
-                    <th className="text-end py-2 px-2 w-28">مدين</th>
-                    <th className="text-end py-2 px-2 w-28">دائن</th>
-                    <th className="text-end py-2 px-2 w-32">الرصيد</th>
-                    <th className="py-2 px-2 w-8 print:hidden"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="border-b font-semibold bg-muted/30">
-                    <td className="py-2 px-2 tabular-nums">{formatDateAr(data.period.from)}</td>
-                    <td className="py-2 px-2">—</td>
-                    <td className="py-2 px-2">الرصيد الافتتاحي</td>
-                    <td className="py-2 px-2 text-end tabular-nums">—</td>
-                    <td className="py-2 px-2 text-end tabular-nums">—</td>
-                    <td className="py-2 px-2 text-end tabular-nums">{formatCurrency(data.openingBalance)}</td>
-                    <td className="py-2 px-2 print:hidden"></td>
-                  </tr>
-                  {data.movements.map(m => (
-                    <tr key={`${m.movementType}-${m.id}`} className="border-b">
-                      <td className="py-1.5 px-2 tabular-nums">{formatDateAr(m.date.split("T")[0])}</td>
-                      <td className="py-1.5 px-2 font-mono text-xs">{m.ref}</td>
-                      <td className="py-1.5 px-2">
+              <DataTable<Movement & { _opening?: boolean }>
+                noToolbar
+                pageSize={0}
+                data={[
+                  { _opening: true, id: -1, ref: "", date: data.period.from, debit: 0, credit: 0, dueDate: null, status: "", movementType: "voucher_payment", description: "الرصيد الافتتاحي", runningBalance: data.openingBalance },
+                  ...data.movements,
+                ]}
+                rowKey={(m) => (m._opening ? "opening" : `${m.movementType}-${m.id}`)}
+                rowClassName={(m) => (m._opening ? "font-semibold bg-muted/30" : undefined)}
+                columns={[
+                  { key: "date", header: "التاريخ", sortable: false, width: "6rem", className: "tabular-nums", render: (m) => formatDateAr(m._opening ? m.date : m.date.split("T")[0]) },
+                  { key: "ref", header: "المرجع", sortable: false, width: "7rem", className: "font-mono text-xs", render: (m) => (m._opening ? "—" : m.ref) },
+                  {
+                    key: "description", header: "الوصف", sortable: false,
+                    render: (m) => (
+                      <>
                         {m.description}
-                        {m.movementType === "purchase_order" && m.dueDate && (
+                        {!m._opening && m.movementType === "purchase_order" && m.dueDate && (
                           <span className="text-xs text-muted-foreground mr-2">
                             (تسليم: {formatDateAr(m.dueDate.split("T")[0])})
                           </span>
                         )}
-                      </td>
-                      <td className="py-1.5 px-2 text-end tabular-nums">
-                        {Number(m.debit) > 0 ? formatCurrency(Number(m.debit)) : "—"}
-                      </td>
-                      <td className="py-1.5 px-2 text-end tabular-nums">
-                        {Number(m.credit) > 0 ? formatCurrency(Number(m.credit)) : "—"}
-                      </td>
-                      <td className="py-1.5 px-2 text-end tabular-nums font-semibold">
-                        {formatCurrency(m.runningBalance)}
-                      </td>
-                      <td className="py-1.5 px-2 print:hidden">
-                        {m.movementType === "purchase_order" && (
-                          <Button asChild variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-6 w-6"><Link href={`/finance/purchase-orders/${m.id}`}><ExternalLink className="w-3 h-3" /></Link></Button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t-2 font-bold bg-muted/40">
-                    <td colSpan={3} className="py-2 px-2">الرصيد الختامي ({formatDateAr(data.period.to)})</td>
-                    <td className="py-2 px-2 text-end tabular-nums">{formatCurrency(data.totals.totalDebit)}</td>
-                    <td className="py-2 px-2 text-end tabular-nums">{formatCurrency(data.totals.totalCredit)}</td>
-                    <td className={`py-2 px-2 text-end tabular-nums text-lg ${data.endingBalance < 0 ? "text-status-warning-foreground" : "text-status-success-foreground"}`}>
-                      {formatCurrency(data.endingBalance)}
-                    </td>
-                    <td className="print:hidden"></td>
-                  </tr>
-                </tfoot>
-              </table>
+                      </>
+                    ),
+                    footer: () => `الرصيد الختامي (${formatDateAr(data.period.to)})`,
+                  },
+                  { key: "debit", header: "مدين", sortable: false, align: "end", width: "7rem", className: "tabular-nums", render: (m) => (m._opening || Number(m.debit) <= 0 ? "—" : formatCurrency(Number(m.debit))), footer: () => formatCurrency(data.totals.totalDebit) },
+                  { key: "credit", header: "دائن", sortable: false, align: "end", width: "7rem", className: "tabular-nums", render: (m) => (m._opening || Number(m.credit) <= 0 ? "—" : formatCurrency(Number(m.credit))), footer: () => formatCurrency(data.totals.totalCredit) },
+                  {
+                    key: "balance", header: "الرصيد", sortable: false, align: "end", width: "8rem", className: "tabular-nums font-semibold",
+                    render: (m) => formatCurrency(m.runningBalance),
+                    footer: () => (
+                      <span className={`text-lg ${data.endingBalance < 0 ? "text-status-warning-foreground" : "text-status-success-foreground"}`}>
+                        {formatCurrency(data.endingBalance)}
+                      </span>
+                    ),
+                  },
+                  {
+                    key: "_actions", header: "", sortable: false, width: "2rem", className: "print:hidden",
+                    render: (m) => (!m._opening && m.movementType === "purchase_order")
+                      ? <Button asChild variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-6 w-6"><Link href={`/finance/purchase-orders/${m.id}`}><ExternalLink className="w-3 h-3" /></Link></Button>
+                      : null,
+                  },
+                ]}
+              />
             </CardContent>
           </Card>
 
@@ -356,46 +338,28 @@ export default function VendorStatementPrintPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-0">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-xs text-muted-foreground">
-                      <th className="text-start py-2 px-2">السطل</th>
-                      <th className="text-end py-2 px-2">المبلغ</th>
-                      <th className="text-end py-2 px-2">% من الإجمالي</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[
-                      { key: "current" as const, label: "حالي (لم يستحق)", color: "" },
-                      { key: "1-30" as const, label: "1-30 يوم متأخر", color: "text-status-success-foreground" },
-                      { key: "31-60" as const, label: "31-60 يوم متأخر", color: "text-status-warning-foreground" },
-                      { key: "61-90" as const, label: "61-90 يوم متأخر", color: "text-status-warning-foreground" },
-                      { key: "90+" as const, label: "أكثر من 90 يوم", color: "text-status-danger-foreground" },
-                    ].map(b => {
-                      const value = data.aging[b.key];
-                      const pct = data.aging.total > 0 ? (value / data.aging.total) * 100 : 0;
-                      if (value <= 0) return null;
-                      return (
-                        <tr key={b.key} className="border-b">
-                          <td className="py-1.5 px-2">{b.label}</td>
-                          <td className={`py-1.5 px-2 text-end tabular-nums font-semibold ${b.color}`}>
-                            {formatCurrency(value)}
-                          </td>
-                          <td className="py-1.5 px-2 text-end tabular-nums text-muted-foreground">
-                            {pct.toFixed(1)}%
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                  <tfoot>
-                    <tr className="font-bold bg-muted/40">
-                      <td className="py-2 px-2">إجمالي المفتوح</td>
-                      <td className="py-2 px-2 text-end tabular-nums">{formatCurrency(data.aging.total)}</td>
-                      <td className="py-2 px-2 text-end tabular-nums">100%</td>
-                    </tr>
-                  </tfoot>
-                </table>
+                <DataTable<{ key: string; label: string; color: string; value: number; pct: number }>
+                  noToolbar
+                  pageSize={0}
+                  rowKey={(b) => b.key}
+                  data={[
+                    { key: "current", label: "حالي (لم يستحق)", color: "" },
+                    { key: "1-30", label: "1-30 يوم متأخر", color: "text-status-success-foreground" },
+                    { key: "31-60", label: "31-60 يوم متأخر", color: "text-status-warning-foreground" },
+                    { key: "61-90", label: "61-90 يوم متأخر", color: "text-status-warning-foreground" },
+                    { key: "90+", label: "أكثر من 90 يوم", color: "text-status-danger-foreground" },
+                  ]
+                    .map((b) => {
+                      const value = data.aging[b.key as keyof typeof data.aging] as number;
+                      return { ...b, value, pct: data.aging.total > 0 ? (value / data.aging.total) * 100 : 0 };
+                    })
+                    .filter((b) => b.value > 0)}
+                  columns={[
+                    { key: "label", header: "السطل", sortable: false, render: (b) => b.label, footer: () => "إجمالي المفتوح" },
+                    { key: "amount", header: "المبلغ", sortable: false, align: "end", className: "tabular-nums font-semibold", cellClassName: (b) => b.color || undefined, render: (b) => formatCurrency(b.value), footer: () => formatCurrency(data.aging.total) },
+                    { key: "pct", header: "% من الإجمالي", sortable: false, align: "end", className: "tabular-nums text-muted-foreground", render: (b) => `${b.pct.toFixed(1)}%`, footer: () => "100%" },
+                  ]}
+                />
               </CardContent>
             </Card>
           )}

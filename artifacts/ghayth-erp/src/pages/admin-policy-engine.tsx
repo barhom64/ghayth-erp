@@ -5,6 +5,8 @@ import {
 } from "@workspace/ui-core";
 import { useApiQuery } from "@/lib/api";
 import { PageStateWrapper } from "@/components/shared/page-state";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -51,6 +53,8 @@ export default function AdminPolicyEngine() {
 
   const isLoading = auditLoading || stratLoading;
 
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(violations);
+
   const violationColumns: DataTableColumn<any>[] = [
     { key: "type", header: "النوع", searchable: true, render: (r: any) => <Badge variant="outline">{TYPE_LABELS[r.type] || r.type}</Badge> },
     { key: "severity", header: "الخطورة", sortable: true, render: (r: any) => <Badge className={SEVERITY_COLORS[r.severity] || ""}>{SEVERITY_LABELS[r.severity] || r.severity}</Badge> },
@@ -75,9 +79,24 @@ export default function AdminPolicyEngine() {
       subtitle="سياسات الصلاحيات وفصل المهام والعمليات الحساسة"
       loading={isLoading}
       actions={
-        <Button variant="outline" size="sm" onClick={() => refetchAudit()}>
-          <Scan className="h-4 w-4 me-1" />فحص السياسات
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => refetchAudit()}>
+            <Scan className="h-4 w-4 me-1" />فحص السياسات
+          </Button>
+          <PrintButton
+            entityType="report_admin_policy_violations"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "مخالفات السياسات", total: printRows.length },
+              items: printRows.map((r: any) => ({
+                "النوع": TYPE_LABELS[r.type] || r.type,
+                "الخطورة": SEVERITY_LABELS[r.severity] || r.severity,
+                "التفاصيل": r.details,
+              })),
+            })}
+          />
+        </div>
       }
     >
       <PageStateWrapper isLoading={isLoading && !audit} error={auditError} onRetry={refetchAudit}>
@@ -121,6 +140,7 @@ export default function AdminPolicyEngine() {
                 <DataTable
                   columns={violationColumns}
                   data={violations}
+                  onSortedDataChange={setPrintRows}
                   noToolbar
                   pageSize={0}
                 />

@@ -6,6 +6,8 @@ import {
 } from "@workspace/ui-core";
 import { useApiQuery } from "@/lib/api";
 import { PageStateWrapper } from "@/components/shared/page-state";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,10 +15,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import {
-  RefreshCw, Database, Layers, Shield, Activity, AlertTriangle,
+  Database, Layers, Shield, Activity, AlertTriangle,
   Zap, BarChart3, CheckCircle2, XCircle, ChevronDown, ChevronUp,
   Bell, Printer,
 } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 
 function FeatureDot({ active, title }: { active: boolean; title: string }) {
   return (
@@ -74,6 +77,13 @@ function severityColor(severity: string): string {
 function severityLabel(severity: string): string {
   const map: Record<string, string> = { critical: "حرج", high: "عالي", medium: "متوسط", low: "منخفض" };
   return map[severity] ?? severity;
+}
+
+function entityTypeLabel(type: string): string {
+  const map: Record<string, string> = {
+    document: "مستند", transaction: "معاملة", master: "بيان رئيسي", request: "طلب", config: "إعداد",
+  };
+  return map[type] ?? "إعداد";
 }
 
 function StatCard({ label, value, icon: Icon }: { label: string; value: number | string; icon: any }) {
@@ -144,6 +154,11 @@ export default function AdminSystemRegistry() {
     ? coverageGaps
     : coverageGaps.filter((g: any) => g.domain === domainFilter);
 
+  // Entities render as expandable cards (not a DataTable), so there is no
+  // onSortedDataChange to wire — usePrintRows re-seeds from filteredEntities
+  // directly, which is the operationally-meaningful record set to print.
+  const { sortedRows: printRows } = usePrintRows<any>(filteredEntities);
+
   const isLoading = regLoading;
   const error = regError;
 
@@ -178,7 +193,7 @@ export default function AdminSystemRegistry() {
 
   return (
     <PageShell
-      title="المرجعية المركزية الشاملة"
+      title="سجل الكيانات"
       breadcrumbs={[
         { href: "/dashboard", label: "لوحة التحكم" },
         { label: "المرجعية المركزية الشاملة" },
@@ -186,9 +201,25 @@ export default function AdminSystemRegistry() {
       subtitle="فهرس شامل لكل النطاقات والكيانات والإجراءات والصلاحيات والأحداث في النظام"
       loading={isLoading}
       actions={
-        <Button variant="outline" size="sm" onClick={() => refetchReg()}>
-          <RefreshCw className="h-4 w-4 me-1" />تحديث
-        </Button>
+        <div className="flex items-center gap-2">
+          <RefreshAction onRefresh={() => refetchReg()} />
+          <PrintButton
+            entityType="report_admin_system_registry_entities"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "سجل الكيانات", total: printRows.length },
+              items: printRows.map((e: any) => ({
+                "الكيان": e.label,
+                "الجدول": e.table,
+                "النطاق": e.domain,
+                "النوع": entityTypeLabel(e.type),
+                "دورة حياة": e.lifecycle ? "نعم" : "لا",
+                "أثر مالي": e.financialImpact ? "نعم" : "لا",
+              })),
+            })}
+          />
+        </div>
       }
     >
       <PageStateWrapper isLoading={isLoading && !registry} error={error} onRetry={refetchReg}>
@@ -372,7 +403,7 @@ export default function AdminSystemRegistry() {
                         {isExpanded ? <ChevronUp className="w-4 h-4 shrink-0" /> : <ChevronDown className="w-4 h-4 shrink-0" />}
                         <span className="font-semibold text-sm">{e.label}</span>
                         <Badge variant="outline" className="font-mono text-[10px]">{e.table}</Badge>
-                        <Badge className="text-[10px] bg-surface-subtle text-status-neutral-foreground">{e.type === "document" ? "مستند" : e.type === "transaction" ? "معاملة" : e.type === "master" ? "بيان رئيسي" : e.type === "request" ? "طلب" : "إعداد"}</Badge>
+                        <Badge className="text-[10px] bg-surface-subtle text-status-neutral-foreground">{entityTypeLabel(e.type)}</Badge>
                         <div className="flex gap-1 ms-auto">
                           <FeatureDot active={!!e.lifecycle} title="دورة حياة" />
                           <FeatureDot active={!!e.approval} title="اعتماد" />

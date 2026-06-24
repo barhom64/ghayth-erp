@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { exportRowsToCsv } from "@/lib/unified-export";
 import { useApiQuery } from "@/lib/api";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -379,66 +379,63 @@ export default function AccountReconciliationWorkpaperPage() {
                     </div>
 
                     {list.length > 0 && (
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="text-xs text-muted-foreground border-b">
-                            <th className="text-start py-1 px-2 w-32">المرجع</th>
-                            <th className="text-start py-1 px-2">الوصف</th>
-                            <th className="text-end py-1 px-2 w-32">المبلغ</th>
-                            <th className="w-8"></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {list.map(it => (
-                            <tr key={it.id} className="border-b last:border-b-0">
-                              <td className="py-1 px-2">
-                                <Input
-                                  value={it.reference}
-                                  onChange={(e) => updateItem(it.id, { reference: e.target.value })}
-                                  placeholder="رقم"
-                                  className="h-7 text-xs"
-                                />
-                              </td>
-                              <td className="py-1 px-2">
-                                <Input
-                                  value={it.description}
-                                  onChange={(e) => updateItem(it.id, { description: e.target.value })}
-                                  placeholder="وصف البند"
-                                  className="h-7 text-xs"
-                                />
-                              </td>
-                              <td className="py-1 px-2">
-                                <Input
-                                  type="number"
-                                  step="0.01"
-                                  value={it.amount}
-                                  onChange={(e) => updateItem(it.id, { amount: Number(e.target.value) || 0 })}
-                                  className="h-7 text-xs text-end tabular-nums"
-                                />
-                              </td>
-                              <td className="py-1 px-2">
-                                <Button
-                                  variant="ghost"
-                                  size="icon" title="حذف"
-                                  className="h-7 w-7 text-status-danger-foreground"
-                                  onClick={() => removeItem(it.id)}
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </Button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                        <tfoot>
-                          <tr className="font-semibold">
-                            <td colSpan={2} className="py-1 px-2 text-end text-xs text-muted-foreground">مجموع جزئي:</td>
-                            <td className={`py-1 px-2 text-end tabular-nums ${def.color}`}>
-                              {def.sign}{formatCurrency(subtotal(cat))}
-                            </td>
-                            <td></td>
-                          </tr>
-                        </tfoot>
-                      </table>
+                      <DataTable<ReconItem>
+                        noToolbar
+                        pageSize={0}
+                        data={list}
+                        rowKey={(it) => it.id}
+                        columns={[
+                          {
+                            key: "reference", header: "المرجع", sortable: false, width: "8rem",
+                            render: (it) => (
+                              <Input
+                                value={it.reference}
+                                onChange={(e) => updateItem(it.id, { reference: e.target.value })}
+                                placeholder="رقم"
+                                className="h-7 text-xs"
+                              />
+                            ),
+                          },
+                          {
+                            key: "description", header: "الوصف", sortable: false,
+                            render: (it) => (
+                              <Input
+                                value={it.description}
+                                onChange={(e) => updateItem(it.id, { description: e.target.value })}
+                                placeholder="وصف البند"
+                                className="h-7 text-xs"
+                              />
+                            ),
+                            footer: () => <span className="text-xs text-muted-foreground">مجموع جزئي:</span>,
+                          },
+                          {
+                            key: "amount", header: "المبلغ", sortable: false, align: "end", width: "8rem",
+                            render: (it) => (
+                              <Input
+                                type="number"
+                                step="0.01"
+                                value={it.amount}
+                                onChange={(e) => updateItem(it.id, { amount: Number(e.target.value) || 0 })}
+                                className="h-7 text-xs text-end tabular-nums"
+                              />
+                            ),
+                            footer: () => <span className={`tabular-nums ${def.color}`}>{def.sign}{formatCurrency(subtotal(cat))}</span>,
+                          },
+                          {
+                            key: "_actions", header: "", sortable: false, width: "2rem",
+                            render: (it) => (
+                              <Button
+                                variant="ghost"
+                                size="icon" title="حذف"
+                                className="h-7 w-7 text-status-danger-foreground"
+                                onClick={() => removeItem(it.id)}
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </Button>
+                            ),
+                          },
+                        ]}
+                      />
                     )}
                   </div>
                 );

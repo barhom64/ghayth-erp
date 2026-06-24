@@ -149,14 +149,33 @@ jobs:
             cat /tmp/post.log >&2
             exit 1
           fi
-          # Mark every existing migration as already applied so the API
-          # server (when imported by the dynamic test harness) doesn't try
-          # to ALTER TABLE on a baseline that already has those columns.
+          # Bring the test DB to HEAD before guard runs its schema-contract
+          # checks. The dump (db/schema_*.sql) is a point-in-time baseline that
+          # LAGS newer migrations. Previously we marked EVERY migration applied
+          # WITHOUT running the post-baseline ones, so the DB stayed at the dump
+          # level and check:insert-columns / check:update-columns ran against a
+          # STALE schema — letting column drift from later migrations slip
+          # through (the recruitment hire-flow broke exactly this way, #2776:
+          # it wrote columns a post-dump migration had removed, yet guard was
+          # green because its DB still had them). Now we ACTUALLY APPLY
+          # post-cutoff migrations (idempotent: ADD COLUMN IF NOT EXISTS /
+          # ON CONFLICT — proven by scripts/provision-agent-db.sh, which reaches
+          # 413/413 over this same dump), THEN mark every file applied so the
+          # api-server boot (dynamic harness) doesn't re-run them.
+          CUTOFF="$(grep -vE '^#|^[[:space:]]*$' db/.baseline-cutoff | head -1)"
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c \
             "CREATE TABLE IF NOT EXISTS schema_migrations (filename text PRIMARY KEY, applied_at timestamptz DEFAULT NOW());"
-          for mig in artifacts/api-server/src/migrations/*.sql; do
+          for mig in $(ls artifacts/api-server/src/migrations/*.sql | sort -V); do
             [ -f "$mig" ] || continue
             fn="$(basename "$mig")"
+            # Numeric-aware post-cutoff test (matches src/lib/migrate.ts): the
+            # cutoff sorts strictly before a post-cutoff filename. ON_ERROR_STOP=0
+            # makes psql tolerate benign idempotent-re-apply SQL errors (exit 0)
+            # while still failing the step on a real connection error — so no
+            # `|| true` mask is needed.
+            if [ "$fn" != "$CUTOFF" ] && [ "$(printf '%s\n%s\n' "$CUTOFF" "$fn" | sort -V | tail -1)" = "$fn" ]; then
+              psql "$DATABASE_URL" -v ON_ERROR_STOP=0 -q -f "$mig" >> /tmp/migrate.log 2>&1
+            fi
             psql "$DATABASE_URL" -q -c \
               "INSERT INTO schema_migrations(filename) VALUES ('$fn') ON CONFLICT DO NOTHING;"
           done

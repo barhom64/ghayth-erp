@@ -34,7 +34,7 @@ import {
   resolveTaskSlaReminderConfig,
   shouldFireSlaReminder,
 } from "./inboxClassifier.js";
-import { processFallbackChains } from "./notificationEngine.js";
+import { processFallbackChains } from "./notificationDispatch.js";
 import {
   resolveSystemSmtpConfig,
   formatFromHeader,
@@ -2696,13 +2696,13 @@ async function monthlyAutoDepreciation(): Promise<string> {
           sourceKey: `finance:depreciation:${asset.id}:${period}`,
           lines: [
             {
-              accountCode: (asset.depreciationAccountCode as string | undefined) ?? "6100",
+              accountCode: (asset.depreciationAccountCode as string | undefined) ?? "5790",
               debit: depAmount,
               credit: 0,
               assetId: Number(asset.id),
             },
             {
-              accountCode: (asset.accDepreciationAccountCode as string | undefined) ?? "1590",
+              accountCode: (asset.accDepreciationAccountCode as string | undefined) ?? "1290",
               debit: 0,
               credit: depAmount,
               assetId: Number(asset.id),
@@ -4784,7 +4784,62 @@ async function financialPostingFailureAutoRetry(): Promise<string> {
   return `financial_posting_failure_auto_retry: processed ${totalProcessed} across ${companiesTouched} company(ies) — resolved ${totalResolved}, stillFailing ${totalStillFailing}`;
 }
 
+// متابعة النقل بالصور (PR2): ينشئ طلب فحص يومي «pending» لكل مركبة مُسنَدة لسائق
+// لم يُنشأ لها طلب اليوم بعد، ويذكّر السائق (عبر تكليف موظفه النشط). يفي السائق
+// الطلب من بوابته (POST /fleet/me/inspections/:id/submit + رفع الصور).
+export async function generateDailyInspectionRequests(): Promise<string> {
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
+  let created = 0;
+  let notified = 0;
+  for (const company of companies) {
+    const rows = await rawQuery<{
+      vehicleId: number; branchId: number | null; driverId: number;
+      plateNumber: string | null; assignmentId: number | null;
+    }>(
+      `SELECT v.id AS "vehicleId", v."branchId", d.id AS "driverId",
+              v."plateNumber", ea.id AS "assignmentId"
+         FROM fleet_vehicles v
+         JOIN fleet_drivers d ON d.id = v."assignedDriverId" AND d."deletedAt" IS NULL
+         LEFT JOIN employee_assignments ea
+           ON ea."employeeId" = d."employeeId" AND ea.status = 'active'
+        WHERE v."companyId" = $1 AND v."deletedAt" IS NULL
+          AND v."assignedDriverId" IS NOT NULL
+          AND v.status IN ('available','in_use')
+          AND NOT EXISTS (
+            SELECT 1 FROM fleet_vehicle_inspections i
+             WHERE i."vehicleId" = v.id AND i."inspectionType" = 'daily'
+               AND i."dueDate" = CURRENT_DATE AND i."deletedAt" IS NULL
+          )`,
+      [company.id],
+    ).catch((e) => { logger.error(e, "[cronScheduler] daily-inspection query failed"); return [] as any[]; });
+
+    for (const r of rows) {
+      const { insertId } = await rawExecute(
+        `INSERT INTO fleet_vehicle_inspections
+           ("companyId","branchId","vehicleId","driverId","inspectionType","status","dueDate","capturedByRole")
+         VALUES ($1,$2,$3,$4,'daily','pending',CURRENT_DATE,'driver')`,
+        [company.id, r.branchId ?? null, r.vehicleId, r.driverId],
+      ).catch((e) => { logger.error(e, "[cronScheduler] daily-inspection insert failed"); return { insertId: 0 } as any; });
+      if (!insertId) continue;
+      created++;
+      if (r.assignmentId) {
+        await createNotification({
+          companyId: company.id, assignmentId: r.assignmentId,
+          type: "fleet_daily_inspection", priority: "normal",
+          title: "تذكير: تصوير عداد المركبة اليومي",
+          body: `يرجى تصوير عداد المركبة ${r.plateNumber ?? r.vehicleId} وحالتها لليوم.`,
+          refType: "fleet_vehicle_inspections", refId: insertId,
+          actionUrl: `/fleet/me/inspections/${insertId}`,
+        }).catch((e) => logger.error(e, "[cronScheduler] daily-inspection notify failed"));
+        notified++;
+      }
+    }
+  }
+  return `fleet_daily_inspection_requests: created ${created} daily request(s); notified ${notified} driver(s)`;
+}
+
 const JOB_DEFINITIONS: CronJobDef[] = [
+  { name: "fleet_daily_inspection_requests", description: "إنشاء طلب فحص يومي (تصوير عداد + حالة) لكل مركبة مُسنَدة لسائق + تذكير السائق", schedule: "0 6 * * *", handler: generateDailyInspectionRequests },
   { name: "financial_posting_failure_auto_retry", description: "آلية منع التفاقم — إعادة ترحيل تراكم فشل القيد المالي تلقائياً وإغلاق السجلات الناجحة لكل شركة", schedule: "*/15 * * * *", handler: financialPostingFailureAutoRetry },
   { name: "inbox_task_sla_reminder_scan", description: "تذكير المسؤولين بمهام صندوق الوارد قبل تجاوز موعد الاستجابة (SLA)", schedule: "*/15 * * * *", handler: inboxTaskSlaReminderScan },
   { name: "warehouse_lot_expiry_alerts", description: "تنبيهات انتهاء صلاحية دفعات المستودع (عتبات المستودع)", schedule: "10 6 * * *", handler: warehouseLotExpiryAlerts },

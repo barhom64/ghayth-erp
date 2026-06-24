@@ -1,10 +1,8 @@
 import { useState, useEffect } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { formatCurrency, roundMoney , todayLocal } from "@/lib/formatters";
 import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
@@ -12,12 +10,14 @@ import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { CostCenterSelect, SupplierSelect, BranchSelect } from "@/components/shared/entity-selects";
+import { ProductSelect } from "@/components/shared/product-select";
 import { useAppContext } from "@/contexts/app-context";
 import { ActiveContextNotice, useActiveFinanceContext } from "@/components/shared/active-context-gate";
 import { SupplierContextCard } from "@/components/shared/supplier-context-card";
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { ImpactPreviewButton } from "@/components/shared/impact-preview";
 import { LineAllocationPanel, type LineAllocation, deriveAllocationStatus, buildAllocationPayload } from "@/components/shared/line-allocation-panel";
+import { LineItemsTable } from "@/components/shared/line-items-table";
 import { Select as LineTreatmentSelect, SelectContent as LTSC, SelectItem as LTSI, SelectTrigger as LTST, SelectValue as LTSV } from "@/components/ui/select";
 // #1945 — the line-treatment list + its expected accounting come from the
 // central finance model (mirrors the backend TREATMENT_PURPOSE; parity tested).
@@ -41,8 +41,6 @@ export default function PurchaseOrdersCreate() {
   // procurement, manager-direct issuance, etc).
   const createDirectMut = useApiMutation("/finance/purchase-orders", "POST", [["purchase-orders"]]);
   const [createMode, setCreateMode] = useState<"request" | "direct">("request");
-  const { data: productsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["warehouse-products"], "/warehouse/products");
-  const products = productsData?.data || [];
   const { data: copySource } = useApiQuery<any>(["po-copy", copyFromId || ""], `/finance/purchase-orders/${copyFromId}`, !!copyFromId);
 
   const INITIAL = { supplierId: "", notes: "", branchId: selectedBranchId ? String(selectedBranchId) : "", companyId: selectedCompanyIds.length === 1 ? String(selectedCompanyIds[0]) : "", costCenter: "", expectedDelivery: "", date: todayLocal() };
@@ -82,9 +80,6 @@ export default function PurchaseOrdersCreate() {
     }
   }, [copySource, copied, setForm]);
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const addItem = () => setItems([...items, {
     productId: "", quantity: "1", unitPrice: "",
     lineTreatment: "inventory",
@@ -103,7 +98,7 @@ export default function PurchaseOrdersCreate() {
     const validItems = items.filter((i) => Number(i.unitPrice) > 0 && i.productId);
     const firstError = validate({
       supplierId: form.supplierId ? null : "المورد مطلوب",
-      branchId: form.branchId ? null : "الفرع مطلوب",
+      // الفرع اختياري في الخلفية ويُعبّأ من سياق الدخول — لا يُفرض.
       items: validItems.length === 0 ? "يرجى إضافة بند واحد على الأقل" : null,
     });
     if (firstError) {
@@ -197,60 +192,80 @@ export default function PurchaseOrdersCreate() {
 
       <div className="mb-4">
         <Label className="text-base font-semibold">البنود</Label>
-        {items.map((item, idx) => (
-          <div key={idx} className="border rounded-lg p-3 mt-2">
-            <div className="grid grid-cols-4 gap-2 items-end">
-              <div>
-                <Label className="text-xs">المنتج</Label>
-                <Select value={item.productId || "_none"} onValueChange={(v) => updateItem(idx, "productId", v === "_none" ? "" : v)}>
-                  <SelectTrigger className="text-sm">
-                    <SelectValue placeholder="اختر من المخزون" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="_none">اختر من المخزون</SelectItem>
-                    {products.map((p: any) => <SelectItem key={p.id} value={String(p.id)}>{p.sku ? `${p.sku} - ` : ""}{p.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+        {/* الجدول الموحّد للإدخالات المالية — المكوّن المشترك <LineItemsTable>
+            بدل بطاقة لكل بند (المنتج/الكمية/سعر الوحدة أعمدة؛ معالجة البند
+            والتوجيه المحاسبي ولوحة الأبعاد عبر renderExpansion). */}
+        <div className="mt-2">
+          <LineItemsTable
+            items={items}
+            minItems={1}
+            onAdd={addItem}
+            onRemove={removeItem}
+            addLabel="إضافة بند"
+            columns={[
+              {
+                header: "المنتج", className: "min-w-[10rem]",
+                render: (item, idx) => (
+                  <ProductSelect
+                    value={item.productId}
+                    onChange={(v) => updateItem(idx, "productId", v)}
+                    placeholder="اختر من المخزون"
+                    allowCreate
+                    className="text-sm"
+                  />
+                ),
+              },
+              {
+                header: "الكمية",
+                render: (item, idx) => (
+                  <NumberField label="الكمية" hideLabel className="w-24" value={item.quantity} onChange={(v) => updateItem(idx, "quantity", v)} placeholder="1" />
+                ),
+              },
+              {
+                header: "سعر الوحدة",
+                render: (item, idx) => (
+                  <NumberField label="سعر الوحدة" hideLabel className="w-24" value={item.unitPrice} onChange={(v) => updateItem(idx, "unitPrice", v)} placeholder="0.00" />
+                ),
+              },
+            ]}
+            renderExpansion={(item, idx) => (
+              <div className="space-y-2">
+                <div>
+                  <Label className="text-xs">معالجة البند (Line Treatment)</Label>
+                  <LineTreatmentSelect value={item.lineTreatment} onValueChange={(v) => updateItem(idx, "lineTreatment", v)}>
+                    <LTST className="text-sm"><LTSV /></LTST>
+                    <LTSC>
+                      {LINE_TREATMENTS.map((t) => (
+                        <LTSI key={t.value} value={t.value}>{t.label}</LTSI>
+                      ))}
+                    </LTSC>
+                  </LineTreatmentSelect>
+                  {/* #1945 — التوجيه المحاسبي المتوقع لهذا البند، مشتق من النموذج
+                      المركزي (مطابق لتوجيه الخادم عند الـ GRN). */}
+                  {(() => {
+                    const t = resolvePurchaseTreatment(item.lineTreatment);
+                    return (
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        ⓘ التوجيه المحاسبي عند الـ GRN:{" "}
+                        {t ? `${t.hint}${t.capitalize ? " (رسملة — ميزانية)" : " (مصروف — قائمة الدخل)"}` : "يُحدَّد حسب نوع البند."}
+                      </p>
+                    );
+                  })()}
+                </div>
+                <LineAllocationPanel
+                  value={item.allocation ?? {}}
+                  onChange={(next) => {
+                    const updated = [...items];
+                    (updated[idx] as any).allocation = next;
+                    setItems(updated);
+                  }}
+                  status={deriveAllocationStatus(item.allocation ?? {})}
+                  required={false}
+                />
               </div>
-              <NumberField label="الكمية" value={item.quantity} onChange={(v) => updateItem(idx, "quantity", v)} placeholder="1" />
-              <NumberField label="سعر الوحدة" value={item.unitPrice} onChange={(v) => updateItem(idx, "unitPrice", v)} placeholder="0.00" />
-              <Button type="button" variant="destructive" size="sm" onClick={() => removeItem(idx)} disabled={items.length <= 1}>حذف</Button>
-            </div>
-            <div className="mt-2">
-              <Label className="text-xs">معالجة البند (Line Treatment)</Label>
-              <LineTreatmentSelect value={item.lineTreatment} onValueChange={(v) => updateItem(idx, "lineTreatment", v)}>
-                <LTST className="text-sm"><LTSV /></LTST>
-                <LTSC>
-                  {LINE_TREATMENTS.map((t) => (
-                    <LTSI key={t.value} value={t.value}>{t.label}</LTSI>
-                  ))}
-                </LTSC>
-              </LineTreatmentSelect>
-              {/* #1945 — التوجيه المحاسبي المتوقع لهذا البند، مشتق من النموذج
-                  المركزي (مطابق لتوجيه الخادم عند الـ GRN). */}
-              {(() => {
-                const t = resolvePurchaseTreatment(item.lineTreatment);
-                return (
-                  <p className="text-[10px] text-muted-foreground mt-1">
-                    ⓘ التوجيه المحاسبي عند الـ GRN:{" "}
-                    {t ? `${t.hint}${t.capitalize ? " (رسملة — ميزانية)" : " (مصروف — قائمة الدخل)"}` : "يُحدَّد حسب نوع البند."}
-                  </p>
-                );
-              })()}
-            </div>
-            <LineAllocationPanel
-              value={item.allocation ?? {}}
-              onChange={(next) => {
-                const updated = [...items];
-                (updated[idx] as any).allocation = next;
-                setItems(updated);
-              }}
-              status={deriveAllocationStatus(item.allocation ?? {})}
-              required={false}
-            />
-          </div>
-        ))}
-        <Button type="button" variant="outline" size="sm" className="mt-2" onClick={addItem}>+ إضافة بند</Button>
+            )}
+          />
+        </div>
       </div>
 
       <div className="bg-muted/50 p-4 rounded-md text-sm">

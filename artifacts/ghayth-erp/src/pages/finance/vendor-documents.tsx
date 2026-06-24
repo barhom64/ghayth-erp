@@ -17,6 +17,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { VendorSelect } from "@/components/shared/entity-selects";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent } from "@/components/ui/card";
@@ -27,6 +28,8 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
@@ -97,13 +100,9 @@ export default function VendorDocumentsPage() {
   const advQ = useApiQuery<{ data: AdvanceRow[] }>(["vendor-advances"], "/finance/vendor-advances");
   const crdQ = useApiQuery<{ data: CreditRow[] }>(["vendor-credits"], "/finance/vendor-credits");
   const invQ = useApiQuery<{ data: VInvoiceRow[] }>(["vendor-invoices"], "/finance/vendor-invoices");
-  const suppliersQ = useApiQuery<{ data: { id: number; name: string }[] }>(
-    ["finance-vendors-for-documents"], "/finance/vendors?limit=500",
-  );
   const posQ = useApiQuery<{ data: { id: number; ref?: string; poNumber?: string; supplierId?: number }[] }>(
     ["purchase-orders-for-documents"], "/finance/purchase-orders?limit=500",
   );
-  const suppliers = suppliersQ.data?.data ?? [];
   const pos = posQ.data?.data ?? [];
 
   const bySearch = <T extends { ref: string; supplierName: string | null }>(rows: T[]) => {
@@ -121,6 +120,8 @@ export default function VendorDocumentsPage() {
   const invoices = useMemo(
     () => bySearch(invQ.data?.data ?? []).filter((r) => !invStatus || r.status === invStatus),
     [invQ.data, searchText, invStatus]);
+
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<AdvanceRow>(advances);
 
   // ── الإنشاء (نماذج سريعة لكل تبويب) ────────────────────────────────
   const [advOpen, setAdvOpen] = useState(false);
@@ -272,11 +273,7 @@ export default function VendorDocumentsPage() {
     </div>
   );
   const supplierSelect = (value: string, onChange: (v: string) => void) => (
-    <select value={value} onChange={(e) => onChange(e.target.value)}
-      className="w-full h-8 px-2 border rounded bg-background text-xs">
-      <option value="">— اختر المورد —</option>
-      {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-    </select>
+    <VendorSelect label="المورد" hideLabel value={value} onChange={onChange} placeholder="— اختر المورد —" />
   );
   const txt = (v: string, on: (x: string) => void, dir?: "ltr") => (
     <input value={v} onChange={(e) => on(e.target.value)} dir={dir}
@@ -361,10 +358,28 @@ export default function VendorDocumentsPage() {
         <TabsContent value="advances" className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             {statusChips(advStatus, setAdvStatus, APPLY_STATUSES)}
-            <GuardedButton perm="finance:create" variant="outline" size="sm"
-              onClick={() => setAdvOpen((v) => !v)}>
-              <Plus className="h-4 w-4 me-1" />دفعة مقدمة لمورد
-            </GuardedButton>
+            <div className="flex items-center gap-2">
+              <PrintButton
+                entityType="report_finance_vendor_advances"
+                entityId="list"
+                size="icon"
+                payload={() => ({
+                  entity: { title: "دفعات مقدمة للموردين", total: printRows.length },
+                  items: printRows.map((r) => ({
+                    "المرجع": r.ref,
+                    "المورد": r.supplierName ?? "— محذوف —",
+                    "المبلغ": Number(r.amount),
+                    "مُطبَّق": Number(r.appliedAmount || 0),
+                    "متبقي": Number(r.amount) - Number(r.appliedAmount || 0),
+                    "الحالة": STATUS_LABEL[r.status]?.label ?? r.status,
+                  })),
+                })}
+              />
+              <GuardedButton perm="finance:create" variant="outline" size="sm"
+                onClick={() => setAdvOpen((v) => !v)}>
+                <Plus className="h-4 w-4 me-1" />دفعة مقدمة لمورد
+              </GuardedButton>
+            </div>
           </div>
           {advOpen && (
             <Card className="border-dashed">
@@ -401,7 +416,7 @@ export default function VendorDocumentsPage() {
             </Card>
           )}
           <Card><CardContent className="p-0">
-            <DataTable columns={advCols} data={advances} pageSize={25}
+            <DataTable columns={advCols} data={advances} onSortedDataChange={setPrintRows} pageSize={25}
               emptyMessage="لا توجد دفعات مقدمة لموردين" />
           </CardContent></Card>
         </TabsContent>

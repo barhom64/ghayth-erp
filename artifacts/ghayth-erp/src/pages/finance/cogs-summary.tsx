@@ -178,11 +178,11 @@ export default function CogsSummaryPage() {
   const detailColumns: DataTableColumn<CogsRow>[] = [
     { key: "cogsPostedAt", header: "تاريخ",
       render: (r) => <span className="text-xs text-muted-foreground">{r.cogsPostedAt?.slice(0, 10) ?? "—"}</span> },
-    { key: "invoiceRef", header: "فاتورة",
+    { key: "invoiceRef", header: "فاتورة", searchable: true,
       render: (r) => <span className="font-mono text-xs text-status-info-foreground">{r.invoiceRef}</span> },
-    { key: "clientName", header: "العميل",
+    { key: "clientName", header: "العميل", searchable: true,
       render: (r) => r.clientName ?? "—" },
-    { key: "productSku", header: "المنتج",
+    { key: "productSku", header: "المنتج", searchable: true,
       render: (r) => (
         <div className="text-xs">
           <p className="font-mono">{r.productSku ?? "—"}</p>
@@ -211,7 +211,7 @@ export default function CogsSummaryPage() {
 
   return (
     <PageShell
-      title="ملخص التكلفة وهامش الربح (COGS)"
+      title="ملخص التكلفة وهامش الربح"
       subtitle="إيراد − تكلفة المباع (صافي المرتجعات) = الربح. مع تقسيم حسب المنتج / العميل / الشهر."
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
@@ -354,6 +354,7 @@ export default function CogsSummaryPage() {
         <h3 className="text-base font-semibold mb-3">تفصيل البنود ({rows.length})</h3>
         <DataTable
           columns={detailColumns} data={rows}
+          searchPlaceholder="بحث برقم الفاتورة أو العميل أو رمز المنتج…"
           emptyMessage="لا توجد بنود في هذه الفترة"
           pageSize={50}
         />

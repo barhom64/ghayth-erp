@@ -41,7 +41,9 @@ describe("vendor-documents page — all nine endpoints wired", () => {
     expect(PAGE).toMatch(/\{ id: number; poId: number; amount: number \}/);
   });
   it("supporting lists come from the canonical finance sources", () => {
-    expect(PAGE).toContain('"/finance/vendors?limit=500"');
+    // Vendors now come from the unified VendorSelect (which itself queries the
+    // canonical "/finance/vendors?limit=500" source) instead of a page-level fetch.
+    expect(PAGE).toContain("VendorSelect");
     expect(PAGE).toContain('"/finance/purchase-orders?limit=500"');
   });
 });

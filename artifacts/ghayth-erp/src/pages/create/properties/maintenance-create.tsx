@@ -3,14 +3,13 @@ import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PropertyUnitContextCard } from "@/components/shared/property-unit-context-card";
 import { TextAreaField, NumberField, FormFieldWrapper, TextField } from "@/components/shared/form-field-wrapper";
-import { SupplierSelect } from "@/components/shared/entity-selects";
+import { SupplierSelect, UnitSelect } from "@/components/shared/entity-selects";
 
 export default function PropertyMaintenanceCreate() {
   const [, setLocation] = useLocation();
@@ -25,8 +24,6 @@ export default function PropertyMaintenanceCreate() {
   // history without sitting in someone's inbox.
   const createSimpleMut = useApiMutation("/properties/maintenance", "POST", [["maintenance-requests"]]);
   const [simpleMode, setSimpleMode] = useState(false);
-  const { data: unitsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["property-units"], "/properties/units");
-  const units = unitsData?.data || [];
 
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
@@ -34,9 +31,6 @@ export default function PropertyMaintenanceCreate() {
     unitId: "", category: "", description: "", priority: "medium", cost: "",
     supplierId: "", unregisteredSupplierName: "", unregisteredSupplier: false,
   });
-
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
 
   const handleSubmit = async () => {
     const firstError = validate({
@@ -80,22 +74,21 @@ export default function PropertyMaintenanceCreate() {
         <CreationDateField />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <FormFieldWrapper label="الوحدة" required error={fieldErrors.unitId}>
-          <Select value={form.unitId || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, unitId: v === "_none" ? "" : v }))}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="_none">اختر الوحدة</SelectItem>
-              {units.map((u: any) => (
-                <SelectItem key={u.id} value={String(u.id)}>{u.unitNumber} - {u.buildingName || ""}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div>
+          <UnitSelect
+            label="الوحدة"
+            required
+            error={fieldErrors.unitId}
+            placeholder="اختر الوحدة"
+            value={form.unitId}
+            onChange={(v) => setForm((f) => ({ ...f, unitId: v }))}
+          />
           {form.unitId && (
             <div className="mt-3">
               <PropertyUnitContextCard unitId={form.unitId} section="maintenance" />
             </div>
           )}
-        </FormFieldWrapper>
+        </div>
         <FormFieldWrapper label="الفئة">
           <Select value={form.category || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, category: v === "_none" ? "" : v }))}>
             <SelectTrigger><SelectValue /></SelectTrigger>

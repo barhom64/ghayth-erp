@@ -21,7 +21,7 @@ const BOOKINGS_LIST = read("pages/fleet/transport-bookings.tsx");
 const BOOKING_DETAIL = read("pages/fleet/transport-booking-detail.tsx");
 const DISPATCH_BOARD = read("pages/fleet/transport-dispatch.tsx");
 const FLEET_ROUTES = read("routes/fleetRoutes.tsx");
-const FLEET_TABS = read("components/shared/fleet-tabs-nav.tsx");
+const FLEET_TABS = read("components/layout/navigation.registry.ts");
 const ME_DRIVER = read("pages/fleet/me-driver.tsx");
 
 describe("#1733 Comment 9 — booking list SPA page", () => {
@@ -140,11 +140,12 @@ describe("#1733 — routes + nav integration", () => {
     expect(FLEET_ROUTES).toContain("TransportDispatch");
   });
 
-  it("fleet tabs nav links to the transport cluster + mounts the transport sub-nav", () => {
-    // Reorganized: the top tab is the "النقل" cluster entry; a dedicated
-    // TransportTabsNav (القائمة السفلية) renders under it on transport routes.
+  it("the transport cluster is reachable from the fleet nav (derived sub-tabs)", () => {
+    // FleetTabsNav now derives from the sidebar registry: the «النقل والإرسال»
+    // group's pages become the sub-tab row on /fleet/transport routes — no
+    // separate TransportTabsNav component required.
     expect(FLEET_TABS).toContain("/fleet/transport/bookings");
-    expect(FLEET_TABS).toMatch(/TransportTabsNav/);
+    expect(FLEET_TABS).toContain("/fleet/transport/dispatch");
   });
 });
 

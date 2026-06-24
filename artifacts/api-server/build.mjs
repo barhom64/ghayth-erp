@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { execSync } from "node:child_process";
 import { build as esbuild } from "esbuild";
 import esbuildPluginPino from "esbuild-plugin-pino";
 import { rm, cp, mkdir, writeFile } from "node:fs/promises";
@@ -9,6 +10,33 @@ import { rm, cp, mkdir, writeFile } from "node:fs/promises";
 globalThis.require = createRequire(import.meta.url);
 
 const artifactDir = path.dirname(fileURLToPath(import.meta.url));
+
+// Freeze the source revision INTO the bundle at build time so every running
+// instance can report exactly which commit it was built from (GET /api/version
+// and the `commit` field on /api/healthz). Order: explicit CI/deploy env var ->
+// `git rev-parse HEAD` -> "unknown". Baked via esbuild `define` so it survives
+// even when .git is absent at runtime (the bundle runs from dist/).
+function resolveBuildCommit() {
+  const fromEnv =
+    process.env.APP_COMMIT ||
+    process.env.SOURCE_COMMIT ||
+    process.env.GIT_COMMIT ||
+    process.env.GITHUB_SHA;
+  if (fromEnv && fromEnv.trim()) return fromEnv.trim();
+  try {
+    return execSync("git rev-parse HEAD", {
+      cwd: artifactDir,
+      stdio: ["ignore", "pipe", "ignore"],
+    })
+      .toString()
+      .trim();
+  } catch {
+    return "unknown";
+  }
+}
+
+const BUILD_COMMIT = resolveBuildCommit();
+const BUILD_TIME = new Date().toISOString();
 
 async function buildAll() {
   const distDir = path.resolve(artifactDir, "dist");
@@ -28,6 +56,11 @@ async function buildAll() {
     outdir: distDir,
     outExtension: { ".js": ".mjs" },
     logLevel: "info",
+    // Bake the build revision into the bundle (see lib/version.ts).
+    define: {
+      __APP_COMMIT__: JSON.stringify(BUILD_COMMIT),
+      __APP_BUILT_AT__: JSON.stringify(BUILD_TIME),
+    },
     // Some packages may not be bundleable, so we externalize them, we can add more here as needed.
     // Some of the packages below may not be imported or installed, but we're adding them in case they are in the future.
     // Examples of unbundleable packages:

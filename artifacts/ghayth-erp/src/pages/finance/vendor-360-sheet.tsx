@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { exportRowsToCsv } from "@/lib/unified-export";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -376,7 +376,7 @@ export default function Vendor360SheetPage() {
                 <CardTitle className="text-base">أعمار أوامر الشراء المفتوحة</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-5 gap-2">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
                   {[
                     { key: "current" as const, label: "حالي", color: "" },
                     { key: "1-30" as const, label: "1-30 يوم", color: "text-status-success-foreground" },
@@ -409,47 +409,52 @@ export default function Vendor360SheetPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-0">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-xs text-muted-foreground">
-                      <th className="text-start py-2 px-2">العنوان</th>
-                      <th className="text-start py-2 px-2">ينتهي</th>
-                      <th className="text-end py-2 px-2">القيمة</th>
-                      <th className="py-2 px-2"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {activeContracts.map(c => {
-                      const days = c.endDate
-                        ? Math.round((new Date(c.endDate.split("T")[0] + "T00:00:00Z").getTime() - new Date(today + "T00:00:00Z").getTime()) / 86400000)
-                        : null;
-                      const isExpiring = days != null && days >= 0 && days <= 60;
-                      return (
-                        <tr key={c.id} className="border-b">
-                          <td className="py-1.5 px-2">{c.title ?? `عقد #${c.id}`}</td>
-                          <td className="py-1.5 px-2">
-                            {c.endDate ? (
-                              <>
-                                {formatDateAr(c.endDate.split("T")[0])}
-                                {days != null && (
-                                  <span className={`text-[10px] mr-2 ${isExpiring ? "text-status-warning-foreground" : "text-muted-foreground"}`}>
-                                    ({days < 0 ? `متأخر ${Math.abs(days)}ي` : `${days}ي`})
-                                  </span>
-                                )}
-                              </>
-                            ) : "—"}
-                          </td>
-                          <td className="py-1.5 px-2 text-end tabular-nums font-semibold">
-                            {formatCurrency(Number(c.totalValue ?? 0))}
-                          </td>
-                          <td className="py-1.5 px-2">
-                            <Button asChild variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7"><Link href="/finance/contracts"><ExternalLink className="w-3 h-3" /></Link></Button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                <div className="overflow-x-auto">
+                  <DataTable
+                    data={activeContracts}
+                    rowKey={(c) => c.id}
+                    noToolbar
+                    pageSize={0}
+                    className="text-sm"
+                    columns={[
+                      {
+                        key: "title", header: "العنوان",
+                        render: (c) => <>{c.title ?? `عقد #${c.id}`}</>,
+                      },
+                      {
+                        key: "endDate", header: "ينتهي",
+                        render: (c) => {
+                          const days = c.endDate
+                            ? Math.round((new Date(c.endDate.split("T")[0] + "T00:00:00Z").getTime() - new Date(today + "T00:00:00Z").getTime()) / 86400000)
+                            : null;
+                          const isExpiring = days != null && days >= 0 && days <= 60;
+                          return c.endDate ? (
+                            <>
+                              {formatDateAr(c.endDate.split("T")[0])}
+                              {days != null && (
+                                <span className={`text-[10px] mr-2 ${isExpiring ? "text-status-warning-foreground" : "text-muted-foreground"}`}>
+                                  ({days < 0 ? `متأخر ${Math.abs(days)}ي` : `${days}ي`})
+                                </span>
+                              )}
+                            </>
+                          ) : "—";
+                        },
+                      },
+                      {
+                        key: "totalValue", header: "القيمة", align: "end",
+                        render: (c) => (
+                          <span className="tabular-nums font-semibold">{formatCurrency(Number(c.totalValue ?? 0))}</span>
+                        ),
+                      },
+                      {
+                        key: "_action", header: "", sortable: false,
+                        render: () => (
+                          <Button asChild variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7"><Link href="/finance/contracts"><ExternalLink className="w-3 h-3" /></Link></Button>
+                        ),
+                      },
+                    ] satisfies DataTableColumn<ContractsResp["data"][number]>[]}
+                  />
+                </div>
               </CardContent>
             </Card>
           )}
@@ -464,32 +469,39 @@ export default function Vendor360SheetPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-0">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-xs text-muted-foreground">
-                      <th className="text-start py-2 px-2">المرجع</th>
-                      <th className="text-start py-2 px-2">تاريخ التسليم</th>
-                      <th className="text-end py-2 px-2">المبلغ</th>
-                      <th className="py-2 px-2"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {vendorPos.map(p => (
-                      <tr key={p.id} className="border-b">
-                        <td className="py-1.5 px-2 font-mono text-xs">{p.ref}</td>
-                        <td className="py-1.5 px-2 text-xs">
-                          {p.expectedDelivery ? formatDateAr(p.expectedDelivery.split("T")[0]) : "—"}
-                        </td>
-                        <td className="py-1.5 px-2 text-end tabular-nums font-semibold">
-                          {formatCurrency(Number(p.totalAmount))}
-                        </td>
-                        <td className="py-1.5 px-2">
+                <div className="overflow-x-auto">
+                  <DataTable
+                    data={vendorPos}
+                    rowKey={(p) => p.id}
+                    noToolbar
+                    pageSize={0}
+                    className="text-sm"
+                    columns={[
+                      {
+                        key: "ref", header: "المرجع", ltr: true,
+                        render: (p) => <span className="font-mono text-xs">{p.ref}</span>,
+                      },
+                      {
+                        key: "expectedDelivery", header: "تاريخ التسليم",
+                        render: (p) => (
+                          <span className="text-xs">{p.expectedDelivery ? formatDateAr(p.expectedDelivery.split("T")[0]) : "—"}</span>
+                        ),
+                      },
+                      {
+                        key: "totalAmount", header: "المبلغ", align: "end",
+                        render: (p) => (
+                          <span className="tabular-nums font-semibold">{formatCurrency(Number(p.totalAmount))}</span>
+                        ),
+                      },
+                      {
+                        key: "_action", header: "", sortable: false,
+                        render: (p) => (
                           <Button asChild variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7"><Link href={`/finance/purchase-orders/${p.id}`}><ExternalLink className="w-3 h-3" /></Link></Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        ),
+                      },
+                    ] satisfies DataTableColumn<PendingResp["data"][number]>[]}
+                  />
+                </div>
               </CardContent>
             </Card>
           )}
@@ -504,32 +516,41 @@ export default function Vendor360SheetPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-0">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-xs text-muted-foreground">
-                      <th className="text-start py-2 px-2">التاريخ</th>
-                      <th className="text-start py-2 px-2">المرجع</th>
-                      <th className="text-start py-2 px-2">الوصف</th>
-                      <th className="text-end py-2 px-2">مدين</th>
-                      <th className="text-end py-2 px-2">دائن</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recentMovements.map(m => (
-                      <tr key={`${m.movementType}-${m.id}`} className="border-b">
-                        <td className="py-1.5 px-2 text-xs">{formatDateAr(m.date.split("T")[0])}</td>
-                        <td className="py-1.5 px-2 font-mono text-xs">{m.ref}</td>
-                        <td className="py-1.5 px-2 text-xs">{m.description}</td>
-                        <td className="py-1.5 px-2 text-end tabular-nums">
-                          {Number(m.debit) > 0 ? formatCurrency(Number(m.debit)) : "—"}
-                        </td>
-                        <td className="py-1.5 px-2 text-end tabular-nums">
-                          {Number(m.credit) > 0 ? formatCurrency(Number(m.credit)) : "—"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div className="overflow-x-auto">
+                  <DataTable
+                    data={recentMovements}
+                    rowKey={(m) => `${m.movementType}-${m.id}`}
+                    noToolbar
+                    pageSize={0}
+                    className="text-sm"
+                    columns={[
+                      {
+                        key: "date", header: "التاريخ",
+                        render: (m) => <span className="text-xs">{formatDateAr(m.date.split("T")[0])}</span>,
+                      },
+                      {
+                        key: "ref", header: "المرجع", ltr: true,
+                        render: (m) => <span className="font-mono text-xs">{m.ref}</span>,
+                      },
+                      {
+                        key: "description", header: "الوصف",
+                        render: (m) => <span className="text-xs">{m.description}</span>,
+                      },
+                      {
+                        key: "debit", header: "مدين", align: "end",
+                        render: (m) => (
+                          <span className="tabular-nums">{Number(m.debit) > 0 ? formatCurrency(Number(m.debit)) : "—"}</span>
+                        ),
+                      },
+                      {
+                        key: "credit", header: "دائن", align: "end",
+                        render: (m) => (
+                          <span className="tabular-nums">{Number(m.credit) > 0 ? formatCurrency(Number(m.credit)) : "—"}</span>
+                        ),
+                      },
+                    ] satisfies DataTableColumn<StmtResp["movements"][number]>[]}
+                  />
+                </div>
               </CardContent>
             </Card>
           )}

@@ -44,7 +44,7 @@ const createCostCenterSchema = z.object({
   parentId: z.coerce.number().nullable().optional(),
   relatedEntityType: z.string().nullable().optional(),
   relatedEntityId: z.coerce.number().nullable().optional(),
-  allocatedAmount: z.coerce.number().optional(),
+  allocatedAmount: z.coerce.number().nonnegative().optional(),
 });
 
 const updateCostCenterSchema = z.object({
@@ -52,7 +52,7 @@ const updateCostCenterSchema = z.object({
   code: z.string().nullable().optional(),
   type: z.string().optional(),
   parentId: z.coerce.number().nullable().optional(),
-  allocatedAmount: z.coerce.number().optional(),
+  allocatedAmount: z.coerce.number().nonnegative().optional(),
   status: z.string().optional(),
 });
 

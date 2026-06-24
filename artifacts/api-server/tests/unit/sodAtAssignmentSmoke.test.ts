@@ -19,6 +19,7 @@ const read = (f: string) => readFileSync(join(apiSrc, f), "utf8");
 const POLICY = read("lib/policyEngine.ts");
 const ADMIN = read("routes/admin.ts");
 const RBACV2 = read("routes/rbacV2.ts");
+const RBACSVC = read("lib/rbacService.ts");
 
 describe("policyEngine.findSeparationOfDutiesConflict — pure check", () => {
   it("returns null when the new role is compatible with the existing set", () => {
@@ -81,9 +82,23 @@ describe("policyEngine.getActiveRoleKeysForUser — SQL coverage", () => {
 });
 
 describe("SoD enforcement — wired at both grant endpoints", () => {
-  it("admin.ts POST /user-roles uses the shared helper + check", () => {
-    expect(ADMIN).toContain("getActiveRoleKeysForUser");
-    expect(ADMIN).toContain("findSeparationOfDutiesConflict");
+  it("the central rbacService.grantUserRole holds the SoD check (shared helper)", () => {
+    // SoD enforcement for the creation/grant paths lives in ONE place now —
+    // the rbacService — so employees.ts, admin onboard, and admin /user-roles
+    // all enforce it without re-implementing the rule.
+    expect(RBACSVC).toContain("getActiveRoleKeysForUser");
+    expect(RBACSVC).toContain("findSeparationOfDutiesConflict");
+    expect(RBACSVC).toContain("sod_conflict");
+  });
+
+  it("admin.ts POST /user-roles enforces SoD via grantUserRole (hard 403 on conflict)", () => {
+    // Refactored off the inline getActiveRoleKeysForUser/findSeparationOfDutiesConflict
+    // onto the central service; an SoD conflict is still a HARD failure here.
+    const idx = ADMIN.indexOf('router.post("/user-roles"');
+    const section = ADMIN.slice(idx, idx + 3000);
+    expect(section).toContain("grantUserRole");
+    expect(section).toContain("sod_conflict");
+    expect(section).toContain("ForbiddenError");
   });
 
   it("rbacV2.ts POST /users/:userId/roles uses the shared helper + check", () => {

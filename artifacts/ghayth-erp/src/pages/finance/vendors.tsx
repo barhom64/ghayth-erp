@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, apiFetch } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -21,6 +22,7 @@ import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/sha
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
+import { AllowCreateDrawer } from "@/components/shared/allow-create-drawer";
 
 /**
  * Vendors list — migrated in R.2 iter 2 to the unified template stack.
@@ -41,19 +43,36 @@ import { usePrintRows } from "@/hooks/use-print-rows";
  * `accounts.tsx` in this same iteration as the reference demo.
  */
 export default function VendorsPage() {
-  const [location, navigate] = useLocation();
-  const isWarehouseContext = location.startsWith("/warehouse");
-  const createPath = isWarehouseContext ? "/warehouse/suppliers/create" : "/finance/vendors/create";
+  const [, navigate] = useLocation();
   const { scopeQueryString } = useAppContext();
-  const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
+  const { toast } = useToast();
+  // تعميم نمط «درج الإنشاء» (AllowCreateDrawer) — زر «إضافة مورد» يفتح
+  // النموذج الكامل في درج بدل الانتقال لصفحة /create. صفحة الإنشاء الكاملة
+  // تبقى متاحة عبر «فتح الصفحة الكاملة» داخل الدرج وللوصول المباشر.
+  const [createOpen, setCreateOpen] = useState(false);
+  // #2713 (تعميم) — سلة المحذوفات للمورّدين.
+  const [showDeleted, setShowDeleted] = useState(false);
+  const vendorsQs = new URLSearchParams(scopeQueryString || "");
+  if (showDeleted) vendorsQs.set("deleted", "true");
+  const vendorsUrl = `/finance/vendors${vendorsQs.toString() ? `?${vendorsQs.toString()}` : ""}`;
   const { data, isLoading, error, refetch } = useApiQuery<any>(
-    ["vendors", scopeQueryString],
-    `/finance/vendors${scopeSuffix}`,
+    ["vendors", scopeQueryString, showDeleted ? "deleted" : "active"],
+    vendorsUrl,
   );
   const items = data?.data || [];
   const [filters, setFilters] = useFilters();
   const [page, setPage] = useState(1);
   const pageSize = 20;
+
+  async function handleRestoreVendor(id: number) {
+    try {
+      await apiFetch(`/finance/vendors/${id}/restore`, { method: "POST" });
+      toast({ title: "تم استرجاع المورد" });
+      refetch();
+    } catch (e: any) {
+      toast({ variant: "destructive", title: e?.message || "تعذّر الاسترجاع" });
+    }
+  }
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
 
   const filtered = applyFilters(items, filters, {
@@ -118,6 +137,15 @@ export default function VendorsPage() {
       sortable: true,
       render: (v) => v.category ? <Badge variant="outline">{v.category}</Badge> : "-",
     },
+    ...(showDeleted ? [{
+      key: "_restore",
+      header: "إجراء",
+      render: (v: any) => (
+        <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleRestoreVendor(v.id); }}>
+          استرجاع
+        </Button>
+      ),
+    } as DataTableColumn<any>] : []),
   ];
 
   return (
@@ -128,17 +156,22 @@ export default function VendorsPage() {
       loading={isLoading}
       actions={
         <>
+          <Button
+            variant={showDeleted ? "default" : "outline"}
+            size="sm"
+            onClick={() => { setShowDeleted((v) => !v); setPage(1); }}
+          >
+            {showDeleted ? "الموردون النشطون" : "سلة المحذوفات"}
+          </Button>
           <Button asChild variant="outline" size="sm"><Link href="/finance/vendor-spend">
               <Building2 className="h-4 w-4 me-2" />تحليل الإنفاق
             </Link></Button>
           <Button asChild variant="outline" size="sm"><Link href="/finance/vendor-contracts-tracker">
               <Calendar className="h-4 w-4 me-2" />متابعة العقود
             </Link></Button>
-          <GuardedButton perm="finance:create" size="sm" asChild>
-            <Link href={createPath}>
-              <Plus className="h-4 w-4 me-1" />
-              إضافة مورد
-            </Link>
+          <GuardedButton perm="finance:create" size="sm" onClick={() => setCreateOpen(true)}>
+            <Plus className="h-4 w-4 me-1" />
+            إضافة مورد
           </GuardedButton>
           <PrintButton
             entityType="report_finance_vendors"
@@ -225,6 +258,16 @@ export default function VendorsPage() {
           noToolbar
         />
       </PageStateWrapper>
+
+      <AllowCreateDrawer
+        kind="vendor"
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={() => {
+          toast({ title: "تم إنشاء المورد" });
+          refetch();
+        }}
+      />
     </PageShell>
   );
 }

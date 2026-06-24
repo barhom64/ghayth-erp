@@ -20,7 +20,7 @@ import { logger } from "../lib/logger.js";
 const contractsRouter = Router();
 contractsRouter.use(authMiddleware);
 
-const createContractSchema = z.object({
+const contractFields = z.object({
   employeeId: z.coerce.number(),
   assignmentId: z.coerce.number().optional().nullable(),
   contractType: z.string().min(1),
@@ -36,6 +36,17 @@ const createContractSchema = z.object({
   notes: z.string().optional(),
 });
 
+// نهاية العقد يجب ألا تسبق بدايته (يتجاوز عند غياب/تعذّر التحليل؛ التساوي مقبول).
+// مطبَّق على الإنشاء والتحديث الجزئي معًا عبر contractFields الأساسي.
+const contractDatesInOrder = (d: { startDate?: string | null; endDate?: string | null }): boolean => {
+  const s = d.startDate ? Date.parse(d.startDate) : NaN;
+  const e = d.endDate ? Date.parse(d.endDate) : NaN;
+  return Number.isNaN(s) || Number.isNaN(e) || e >= s;
+};
+const contractDatesIssue = { path: ["endDate"], message: "تاريخ نهاية العقد يجب ألا يسبق تاريخ بدايته" };
+
+export const createContractSchema = contractFields.refine(contractDatesInOrder, contractDatesIssue);
+
 const rejectContractSchema = z.object({
   reason: z.string().optional(),
 });
@@ -49,7 +60,7 @@ const renewContractSchema = z.object({
   newSalary: z.coerce.number().optional(),
 });
 
-const updateContractSchema = createContractSchema.partial();
+const updateContractSchema = contractFields.partial().refine(contractDatesInOrder, contractDatesIssue);
 
 // ── List all contracts ──
 contractsRouter.get("/", authorize({ feature: "hr.contracts", action: "list" }), async (req, res) => {
@@ -133,7 +144,7 @@ contractsRouter.get("/:id", authorize({ feature: "hr.contracts", action: "list" 
 contractsRouter.post("/", authorize({ feature: "hr.contracts", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const data = createContractSchema.parse(req.body);
+    const data = zodParse(createContractSchema.safeParse(req.body));
 
     const [emp] = await rawQuery<Record<string, unknown>>(
       `SELECT e.id, e.name FROM employees e JOIN employee_assignments ea ON ea."employeeId"=e.id WHERE e.id = $1 AND ea."companyId" = $2 LIMIT 1`,

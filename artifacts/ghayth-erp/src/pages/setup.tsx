@@ -10,10 +10,11 @@
 // login page (B1 setup link). A real billing-aware sign-up flow ships
 // when subscription integration lands.
 import { useState, useEffect } from "react";
+import { API_BASE } from "@/lib/api";
 import { useLocation } from "wouter";
 import { Loader2, Building2 } from "lucide-react";
 
-const BASE = (typeof window !== "undefined" && (window as { location?: { origin?: string } }).location?.origin) || "";
+const BASE = API_BASE;
 
 interface SetupForm {
   companyName: string;

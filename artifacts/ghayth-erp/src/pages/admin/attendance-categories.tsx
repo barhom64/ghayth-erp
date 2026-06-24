@@ -11,6 +11,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -213,6 +214,7 @@ export default function AttendanceCategoriesPage() {
         { label: "فئات الحضور" },
       ]}
     >
+      {onHrRoute && <HrTabsNav />}
       {/* System categories — read-only summary */}
       <Card className="mb-4">
         <CardHeader className="pb-2">
@@ -293,7 +295,7 @@ export default function AttendanceCategoriesPage() {
                 </div>
                 <div>
                   <Label className="text-xs">سلّم الخصومات (مستويات 1→5، خصم لكل مرة تأخر)</Label>
-                  <div className="grid gap-2 grid-cols-5 mt-1">
+                  <div className="grid gap-2 grid-cols-2 md:grid-cols-5 mt-1">
                     {[1, 2, 3, 4, 5].map((lvl) => (
                       <div key={lvl}>
                         <Label className="text-xs text-muted-foreground">مستوى {lvl}</Label>

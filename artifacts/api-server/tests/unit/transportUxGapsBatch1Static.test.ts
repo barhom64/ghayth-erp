@@ -22,7 +22,7 @@ const read = (base: string, rel: string) => readFileSync(join(base, rel), "utf8"
 
 const MULTI_LEG = read(spaSrc, "components/shared/multi-leg-booking-editor.tsx");
 const CONFIRM = read(spaSrc, "pages/fleet/transport-booking-confirmation.tsx");
-const DRIVERS_CREATE = read(spaSrc, "pages/create/fleet/drivers-create.tsx");
+const DRIVERS_CREATE = read(spaSrc, "pages/create/fleet/driver-create-form.tsx");
 const DISPATCH = read(spaSrc, "pages/fleet/transport-dispatch.tsx");
 const GROUP_PICKER = read(spaSrc, "components/shared/umrah-group-picker.tsx");
 const BOOKINGS_ROUTE = read(apiSrc, "routes/transport-bookings.ts");

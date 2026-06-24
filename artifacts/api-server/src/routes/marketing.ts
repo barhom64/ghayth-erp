@@ -151,9 +151,17 @@ router.patch("/campaigns/:id", authorize({ feature: "marketing", action: "update
     const parsed = zodParse(updateCampaignSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<{ id: number }>(`SELECT id FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [existing] = await rawQuery<{ id: number; startDate: string | null; endDate: string | null }>(`SELECT id, "startDate", "endDate" FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("الحملة غير موجودة");
     const b = parsed;
+    // كمرآة لتحقّق POST: لا يجوز أن تصبح النهاية قبل البداية بعد التعديل الجزئي.
+    if (b.startDate !== undefined || b.endDate !== undefined) {
+      const sd = b.startDate ?? existing.startDate;
+      const ed = b.endDate ?? existing.endDate;
+      if (sd && ed && new Date(ed) < new Date(sd)) {
+        throw new ValidationError("تاريخ النهاية قبل تاريخ البداية", { field: "endDate", fix: "اختر تاريخ انتهاء بعد تاريخ البداية" });
+      }
+    }
     const sets: string[] = [];
     const params: unknown[] = [];
     if (b.name !== undefined) { params.push(b.name); sets.push(`name=$${params.length}`); }
@@ -297,9 +305,8 @@ router.get("/templates", authorize({ feature: "marketing", action: "list" }), as
       [scope.companyId]
     );
     res.json(maskFields(req, { data: rows }));
-  } catch (e) {
-    logger.error(e, "failed to list marketing templates");
-    res.json({ data: [] });
+  } catch (err) {
+    handleRouteError(err, res, "failed to list marketing templates");
   }
 });
 

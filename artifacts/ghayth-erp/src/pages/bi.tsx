@@ -22,7 +22,7 @@ export default function BIPage() {
     <PageShell title="ذكاء الأعمال" breadcrumbs={[{ label: "التحليلات" }]}>
       <BiTabsNav />
       <Tabs defaultValue="ceo" dir="rtl">
-        <TabsList className="grid w-full grid-cols-5 lg:grid-cols-10 gap-1 h-auto flex-wrap">
+        <TabsList className="grid w-full grid-cols-3 sm:grid-cols-5 lg:grid-cols-10 gap-1 h-auto flex-wrap">
           <TabsTrigger value="ceo" className="text-xs">لوحة الرئيس التنفيذي</TabsTrigger>
           <TabsTrigger value="overview" className="text-xs">نظرة عامة</TabsTrigger>
           <TabsTrigger value="branches" className="text-xs">الفروع</TabsTrigger>
@@ -31,7 +31,7 @@ export default function BIPage() {
           <TabsTrigger value="leave-balance" className="text-xs">رصيد الإجازات</TabsTrigger>
           <TabsTrigger value="property" className="text-xs">الإشغال العقاري</TabsTrigger>
           <TabsTrigger value="training" className="text-xs">عائد التدريب</TabsTrigger>
-          <TabsTrigger value="ai-insights" className="text-xs">رؤى AI</TabsTrigger>
+          <TabsTrigger value="ai-insights" className="text-xs">رؤى ذكية</TabsTrigger>
           <TabsTrigger value="alert-fatigue" className="text-xs">إدارة التنبيهات</TabsTrigger>
         </TabsList>
         <div className="mt-4">

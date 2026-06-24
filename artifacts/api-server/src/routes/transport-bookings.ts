@@ -271,7 +271,7 @@ const bookingLineSchema = z.object({
 // just append legs and the server auto-numbers them.
 const nestedBookingLineSchema = bookingLineSchema;
 
-const dispatchOrderSchema = z.object({
+export const dispatchOrderSchema = z.object({
   bookingLineId: z.coerce.number().int().positive(),
   vehicleId: z.coerce.number().int().positive(),
   driverId: z.coerce.number().int().positive(),
@@ -282,7 +282,16 @@ const dispatchOrderSchema = z.object({
   // Without this, both checks reject; with it, the conflict is recorded
   // in the audit log and the order is created anyway.
   overrideReason: z.string().min(1).max(500).optional(),
-});
+}).refine(
+  (d) => {
+    const s = Date.parse(d.scheduledStartAt);
+    const e = Date.parse(d.scheduledEndAt);
+    // skip if either is unparseable (other validation handles format);
+    // tstzrange() silently inverts a reversed window, so block it here.
+    return Number.isNaN(s) || Number.isNaN(e) || e >= s;
+  },
+  { path: ["scheduledEndAt"], message: "وقت نهاية الجدولة يجب ألا يسبق وقت بدايتها" },
+);
 
 const dispatchOrderActionSchema = z.object({
   action: z.enum(["notify", "accept", "decline", "start", "complete", "close", "cancel"]),
@@ -1270,21 +1279,28 @@ transportBookingsRouter.post(
         );
       }
 
-      const { insertId } = await rawExecute(
-        `INSERT INTO transport_dispatch_orders
-           ("companyId", "branchId", "bookingId", "bookingLineId",
-            "vehicleId", "driverId", "scheduledStartAt", "scheduledEndAt",
-            status, "dispatchedBy", "dispatchedAt")
-         VALUES ($1,$2,$3,$4, $5,$6,$7,$8, 'pending', $9, NOW())`,
-        [scope.companyId, scope.branchId ?? null, line.bookingId, b.bookingLineId,
-         b.vehicleId, b.driverId, b.scheduledStartAt, b.scheduledEndAt, scope.userId],
-      );
-      assertInsert(insertId, "transport_dispatch_orders");
-      await rawExecute(
-        `UPDATE transport_booking_lines SET status = 'dispatched', "updatedAt" = NOW()
-          WHERE id = $1 AND "companyId" = $2`,
-        [b.bookingLineId, scope.companyId],
-      );
+      // Creating the dispatch order + flipping the booking line to
+      // 'dispatched' are atomic: a dispatch order must never exist without
+      // its line marked dispatched (or a line flipped with no order).
+      // rawQuery joins the ambient transaction (txStore).
+      const insertId = await withTransaction(async () => {
+        const { insertId: orderId } = await rawExecute(
+          `INSERT INTO transport_dispatch_orders
+             ("companyId", "branchId", "bookingId", "bookingLineId",
+              "vehicleId", "driverId", "scheduledStartAt", "scheduledEndAt",
+              status, "dispatchedBy", "dispatchedAt")
+           VALUES ($1,$2,$3,$4, $5,$6,$7,$8, 'pending', $9, NOW())`,
+          [scope.companyId, scope.branchId ?? null, line.bookingId, b.bookingLineId,
+           b.vehicleId, b.driverId, b.scheduledStartAt, b.scheduledEndAt, scope.userId],
+        );
+        assertInsert(orderId, "transport_dispatch_orders");
+        await rawExecute(
+          `UPDATE transport_booking_lines SET status = 'dispatched', "updatedAt" = NOW()
+            WHERE id = $1 AND "companyId" = $2`,
+          [b.bookingLineId, scope.companyId],
+        );
+        return orderId;
+      });
       emitEvent({
         companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId,
         action: "fleet.dispatch.created", entity: "transport_dispatch_orders", entityId: insertId,

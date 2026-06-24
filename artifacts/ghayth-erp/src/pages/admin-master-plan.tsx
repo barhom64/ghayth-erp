@@ -22,10 +22,11 @@ import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
 import {
-  CheckCircle2, AlertTriangle, XCircle, ExternalLink, RefreshCw,
+  CheckCircle2, AlertTriangle, XCircle, ExternalLink,
   Layers, ArrowRight, Target, Lock, Sparkles, Radio, Activity, Workflow,
   AlertOctagon,
 } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 
 interface PlanItem {
   key: string;
@@ -101,9 +102,7 @@ export default function AdminMasterPlan() {
       subtitle="تتبّع حيّ لخطة Ghaith Enterprise Operating System عبر القنوات الفعلية للنظام"
       loading={isLoading}
       actions={
-        <Button variant="outline" size="sm" onClick={() => refetch()}>
-          <RefreshCw className="h-4 w-4 me-1" />تحديث
-        </Button>
+        <RefreshAction onRefresh={() => refetch()} />
       }
     >
       <PageStateWrapper isLoading={isLoading && !data} error={error} onRetry={refetch}>

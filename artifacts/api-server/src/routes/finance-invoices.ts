@@ -9,7 +9,7 @@ import {
   zodParse,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
-import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requireOwnership } from "../middlewares/contextualRbac.js";
@@ -51,9 +51,9 @@ const createInvoiceSchema = z.object({
   // still works exactly as today, falling back to the company-level
   // generic revenue account on approval.
   lines: z.array(z.object({
-    description: z.string().optional(),
+    description: z.string().max(2000, "الوصف طويل جدًا").optional(),
     quantity: z.coerce.number().optional(),
-    unitPrice: z.coerce.number().optional(),
+    unitPrice: z.coerce.number().nonnegative().optional(),
     accountCode: z.string().optional(),
     accountId: z.coerce.number().optional(),
     costCenterId: z.coerce.number().optional(),
@@ -80,13 +80,13 @@ const createInvoiceSchema = z.object({
     dimensionJson: z.record(z.any()).optional(),
     manualOverrideReason: z.string().optional(),
     total: z.coerce.number().optional(),
-  })).min(1, "يجب إضافة بند واحد على الأقل").optional(),
+  })).min(1, "يجب إضافة بند واحد على الأقل").max(500, "عدد بنود الفاتورة يتجاوز الحدّ المسموح (500)").optional(),
   // `vatRate` retained for backwards compatibility — old API callers
   // that don't know about tax_codes can still pass a literal rate.
   // New flow: pick a `taxCode` (header default) and the line math is
   // driven by tax_codes.rate. taxInclusive declares whether the entered
   // amount is gross or net.
-  vatRate: z.coerce.number().optional(),
+  vatRate: z.coerce.number().nonnegative().max(100, "نسبة الضريبة يجب ألا تتجاوز 100").optional(),
   taxCode: z.string().optional(),
   taxInclusive: z.boolean().optional(),
   dueDate: z.string().optional(),
@@ -94,7 +94,7 @@ const createInvoiceSchema = z.object({
   description: z.string().max(1000).optional(),
   subtotal: z.coerce.number().optional(),
   total: z.coerce.number().optional(),
-  notes: z.string().optional(),
+  notes: z.string().max(2000, "الملاحظات طويلة جدًا").optional(),
   paymentTermsDays: z.coerce.number().optional(),
   branchId: z.coerce.number().optional(),
   companyId: z.coerce.number().optional(),
@@ -121,7 +121,7 @@ const createPaymentSchema = z.object({
 
 const createCreditMemoSchema = z.object({
   amount: z.coerce.number().positive("المبلغ مطلوب"),
-  reason: z.string().min(1, "السبب مطلوب"),
+  reason: z.string().min(1, "السبب مطلوب").max(2000, "النص طويل جدًا"),
   vatIncluded: z.boolean().optional(),
   memoDate: z.string().optional(),
 });
@@ -129,7 +129,7 @@ const createCreditMemoSchema = z.object({
 // Preview-time schema — same shape, but `reason` is optional since the
 // operator may not have settled on a justification yet when previewing.
 const previewCreditMemoSchema = createCreditMemoSchema.omit({ reason: true }).extend({
-  reason: z.string().optional(),
+  reason: z.string().max(2000, "النص طويل جدًا").optional(),
 });
 
 // ZATCA invoice amendment — the only legal way to "edit" an approved
@@ -143,7 +143,7 @@ const previewCreditMemoSchema = createCreditMemoSchema.omit({ reason: true }).ex
 // — omitted fields fall back to the original invoice's value. `reason`
 // is mandatory because ZATCA filings include it on the chain.
 const amendInvoiceSchema = z.object({
-  reason: z.string().min(1, "سبب التعديل مطلوب"),
+  reason: z.string().min(1, "سبب التعديل مطلوب").max(2000, "النص طويل جدًا"),
   // Optional overrides — when set, the new invoice carries this value;
   // when omitted, the value carries over from the original. Same shape
   // as createInvoiceSchema so the orchestrator can spread it through.
@@ -152,7 +152,7 @@ const amendInvoiceSchema = z.object({
   dueDate: z.string().optional(),
   date: z.string().optional(),
   description: z.string().max(1000).optional(),
-  notes: z.string().optional(),
+  notes: z.string().max(2000, "الملاحظات طويلة جدًا").optional(),
   discountAmount: z.coerce.number().min(0).optional(),
   discountPercent: z.coerce.number().min(0).max(100).optional(),
   taxCode: z.string().optional(),
@@ -164,7 +164,7 @@ const createCustomerAdvanceSchema = z.object({
   amount: z.coerce.number().positive("المبلغ مطلوب"),
   method: z.string().optional(),
   reference: z.string().optional(),
-  notes: z.string().optional(),
+  notes: z.string().max(2000, "الملاحظات طويلة جدًا").optional(),
   receivedDate: z.string().optional(),
   // Operator's explicit branch pick. Required for multi-branch users;
   // single-branch users auto-resolve via the resolver. The advance JE
@@ -193,24 +193,26 @@ const createCustomerReceiptSchema = z.object({
   })).max(200).default([]),
   branchId: z.coerce.number().optional(),
   lineAllocation: z.record(z.string(), z.any()).optional(),
+  // #2698 — خزنة/بنك الإيداع صراحةً (يتجاوز الحلّ الآلي بالطريقة في سند القبض).
+  cashAccountCode: z.string().max(40).optional(),
 });
 
 const impactPreviewSchema = z.object({
   clientId: z.coerce.number().optional(),
   lines: z.array(z.any()).optional(),
-  taxRate: z.coerce.number().optional(),
+  taxRate: z.coerce.number().nonnegative().max(100, "نسبة الضريبة يجب ألا تتجاوز 100").optional(),
   dueInDays: z.coerce.number().optional(),
 });
 
 const patchInvoiceSchema = z.object({
   status: z.enum(["draft", "pending_approval", "approved", "sent", "partial", "partially_paid", "paid", "overdue", "void", "rejected", "cancelled", "returned", "delivered", "ordered", "posted", "closed", "invoiced"]).optional(),
-  description: z.string().optional(),
+  description: z.string().max(2000, "الوصف طويل جدًا").optional(),
   dueDate: z.string().optional(),
 });
 
 const createDebitMemoSchema = z.object({
   amount: z.coerce.number().positive("المبلغ مطلوب ويجب أن يكون أكبر من صفر"),
-  reason: z.string().min(1, "سبب الإشعار المدين مطلوب"),
+  reason: z.string().min(1, "سبب الإشعار المدين مطلوب").max(2000, "النص طويل جدًا"),
   vatIncluded: z.boolean().optional(),
   memoDate: z.string().optional(),
 });
@@ -218,7 +220,7 @@ const createDebitMemoSchema = z.object({
 // Preview-time schema — same shape, but `reason` is optional since the
 // operator may not have settled on a justification yet when previewing.
 const previewDebitMemoSchema = createDebitMemoSchema.omit({ reason: true }).extend({
-  reason: z.string().optional(),
+  reason: z.string().max(2000, "النص طويل جدًا").optional(),
 });
 
 const badDebtPostSchema = z.object({
@@ -231,7 +233,7 @@ const badDebtPostSchema = z.object({
     d90: z.coerce.number().optional(),
     d90plus: z.coerce.number().optional(),
   }).optional(),
-  notes: z.string().optional(),
+  notes: z.string().max(2000, "الملاحظات طويلة جدًا").optional(),
 });
 
 const applyAdvanceSchema = z.object({
@@ -240,13 +242,100 @@ const applyAdvanceSchema = z.object({
 });
 
 const invoiceApprovalActionSchema = z.object({
-  notes: z.string().optional(),
+  notes: z.string().max(2000, "الملاحظات طويلة جدًا").optional(),
 });
 
 const dunningSendSchema = z.object({
   invoiceIds: z.array(z.coerce.number()).min(1, "invoiceIds مطلوبة (قائمة معرفات الفواتير)"),
   sentVia: z.string().optional(),
 });
+
+// ── عقد المالية: إنشاء فاتورة خدمة مسوّدة + سطورها ─────────────────────────
+// المالية تملك جدولَي `invoices` و`invoice_lines`. المسارات الخادمة (النقل…)
+// التي تُسعّر بنودها وتحتاج إصدار فاتورة لا تكتب الجدولين مباشرةً — تستدعي هذا
+// العقد عبر import ديناميكي **ضمن معاملتها** (rawExecute ينضمّ لـtxStore الذي
+// يربطه withTransaction، فيبقى الإدراج ذرّيًا مع كتابات المسار الخادم).
+//
+// العقد يُرسّخ ثوابت الفاتورة المسوّدة المملوكة للمالية (لا يقرّرها المستدعي):
+// status='draft' وpaidAmount=0 — كل فاتورة تنشأ مسوّدة ثم يعتمدها المحاسب
+// فيُرحّل القيد عبر مسار الاعتماد القياسي (لا قيد محاسبي هنا). وقيم فاتورة
+// المبيعات القياسية (ZATCA): isTaxLinked=true، invoiceTypeCode='388' (فاتورة
+// ضريبية)، taxCategoryCode='S' (نسبة قياسية)، taxInclusive=false، بلا خصم.
+//
+// المستدعي يبقى مالكًا لكل ما عداه: الترقيم، تحليل الحسابات/الضريبة، مراكز
+// التكلفة، جداوله الخادمة (روابط/حالة فوترة). يستقبل invoiceId + معرّفات
+// السطور بالترتيب نفسه ليكمل ربطه.
+export interface ServiceInvoiceLineInput {
+  description: string;
+  quantity: string;
+  unitPrice: string | null;
+  lineTotal: number;
+  vatAmount: number;
+  lineGross: number;
+  accountCode: string;
+  costCenterId: number | null;
+  vehicleId: number | null;
+  driverId: number | null;
+  taxCode: string | null;
+}
+
+export async function createServiceInvoiceWithLines(params: {
+  companyId: number;
+  branchId: number | null;
+  clientId: number;
+  ref: string;
+  description: string;
+  subtotal: number;
+  vatRate: number;
+  vatAmount: number;
+  total: number;
+  dueDate: string | null;
+  createdBy: number;
+  notes: string | null;
+  taxCode: string | null;
+  lines: ServiceInvoiceLineInput[];
+}): Promise<{ invoiceId: number; lineIds: number[] }> {
+  const inv = await rawExecute(
+    `INSERT INTO invoices ("companyId","branchId","clientId",ref,description,
+            subtotal,"vatRate","vatAmount",total,"paidAmount",status,"dueDate","createdBy",notes,
+            "isTaxLinked","invoiceTypeCode","taxCategoryCode","exemptionReason","costCenter",
+            "taxCode","taxInclusive","discountAmount","discountPercent")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,'draft',$10,$11,$12,
+            true,'388','S',NULL,NULL,$13,false,0,0)
+     RETURNING id`,
+    [
+      params.companyId, params.branchId ?? null, params.clientId, params.ref, params.description,
+      params.subtotal, params.vatRate, params.vatAmount, params.total, params.dueDate ?? null,
+      params.createdBy, params.notes ?? null, params.taxCode ?? null,
+    ],
+  );
+  const invoiceId = assertInsert(inv.insertId, "invoices");
+
+  const lineIds: number[] = [];
+  for (const l of params.lines) {
+    const lineRes = await rawExecute(
+      `INSERT INTO invoice_lines (
+         "invoiceId",description,quantity,"unitPrice","lineTotal","vatAmount","lineGross",
+         "accountId","accountCode","costCenterId","activityType",
+         "projectId","vehicleId","propertyId","unitId","assetId",
+         "employeeId","driverId","contractId","umrahSeasonId","umrahAgentId",
+         "productId","taxCode","taxInclusive","allocationRuleId","allocationStatus",
+         "dimensionJson","manualOverrideReason"
+       )
+       VALUES ($1,$2,$3,$4,$5,$6,$7,NULL,$8,$9,NULL,
+               NULL,$10,NULL,NULL,NULL,NULL,$11,NULL,NULL,NULL,
+               NULL,$12,false,NULL,'resolved',NULL,NULL)
+       RETURNING id`,
+      [
+        invoiceId, l.description, l.quantity, l.unitPrice, l.lineTotal, l.vatAmount, l.lineGross,
+        l.accountCode, l.costCenterId, l.vehicleId, l.driverId, l.taxCode,
+      ],
+    );
+    lineIds.push(assertInsert(lineRes.insertId, "invoice_lines"));
+  }
+
+  return { invoiceId, lineIds };
+}
 
 export const invoicesRouter = Router();
 invoicesRouter.use(authMiddleware);
@@ -1046,6 +1135,17 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
         logAllocationOverride,
         getProductRevenueCodes,
       } = await import("../lib/accountingAllocation.js");
+      // #2102 — batch-load the product→revenue-account map ONCE, then inject
+      // it into the resolver so product-revenue selection happens INSIDE
+      // resolveLineAllocation at the right precedence (manual pin > rule >
+      // product revenue > generic). No per-line DB call; the old
+      // post-resolver bolt-on that read this map after the resolver is gone.
+      const productRevenueCodes = await getProductRevenueCodes(
+        scope.companyId,
+        dimLines.rows
+          .filter((ln) => ln.productId != null)
+          .map((ln) => Number(ln.productId)),
+      );
       const lineResolutions = await Promise.all(
         dimLines.rows.map((ln) =>
           resolveLineAllocation({
@@ -1056,6 +1156,8 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
             accountId: ln.accountId,
             costCenterId: ln.costCenterId,
             taxCode: ln.taxCode,
+            productId: ln.productId,
+            productRevenueCodes,
             dimensions: {
               vehicleId: ln.vehicleId,
               propertyId: ln.propertyId,
@@ -1126,18 +1228,6 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
       const totalNet = Number(invoice.total) - Number(invoice.vatAmount || 0);
       const revenueLines: JournalEntryLine[] = [];
 
-      // #1945 item 6 — خريطة إيراد المنتج: lines the resolver left without an
-      // account (no manual pin, no rule) consult the PRODUCT's mapped revenue
-      // account (products.defaultRevenueAccountId) before the generic
-      // company-level invoice_revenue — each product line lands on ITS
-      // revenue account, carrying its productId dim.
-      const productRevenueCodes = await getProductRevenueCodes(
-        scope.companyId,
-        dimLines.rows
-          .filter((ln, i) => !lineResolutions[i].resolvedAccountCode && ln.productId != null)
-          .map((ln) => Number(ln.productId)),
-      );
-
       if (dimLines.rows.length > 0) {
         // Group lines that share the SAME revenue account + dimension
         // signature into one journal_line, so the GL stays compact
@@ -1164,15 +1254,13 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
         for (let i = 0; i < dimLines.rows.length; i++) {
           const ln = dimLines.rows[i];
           const res = lineResolutions[i];
-          // Resolver picked an account (rule match or manual override);
-          // unmapped lines try the PRODUCT's mapped revenue account
-          // (#1945 item 6) before the generic invoice_revenue mapping so
-          // the entry still posts. The dimensions used in the bucket key
-          // come from the RESOLVER OUTPUT — for an 'explicit' or
-          // 'from_vehicle' strategy that may differ from the raw line.
-          const acct = res.resolvedAccountCode
-            || (ln.productId != null ? productRevenueCodes.get(Number(ln.productId)) : undefined)
-            || invRevenueCode;
+          // #2102 — the resolver now returns the account at the right
+          // precedence (manual pin > rule > product revenue); the route
+          // only supplies the generic invoice_revenue fallback. The
+          // dimensions used in the bucket key come from the RESOLVER OUTPUT
+          // — for an 'explicit' or 'from_vehicle' strategy that may differ
+          // from the raw line.
+          const acct = res.resolvedAccountCode || invRevenueCode;
           const dims = res.dimensions;
           const cc = res.costCenterId;
           const key = [
@@ -1588,6 +1676,15 @@ invoicesRouter.post("/invoices/:id/preview-posting", authorize({
     // rule shows as "resolved" with the rule's chosen account in the
     // preview, matching exactly what /approve would post.
     const { resolveLineAllocation, getProductRevenueCodes } = await import("../lib/accountingAllocation.js");
+    // #2102 — batch-load the product→revenue map ONCE and inject it so the
+    // resolver applies product-revenue selection internally (same precedence
+    // as /approve). The post-resolver bolt-on below is gone.
+    const productRevenueCodes = await getProductRevenueCodes(
+      scope.companyId,
+      lines
+        .filter((ln: any) => ln.productId != null)
+        .map((ln: any) => Number(ln.productId)),
+    );
     const lineResolutions = await Promise.all(
       lines.map((ln) =>
         resolveLineAllocation({
@@ -1598,6 +1695,8 @@ invoicesRouter.post("/invoices/:id/preview-posting", authorize({
           accountId: ln.accountId,
           costCenterId: ln.costCenterId,
           taxCode: ln.taxCode,
+          productId: ln.productId,
+          productRevenueCodes,
           dimensions: {
             vehicleId: ln.vehicleId,
             propertyId: ln.propertyId,
@@ -1641,14 +1740,6 @@ invoicesRouter.post("/invoices/:id/preview-posting", authorize({
     const unmappedLineIds: number[] = [];
     // Aggregate resolver warnings so the operator sees them in the preview.
     const resolverWarnings: Array<{ lineId: number; code: string; message: string }> = [];
-    // #1945 item 6 — same product-revenue-map fallback as /approve, so the
-    // preview shows the product's mapped revenue account, not the generic.
-    const productRevenueCodes = await getProductRevenueCodes(
-      scope.companyId,
-      lines
-        .filter((ln: any, i: number) => !lineResolutions[i].resolvedAccountCode && ln.productId != null)
-        .map((ln: any) => Number(ln.productId)),
-    );
     if (lines.length > 0) {
       const buckets = new Map<string, PreviewLine & { _amount: number }>();
       let postedNet = 0;
@@ -1657,10 +1748,10 @@ invoicesRouter.post("/invoices/:id/preview-posting", authorize({
         const res = lineResolutions[i];
 
         // Resolver output drives the bucket — same as /approve so the
-        // preview shows exactly what would post.
-        const acct = res.resolvedAccountCode
-          || (ln.productId != null ? productRevenueCodes.get(Number(ln.productId)) : undefined)
-          || invRevenueCode;
+        // preview shows exactly what would post. Product-revenue selection
+        // is now inside the resolver (#2102); the route only adds the
+        // generic fallback.
+        const acct = res.resolvedAccountCode || invRevenueCode;
         const cc = res.costCenterId;
         const dims = res.dimensions;
         if (res.status === "unmapped") unmappedLineIds.push(ln.id);
@@ -3049,15 +3140,12 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
         // — the reference is unique-per-memo so this targets exactly
         // the rows from this run. Migration 211 added the column.
         if (cogsReversalPlan.lineUpdates.length > 0) {
-          await client.query(
-            `UPDATE warehouse_movements
-                SET "journalEntryId" = $1
-              WHERE "companyId" = $2
-                AND reference = $3
-                AND type = 'return'
-                AND "journalEntryId" IS NULL`,
-            [memoJournalResult.journalId, scope.companyId, `CM-${memoId}`],
-          );
+          // حدّ المخزون (#2839): ختم معرّف القيد على حركات المخزون عبر عقد المخزون المالك.
+          const { stampMovementsJournalEntry } = await import("./warehouse.js");
+          await stampMovementsJournalEntry({
+            companyId: scope.companyId, reference: `CM-${memoId}`, type: "return",
+            journalEntryId: memoJournalResult.journalId,
+          });
         }
       }
     });
@@ -3359,15 +3447,12 @@ invoicesRouter.post("/invoices/:id/amend", authorize({ feature: "finance.invoice
           [memoPost.journalId, memoId, scope.companyId]
         );
         if (cogsReversalPlan.lineUpdates.length > 0) {
-          await client.query(
-            `UPDATE warehouse_movements
-                SET "journalEntryId" = $1
-              WHERE "companyId" = $2
-                AND reference = $3
-                AND type = 'return'
-                AND "journalEntryId" IS NULL`,
-            [memoPost.journalId, scope.companyId, `CM-${memoId}`],
-          );
+          // حدّ المخزون (#2839): ختم معرّف القيد على حركات المخزون عبر عقد المخزون المالك.
+          const { stampMovementsJournalEntry } = await import("./warehouse.js");
+          await stampMovementsJournalEntry({
+            companyId: scope.companyId, reference: `CM-${memoId}`, type: "return",
+            journalEntryId: memoPost.journalId,
+          });
         }
       }
 
@@ -4163,6 +4248,12 @@ invoicesRouter.post("/customer-advances", authorize({ feature: "finance.invoices
     });
     markIdempotencyReplay(req, res, advanceAlreadyExists);
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "finance.customer_advance.created", entity: "customer_advances", entityId: advanceId ?? 0,
+      after: { ref: advRef, clientId, amount: amt, journalId },
+    }).catch((e) => logger.error(e, "finance-invoices customer-advance-create audit failed"));
+
     res.status(201).json({ advanceId, ref: advRef, clientId, amount: amt, journalId, status: "open" });
   } catch (err) {
     handleRouteError(err, res, "Customer advance create error:");
@@ -4213,6 +4304,7 @@ invoicesRouter.post("/customer-receipts", authorize({ feature: "finance.invoices
       clientId: body.clientId,
       amount: body.amount,
       method: body.method === "bank" || body.method === "transfer" ? "bank_transfer" : body.method,
+      cashAccountCode: body.cashAccountCode ?? null,
       receiptKey: body.receiptKey,
       receivedDate: body.date,
       reference: body.reference ?? null,
@@ -4361,6 +4453,12 @@ invoicesRouter.post("/customer-advances/:id/apply", authorize({ feature: "financ
     // below would have responded with the error).
     const journalId = applyResult!.journalId;
     markIdempotencyReplay(req, res, applyResult!.alreadyExists);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "finance.customer_advance.applied", entity: "customer_advances", entityId: advanceId,
+      after: { invoiceId: Number(invoiceId), amount: applyAmt, journalId },
+    }).catch((e) => logger.error(e, "finance-invoices customer-advance-apply audit failed"));
 
     res.json({ advanceId, invoiceId: Number(invoiceId), amount: applyAmt, journalId });
   } catch (err) {
@@ -4615,9 +4713,16 @@ invoicesRouter.post("/dunning/send", authorize({ feature: "finance.collection", 
       results.push({ invoiceId: inv.id, letterId: row.id, stage: stg.stage, daysPastDue: days, outstanding, status: "sent" });
     }
 
+    const sentCount = results.filter(r => r.status === "sent").length;
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "finance.dunning.sent", entity: "dunning_letters", entityId: scope.companyId,
+      after: { sent: sentCount, total: results.length, sentVia },
+    }).catch((e) => logger.error(e, "finance-invoices dunning audit failed"));
+
     res.status(201).json({
       total: results.length,
-      sent: results.filter(r => r.status === "sent").length,
+      sent: sentCount,
       skipped: results.filter(r => r.status === "skipped").length,
       results,
     });

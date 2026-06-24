@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useApiQuery, useApiMutation } from "@/lib/api";
+import { useApiQuery, useApiMutation, apiFetch } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   PageStatusBadge,
@@ -42,7 +42,12 @@ const emptyForm: AgentForm = {
 
 export default function UmrahAgents() {
   const [, navigate] = useLocation();
-  const { data: resp, refetch, isLoading, isError, error } = useApiQuery<any>(["umrah-agents"], "/umrah/agents");
+  // #2713 (تعميم) — سلة المحذوفات للوكلاء.
+  const [showDeleted, setShowDeleted] = useState(false);
+  const { data: resp, refetch, isLoading, isError, error } = useApiQuery<any>(
+    ["umrah-agents", showDeleted ? "deleted" : "active"],
+    `/umrah/agents${showDeleted ? "?deleted=true" : ""}`,
+  );
   const items = resp?.data || [];
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
   const { toast } = useToast();
@@ -61,6 +66,16 @@ export default function UmrahAgents() {
   const deleteMut = useApiMutation<any, any>(() => `/umrah/agents/${deleteId}`, "DELETE", [["umrah-agents"]], {
     onSuccess: () => { refetch(); setDeleteId(null); toast({ title: "تم حذف الوكيل" }); },
   });
+
+  async function handleRestoreAgent(id: number) {
+    try {
+      await apiFetch(`/umrah/agents/${id}/restore`, { method: "POST" });
+      toast({ title: "تم استرجاع الوكيل" });
+      refetch();
+    } catch (e: any) {
+      toast({ variant: "destructive", title: e?.message || "تعذّر الاسترجاع" });
+    }
+  }
 
   function openCreate() {
     setForm(emptyForm);
@@ -125,10 +140,14 @@ export default function UmrahAgents() {
     { key: "status", header: "الحالة", sortable: true, render: (a) => <PageStatusBadge status={a.status} /> },
     {
       key: "id" as any, header: "", render: (a) => (
-        <div className="flex gap-1">
-          <Button variant="ghost" size="icon" title="تعديل" onClick={() => openEdit(a)}><Pencil className="h-4 w-4" /></Button>
-          <Button variant="ghost" size="icon" title="حذف" onClick={() => setDeleteId(a.id)}><Trash2 className="h-4 w-4 text-status-error" /></Button>
-        </div>
+        showDeleted ? (
+          <Button variant="outline" size="sm" onClick={() => handleRestoreAgent(a.id)}>استرجاع</Button>
+        ) : (
+          <div className="flex gap-1">
+            <Button variant="ghost" size="icon" title="تعديل" onClick={() => openEdit(a)}><Pencil className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="icon" title="حذف" onClick={() => setDeleteId(a.id)}><Trash2 className="h-4 w-4 text-status-error" /></Button>
+          </div>
+        )
       ),
     },
   ];
@@ -159,7 +178,12 @@ export default function UmrahAgents() {
       <UmrahTabsNav />
       <div className="flex items-center justify-between">
         <p className="text-muted-foreground">إدارة وكلاء العمرة</p>
-        <GuardedButton perm="umrah:create" onClick={openCreate} className="gap-2"><Plus className="h-4 w-4" />إضافة وكيل</GuardedButton>
+        <div className="flex items-center gap-2">
+          <Button variant={showDeleted ? "default" : "outline"} size="sm" onClick={() => setShowDeleted((v) => !v)}>
+            {showDeleted ? "الوكلاء النشطون" : "سلة المحذوفات"}
+          </Button>
+          <GuardedButton perm="umrah:create" onClick={openCreate} className="gap-2"><Plus className="h-4 w-4" />إضافة وكيل</GuardedButton>
+        </div>
       </div>
 
       <div className="grid gap-4 grid-cols-3">

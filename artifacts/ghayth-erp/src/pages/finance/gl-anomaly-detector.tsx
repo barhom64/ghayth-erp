@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import {
   Search, AlertTriangle, ChevronRight, ExternalLink,
   ScaleIcon, DollarSign, Clock, RotateCcw, Copy, Layers,
@@ -313,45 +314,51 @@ export default function GlAnomalyDetectorPage() {
                     </CardHeader>
                     {isOpen && (
                       <CardContent className="pt-0">
-                        <table className="w-full text-xs">
-                          <thead>
-                            <tr className="border-b text-muted-foreground">
-                              <th className="text-start py-1 px-2">الحساب</th>
-                              <th className="text-start py-1 px-2">الوصف</th>
-                              <th className="text-end py-1 px-2">مدين</th>
-                              <th className="text-end py-1 px-2">دائن</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {je.lines.map((l, i) => (
-                              <tr key={i} className="border-b">
-                                <td className="py-1 px-2 font-mono">{l.accountCode}</td>
-                                <td className="py-1 px-2 truncate max-w-xs">{l.description ?? "—"}</td>
-                                <td className="py-1 px-2 text-end tabular-nums">
-                                  {Number(l.debit) > 0 ? formatCurrency(Number(l.debit)) : "—"}
-                                </td>
-                                <td className="py-1 px-2 text-end tabular-nums">
-                                  {Number(l.credit) > 0 ? formatCurrency(Number(l.credit)) : "—"}
-                                </td>
+                        <DataTable
+                          noToolbar
+                          pageSize={0}
+                          className="text-xs"
+                          data={je.lines}
+                          rowKey={(_l, i) => i}
+                          columns={[
+                            {
+                              key: "accountCode", header: "الحساب", className: "font-mono",
+                              render: (l) => l.accountCode,
+                            },
+                            {
+                              key: "description", header: "الوصف", className: "truncate max-w-xs",
+                              render: (l) => l.description ?? "—",
+                              exportValue: (l) => l.description ?? "",
+                            },
+                            {
+                              key: "debit", header: "مدين", align: "end", className: "tabular-nums",
+                              render: (l) => (Number(l.debit) > 0 ? formatCurrency(Number(l.debit)) : "—"),
+                              exportValue: (l) => Number(l.debit),
+                            },
+                            {
+                              key: "credit", header: "دائن", align: "end", className: "tabular-nums",
+                              render: (l) => (Number(l.credit) > 0 ? formatCurrency(Number(l.credit)) : "—"),
+                              exportValue: (l) => Number(l.credit),
+                            },
+                          ] satisfies DataTableColumn<JeLine>[]}
+                          renderGrandTotal={() => (
+                            <>
+                              <tr className="font-semibold">
+                                <td colSpan={2} className="py-1 px-2">الإجمالي</td>
+                                <td className="py-1 px-2 text-end tabular-nums">{formatCurrency(totalDebit)}</td>
+                                <td className="py-1 px-2 text-end tabular-nums">{formatCurrency(totalCredit)}</td>
                               </tr>
-                            ))}
-                          </tbody>
-                          <tfoot>
-                            <tr className="font-semibold">
-                              <td colSpan={2} className="py-1 px-2">الإجمالي</td>
-                              <td className="py-1 px-2 text-end tabular-nums">{formatCurrency(totalDebit)}</td>
-                              <td className="py-1 px-2 text-end tabular-nums">{formatCurrency(totalCredit)}</td>
-                            </tr>
-                            {Math.abs(totalDebit - totalCredit) > 0.01 && (
-                              <tr className="text-status-danger-foreground font-semibold">
-                                <td colSpan={2} className="py-1 px-2">الفرق</td>
-                                <td colSpan={2} className="py-1 px-2 text-end tabular-nums">
-                                  {formatCurrency(Math.abs(totalDebit - totalCredit))}
-                                </td>
-                              </tr>
-                            )}
-                          </tfoot>
-                        </table>
+                              {Math.abs(totalDebit - totalCredit) > 0.01 && (
+                                <tr className="text-status-danger-foreground font-semibold">
+                                  <td colSpan={2} className="py-1 px-2">الفرق</td>
+                                  <td colSpan={2} className="py-1 px-2 text-end tabular-nums">
+                                    {formatCurrency(Math.abs(totalDebit - totalCredit))}
+                                  </td>
+                                </tr>
+                              )}
+                            </>
+                          )}
+                        />
                         <div className="flex justify-end mt-3">
                           <Button asChild variant="outline" size="sm"><Link href={`/finance/journal/${je.id}`}>
                               <ExternalLink className="w-3 h-3 ml-1" />

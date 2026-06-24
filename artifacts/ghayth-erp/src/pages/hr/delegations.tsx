@@ -3,7 +3,7 @@ import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { EmployeeSelect } from "@/components/shared/entity-selects";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import {
@@ -53,8 +53,6 @@ export default function DelegationsPage() {
   const delegations = asList(data?.data || data);
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(delegations);
 
-  const { data: empsResp } = useApiQuery<any>(["employees-list"], "/employees?limit=500");
-  const employees = asList(empsResp?.data || empsResp);
 
   const createMut = useApiMutation<any, { delegateId: number; scope?: string; reason: string; startDate?: string; endDate?: string; features?: string[] }>(
     "/hr/delegations",
@@ -94,13 +92,13 @@ export default function DelegationsPage() {
   };
 
   const columns: DataTableColumn<any>[] = [
-    { key: "delegatorName", header: "المُفوِّض", render: (r) => r.delegatorName || `#${r.delegatorId}` },
-    { key: "delegateName", header: "المُفوَّض إليه", render: (r) => r.delegateName || `#${r.delegateId}` },
+    { key: "delegatorName", header: "المُفوِّض", searchable: true, render: (r) => r.delegatorName || `#${r.delegatorId}` },
+    { key: "delegateName", header: "المُفوَّض إليه", searchable: true, render: (r) => r.delegateName || `#${r.delegateId}` },
     { key: "features", header: "الصلاحيات المفوَّضة", render: (r) => <span className="max-w-[260px] truncate inline-block">{describeFeatures(r.features)}</span> },
     { key: "status", header: "الحالة", render: (r) => <PageStatusBadge status={r.status} /> },
     { key: "startDate", header: "من", render: (r) => (r.startDate ? formatDateAr(r.startDate) : "—") },
     { key: "endDate", header: "إلى", render: (r) => (r.endDate ? formatDateAr(r.endDate) : "—") },
-    { key: "reason", header: "السبب", render: (r) => <span className="max-w-[260px] truncate inline-block">{r.reason || "—"}</span> },
+    { key: "reason", header: "السبب", searchable: true, render: (r) => <span className="max-w-[260px] truncate inline-block">{r.reason || "—"}</span> },
     { key: "actions", header: "", render: (r) => (
       r.status === "active" ? (
         <GuardedButton perm="hr.organization:approve" variant="ghost" size="sm" className="text-status-error-foreground h-7 px-2" onClick={() => revoke(r.id)}>
@@ -153,15 +151,11 @@ export default function DelegationsPage() {
           <CardContent>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <Label>المُفوَّض إليه</Label>
-                <Select value={form.delegateId} onValueChange={(v) => setForm((f) => ({ ...f, delegateId: v }))}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="اختر موظفًا" /></SelectTrigger>
-                  <SelectContent>
-                    {employees.map((e: any) => (
-                      <SelectItem key={e.id} value={String(e.id)}>{e.name || `#${e.id}`}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <EmployeeSelect
+                  label="المُفوَّض إليه"
+                  value={form.delegateId}
+                  onChange={(v) => setForm((f) => ({ ...f, delegateId: v }))}
+                />
               </div>
               <div>
                 <Label>النطاق</Label>
@@ -212,8 +206,8 @@ export default function DelegationsPage() {
         columns={columns}
         onSortedDataChange={setPrintRows}
         data={delegations}
+        searchPlaceholder="بحث بالمُفوِّض أو المُفوَّض إليه أو السبب…"
         emptyMessage="لا توجد تفويضات"
-        noToolbar
       />
     </PageShell>
   );

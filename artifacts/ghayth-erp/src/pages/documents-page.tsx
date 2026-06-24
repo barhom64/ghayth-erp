@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { API_BASE, nativeAuthHeaders } from "@/lib/api";
 import { z } from "zod";
 import { Link, useLocation } from "wouter";
 import {
@@ -68,7 +69,7 @@ const CATEGORY_EFFECTS: Record<string, { icon: string; approvedEffect: string; s
   other: { icon: "📄", approvedEffect: "اعتماد المستند يُبدأ تأثيره المرتبط", severity: "info" },
 };
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+const BASE = API_BASE;
 
 function formatSize(bytes: number) {
   if (!bytes) return "-";
@@ -201,6 +202,7 @@ function DocumentsList() {
     try {
       const res = await fetch(`${BASE}/api/documents/${docId}/download`, {
         credentials: "include",
+        headers: { ...nativeAuthHeaders() },
       });
       if (!res.ok) throw new Error("فشل التنزيل");
       const blob = await res.blob();

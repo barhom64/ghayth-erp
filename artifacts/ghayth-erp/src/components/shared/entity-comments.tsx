@@ -12,6 +12,10 @@ import { toast } from "@/hooks/use-toast";
 interface EntityCommentsProps {
   entityType: string;
   entityId: number | string;
+  /** When set, the thread is scoped to a specific attachment (document) of the
+   *  entity — a reviewer↔submitter dialogue on that file. Omit for the
+   *  entity-level «المناقشة» thread. */
+  documentId?: number | string | null;
   className?: string;
 }
 
@@ -49,10 +53,14 @@ function CommentRow() {
   );
 }
 
-export function EntityComments({ entityType, entityId, className }: EntityCommentsProps) {
+export function EntityComments({ entityType, entityId, documentId = null, className }: EntityCommentsProps) {
   const qc = useQueryClient();
-  const qk = ["entity-comments", entityType, String(entityId)];
-  const { data } = useApiQuery<any>(qk, `/entity-meta/comments/${entityType}/${entityId}`, !!entityId);
+  const docKey = documentId != null && documentId !== "" ? String(documentId) : "";
+  const qk = ["entity-comments", entityType, String(entityId), docKey];
+  const listUrl = docKey
+    ? `/entity-meta/comments/${entityType}/${entityId}?documentId=${docKey}`
+    : `/entity-meta/comments/${entityType}/${entityId}`;
+  const { data } = useApiQuery<any>(qk, listUrl, !!entityId);
   const comments = data?.data || [];
 
   const removeComment = async (id: number) => {
@@ -79,7 +87,7 @@ export function EntityComments({ entityType, entityId, className }: EntityCommen
           try {
             await apiFetch(`/entity-meta/comments/${entityType}/${entityId}`, {
               method: "POST",
-              body: JSON.stringify({ body: values.body.trim() }),
+              body: JSON.stringify({ body: values.body.trim(), ...(docKey ? { documentId: Number(docKey) } : {}) }),
             });
             qc.invalidateQueries({ queryKey: qk });
             ctx.reset();

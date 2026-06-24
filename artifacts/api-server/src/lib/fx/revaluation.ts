@@ -1,4 +1,13 @@
 /**
+ * مُشغِّل حساب إعادة تقييم الفترة (حيّ — أُحيي 2026-06-23). `runPeriodEndRevaluation`
+ * يُستدعى من `POST /finance/fx/revaluation/compute` فيملأ fx_revaluation_log +
+ * fx_revaluation_lines (طابور الترحيل المؤجَّل). الترحيل نفسه يتم لاحقًا عبر
+ * `POST /finance/gl-helpers/fx-revaluation/:revaluationLogId` →
+ * lib/fx/post-revaluation-journal.postFxRevaluationJournal. هذا التدفّق موازٍ
+ * للمسار المباشر `POST /finance/fx/revaluation/post`، ويتقاسمان حاجز ازدواج صلبًا
+ * على مستوى DB عبر قيد UNIQUE(companyId, period) على جدول fx_revaluations
+ * (يكتبه كلا المسارين عند الترحيل) — أيّهما سبق يحجب الآخر لنفس الفترة.
+ *
  * Period-end FX revaluation per IAS 21.
  *
  * "Monetary items denominated in a foreign currency are translated
@@ -153,15 +162,12 @@ export interface RunPeriodEndOpts {
 
 /**
  * Walk every monetary item for the company, compute lines, and
- * write the audit log. Journal-entry construction itself lives
- * outside this module because the chart-of-accounts mapping
- * (which 4XXX gain account, which 5XXX loss account) is a
- * per-tenant config concern — for now we record the totals in
- * `fx_revaluation_log.totalGain/totalLoss` and leave the
- * `journalEntryId` NULL for the operator to post manually.
- *
- * The DB-side journal posting will be wired in a follow-up once
- * the GL-account-by-purpose lookup helper lands.
+ * write fx_revaluation_log + fx_revaluation_lines with
+ * `journalEntryId` NULL — البند يدخل طابور الترحيل المؤجَّل. الترحيل
+ * الفعلي (بناء القيد المتوازن بأبعاد الكيان + ختم journalEntryId +
+ * كتابة حاجز fx_revaluations) يتم لاحقًا عبر
+ * lib/fx/post-revaluation-journal.postFxRevaluationJournal، الذي يحلّ
+ * حساب المكسب/الخسارة (4XXX/5XXX) وقت الترحيل عبر getAccountForPurpose.
  */
 export async function runPeriodEndRevaluation(opts: RunPeriodEndOpts): Promise<RevaluationResult> {
   return withTransaction(async () => {

@@ -16,8 +16,10 @@ import { join } from "node:path";
  * (3) /umrah/reports hub + nav tab — single entry point for all
  *     existing + new reports, grouped by category.
  */
+// U-07 Phase 13 — agent-balances + pilgrim-movements reports carved into
+// umrah-reports.ts.
 const ROUTE_ENT = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-reports.ts"),
   "utf8",
 );
 const HUB_PAGE = readFileSync(
@@ -37,7 +39,7 @@ const ROUTES_TSX = readFileSync(
   "utf8",
 );
 const TABS = readFileSync(
-  join(import.meta.dirname!, "../../../ghayth-erp/src/components/shared/umrah-tabs-nav.tsx"),
+  join(import.meta.dirname!, "../../../ghayth-erp/src/components/layout/navigation.registry.ts"),
   "utf8",
 );
 
@@ -166,8 +168,8 @@ describe("reports hub + new pages — registration + nav", () => {
   });
 
   it("'التقارير' tab added to umrah nav", () => {
-    expect(TABS).toMatch(/href: "\/umrah\/reports", label: "التقارير"/);
-    expect(TABS).toMatch(/BarChart3/);
+    expect(TABS).toMatch(/label: "التقارير", path: "\/umrah\/reports"/);
+    expect(TABS).toMatch(/FileBarChart/);
   });
 
   it("hub page exposes category + status filters (§11 of #1870)", () => {
@@ -199,10 +201,13 @@ describe("reports hub + new pages — registration + nav", () => {
 
 describe("agent balances page — UX", () => {
   it("renders 4 KPI tiles + filters + table with stable testids", () => {
-    expect(AGENTS_PAGE).toContain('data-testid="agent-balances-filter-season"');
-    expect(AGENTS_PAGE).toContain('data-testid="agent-balances-filter-status"');
-    expect(AGENTS_PAGE).toContain('data-testid="agent-balances-filter-outstanding"');
-    expect(AGENTS_PAGE).toContain('data-testid="agent-balances-search"');
+    // Filters unified into the canonical <AdvancedFilters> bar (was 4 bespoke
+    // controls: season/status/outstanding/search). The status enum + the
+    // season/outstanding extra-filters + the search placeholder feed it.
+    expect(AGENTS_PAGE).toMatch(/<AdvancedFilters/);
+    expect(AGENTS_PAGE).toContain('key: "seasonId"');
+    expect(AGENTS_PAGE).toContain('key: "hasOutstanding"');
+    expect(AGENTS_PAGE).toContain('searchPlaceholder: "اسم / رقم نسك / دولة..."');
     expect(AGENTS_PAGE).toContain('data-testid="agent-balances-table"');
     expect(AGENTS_PAGE).toContain("data-testid={`agent-balances-row-${r.id}`}");
     expect(AGENTS_PAGE).toContain("data-testid={`agent-balances-outstanding-${r.id}`}");

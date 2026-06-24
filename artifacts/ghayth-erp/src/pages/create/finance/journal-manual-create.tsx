@@ -1,10 +1,8 @@
 import { useLocation } from "wouter";
-import { useApiQuery, useApiMutation } from "@/lib/api";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { useAppContext } from "@/contexts/app-context";
+import { useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
-import { CostCenterSelect } from "@/components/shared/entity-selects";
+import { BranchSelect, CostCenterSelect, PostingAccountSelect } from "@/components/shared/entity-selects";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
@@ -14,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { NumberField } from "@/components/shared/form-field-wrapper";
 import { LineAllocationPanel, type LineAllocation, deriveAllocationStatus, buildAllocationPayload } from "@/components/shared/line-allocation-panel";
+import { LineItemsTable } from "@/components/shared/line-items-table";
 
 type JournalLine = {
   accountCode: string;
@@ -31,22 +30,16 @@ const emptyLine = (): JournalLine => ({
 export default function JournalManualCreatePage() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
-  const { scopeQueryString } = useAppContext();
-  const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("finance_journal_manual_create", {
     description: "",
     date: todayLocal(),
+    branchId: "",
     costCenter: "",
     notes: "",
     lines: [emptyLine(), emptyLine()],
   });
   const { fieldErrors, validate } = useFieldErrors();
-
-  const { data: coaData, isLoading, isError } = useApiQuery<any>(
-    ["chart-of-accounts"],
-    `/finance/chart-of-accounts${scopeSuffix}`
-  );
 
   const createMutation = useApiMutation<unknown, any>(
     "/finance/journal-manual",
@@ -58,10 +51,6 @@ export default function JournalManualCreatePage() {
     },
   );
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
-  const coa = coaData?.data ?? coaData ?? [];
 
   const totalDebit = roundMoney(form.lines.reduce((s, l) => s + roundMoney(l.debit), 0));
   const totalCredit = roundMoney(form.lines.reduce((s, l) => s + roundMoney(l.credit), 0));
@@ -92,6 +81,9 @@ export default function JournalManualCreatePage() {
     createMutation.mutate({
       ...form,
       date: form.date || undefined,
+      // #2230 — multi-branch users must pick a branch (backend returns
+      // BRANCH_REQUIRED); single-branch users auto-derive from scope.
+      branchId: form.branchId ? Number(form.branchId) : undefined,
       lines: form.lines.map((l) => ({
         accountCode: l.accountCode,
         description: l.description,
@@ -123,76 +115,81 @@ export default function JournalManualCreatePage() {
                 <Input required value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="وصف القيد اليدوي" />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">التاريخ</label>
+                <label className="block text-sm font-medium mb-1">تاريخ القيد</label>
                 <DatePicker value={form.date} onChange={v => setForm(f => ({ ...f, date: v }))} />
               </div>
+              {/* #2230 — mirror the journal-create exemplar: multi-branch users
+                  must pick a branch (backend BRANCH_REQUIRED); single-branch
+                  auto-derives from scope. Was missing → manual journals failed. */}
+              <BranchSelect
+                value={form.branchId ?? ""}
+                onChange={(v) => setForm(f => ({ ...f, branchId: String(v ?? "") }))}
+                label="الفرع"
+                allowCreate={false}
+              />
               <CostCenterSelect
                 value={form.costCenter}
                 onChange={(v) => setForm(f => ({ ...f, costCenter: v }))}
               />
             </div>
 
-            <div className="rounded-xl border overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-surface-subtle">
-                  <tr>
-                    <th className="px-3 py-2 text-right">رمز الحساب</th>
-                    <th className="px-3 py-2 text-right">البيان</th>
-                    <th className="px-3 py-2 text-right">مدين</th>
-                    <th className="px-3 py-2 text-right">دائن</th>
-                    <th className="px-3 py-2"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {form.lines.map((line, i) => (
-                    <>
-                      <tr key={`row-${i}`} className="border-t">
-                        <td className="px-2 py-1">
-                          <Input
-                            list={`coa-list-${i}`}
-                            value={line.accountCode}
-                            onChange={e => updateLine(i, "accountCode", e.target.value)}
-                            placeholder="الحساب"
-                          />
-                          <datalist id={`coa-list-${i}`}>
-                            {(Array.isArray(coa) ? coa : []).map((a: any) => <option key={a.code} value={a.code}>{a.code} - {a.name}</option>)}
-                          </datalist>
-                        </td>
-                        <td className="px-2 py-1">
-                          <Input value={line.description} onChange={e => updateLine(i, "description", e.target.value)} placeholder="البيان" />
-                        </td>
-                        <td className="px-2 py-1">
-                          <NumberField label="مدين" hideLabel className="w-24" min={0} value={line.debit || ""} onChange={v => updateLine(i, "debit", v)} placeholder="0" />
-                        </td>
-                        <td className="px-2 py-1">
-                          <NumberField label="دائن" hideLabel className="w-24" min={0} value={line.credit || ""} onChange={v => updateLine(i, "credit", v)} placeholder="0" />
-                        </td>
-                        <td className="px-2 py-1">
-                          <button type="button" onClick={() => removeLine(i)} className="text-red-400 hover:text-status-error-foreground text-lg leading-none">&times;</button>
-                        </td>
-                      </tr>
-                      <tr key={`alloc-${i}`}>
-                        <td colSpan={5} className="px-2 pb-2">
-                          <LineAllocationPanel
-                            value={line.allocation ?? {}}
-                            onChange={(next) => updateLine(i, "allocation" as any, next as any)}
-                            status={deriveAllocationStatus(line.allocation ?? {})}
-                          />
-                        </td>
-                      </tr>
-                    </>
-                  ))}
-                </tbody>
-                <tfoot className="bg-surface-subtle font-semibold">
-                  <tr>
-                    <td colSpan={2} className="px-3 py-2 text-muted-foreground">المجموع</td>
-                    <td className={`px-3 py-2 ${isBalanced ? "text-status-success-foreground" : "text-status-error-foreground"}`}>{formatCurrency(totalDebit)}</td>
-                    <td className={`px-3 py-2 ${isBalanced ? "text-status-success-foreground" : "text-status-error-foreground"}`}>{formatCurrency(totalCredit)}</td>
-                    <td></td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
+            {/* الجدول الموحّد للإدخالات المالية — يعتمد المكوّن المشترك
+                <LineItemsTable> بدل جدول يدوي مكرّر (نفس الأعمدة والسلوك:
+                إضافة/حذف سطر، لوحة الأبعاد لكل سطر، صف المجموع). */}
+            <LineItemsTable
+              items={form.lines}
+              minItems={2}
+              onAdd={addLine}
+              onRemove={removeLine}
+              addLabel="إضافة سطر"
+              columns={[
+                {
+                  header: "رمز الحساب",
+                  render: (line, i) => (
+                    <PostingAccountSelect
+                      value={line.accountCode}
+                      onChange={(v) => updateLine(i, "accountCode", v)}
+                      label="رمز الحساب"
+                      placeholder="اختر حسابًا قابلًا للترحيل"
+                      error={fieldErrors[`lines.${i}.accountCode`]}
+                    />
+                  ),
+                },
+                {
+                  header: "البيان",
+                  render: (line, i) => (
+                    <Input value={line.description} onChange={e => updateLine(i, "description", e.target.value)} placeholder="البيان" />
+                  ),
+                },
+                {
+                  header: "مدين", width: "120px",
+                  render: (line, i) => (
+                    <NumberField label="مدين" hideLabel className="w-24" min={0} value={line.debit || ""} onChange={v => updateLine(i, "debit", v)} placeholder="0" />
+                  ),
+                },
+                {
+                  header: "دائن", width: "120px",
+                  render: (line, i) => (
+                    <NumberField label="دائن" hideLabel className="w-24" min={0} value={line.credit || ""} onChange={v => updateLine(i, "credit", v)} placeholder="0" />
+                  ),
+                },
+              ]}
+              renderExpansion={(line, i) => (
+                <LineAllocationPanel
+                  value={line.allocation ?? {}}
+                  onChange={(next) => updateLine(i, "allocation" as any, next as any)}
+                  status={deriveAllocationStatus(line.allocation ?? {})}
+                />
+              )}
+              renderTotals={() => (
+                <tr className="bg-surface-subtle font-semibold border-t">
+                  <td colSpan={2} className="px-3 py-2 text-muted-foreground">المجموع</td>
+                  <td className={`px-3 py-2 ${isBalanced ? "text-status-success-foreground" : "text-status-error-foreground"}`}>{formatCurrency(totalDebit)}</td>
+                  <td className={`px-3 py-2 ${isBalanced ? "text-status-success-foreground" : "text-status-error-foreground"}`}>{formatCurrency(totalCredit)}</td>
+                  <td></td>
+                </tr>
+              )}
+            />
 
             {!isBalanced && totalDebit > 0 && (
               <div className="text-sm text-status-error-foreground bg-status-error-surface border border-status-error-surface rounded-lg px-3 py-2">
@@ -204,8 +201,6 @@ export default function JournalManualCreatePage() {
                 القيد متوازن
               </div>
             )}
-
-            <Button type="button" variant="outline" size="sm" onClick={addLine}>+ إضافة سطر</Button>
 
             <div>
               <label className="block text-sm font-medium mb-1">ملاحظات</label>

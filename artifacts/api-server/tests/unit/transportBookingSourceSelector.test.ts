@@ -80,7 +80,8 @@ describe("#1812 — booking-create wires the source selector at top of form", ()
     expect(CREATE).toMatch(/const \[customerId, setCustomerId\]/);
     expect(CREATE).toMatch(/const \[contractId, setContractId\]/);
     expect(CREATE).toMatch(/const \[projectId, setProjectId\]/);
-    expect(CREATE).toMatch(/const \[recurringTemplateId, setRecurringTemplateId\]/);
+    // #1812 audit fix — renamed from recurringTemplateId to routePatternId.
+    expect(CREATE).toMatch(/const \[routePatternId, setRoutePatternId\]/);
   });
 
   it("applyPrefill writes EVERY prefill field onto form state", () => {

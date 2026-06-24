@@ -21,6 +21,8 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { FleetTelematicsTabsNav } from "@/components/shared/fleet-telematics-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 interface LeaderboardRow {
   driverId: number;
@@ -84,6 +86,7 @@ export default function FleetTelematicsScorecard() {
     `/fleet/telematics/drivers/scorecard-leaderboard?${qs.toString()}`,
   );
   const rows = asList(data) as LeaderboardRow[];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
   const meta = data?.meta;
 
   const drillQs = new URLSearchParams();
@@ -230,6 +233,24 @@ export default function FleetTelematicsScorecard() {
         { href: "/fleet/telematics/live-map", label: "التتبع المباشر" },
         { label: "بطاقة الأداء" },
       ]}
+      actions={
+        <PrintButton
+          entityType="report_fleet_driver_scorecard"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "بطاقة أداء السلامة للسائقين", total: printRows.length },
+            items: printRows.map((r: any, i: number) => ({
+              "الترتيب": i + 1,
+              "السائق": r.driverName,
+              "النقاط": `${r.safetyScore} / 100`,
+              "تنبيهات": r.totalAlerts,
+              "حادة": r.severeCount,
+              "آخر تنبيه": r.lastAlertAt ? new Date(r.lastAlertAt).toLocaleString("ar-SA") : "نظيف",
+            })),
+          })}
+        />
+      }
     >
       <FleetTabsNav />
       <FleetTelematicsTabsNav />
@@ -319,6 +340,7 @@ export default function FleetTelematicsScorecard() {
           <DataTable
             columns={columns}
             data={rows}
+            onSortedDataChange={setPrintRows}
             searchPlaceholder="ابحث عن سائق…"
             emptyMessage="لا سائقين في النطاق الحالي"
           />

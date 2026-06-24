@@ -37,13 +37,13 @@ const bankReconciliationRowSchema = z.object({
 
 const bankImportSchema = z.object({
   rows: z.array(bankReconciliationRowSchema).min(1),
-  accountCode: z.string().default("1120"),
+  accountCode: z.string().default("1124"),
   statementDate: z.string().optional(),
 });
 
 const bankAutoMatchSchema = z.object({
   batchId: z.string().min(1),
-  accountCode: z.string().default("1120"),
+  accountCode: z.string().default("1124"),
   toleranceDays: z.coerce.number().default(3),
 });
 
@@ -76,9 +76,9 @@ const createFixedAssetSchema = z.object({
   category: z.string().optional().nullable(),
   branchId: z.coerce.number().optional(),
   depreciationMethod: z.string().default("straight_line"),
-  assetAccountCode: z.string().default("1500"),
-  depreciationAccountCode: z.string().default("6100"),
-  accDepreciationAccountCode: z.string().default("1590"),
+  assetAccountCode: z.string().default("1280"),
+  depreciationAccountCode: z.string().default("5790"),
+  accDepreciationAccountCode: z.string().default("1290"),
   // Asset Acquisition Center: when a payment-source (credit) account is
   // supplied, the create also posts a balanced acquisition entry
   // (Dr asset account / Cr payment source) so the purchase is capitalised,
@@ -1411,8 +1411,8 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/depreciate", authorize({ feature
         sourceId: asset.id as number,
         sourceKey: `finance:depreciation:${asset.id}:${targetPeriod}`,
         lines: [
-          { accountCode: (asset.depreciationAccountCode as string | null) ?? "6100", debit: depAmount, credit: 0, description: `إهلاك ${asset.name}`, assetId: asset.id as number },
-          { accountCode: (asset.accDepreciationAccountCode as string | null) ?? "1590", debit: 0, credit: depAmount, description: `مجمع إهلاك ${asset.name}`, assetId: asset.id as number },
+          { accountCode: (asset.depreciationAccountCode as string | null) ?? "5790", debit: depAmount, credit: 0, description: `إهلاك ${asset.name}`, assetId: asset.id as number },
+          { accountCode: (asset.accDepreciationAccountCode as string | null) ?? "1290", debit: 0, credit: depAmount, description: `مجمع إهلاك ${asset.name}`, assetId: asset.id as number },
         ],
       });
       journalId = posted.journalId;
@@ -1515,8 +1515,8 @@ financeAlgorithmsRouter.post("/fixed-assets/depreciate-all", authorize({ feature
           sourceId: asset.id as number,
           sourceKey: `finance:depreciation:${asset.id}:${targetPeriod}`,
           lines: [
-            { accountCode: (asset.depreciationAccountCode as string | null) ?? "6100", debit: depAmount, credit: 0, assetId: asset.id as number },
-            { accountCode: (asset.accDepreciationAccountCode as string | null) ?? "1590", debit: 0, credit: depAmount, assetId: asset.id as number },
+            { accountCode: (asset.depreciationAccountCode as string | null) ?? "5790", debit: depAmount, credit: 0, assetId: asset.id as number },
+            { accountCode: (asset.accDepreciationAccountCode as string | null) ?? "1290", debit: 0, credit: depAmount, assetId: asset.id as number },
           ],
         });
 
@@ -1731,7 +1731,7 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/dispose", authorize({ feature: "
       (storedAssetCode && storedAssetCode !== "1500")
         ? Promise.resolve(storedAssetCode)
         : financialEngine.resolveAccountCode(scope.companyId, "asset_cost", "credit", "1270"),
-      (storedAccDepCode && storedAccDepCode !== "1590")
+      (storedAccDepCode && storedAccDepCode !== "1290")
         ? Promise.resolve(storedAccDepCode)
         : financialEngine.resolveAccountCode(scope.companyId, "asset_accumulated_depreciation", "debit", "1290"),
       // fallback 1111 (نقدية صندوق — postable leaf) — main أصلح هذا في #2192
@@ -2065,8 +2065,8 @@ financeAlgorithmsRouter.get("/cip/:id", authorize({ feature: "finance.algorithms
     );
     if (!cip) throw new NotFoundError("مشروع CIP غير موجود");
     const costs = await rawQuery<Record<string, unknown>>(
-      `SELECT * FROM cip_costs WHERE "cipId"=$1 AND "deletedAt" IS NULL ORDER BY "costDate" ASC, id ASC`,
-      [id]
+      `SELECT * FROM cip_costs WHERE "cipId"=$1 AND "companyId" = $2 AND "deletedAt" IS NULL ORDER BY "costDate" ASC, id ASC`,
+      [id, scope.companyId]
     );
     res.json({ ...cip, costs });
   } catch (err) {
@@ -2093,9 +2093,9 @@ financeAlgorithmsRouter.post("/cip", authorize({ feature: "finance.algorithms", 
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,0,'in_progress',$16) RETURNING id`,
           [scope.companyId, scope.branchId, b.code ?? null, b.name, b.description ?? null,
            b.category ?? null, b.startDate, b.expectedCompletionDate ?? null,
-           b.cipAccountCode ?? "1530", b.targetAssetCategory ?? null,
-           b.targetAssetAccountCode ?? "1500", b.targetDepreciationAccountCode ?? "6100",
-           b.targetAccDepreciationAccountCode ?? "1590", b.targetUsefulLifeYears ?? null,
+           b.cipAccountCode ?? "1270", b.targetAssetCategory ?? null,
+           b.targetAssetAccountCode ?? "1280", b.targetDepreciationAccountCode ?? "5790",
+           b.targetAccDepreciationAccountCode ?? "1290", b.targetUsefulLifeYears ?? null,
            b.targetDepreciationMethod ?? "straight_line", scope.userId]
         );
         insertId = ins.rows[0].id;
@@ -2152,7 +2152,7 @@ financeAlgorithmsRouter.post("/cip/:id/costs", authorize({ feature: "finance.alg
 
     const amt = roundTo2(b.amount);
     const { financialEngine } = await import("../lib/engines/index.js");
-    const cipCode = (cip.cipAccountCode as string | null) ?? "1530";
+    const cipCode = (cip.cipAccountCode as string | null) ?? "1270";
     const cashCode = b.cashAccountCode
       ?? await financialEngine.resolveAccountCode(scope.companyId, "cip_funding_cash", "credit", "1111");
 
@@ -2190,6 +2190,15 @@ financeAlgorithmsRouter.post("/cip/:id/costs", authorize({ feature: "finance.alg
       );
     });
 
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "finance.cip.cost_added",
+      entity: "construction_in_progress",
+      entityId: id,
+      after: { costId, journalEntryId: journalId, amount: amt, costDate: b.costDate },
+    }).catch((e) => logger.error(e, "finance-algorithms cip-cost audit failed"));
     res.status(201).json({ costId, journalEntryId: journalId, amount: amt, cipId: id });
   } catch (err) {
     handleRouteError(err, res, "Add CIP cost error:");
@@ -2232,10 +2241,10 @@ financeAlgorithmsRouter.post("/cip/:id/capitalize", authorize({ feature: "financ
     const depMethod = b.depreciationMethod ?? (cip.targetDepreciationMethod as string | null) ?? "straight_line";
     const assetName = b.assetName ?? `${cip.name} (مرسمل)`;
     const assetCode = b.assetCode ?? (cip.code as string | null) ?? null;
-    const targetAssetCode = (cip.targetAssetAccountCode as string | null) ?? "1500";
-    const targetDepCode = (cip.targetDepreciationAccountCode as string | null) ?? "6100";
-    const targetAccDepCode = (cip.targetAccDepreciationAccountCode as string | null) ?? "1590";
-    const cipCode = (cip.cipAccountCode as string | null) ?? "1530";
+    const targetAssetCode = (cip.targetAssetAccountCode as string | null) ?? "1280";
+    const targetDepCode = (cip.targetDepreciationAccountCode as string | null) ?? "5790";
+    const targetAccDepCode = (cip.targetAccDepreciationAccountCode as string | null) ?? "1290";
+    const cipCode = (cip.cipAccountCode as string | null) ?? "1270";
 
     let newAssetId: number | null = null;
     let journalId: number | null = null;
@@ -2529,7 +2538,12 @@ financeAlgorithmsRouter.post("/rounding-differences/apply", authorize({ feature:
 //
 // Tables are created lazily so no extra migration is needed:
 //   fx_rates(id, companyId, effectiveDate, fromCurrency, toCurrency, rate, source)
-//   fx_revaluations(id, companyId, currency, oldRate, newRate, revaluationDate, journalEntryId, totalImpact, createdBy, createdAt)
+// NOTE: fx_revaluations is NOT created here — it is owned by the canonical
+// schema (db/schema_pre.sql: companyId, period, journalEntryId, totalGain,
+// totalLoss, details, postedBy, postedAt; UNIQUE(companyId, period)). The
+// stale lazy CREATE that used a divergent shape (currency/oldRate/newRate/
+// revaluationDate/totalImpact) was removed — it was shadowed by the dump and
+// was the root cause of the `revaluationDate` mismatch fixed in #2897.
 
 async function ensureFxTables(client?: any) {
   const exec = client ? (sql: string, params?: any[]) => client.query(sql, params) : rawExecute;
@@ -2546,20 +2560,8 @@ async function ensureFxTables(client?: any) {
       UNIQUE ("companyId","effectiveDate","fromCurrency","toCurrency",source)
     )
   `);
-  await exec(`
-    CREATE TABLE IF NOT EXISTS fx_revaluations (
-      id SERIAL PRIMARY KEY,
-      "companyId" INTEGER NOT NULL,
-      currency VARCHAR(10) NOT NULL,
-      "oldRate" NUMERIC(15,6),
-      "newRate" NUMERIC(15,6),
-      "revaluationDate" DATE NOT NULL,
-      "journalEntryId" INTEGER,
-      "totalImpact" NUMERIC(15,2),
-      "createdBy" INTEGER,
-      "createdAt" TIMESTAMPTZ DEFAULT NOW()
-    )
-  `);
+  // fx_revaluations is owned by the canonical schema (migrations/dump) —
+  // not created here. See note above ensureFxTables.
   // Ensure foreign-currency columns exist on invoices & purchase_orders
   await exec(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS currency VARCHAR(8) DEFAULT 'SAR'`);
   await exec(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "exchangeRate" NUMERIC(18,8) DEFAULT 1`);
@@ -2758,6 +2760,108 @@ financeAlgorithmsRouter.get("/fx/revaluation/preview", authorize({ feature: "fin
   }
 });
 
+// Compute FX revaluation into the deferred posting queue (لا ترحيل GL هنا).
+// مُشغِّل الحساب لمسار الطابور: يستدعي runPeriodEndRevaluation فيملأ
+// fx_revaluation_log + fx_revaluation_lines، فيظهر البند في طابور ترحيل GL
+// (POST /finance/gl-helpers/fx-revaluation/:revaluationLogId). نفس RBAC المسار
+// المباشر (finance.algorithms/create). حارس الازدواج: يرفض إن كانت الفترة
+// مُرحَّلة مباشرةً (صف fx_revaluations)، أو مُحسَبة في الطابور سلفًا (idempotency).
+financeAlgorithmsRouter.post("/fx/revaluation/compute", authorize({ feature: "finance.algorithms", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    assertFinanceRole(scope);
+    const { period } = zodParse(fxRevaluationPostSchema.safeParse(req.body ?? {}));
+    await ensureFxTables();
+
+    const [y, m] = period.split("-").map(Number);
+    const periodEnd = toDateISO(new Date(y, m, 0)); // آخر يوم في الشهر = asOfDate
+
+    // الفترة المالية يجب أن تكون مُعرَّفة ومفتوحة (runPeriodEndRevaluation يطلب periodId FK).
+    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, periodEnd);
+    if (!periodCheck.open) {
+      throw new ValidationError(`لا يمكن الحساب — الفترة ${periodCheck.periodName ?? period} مقفلة`);
+    }
+    const [finPeriod] = await rawQuery<{ id: number }>(
+      `SELECT id FROM financial_periods
+        WHERE "companyId"=$1 AND "deletedAt" IS NULL
+          AND "startDate" <= $2::date AND "endDate" >= $2::date
+        ORDER BY id ASC LIMIT 1`,
+      [scope.companyId, periodEnd]
+    );
+    if (!finPeriod) {
+      throw new ValidationError(
+        `لا توجد فترة مالية مُعرَّفة تشمل ${periodEnd} — عرّف الفترة المالية أولاً`,
+        { field: "period", fix: "أنشئ الفترة المالية المطابقة في إعدادات المالية ثم أعد المحاولة" },
+      );
+    }
+
+    // حارس الازدواج (1) — رُحّلت مباشرةً؟ صف fx_revaluations للفترة = ممنوع الحساب.
+    const [postedDirect] = await rawQuery<Record<string, unknown>>(
+      `SELECT id FROM fx_revaluations WHERE "companyId"=$1 AND period=$2 LIMIT 1`,
+      [scope.companyId, period]
+    );
+    if (postedDirect) {
+      throw new ConflictError(
+        `تم تسجيل إعادة تقييم العملات لفترة ${period} مسبقاً عبر الترحيل المباشر — لا حاجة لحسابها في الطابور`,
+      );
+    }
+    // حارس الازدواج (2) — idempotency: محسوبة في الطابور سلفًا (سجل غير مُرحَّل)؟
+    const [pendingQueue] = await rawQuery<{ id: number }>(
+      `SELECT id FROM fx_revaluation_log
+        WHERE "companyId"=$1 AND to_char("asOfDate",'YYYY-MM')=$2 AND "journalEntryId" IS NULL
+        LIMIT 1`,
+      [scope.companyId, period]
+    );
+    if (pendingQueue) {
+      throw new ConflictError(
+        `إعادة تقييم فترة ${period} محسوبة بالفعل في طابور الترحيل — رحّلها من الطابور`,
+      );
+    }
+
+    const { runPeriodEndRevaluation } = await import("../lib/fx/revaluation.js");
+    const result = await runPeriodEndRevaluation({
+      companyId: scope.companyId,
+      periodId: finPeriod.id,
+      asOfDate: periodEnd,
+      ranBy: scope.activeAssignmentId,
+    });
+
+    // أثر تدقيق — حساب أُدرج في طابور الترحيل (لا قيد بعد).
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "fx_revaluation.compute",
+      entity: "fx_revaluation_log",
+      entityId: result.revaluationLogId,
+      after: {
+        period,
+        periodEnd,
+        periodId: finPeriod.id,
+        totalGain: result.totalGain,
+        totalLoss: result.totalLoss,
+        scanned: result.scanned,
+        reported: result.reported,
+        skippedCount: result.skipped.length,
+      },
+    }).catch((e) => logger.error(e, "finance-algorithms fx-revaluation compute audit failed"));
+
+    res.status(201).json({
+      revaluationLogId: result.revaluationLogId,
+      period,
+      periodEnd,
+      totalGain: result.totalGain,
+      totalLoss: result.totalLoss,
+      scanned: result.scanned,
+      reported: result.reported,
+      skipped: result.skipped,
+      message: `تم حساب إعادة تقييم العملات لفترة ${period} وإدراجها في طابور الترحيل`,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "FX revaluation compute error:");
+  }
+});
+
 // Post FX revaluation journal entry for the period
 financeAlgorithmsRouter.post("/fx/revaluation/post", authorize({ feature: "finance.algorithms", action: "create" }), async (req, res) => {
   try {
@@ -2773,11 +2877,29 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", authorize({ feature: "finan
     }
 
     const [existing] = await rawQuery<Record<string, unknown>>(
-      `SELECT id FROM fx_revaluations WHERE "companyId"=$1 AND "revaluationDate"=$2::date`,
-      [scope.companyId, periodEndDate]
+      `SELECT id FROM fx_revaluations WHERE "companyId"=$1 AND period=$2`,
+      [scope.companyId, period]
     );
     if (existing) {
       throw new ConflictError(`تم تسجيل إعادة تقييم العملات لفترة ${period} مسبقاً`);
+    }
+
+    // حارس الازدواج (الجهة الأخرى) — فحص مبكر ودود: إن وُجد صف
+    // fx_revaluation_log غير مُرحَّل لنفس الفترة فالطابور قد حسبها (وربما هو في
+    // طريقه للترحيل) → ارفض الترحيل المباشر كي لا يتسابق المساران. الحاجز الصلب
+    // يبقى قيد UNIQUE(companyId, period) على fx_revaluations (يكتبه كلا المسارين)؛
+    // هذا الفحص رسالة ودودة قبل بلوغه. مطابقة الفترة عبر to_char(asOfDate,'YYYY-MM').
+    const [pendingQueue] = await rawQuery<Record<string, unknown>>(
+      `SELECT id FROM fx_revaluation_log
+        WHERE "companyId"=$1 AND to_char("asOfDate", 'YYYY-MM')=$2
+          AND "journalEntryId" IS NULL
+        LIMIT 1`,
+      [scope.companyId, period]
+    );
+    if (pendingQueue) {
+      throw new ConflictError(
+        `توجد إعادة تقييم محسوبة في طابور الترحيل لفترة ${period} — رحّلها من الطابور أو احذفها قبل الترحيل المباشر`,
+      );
     }
 
     // Reuse preview logic by calling it inline via the same query shape
@@ -2785,7 +2907,7 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", authorize({ feature: "finan
     const periodEnd = toDateISO(new Date(y, m, 0));
 
     const openInvoices = await rawQuery<Record<string, unknown>>(
-      `SELECT id, ref, currency, "exchangeRate", total, "paidAmount"
+      `SELECT id, ref, currency, "exchangeRate", total, "paidAmount", "clientId"
        FROM invoices
        WHERE "companyId"=$1 AND currency IS NOT NULL AND currency<>'SAR'
          AND status NOT IN ('paid','cancelled') AND "deletedAt" IS NULL
@@ -2793,7 +2915,7 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", authorize({ feature: "finan
       [scope.companyId, periodEnd]
     );
     const openPOs = await rawQuery<Record<string, unknown>>(
-      `SELECT id, ref, currency, "exchangeRate", "totalAmount"
+      `SELECT id, ref, currency, "exchangeRate", "totalAmount", "supplierId"
        FROM purchase_orders
        WHERE "companyId"=$1 AND "deletedAt" IS NULL AND currency IS NOT NULL AND currency<>'SAR'
          AND status NOT IN ('paid','cancelled','draft')
@@ -2818,69 +2940,45 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", authorize({ feature: "finan
       for (const cur of currencies) if (!(cur in rateMap)) rateMap[cur] = 0;
     }
 
-    let arDiff = 0; // net AR adjustment (DR if positive → asset up)
-    let apDiff = 0; // net AP adjustment (CR if positive → liability up)
-    const details: any[] = [];
-
-    for (const inv of openInvoices) {
-      const closing = rateMap[inv.currency as string] || 0;
-      if (!closing) continue;
-      const booked = Number(inv.exchangeRate) || 1;
-      const outstandingFc = Number(inv.total) - Number(inv.paidAmount ?? 0);
-      const diff = roundTo2(outstandingFc * (closing - booked));
-      if (Math.abs(diff) < 0.01) continue;
-      arDiff += diff;
-      details.push({ kind: "AR", refId: inv.id, refNumber: inv.ref, currency: inv.currency, diff });
-    }
-    for (const po of openPOs) {
-      const closing = rateMap[po.currency as string] || 0;
-      if (!closing) continue;
-      const booked = Number(po.exchangeRate) || 1;
-      const outstandingFc = Number(po.totalAmount);
-      const diff = roundTo2(outstandingFc * (closing - booked));
-      if (Math.abs(diff) < 0.01) continue;
-      apDiff += diff;
-      details.push({ kind: "AP", refId: po.id, refNumber: po.ref, currency: po.currency, diff });
-    }
-
-    arDiff = roundTo2(arDiff);
-    apDiff = roundTo2(apDiff);
-
-    if (arDiff === 0 && apDiff === 0) {
-      throw new ValidationError("لا توجد فروق إعادة تقييم لهذه الفترة");
-    }
-
-    // Account codes (configurable via accounting_mappings)
+    // Account codes (configurable via accounting_mappings). 1131/2111 إلزاميان
+    // للبُعد (عقد البُعد في lib/gl/ledgerTruth.ts): سطر AR على 1131 يجب أن يحمل
+    // clientId وسطر AP على 2111 يجب أن يحمل vendorId وإلا يرفض الترحيل.
     const { financialEngine } = await import("../lib/engines/index.js");
     const arCode = await financialEngine.resolveAccountCode(scope.companyId, "fx_revaluation_ar", "debit", "1131");
     const apCode = await financialEngine.resolveAccountCode(scope.companyId, "fx_revaluation_ap", "credit", "2111");
     const gainCode = await financialEngine.resolveAccountCode(scope.companyId, "fx_revaluation_gain", "credit", "4910");
     const lossCode = await financialEngine.resolveAccountCode(scope.companyId, "fx_revaluation_loss", "debit", "5910");
 
-    // Build JE lines
-    const lines: Array<{ accountCode: string; debit: number; credit: number; description: string }> = [];
-    // AR adjustment
-    if (arDiff > 0) {
-      lines.push({ accountCode: arCode, debit: arDiff, credit: 0, description: `إعادة تقييم ذمم مدينة — ${period}` });
-      lines.push({ accountCode: gainCode, debit: 0, credit: arDiff, description: `ربح صرف غير محقق — AR` });
-    } else if (arDiff < 0) {
-      const v = -arDiff;
-      lines.push({ accountCode: lossCode, debit: v, credit: 0, description: `خسارة صرف غير محققة — AR` });
-      lines.push({ accountCode: arCode, debit: 0, credit: v, description: `إعادة تقييم ذمم مدينة — ${period}` });
-    }
-    // AP adjustment
-    if (apDiff > 0) {
-      // Liability up → DR loss / CR AP
-      lines.push({ accountCode: lossCode, debit: apDiff, credit: 0, description: `خسارة صرف غير محققة — AP` });
-      lines.push({ accountCode: apCode, debit: 0, credit: apDiff, description: `إعادة تقييم ذمم دائنة — ${period}` });
-    } else if (apDiff < 0) {
-      const v = -apDiff;
-      lines.push({ accountCode: apCode, debit: v, credit: 0, description: `إعادة تقييم ذمم دائنة — ${period}` });
-      lines.push({ accountCode: gainCode, debit: 0, credit: v, description: `ربح صرف غير محقق — AP` });
-    }
+    // بناء سطور القيد مفصّلة لكل كيان (الخيار أ): سطر AR لكل عميل يحمل clientId،
+    // سطر AP لكل مورد يحمل vendorId، + سطرَي مكسب/خسارة إجماليين بلا بُعد.
+    // التفصيل لا يغيّر الإجمالي ولا التوازن — يوزّع طرف AR/AP على الكيانات فقط.
+    // فاتورة بلا clientId / أمر شراء بلا supplierId → تُتخطّى وتُسجَّل في skipped.
+    const { buildPeriodRevalLines } = await import("../lib/fx/build-period-reval-lines.js");
+    const built = buildPeriodRevalLines({
+      invoices: openInvoices as any,
+      purchaseOrders: openPOs as any,
+      rateMap,
+      accounts: { arCode, apCode, gainCode, lossCode },
+      period,
+    });
+    const { lines, arDiff, apDiff, totalGain, totalLoss, details, skipped } = built;
 
-    const totalGain = lines.filter(l => l.accountCode === gainCode).reduce((s, l) => s + l.credit, 0);
-    const totalLoss = lines.filter(l => l.accountCode === lossCode).reduce((s, l) => s + l.debit, 0);
+    if (lines.length === 0) {
+      // لا سطور قابلة للترحيل: إمّا لا فروق، أو كل البنود متخطّاة لغياب البُعد.
+      if (skipped.length > 0) {
+        throw new ValidationError(
+          "تعذّر تسجيل إعادة التقييم — كل البنود ذات الفروق بلا بُعد مطلوب (عميل/مورد). اربط الكيانات أولاً.",
+          { field: "dimension", meta: { skipped } as any },
+        );
+      }
+      throw new ValidationError("لا توجد فروق إعادة تقييم لهذه الفترة");
+    }
+    if (skipped.length > 0) {
+      logger.warn(
+        { companyId: scope.companyId, period, skipped },
+        "[fx-revaluation] بنود متخطّاة لغياب بُعد العميل/المورد — لم تُدرَج في القيد",
+      );
+    }
 
     // Atomicity: FX revaluation JE + per-currency fx_revaluations
     // audit rows commit or roll back together. Earlier shape posted
@@ -2906,17 +3004,22 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", authorize({ feature: "finan
       });
       journalEntryId = posted.journalId;
 
-      for (const cur of currencies) {
-        const curImpact = roundTo2(details.filter((d: any) => d.currency === cur).reduce((s: number, d: any) => s + d.diff, 0));
-        const { rows: revRows } = await client.query(
-          `INSERT INTO fx_revaluations ("companyId","period","journalEntryId","totalGain","totalLoss",details,"postedBy","postedAt")
-           VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,NOW()) RETURNING id`,
-          [scope.companyId, period, journalEntryId,
-           curImpact > 0 ? curImpact : 0, curImpact < 0 ? -curImpact : 0,
-           JSON.stringify({ currency: cur, periodEnd, impact: curImpact }), scope.activeAssignmentId]
-        );
-        if (revRows[0]?.id) revalIds.push(revRows[0].id as number);
-      }
+      // صف fx_revaluations واحد لكل فترة — يحترم قيد UNIQUE(companyId, period)
+      // ويطابق مسار الطابور (صف واحد) والقيد الواحد. التفصيل لكل عملة محفوظ في
+      // details.perCurrency. (الشكل السابق أدرج صفًا لكل عملة بنفس period → كان
+      // يفشل بـ23505 عند وجود عملتين أجنبيتين أو أكثر في الفترة الواحدة.)
+      const perCurrency = currencies.map((cur) => ({
+        currency: cur,
+        impact: roundTo2(details.filter((d: any) => d.currency === cur).reduce((s: number, d: any) => s + d.diff, 0)),
+      }));
+      const { rows: revRows } = await client.query(
+        `INSERT INTO fx_revaluations ("companyId","period","journalEntryId","totalGain","totalLoss",details,"postedBy","postedAt")
+         VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,NOW()) RETURNING id`,
+        [scope.companyId, period, journalEntryId,
+         roundTo2(totalGain), roundTo2(totalLoss),
+         JSON.stringify({ periodEnd, perCurrency }), scope.activeAssignmentId]
+      );
+      if (revRows[0]?.id) revalIds.push(revRows[0].id as number);
     });
     const revalId = revalIds[0];
 
@@ -2945,6 +3048,9 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", authorize({ feature: "finan
         revaluationIds: revalIds,
         currencies,
         lineCount: details.length,
+        // بنود متخطّاة لغياب البُعد (عميل/مورد) — أثر قابل للتتبع، لا إسقاط صامت.
+        skippedCount: skipped.length,
+        skipped,
       },
     }).catch((e) => logger.error(e, "finance-algorithms fx-revaluation post audit failed"));
     res.status(201).json({
@@ -2954,6 +3060,8 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", authorize({ feature: "finan
       arDiff,
       apDiff,
       lineCount: details.length,
+      skippedCount: skipped.length,
+      skipped,
       message: `تم تسجيل إعادة تقييم العملات لفترة ${period}`,
     });
   } catch (err) {

@@ -14,6 +14,9 @@ import {
   type DataTableColumn,
   PageShell,
   PageStatusBadge,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
 } from "@workspace/ui-core";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -21,6 +24,7 @@ import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
 import { SearchableSelect } from "@/components/shared/searchable-select";
+import { UmrahAgentSelect } from "@/components/shared/entity-selects";
 import { formatCurrency, formatNumber } from "@/lib/formatters";
 import { Plus, Link2, Users, Pencil } from "lucide-react";
 
@@ -66,8 +70,7 @@ export default function UmrahSubAgents() {
   const clients = clientsQ.data?.data ?? [];
 
   const [tab, setTab] = useState<"all" | "linked" | "unlinked">("all");
-  const [search, setSearch] = useState("");
-  const [agentFilter, setAgentFilter] = useState<string>("");
+  const [filters, setFilters] = useFilters();
   const [editing, setEditing] = useState<Partial<SubAgent> | null>(null);
   const [linking, setLinking] = useState<SubAgent | null>(null);
   const [linkClientId, setLinkClientId] = useState<string>("");
@@ -120,20 +123,14 @@ export default function UmrahSubAgents() {
   );
 
   const filtered = useMemo(() => {
-    return subAgents.filter((s) => {
-      if (tab === "linked" && !s.clientId) return false;
-      if (tab === "unlinked" && s.clientId) return false;
-      if (agentFilter && String(s.agentId) !== agentFilter) return false;
-      if (search) {
-        const q = search.toLowerCase();
-        return (
-          s.name?.toLowerCase().includes(q) ||
-          s.nuskCode?.toLowerCase().includes(q)
-        );
-      }
-      return true;
+    let result = applyFilters(subAgents, filters, {
+      searchFields: ["name", "nuskCode"],
+      extraFields: { agentId: "agentId" },
     });
-  }, [subAgents, tab, search, agentFilter]);
+    if (tab === "linked") result = result.filter((s) => !!s.clientId);
+    if (tab === "unlinked") result = result.filter((s) => !s.clientId);
+    return result;
+  }, [subAgents, filters, tab]);
 
   const linkedCount = subAgents.filter((s) => !!s.clientId).length;
   const unlinkedCount = subAgents.length - linkedCount;
@@ -305,28 +302,20 @@ export default function UmrahSubAgents() {
         </TabsList>
       </Tabs>
 
-      <div className="flex flex-wrap gap-3 items-end">
-        <div className="flex-1 min-w-[220px]">
-          <Label className="text-xs">بحث</Label>
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="ابحث بالاسم أو رمز نُسك..."
-          />
-        </div>
-        <div className="min-w-[220px]">
-          <Label className="text-xs">الوكيل الرئيسي</Label>
-          <Select value={agentFilter || "all"} onValueChange={(v) => setAgentFilter(v === "all" ? "" : v)}>
-            <SelectTrigger><SelectValue placeholder="كل الوكلاء" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">كل الوكلاء</SelectItem>
-              {agents.map((a) => (
-                <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+      <AdvancedFilters
+        config={{
+          searchPlaceholder: "ابحث بالاسم أو رمز نُسك...",
+          extraFilters: [{
+            key: "agentId",
+            label: "الوكيل الرئيسي",
+            options: agents.map((a) => ({ value: String(a.id), label: a.name })),
+          }],
+          showDateRange: false,
+        }}
+        values={filters}
+        onChange={setFilters}
+        resultCount={filtered.length}
+      />
 
       <PageStateWrapper
         isLoading={subAgentsQ.isLoading}
@@ -357,16 +346,12 @@ export default function UmrahSubAgents() {
               <div><Label>الاسم *</Label>
                 <Input value={editing.name ?? ""} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
               </div>
-              <div><Label>الوكيل الرئيسي *</Label>
-                <Select
+              <div>
+                <UmrahAgentSelect
+                  label="الوكيل الرئيسي *"
                   value={editing.agentId ? String(editing.agentId) : ""}
-                  onValueChange={(v) => setEditing({ ...editing, agentId: Number(v) })}
-                >
-                  <SelectTrigger><SelectValue placeholder="اختر الوكيل" /></SelectTrigger>
-                  <SelectContent>
-                    {agents.map((a) => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                  onChange={(v) => setEditing({ ...editing, agentId: Number(v) })}
+                />
               </div>
               <div><Label>شروط الدفع</Label>
                 <Select

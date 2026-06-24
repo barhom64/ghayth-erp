@@ -31,6 +31,7 @@ import { Link } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { statusLabel } from "@/lib/transport-status-labels";
 import { PageShell } from "@workspace/ui-core";
+import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -156,6 +157,7 @@ export default function UmrahTransportRequestsPage() {
         { label: "طلبات النقل (العقد الموحّد)" },
       ]}
     >
+      <UmrahTabsNav />
       <Card>
         <CardContent className="p-4 flex flex-col gap-4">
           <div className="flex flex-wrap items-end gap-3">
@@ -317,7 +319,7 @@ export default function UmrahTransportRequestsPage() {
                 لا توجد طلبات نقل مرتبطة بهذه المجموعة عبر العقد الموحّد بعد.
               </p>
             ) : (
-              <table
+              <div className="overflow-x-auto"><table
                 className="w-full text-sm"
                 data-testid="transport-requests-table"
               >
@@ -362,7 +364,7 @@ export default function UmrahTransportRequestsPage() {
                     );
                   })}
                 </tbody>
-              </table>
+              </table></div>
             )}
           </CardContent>
         </Card>

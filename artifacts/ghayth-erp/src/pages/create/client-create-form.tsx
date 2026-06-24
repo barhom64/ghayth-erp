@@ -1,0 +1,192 @@
+import { useState } from "react";
+import { useApiMutation, apiFetch } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CreationDateField } from "@workspace/ui-core";
+import { useToast } from "@/hooks/use-toast";
+import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
+import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Globe } from "lucide-react";
+import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+
+const INITIAL = {
+  name: "", phone: "", email: "", source: "",
+  type: "individual", nationality: "", language: "ar",
+  classification: "", notes: "",
+};
+
+export interface ClientCreateFormProps {
+  /** Called with the freshly-created client row after a successful save. */
+  onCreated: (created: any) => void;
+  /** Called when the operator cancels (back / إلغاء). */
+  onCancel: () => void;
+  /** Draft-recovery key — distinct per host (page vs inline drawer). */
+  draftKey?: string;
+  /** Hide the attachments dropzone (e.g. the inline drawer keeps it lean). */
+  showAttachments?: boolean;
+}
+
+/**
+ * The unified client-creation form body — shared by the full page
+ * (`clients-create.tsx`) and the inline `AllowCreateDrawer` opened from
+ * `ClientSelect`. Owns its own state / validation / mutation / draft +
+ * the optional portal-account step, so an inline create is identical to a
+ * page create — the full form, no truncated quick-add.
+ */
+export function ClientCreateForm({ onCreated, onCancel, draftKey = "clients_create", showAttachments = true }: ClientCreateFormProps) {
+  const { toast } = useToast();
+  const createMut = useApiMutation<{ id: number; name: string }, Record<string, string | Attachment[]>>("/clients", "POST", [["clients"]]);
+  const { form, setForm, clearDraft, hasDraft } = useAutoDraft(draftKey, INITIAL);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [createPortalAccount, setCreatePortalAccount] = useState(false);
+  const [portalPassword, setPortalPassword] = useState("");
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
+
+  const handleSubmit = async () => {
+    const firstError = validate({
+      name: form.name ? null : "يرجى إدخال اسم العميل",
+      email: form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)
+        ? "صيغة البريد الإلكتروني غير صحيحة"
+        : createPortalAccount && !form.email
+          ? "يرجى إدخال البريد الإلكتروني لإنشاء حساب البوابة"
+          : null,
+      phone: form.phone && form.phone.replace(/\D/g, "").length < 9
+        ? "رقم الجوال يجب أن يحتوي على 9 أرقام على الأقل"
+        : null,
+      portalPassword: createPortalAccount && portalPassword.length < 6
+        ? "كلمة مرور البوابة يجب أن تكون 6 أحرف على الأقل"
+        : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
+      return;
+    }
+    try {
+      const newClient = await createMut.mutateAsync({ ...form, ...(attachments.length > 0 ? { attachments } : {}) });
+      if (createPortalAccount && newClient?.id) {
+        try {
+          await apiFetch(`/clients/${newClient.id}/portal-account`, {
+            method: "POST",
+            body: JSON.stringify({ email: form.email, password: portalPassword }),
+          });
+          toast({ title: "تم إضافة العميل وإنشاء حساب البوابة بنجاح" });
+        } catch (portalErr: any) {
+          toast({ title: "تم إضافة العميل، لكن فشل إنشاء حساب البوابة", description: portalErr.message, variant: "destructive" });
+        }
+      } else {
+        toast({ title: "تم إضافة العميل بنجاح" });
+      }
+      clearDraft();
+      onCreated(newClient);
+    } catch (err: any) {
+      setApiError(err);
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة العميل", description: err?.message });
+    }
+  };
+
+  return (
+    <>
+      {hasDraft && (
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
+          <span>تم استعادة مسودة محفوظة سابقاً</span>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+        </div>
+      )}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <CreationDateField />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <TextField label="اسم العميل / الشركة" required value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} error={fieldErrors.name} className="md:col-span-2" />
+        <FormFieldWrapper label="نوع العميل">
+          <Select value={form.type} onValueChange={(v) => setForm((f) => ({ ...f, type: v }))}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="individual">فرد</SelectItem>
+              <SelectItem value="company">شركة</SelectItem>
+              <SelectItem value="government">جهة حكومية</SelectItem>
+            </SelectContent>
+          </Select>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="التصنيف">
+          <Select value={form.classification || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, classification: v === "_none" ? "" : v }))}>
+            <SelectTrigger><SelectValue placeholder="بدون تصنيف" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_none">بدون تصنيف</SelectItem>
+              <SelectItem value="vip">كبار العملاء</SelectItem>
+              <SelectItem value="regular">عادي</SelectItem>
+              <SelectItem value="new">جديد</SelectItem>
+              <SelectItem value="inactive">غير نشط</SelectItem>
+            </SelectContent>
+          </Select>
+        </FormFieldWrapper>
+        <TextField label="رقم الجوال" type="tel" inputMode="tel" dir="ltr" value={form.phone} onChange={(v) => setForm((f) => ({ ...f, phone: v }))} placeholder="05xxxxxxxx" error={fieldErrors.phone} />
+        <TextField label="البريد الإلكتروني" type="email" dir="ltr" value={form.email} onChange={(v) => setForm((f) => ({ ...f, email: v }))} error={fieldErrors.email} />
+        <TextField label="الجنسية" value={form.nationality} onChange={(v) => setForm((f) => ({ ...f, nationality: v }))} placeholder="سعودي" />
+        <FormFieldWrapper label="اللغة المفضلة">
+          <Select value={form.language} onValueChange={(v) => setForm((f) => ({ ...f, language: v }))}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ar">العربية</SelectItem>
+              <SelectItem value="en">الإنجليزية</SelectItem>
+            </SelectContent>
+          </Select>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="مصدر العميل" className="md:col-span-2">
+          <Select value={form.source || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, source: v === "_none" ? "" : v }))}>
+            <SelectTrigger><SelectValue placeholder="اختر المصدر" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_none">اختر المصدر</SelectItem>
+              <SelectItem value="website">الموقع الإلكتروني</SelectItem>
+              <SelectItem value="referral">توصية</SelectItem>
+              <SelectItem value="social_media">وسائل التواصل</SelectItem>
+              <SelectItem value="advertisement">إعلان</SelectItem>
+              <SelectItem value="direct">مباشر</SelectItem>
+              <SelectItem value="other">أخرى</SelectItem>
+            </SelectContent>
+          </Select>
+        </FormFieldWrapper>
+        <TextAreaField label="ملاحظات" value={form.notes} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} placeholder="ملاحظات إضافية..." className="md:col-span-2" />
+      </div>
+      {showAttachments && <FileDropZone files={attachments} onFilesChange={setAttachments} label="مرفقات العميل" />}
+
+      <div className="mt-6 border rounded-lg p-4 bg-status-info-surface">
+        <div className="flex items-center gap-3">
+          <Checkbox
+            id="createPortal"
+            checked={createPortalAccount}
+            onCheckedChange={(v) => setCreatePortalAccount(v === true)}
+          />
+          <label htmlFor="createPortal" className="flex items-center gap-2 text-sm font-medium cursor-pointer select-none">
+            <Globe className="h-4 w-4 text-status-info-foreground" />
+            إنشاء حساب بوابة للعميل
+          </label>
+        </div>
+        {createPortalAccount && (
+          <div className="mt-3 space-y-2">
+            <p className="text-xs text-muted-foreground">سيتم إنشاء حساب بوابة للعميل باستخدام بريده الإلكتروني أعلاه. سيُطلب منه تغيير كلمة المرور عند أول دخول.</p>
+            <TextField
+              label="كلمة المرور المؤقتة"
+              required
+              value={portalPassword}
+              onChange={setPortalPassword}
+              placeholder="6 أحرف على الأقل"
+              error={fieldErrors.portalPassword}
+            />
+            {!form.email && (
+              <p className="text-xs text-status-warning-foreground">يرجى إدخال البريد الإلكتروني للعميل في الحقل أعلاه</p>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="flex justify-end gap-3 pt-6">
+        <Button variant="outline" onClick={onCancel}>إلغاء</Button>
+        <Button onClick={handleSubmit} disabled={!form.name || createMut.isPending} rateLimitAware>
+          {createMut.isPending ? "جاري الحفظ..." : "حفظ العميل"}
+        </Button>
+      </div>
+    </>
+  );
+}

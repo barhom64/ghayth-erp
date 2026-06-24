@@ -16,12 +16,13 @@
 
 import { useMemo, useState } from "react";
 import { useApiQuery, useApiMutation } from "@/lib/api";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
-import { Activity, RefreshCw, AlertCircle } from "lucide-react";
+import { Activity, AlertCircle } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 
 interface UsageRow {
   callDate: string;
@@ -101,6 +102,41 @@ export default function MapsUsagePage() {
     };
   }, [rows]);
 
+  const columns: DataTableColumn<UsageRow>[] = [
+    {
+      key: "callDate",
+      header: "التاريخ",
+      className: "font-mono text-xs",
+      render: (r) => r.callDate,
+    },
+    { key: "provider", header: "المزوّد", render: (r) => r.provider },
+    {
+      key: "apiSurface",
+      header: "الواجهة",
+      className: "text-muted-foreground",
+      render: (r) => r.apiSurface,
+    },
+    {
+      key: "callCount",
+      header: "عدد الاتصالات",
+      align: "end",
+      className: "font-mono",
+      render: (r) => Number(r.callCount).toLocaleString("ar-SA"),
+    },
+    {
+      key: "errorCount",
+      header: "الفاشلة",
+      align: "end",
+      className: "font-mono",
+      render: (r) =>
+        r.errorCount > 0 ? (
+          <span className="text-rose-600">{Number(r.errorCount).toLocaleString("ar-SA")}</span>
+        ) : (
+          <span className="text-muted-foreground">0</span>
+        ),
+    },
+  ];
+
   return (
     <PageShell
       title="استهلاك واجهة الخرائط"
@@ -123,10 +159,7 @@ export default function MapsUsagePage() {
             </Button>
           ))}
         </div>
-        <Button size="sm" variant="outline" onClick={() => refetch()} disabled={isLoading}>
-          <RefreshCw className={`h-3.5 w-3.5 me-1 ${isLoading ? "animate-spin" : ""}`} />
-          تحديث
-        </Button>
+        <RefreshAction onRefresh={() => refetch()} disabled={isLoading} />
       </div>
 
       {/* Summary tiles */}
@@ -251,48 +284,15 @@ export default function MapsUsagePage() {
       {/* Daily breakdown */}
       <Card className="mt-4">
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/30 text-xs">
-                <tr>
-                  <th className="text-start p-2 font-medium">التاريخ</th>
-                  <th className="text-start p-2 font-medium">المزوّد</th>
-                  <th className="text-start p-2 font-medium">الواجهة</th>
-                  <th className="text-end p-2 font-medium">عدد الاتصالات</th>
-                  <th className="text-end p-2 font-medium">الفاشلة</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.length === 0 && !isLoading && (
-                  <tr>
-                    <td colSpan={5} className="p-6 text-center text-muted-foreground">
-                      <Activity className="h-6 w-6 mx-auto mb-2 opacity-50" />
-                      لا توجد بيانات استهلاك خلال هذه النافذة. سيظهر العدّاد بعد أول
-                      اتصال فعلي بمزوّد الخرائط (Google Maps).
-                    </td>
-                  </tr>
-                )}
-                {rows.map((r) => (
-                  <tr
-                    key={`${r.callDate}-${r.provider}-${r.apiSurface}`}
-                    className="border-t hover:bg-muted/20"
-                  >
-                    <td className="p-2 font-mono text-xs">{r.callDate}</td>
-                    <td className="p-2">{r.provider}</td>
-                    <td className="p-2 text-muted-foreground">{r.apiSurface}</td>
-                    <td className="p-2 text-end font-mono">{Number(r.callCount).toLocaleString("ar-SA")}</td>
-                    <td className="p-2 text-end font-mono">
-                      {r.errorCount > 0 ? (
-                        <span className="text-rose-600">{Number(r.errorCount).toLocaleString("ar-SA")}</span>
-                      ) : (
-                        <span className="text-muted-foreground">0</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            columns={columns}
+            data={rows}
+            isLoading={isLoading}
+            rowKey={(r) => `${r.callDate}-${r.provider}-${r.apiSurface}`}
+            noToolbar
+            emptyIcon={<Activity className="h-6 w-6 mx-auto mb-2 opacity-50" />}
+            emptyMessage="لا توجد بيانات استهلاك خلال هذه النافذة. سيظهر العدّاد بعد أول اتصال فعلي بمزوّد الخرائط (Google Maps)."
+          />
         </CardContent>
       </Card>
     </PageShell>

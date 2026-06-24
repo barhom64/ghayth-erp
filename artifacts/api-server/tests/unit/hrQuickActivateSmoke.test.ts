@@ -54,10 +54,11 @@ describe("HR-REV-3 (#2222) — pending (inactive) employee creation", () => {
   it("creates the assignment in 'active' status (so activation flow finds it)", () => {
     expect(QA_BLOCK).toMatch(/INSERT INTO employee_assignments[\s\S]*?'active'/);
   });
-  it("stamps activationStatus = 'pending_activation' on the hire (HR-REV-3 slice 4a)", () => {
+  it("stamps activationStatus on the hire — self_invited مع البريد وإلا pending_activation", () => {
     const empInsert = QA_BLOCK.match(/INSERT INTO employees[\s\S]*?RETURNING/)?.[0] || "";
     expect(empInsert).toMatch(/"activationStatus"/);
-    expect(empInsert).toMatch(/'pending_activation'/);
+    // القيمة مُمَرَّرة عبر بارامتر: self_invited عند توفّر البريد وإلا pending_activation.
+    expect(QA_BLOCK).toMatch(/email \? 'self_invited' : 'pending_activation'/);
   });
 });
 
@@ -119,5 +120,29 @@ describe("HR-REV-3 (#2222) — activation ready-gate (slice 4b)", () => {
     expect(PATCH_BLOCK).toMatch(/if \(remaining > 0\)/);
     expect(PATCH_BLOCK).toMatch(/throw new ValidationError\(/);
     expect(PATCH_BLOCK).toMatch(/remainingMandatory: remaining/);
+  });
+});
+
+describe("رسالة بداية العمل عند التفعيل (activation welcome)", () => {
+  // The PATCH handler, on a real activation transition (inactive/pending/
+  // onboarding → active), must fire a one-time start-of-work message so a
+  // quick-activated employee finally gets a welcome at the moment they
+  // actually start. Full-create employees are created active directly, so
+  // they never hit this branch — no double-send.
+  const PATCH_TAIL =
+    EMPLOYEES_ROUTE.match(
+      /const wasActivated =[\s\S]*?res\.json\(after\);/,
+    )?.[0] || "";
+
+  it("computes wasActivated only on a pending→active transition", () => {
+    expect(PATCH_TAIL).toMatch(
+      /const wasActivated\s*=\s*[\s\S]*?status === "active" && before\.status != null && PENDING_ACTIVATION\.includes\(before\.status\)/,
+    );
+  });
+  it("fires a welcome notification on activation", () => {
+    expect(PATCH_TAIL).toMatch(/if \(wasActivated && after[\s\S]*?createNotification\([\s\S]*?type: "welcome"/);
+  });
+  it("emails the start-of-work message when the employee has an email", () => {
+    expect(PATCH_TAIL).toMatch(/if \(after\.email\)[\s\S]*?sendMessage\([\s\S]*?templateKey: "employee\.welcome"/);
   });
 });

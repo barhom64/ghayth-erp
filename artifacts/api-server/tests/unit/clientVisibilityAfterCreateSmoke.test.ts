@@ -31,6 +31,6 @@ describe("clients list — newest-first ordering", () => {
 
 describe("clients create — lands on the new record", () => {
   it("navigates to /clients/:id after create (not back to the paginated list)", () => {
-    expect(CREATE_PAGE).toMatch(/setLocation\(newClient\?\.id \? `\/clients\/\$\{newClient\.id\}`/);
+    expect(CREATE_PAGE).toMatch(/setLocation\(c\?\.id \? `\/clients\/\$\{c\.id\}`/);
   });
 });

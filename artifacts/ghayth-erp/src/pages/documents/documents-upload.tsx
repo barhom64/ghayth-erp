@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from "react";
+import { API_BASE, nativeAuthHeaders } from "@/lib/api";
 import { z } from "zod";
 import { useLocation } from "wouter";
 import { apiFetch } from "@/lib/api";
@@ -24,7 +25,7 @@ const uploadSchema = z.object({
 });
 type UploadForm = z.infer<typeof uploadSchema>;
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+const BASE = API_BASE;
 
 const CATEGORIES = [
   { value: "contracts", label: "عقود" },
@@ -77,7 +78,7 @@ export default function DocumentsUpload() {
     try {
       const urlRes = await fetch(`${BASE}/api/storage/uploads/request-url`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { ...nativeAuthHeaders(), "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
       });

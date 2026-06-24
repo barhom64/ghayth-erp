@@ -4,6 +4,8 @@ import { apiFetch } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +16,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
 import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
+import { BuildingSelect } from "@/components/shared/entity-selects";
 import { Plus, TrendingUp, Building2, Banknote } from "lucide-react";
 
 const EMPTY_FORM = {
@@ -41,9 +44,7 @@ export default function PropertySalesPage() {
     "/properties/sales"
   );
   const sales: any[] = resp?.data || [];
-
-  const { data: buildingsResp } = useApiQuery<any>(["property-buildings-list"], "/properties/buildings");
-  const buildings: any[] = buildingsResp?.data || buildingsResp || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(sales);
 
   async function handleSave() {
     if (!form.buyerName.trim() || !form.salePrice || !form.saleDate) {
@@ -103,6 +104,24 @@ export default function PropertySalesPage() {
   return (
     <PageShell
       title="بيع العقارات"
+      actions={
+        <PrintButton
+          entityType="report_property_sales"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "بيع العقارات", total: printRows.length },
+            items: printRows.map((r: any) => ({
+              "العقار": r.buildingName || "—",
+              "المشتري": r.buyerName,
+              "تاريخ البيع": r.saleDate,
+              "سعر البيع": formatCurrency(Number(r.salePrice || 0)),
+              "القيمة الدفترية": formatCurrency(Number(r.bookValue || 0)),
+              "الحالة": r.status === "completed" ? "مكتمل — مرحّل" : r.status === "draft" ? "مسودة — بدون قيد" : r.status === "pending" ? "قيد التنفيذ" : r.status,
+            })),
+          })}
+        />
+      }
     >
       <PropertyTabsNav />
       <div className="space-y-4">
@@ -158,6 +177,7 @@ export default function PropertySalesPage() {
               columns={columns}
               data={sales}
               isLoading={isLoading}
+              onSortedDataChange={setPrintRows}
               emptyMessage="لا توجد عمليات بيع مسجلة"
             />
           </CardContent>
@@ -170,19 +190,12 @@ export default function PropertySalesPage() {
             <DialogTitle>تسجيل بيع عقار</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2 text-sm">
-            <div>
-              <Label className="text-xs">العقار / المبنى (اختياري)</Label>
-              <select
-                className="w-full mt-1 h-9 rounded-md border border-input bg-background px-3 text-sm"
-                value={form.buildingId}
-                onChange={e => setForm(f => ({ ...f, buildingId: e.target.value }))}
-              >
-                <option value="">— اختر مبنى —</option>
-                {buildings.map((b: any) => (
-                  <option key={b.id} value={b.id}>{b.name}</option>
-                ))}
-              </select>
-            </div>
+            <BuildingSelect
+              label="العقار / المبنى (اختياري)"
+              placeholder="— اختر مبنى —"
+              value={form.buildingId}
+              onChange={(v) => setForm(f => ({ ...f, buildingId: v }))}
+            />
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs">اسم المشتري *</Label>

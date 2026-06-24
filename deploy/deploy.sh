@@ -32,7 +32,9 @@ fi
 log "Installing dependencies…"
 pnpm install --frozen-lockfile
 
-log "Building libs + API…"
+# Bake the checked-out revision into the bundle (GET /api/version reports it).
+export APP_COMMIT="${APP_COMMIT:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}"
+log "Building libs + API (commit ${APP_COMMIT:0:8})…"
 pnpm run build
 
 log "Building frontend (BASE_PATH=/)…"

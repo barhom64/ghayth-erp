@@ -1,5 +1,12 @@
 /**
- * lifecycleEngine — shared helpers for lifecycle transitions across modules.
+ * lifecycleEngine — المِيكانيزم العام لآلة الحالات (applyTransition + سجل STATE_MACHINES).
+ *
+ * خريطة المفاهيم (ثلاثة مفاهيم متمايزة — ليست تكرارًا · قاموس المفاهيم §3):
+ *   • lifecycleEngine (هذا الملف) = المِيكانيزم العام لانتقالات الحالة عبر المسارات.
+ *   • employeeLifecycleEngine     = سياسة دورة حياة الموظف الخاصة بـHR (قائد يملك سياسته).
+ *   • journeyEngine               = الرحلات التشغيلية متعددة الخطوات (مفهوم مختلف، ليس آلة حالات كيان).
+ *
+ * shared helpers for lifecycle transitions across modules.
  *
  * Before this file, each module (legal, fleet, recruitment, CRM) rolled its own
  * "complete / cancel / renew / terminate / close" flow. That made audit, event,

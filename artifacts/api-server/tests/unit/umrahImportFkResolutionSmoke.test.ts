@@ -31,8 +31,11 @@ const ROUTE = readFileSync(
   join(import.meta.dirname!, "../../src/routes/umrah.ts"),
   "utf8",
 );
+// U-07 Phase 19 — nusk-invoices routes (+ the postNuskJournalEntries engine
+// import) carved verbatim into umrah-nusk-invoices.ts. The ledger contract is
+// asserted against the new file.
 const ENTITIES_ROUTE = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-nusk-invoices.ts"),
   "utf8",
 );
 const ENGINE = readFileSync(

@@ -18,8 +18,10 @@ import { Switch } from "@/components/ui/switch";
 import { Users2, FileText, Calendar, Banknote, Shield, ScrollText, Zap } from "lucide-react";
 import { formatCurrency, formatDateAr, getCurrencySymbol } from "@/lib/formatters";
 import { PropertyUnitContextCard } from "@/components/shared/property-unit-context-card";
+import { PropertyOwnerSelect } from "@/components/shared/entity-selects";
 import { fieldErrorClass, TextField, NumberField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { ImpactPreviewButton } from "@/components/shared/impact-preview";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 
 export default function ContractsCreate() {
   const [, setLocation] = useLocation();
@@ -27,10 +29,8 @@ export default function ContractsCreate() {
   const createMut = useApiMutation("/properties/contracts", "POST", [["rental-contracts"]]);
   const { data: unitsData, isLoading: loadingU, isError: errorU } = useApiQuery<{ data: any[] }>(["property-units"], "/properties/units");
   const { data: tenantsResp, isLoading: loadingT, isError: errorT } = useApiQuery<any>(["tenants-registry"], "/properties/tenants");
-  const { data: ownersResp, isLoading: loadingO, isError: errorO } = useApiQuery<any>(["property-owners"], "/properties/owners");
   const units = unitsData?.data || [];
   const tenants = asList(tenantsResp);
-  const owners = asList(ownersResp);
 
   const [isDirty, setIsDirty] = useState(false);
   useUnsavedChanges(isDirty);
@@ -143,8 +143,8 @@ export default function ContractsCreate() {
     return items;
   }, [form.startDate, form.endDate, form.monthlyRent, form.paymentFrequency, form.paymentDay, form.totalContractValue, form.numberOfInstallments]);
 
-  if (loadingU || loadingT || loadingO) return <LoadingSpinner />;
-  if (errorU || errorT || errorO) return <ErrorState />;
+  if (loadingU || loadingT) return <LoadingSpinner />;
+  if (errorU || errorT) return <ErrorState />;
 
   const handleSubmit = async () => {
     const firstError = validate({
@@ -319,18 +319,12 @@ export default function ContractsCreate() {
                   </Badge>
                 )}
               </FormFieldWrapper>
-              <div>
-                <Label>المالك</Label>
-                <Select value={form.ownerId || "none"} onValueChange={v => set("ownerId", v === "none" ? "" : v)}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="— بدون مالك —" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">— بدون مالك —</SelectItem>
-                    {owners.map((o: any) => (
-                      <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <PropertyOwnerSelect
+                label="المالك"
+                placeholder="— بدون مالك —"
+                value={form.ownerId}
+                onChange={(v) => set("ownerId", v)}
+              />
               <TextField label="المستأجر" required value={form.tenantName} onChange={(v) => set("tenantName", v)} placeholder="اسم المستأجر" />
               <TextField label="هاتف المستأجر" type="tel" inputMode="tel" value={form.tenantPhone} onChange={(v) => set("tenantPhone", v)} dir="ltr" />
               <TextField label="بريد المستأجر" value={form.tenantEmail} onChange={(v) => set("tenantEmail", v)} type="email" dir="ltr" />
@@ -481,30 +475,29 @@ export default function ContractsCreate() {
             </CardHeader>
             <CardContent>
               <div className="max-h-64 overflow-y-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-surface-subtle sticky top-0">
-                    <tr>
-                      <th className="text-start p-2">#</th>
-                      <th className="text-start p-2">تاريخ الاستحقاق</th>
-                      <th className="text-start p-2">المبلغ</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {schedulePreview.map(item => (
-                      <tr key={item.num} className="border-t">
-                        <td className="p-2 font-mono">{item.num}</td>
-                        <td className="p-2">{formatDateAr(item.date)}</td>
-                        <td className="p-2 font-bold text-emerald-600">{formatCurrency(item.amount)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot className="bg-surface-subtle font-bold border-t-2">
-                    <tr>
-                      <td className="p-2" colSpan={2}>الإجمالي</td>
-                      <td className="p-2 text-emerald-600">{formatCurrency(schedulePreview.reduce((s, i) => s + i.amount, 0))}</td>
-                    </tr>
-                  </tfoot>
-                </table>
+                <DataTable<{ num: number; date: string; amount: number }>
+                  noToolbar
+                  pageSize={0}
+                  className="text-sm"
+                  data={schedulePreview}
+                  rowKey={(item) => item.num}
+                  columns={[
+                    {
+                      key: "num", header: "#",
+                      render: (item) => <span className="font-mono">{item.num}</span>,
+                      footer: () => "الإجمالي",
+                    },
+                    {
+                      key: "date", header: "تاريخ الاستحقاق",
+                      render: (item) => formatDateAr(item.date),
+                    },
+                    {
+                      key: "amount", header: "المبلغ",
+                      render: (item) => <span className="font-bold text-emerald-600">{formatCurrency(item.amount)}</span>,
+                      footer: () => <span className="text-emerald-600">{formatCurrency(schedulePreview.reduce((s, i) => s + i.amount, 0))}</span>,
+                    },
+                  ] satisfies DataTableColumn<{ num: number; date: string; amount: number }>[]}
+                />
               </div>
             </CardContent>
           </Card>

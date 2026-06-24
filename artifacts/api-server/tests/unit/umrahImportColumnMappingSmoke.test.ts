@@ -125,7 +125,7 @@ describe("umrah route — normalization wired into every import path", () => {
     expect(ROUTE).toMatch(/columnMappingSchema = z\.record\(z\.string\(\), z\.string\(\)\)\.optional\(\)/);
     expect(ROUTE).toMatch(/importPreviewSchema = z\.object\(\{[\s\S]{0,300}columnMapping: columnMappingSchema/);
     expect(ROUTE).toMatch(/importMutamersSchema = z\.object\(\{[\s\S]{0,300}columnMapping: columnMappingSchema/);
-    expect(ROUTE).toMatch(/importVouchersSchema = z\.object\(\{[\s\S]{0,500}columnMapping: columnMappingSchema/);
+    expect(ROUTE).toMatch(/importVouchersSchema = z\.object\(\{[\s\S]{0,760}columnMapping: columnMappingSchema/);
   });
 
   it("GET /import/header-maps exposes both forward + inverted dictionaries", () => {

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import {
   Calendar, Clock, AlertCircle, CheckCircle2, Truck, Users, Activity,
   ArrowLeft, Wand2,
@@ -106,18 +106,20 @@ function formatHourMinute(iso: string | null): string {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
+interface VehicleUtil {
+  vehicleId: number;
+  plateNumber: string | null;
+  vehicleType: string | null;
+  bookedMinutes: number;
+  tripCount: number;
+  utilisation: number;
+}
+
 interface WeeklyData {
   startDate: string;
   endDate: string;
   daily: Array<{ day: string; total: string; completed: string; cancelled: string; late: string }>;
-  vehicleUtilisation: Array<{
-    vehicleId: number;
-    plateNumber: string | null;
-    vehicleType: string | null;
-    bookedMinutes: number;
-    tripCount: number;
-    utilisation: number;
-  }>;
+  vehicleUtilisation: VehicleUtil[];
 }
 
 export default function TransportOpsDashboard() {
@@ -166,6 +168,58 @@ export default function TransportOpsDashboard() {
 
   if (isLoading) return <LoadingSpinner />;
   if (isError || !data?.data) return <ErrorState />;
+
+  const vehicleUtilColumns: DataTableColumn<VehicleUtil>[] = [
+    {
+      key: "plateNumber",
+      header: "المركبة",
+      className: "font-mono",
+      render: (v) => v.plateNumber ?? `#${v.vehicleId}`,
+    },
+    {
+      key: "vehicleType",
+      header: "النوع",
+      className: "text-xs",
+      render: (v) => v.vehicleType ?? "—",
+    },
+    {
+      key: "tripCount",
+      header: "عدد الرحلات",
+      className: "font-mono",
+      render: (v) => v.tripCount,
+    },
+    {
+      key: "bookedMinutes",
+      header: "الدقائق المحجوزة",
+      className: "font-mono",
+      render: (v) => v.bookedMinutes,
+    },
+    {
+      key: "utilisation",
+      header: "الاستغلال %",
+      className: "font-mono",
+      render: (v) => `${Number(v.utilisation) || 0}%`,
+    },
+    {
+      key: "indicator",
+      header: "المؤشر",
+      sortable: false,
+      render: (v) => {
+        const util = Number(v.utilisation) || 0;
+        const tone = util >= 60 ? "bg-status-success-surface text-status-success-foreground" :
+                     util >= 30 ? "bg-status-warning-surface text-status-warning-foreground" :
+                     util > 0   ? "bg-status-info-surface text-status-info-foreground" :
+                                  "bg-surface-subtle text-muted-foreground";
+        return (
+          <Badge className={tone}>
+            {util >= 60 ? "مرتفع" :
+             util >= 30 ? "متوسط" :
+             util > 0   ? "منخفض" : "خامل"}
+          </Badge>
+        );
+      },
+    },
+  ];
 
   const dash = data.data;
   const vehiclesAvailable = dash.vehiclesByStatus.available ?? 0;
@@ -277,47 +331,13 @@ export default function TransportOpsDashboard() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
-                  <table className="w-full text-sm">
-                    <thead className="bg-surface-subtle text-xs text-muted-foreground">
-                      <tr>
-                        <th className="px-3 py-2 text-start">المركبة</th>
-                        <th className="px-3 py-2 text-start">النوع</th>
-                        <th className="px-3 py-2 text-start">عدد الرحلات</th>
-                        <th className="px-3 py-2 text-start">الدقائق المحجوزة</th>
-                        <th className="px-3 py-2 text-start">الاستغلال %</th>
-                        <th className="px-3 py-2 text-start">المؤشر</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {weekly.data.data.vehicleUtilisation.length === 0 ? (
-                        <tr><td colSpan={6} className="text-center py-6 text-muted-foreground text-sm">
-                          لا توجد بيانات استغلال في هذه الفترة
-                        </td></tr>
-                      ) : weekly.data.data.vehicleUtilisation.map((v) => {
-                        const util = Number(v.utilisation) || 0;
-                        const tone = util >= 60 ? "bg-status-success-surface text-status-success-foreground" :
-                                     util >= 30 ? "bg-status-warning-surface text-status-warning-foreground" :
-                                     util > 0   ? "bg-status-info-surface text-status-info-foreground" :
-                                                  "bg-surface-subtle text-muted-foreground";
-                        return (
-                          <tr key={v.vehicleId} className="border-t hover:bg-surface-subtle">
-                            <td className="px-3 py-2 font-mono">{v.plateNumber ?? `#${v.vehicleId}`}</td>
-                            <td className="px-3 py-2 text-xs">{v.vehicleType ?? "—"}</td>
-                            <td className="px-3 py-2 font-mono">{v.tripCount}</td>
-                            <td className="px-3 py-2 font-mono">{v.bookedMinutes}</td>
-                            <td className="px-3 py-2 font-mono">{util}%</td>
-                            <td className="px-3 py-2">
-                              <Badge className={tone}>
-                                {util >= 60 ? "مرتفع" :
-                                 util >= 30 ? "متوسط" :
-                                 util > 0   ? "منخفض" : "خامل"}
-                              </Badge>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                  <DataTable
+                    columns={vehicleUtilColumns}
+                    data={weekly.data.data.vehicleUtilisation}
+                    rowKey={(v) => v.vehicleId}
+                    noToolbar
+                    emptyMessage="لا توجد بيانات استغلال في هذه الفترة"
+                  />
                 </CardContent>
               </Card>
             </>

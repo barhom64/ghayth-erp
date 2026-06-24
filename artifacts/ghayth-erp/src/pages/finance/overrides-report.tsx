@@ -213,7 +213,7 @@ export default function OverridesReportPage() {
 
   return (
     <PageShell
-      title="سجل التعديلات اليدوية (Manual Overrides)"
+      title="سجل التعديلات اليدوية"
       subtitle="مراجعة تدقيقية — كل تجاوز يدوي في توجيه البنود المحاسبية مع المستخدم والسبب"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },

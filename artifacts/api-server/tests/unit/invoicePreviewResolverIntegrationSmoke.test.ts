@@ -35,10 +35,14 @@ describe("preview resolves per-line allocations", () => {
 
   it("bucket builder reads res.resolvedAccountCode, not raw ln.accountCode", () => {
     expect(handler).toContain("res.resolvedAccountCode");
-    // #1945 item 6 — the fallback chain gained the product revenue map
-    // between the resolver output and the generic account:
-    //   res.resolvedAccountCode || productRevenueCodes.get(productId) || invRevenueCode
-    expect(handler).toMatch(/res\.resolvedAccountCode\s*\|\|[\s\S]*?productRevenueCodes[\s\S]*?\|\|\s*invRevenueCode/);
+    // #2102 — the route fallback is now just resolver-output || generic.
+    //   res.resolvedAccountCode || invRevenueCode
+    expect(handler).toMatch(/res\.resolvedAccountCode\s*\|\|\s*invRevenueCode/);
+    // The product-revenue map is no longer bolted on AFTER the resolver;
+    // it flows THROUGH it via the injected productRevenueCodes input, so
+    // the map is never read (`.get(`) after resolution.
+    expect(handler).not.toContain("productRevenueCodes.get(");
+    expect(handler).toMatch(/resolveLineAllocation\(\{[\s\S]*?productRevenueCodes[\s\S]*?\}\)/);
   });
 
   it("bucket dimensions come from resolver (dims.*)", () => {

@@ -101,7 +101,7 @@ export default function LedgerPage() {
       }
     >
       <FinanceTabsNav />
-      <div className="grid gap-3 grid-cols-4">
+      <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
         <Card><CardContent className="p-4 text-center">
           <p className="text-xs text-muted-foreground">عدد القيود</p>
           <p className="text-2xl font-bold">{entries.length}</p>

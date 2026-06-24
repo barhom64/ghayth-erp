@@ -48,6 +48,7 @@ import {
   handleRouteError,
   NotFoundError,
   ConflictError,
+  ValidationError,
   ForbiddenError,
   parseId,
   zodParse,
@@ -327,6 +328,41 @@ router.post("/overtime", authorize({ feature: "hr.overtime", action: "create" })
 
     const period = b.overtimeDate.substring(0, 7); // YYYY-MM
 
+    // سياسة HR قابلة للضبط — سقف وقت إضافي شهري لكل موظف. الإعداد
+    // system_settings.overtime_monthly_cap_hours؛ الافتراضي 0/غائب = بلا حدّ
+    // (صفر تغيير للسلوك القائم). عند ضبطه > 0 يُرفض ما يتجاوز السقف داخل الشهر
+    // (يحسب pending + approved، يستثني المرفوض). «النظام يَحضُر»: يمنع التجاوز
+    // سلفًا برسالة تبيّن المتبقي، بدل اكتشافه لاحقًا.
+    const capRow = await rawQuery<{ value: string | null }>(
+      `SELECT value FROM system_settings
+        WHERE key = 'overtime_monthly_cap_hours'
+          AND ( "companyId" = $1 OR "companyId" IS NULL )
+        ORDER BY ("companyId" IS NULL) ASC
+        LIMIT 1`,
+      [scope.companyId]
+    );
+    const monthlyCap = Number(capRow[0]?.value ?? 0);
+    if (Number.isFinite(monthlyCap) && monthlyCap > 0) {
+      const [agg] = await rawQuery<{ total: number | string }>(
+        `SELECT COALESCE(SUM(hours), 0) AS total
+           FROM hr_overtime_requests
+          WHERE "assignmentId" = $1 AND "payrollPeriod" = $2
+            AND "companyId" = $3 AND "deletedAt" IS NULL AND status != 'rejected'`,
+        [b.assignmentId, period, scope.companyId]
+      );
+      const already = Number(agg?.total ?? 0);
+      if (already + hours > monthlyCap) {
+        throw new ValidationError(
+          `تجاوز سقف الوقت الإضافي الشهري (${monthlyCap} ساعة) — المسجَّل لهذا الشهر: ${already} ساعة`,
+          {
+            field: "hours",
+            fix: `المتبقي ضمن السقف: ${Math.max(0, monthlyCap - already)} ساعة. عدّل الساعات أو سقف الإعدادات.`,
+            meta: { monthlyCap, alreadyLogged: already, requested: hours },
+          }
+        );
+      }
+    }
+
     // Numbering center (#1141 closure) — atomic issue + INSERT + linkback.
     const atomic = await withTransaction(async () => {
       const issued = await issueNumber({
@@ -449,11 +485,22 @@ router.patch("/overtime/:id/approve", authorize({ feature: "hr.overtime", action
 
     const rejectionReason = reason || notes;
     if (!approved) {
-      const { affectedRows } = await rawExecute(
-        `UPDATE hr_overtime_requests SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3 AND status = 'pending' AND "deletedAt" IS NULL`,
-        [rejectionReason || null, item.id, scope.companyId]
-      );
-      if (!affectedRows) throw new ConflictError("تم تحديث الطلب مسبقاً — أعد التحميل");
+      // The reject decision + its approval-action audit row are written
+      // atomically: a rejected request must never be left without its audit
+      // record. rawQuery joins the ambient transaction (txStore).
+      await withTransaction(async () => {
+        const { affectedRows } = await rawExecute(
+          `UPDATE hr_overtime_requests SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3 AND status = 'pending' AND "deletedAt" IS NULL`,
+          [rejectionReason || null, item.id, scope.companyId]
+        );
+        if (!affectedRows) throw new ConflictError("تم تحديث الطلب مسبقاً — أعد التحميل");
+        await rawExecute(
+          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('hr_overtime_request',$1,'rejected',$2,$3,$4)`,
+          [item.id, rejectionReason || null, scope.userId, scope.companyId]
+        );
+      });
+      // Approval-chain advance + requester notification are best-effort
+      // side-effects, after the decision is durably recorded.
       processApprovalStep({
         companyId: scope.companyId, branchId: scope.branchId,
         refType: "hr_overtime_request", refId: item.id,
@@ -465,12 +512,6 @@ router.patch("/overtime/:id/approve", authorize({ feature: "hr.overtime", action
         body: `تم رفض الطلب ${item.requestNumber}${rejectionReason ? " — السبب: " + rejectionReason : ""}`,
         priority: "normal", refType: "hr_overtime_request", refId: item.id,
       }).catch((e) => logger.error(e, "hr-overtime notification failed"));
-      try {
-        await rawExecute(
-          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('hr_overtime_request',$1,'rejected',$2,$3,$4)`,
-          [item.id, rejectionReason || null, scope.userId, scope.companyId]
-        );
-      } catch (e) { logger.error(e, "Failed to log approval action"); }
       emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "hr.overtime.rejected", entity: "hr_overtime_requests", entityId: item.id, details: JSON.stringify({ requestNumber: item.requestNumber, reason: rejectionReason }) }).catch((e) => logger.error(e, "hr-overtime background task failed"));
       res.json({ success: true, message: "تم رفض الطلب" });
       return;
@@ -495,13 +536,22 @@ router.patch("/overtime/:id/approve", authorize({ feature: "hr.overtime", action
       return;
     }
 
-    const { affectedRows } = await rawExecute(
-      `UPDATE hr_overtime_requests
-       SET status = 'approved', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW()
-       WHERE id = $2 AND "companyId" = $3 AND status = 'pending' AND "deletedAt" IS NULL`,
-      [scope.userId, item.id, scope.companyId]
-    );
-    if (!affectedRows) throw new ConflictError("تم تحديث الطلب مسبقاً — أعد التحميل");
+    // Final-approval status flip + its approval-action audit row are
+    // written atomically (the chain advance above already committed). A
+    // final approval must never be left without its audit record.
+    await withTransaction(async () => {
+      const { affectedRows } = await rawExecute(
+        `UPDATE hr_overtime_requests
+         SET status = 'approved', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW()
+         WHERE id = $2 AND "companyId" = $3 AND status = 'pending' AND "deletedAt" IS NULL`,
+        [scope.userId, item.id, scope.companyId]
+      );
+      if (!affectedRows) throw new ConflictError("تم تحديث الطلب مسبقاً — أعد التحميل");
+      await rawExecute(
+        `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('hr_overtime_request',$1,'approved',$2,$3,$4)`,
+        [item.id, notes || null, scope.userId, scope.companyId]
+      );
+    });
 
     createNotification({
       companyId: scope.companyId, assignmentId: item.assignmentId,
@@ -509,13 +559,6 @@ router.patch("/overtime/:id/approve", authorize({ feature: "hr.overtime", action
       body: `تمت الموافقة على ${item.hours} ساعات إضافية — ${item.requestNumber}`,
       priority: "normal", refType: "hr_overtime_request", refId: item.id,
     }).catch((e) => logger.error(e, "hr-overtime background task failed"));
-
-    try {
-      await rawExecute(
-        `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('hr_overtime_request',$1,'approved',$2,$3,$4)`,
-        [item.id, notes || null, scope.userId, scope.companyId]
-      );
-    } catch (e) { logger.error(e, "Failed to log approval action"); }
 
     await createAuditLog({
       companyId: scope.companyId, userId: scope.userId,

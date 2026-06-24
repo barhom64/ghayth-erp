@@ -330,7 +330,7 @@ export function AssignmentSuggestDialog({
         </label>
       </div>
       <Button size="sm" onClick={saveWindowAndRerun} disabled={savingWindow || loading} rateLimitAware>
-        {savingWindow ? "جارٍ الحفظ…" : "حفظ الموعد وإعادة الحساب"}
+        {savingWindow ? "جاري الحفظ…" : "حفظ الموعد وإعادة الحساب"}
       </Button>
     </div>
   ) : null;

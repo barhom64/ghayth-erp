@@ -4,9 +4,11 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { Card, CardContent } from "@/components/ui/card";
 import { DatePicker } from "@/components/ui/date-picker";
 import { DataTable, type DataTableColumn, PageShell } from "@workspace/ui-core";
-import { ShieldCheck, AlertTriangle, FileWarning, Layers } from "lucide-react";
+import { ShieldCheck, AlertTriangle, FileWarning, Layers, Unlink } from "lucide-react";
 import { formatCurrency, formatNumber, todayLocal } from "@/lib/formatters";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 /**
  * لوحة صدق دفتر الأستاذ — FIN-INTEGRITY-CONTRACT (#2246) المرحلة أ (قياس فقط).
@@ -25,6 +27,7 @@ interface LedgerTruthResponse {
   summary: {
     dimTotalLines: number; dimMissingLines: number; dimMissingValue: number;
     completenessPct: number; fallbackTotal: number; manualTotal: number; manualBlind: number;
+    orphanSourceTotal: number;
     enforcement: string; phase: string;
   };
   dimensionCompleteness: Array<{ expectedDim: string; totalLines: number; missingLines: number; missingValue: number; completenessPct: number }>;
@@ -33,6 +36,7 @@ interface LedgerTruthResponse {
   manual: { total: number; noReason: number; noDimension: number; blind: number };
   nonPostableAccountEntries: Array<{ journalId: number; ref: string | null; createdAt: string; accountCode: string; accountName: string; reason: string }>;
   manualOperationalNoReason: Array<{ journalId: number; ref: string | null; createdAt: string; description: string | null }>;
+  orphanSourceEntries: Array<{ journalId: number; ref: string | null; date: string; type: string | null; amount: number }>;
   ratchetReadiness: Array<{ expectedDim: string; missingLines: number; missingValue: number; completenessPct: number }>;
 }
 
@@ -52,10 +56,15 @@ export default function LedgerTruthPage() {
     `/finance/reports/ledger-truth?startDate=${startDate}&endDate=${endDate}`,
   );
 
+  // Primary truth table = dimension completeness (the headline measurement).
+  // Seeded from the optional response so the hook stays above the early return.
+  const { sortedRows: printRows, setSortedRows: setPrintRows } =
+    usePrintRows<LedgerTruthResponse["dimensionCompleteness"][number]>(data?.dimensionCompleteness ?? []);
+
   if (isLoading) return <LoadingSpinner />;
   if (isError || !data) return <ErrorState />;
 
-  const { summary, dimensionCompleteness, byDoor, fallbackByOperation, manual, nonPostableAccountEntries, manualOperationalNoReason, ratchetReadiness } = data;
+  const { summary, dimensionCompleteness, byDoor, fallbackByOperation, manual, nonPostableAccountEntries, manualOperationalNoReason, orphanSourceEntries, ratchetReadiness } = data;
 
   const dimColumns: DataTableColumn<LedgerTruthResponse["dimensionCompleteness"][number]>[] = [
     { key: "expectedDim", header: "البُعد المطلوب", render: (r) => <span className="font-medium">{DIM_LABEL[r.expectedDim] ?? r.expectedDim}</span> },
@@ -92,6 +101,14 @@ export default function LedgerTruthPage() {
     { key: "createdAt", header: "التاريخ", render: (r) => <span className="text-xs">{r.createdAt.slice(0, 10)}</span> },
   ];
 
+  const orphanSourceColumns: DataTableColumn<LedgerTruthResponse["orphanSourceEntries"][number]>[] = [
+    { key: "journalId", header: "القيد", render: (r) => <span className="font-mono text-xs">#{r.journalId}</span> },
+    { key: "ref", header: "المرجع", render: (r) => <span className="font-mono text-xs">{r.ref ?? "—"}</span> },
+    { key: "type", header: "باب الترحيل (type)", render: (r) => <span className="font-mono text-xs">{r.type ?? "—"}</span> },
+    { key: "amount", header: "القيمة", sortable: true, render: (r) => <span className="text-destructive font-semibold">{formatCurrency(r.amount)}</span> },
+    { key: "date", header: "التاريخ", render: (r) => <span className="text-xs">{r.date.slice(0, 10)}</span> },
+  ];
+
   const ratchetColumns: DataTableColumn<LedgerTruthResponse["ratchetReadiness"][number]>[] = [
     { key: "expectedDim", header: "الصنف", render: (r) => <span className="font-medium">{DIM_LABEL[r.expectedDim] ?? r.expectedDim}</span> },
     { key: "missingValue", header: "حجم التسريب", sortable: true, render: (r) => formatCurrency(r.missingValue) },
@@ -108,10 +125,25 @@ export default function LedgerTruthPage() {
         { label: "صدق دفتر الأستاذ" },
       ]}
       actions={
-        <>
+        <div className="flex items-center gap-2">
           <DatePicker value={startDate} onChange={setStartDate} className="w-44" placeholder="من" />
           <DatePicker value={endDate} onChange={setEndDate} className="w-44" placeholder="إلى" />
-        </>
+          <PrintButton
+            entityType="report_finance_ledger_truth_dimensions"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "اكتمال الأبعاد حسب الصنف", total: printRows.length },
+              items: printRows.map((r) => ({
+                "البُعد المطلوب": DIM_LABEL[r.expectedDim] ?? r.expectedDim,
+                "إجمالي السطور": r.totalLines,
+                "سطور بلا بُعد": r.missingLines,
+                "القيمة اليتيمة": r.missingValue,
+                "اكتمال %": `${r.completenessPct.toFixed(2)}%`,
+              })),
+            })}
+          />
+        </div>
       }
     >
       <FinanceTabsNav />
@@ -120,7 +152,7 @@ export default function LedgerTruthPage() {
         مرحلة <span className="font-semibold">القياس فقط</span> — لا يوجد منع أو رفض للقيود. الغرض تحديد حجم التسريب قبل تفعيل الإنفاذ تدريجيًا (ratchet) صنفًا صنفًا.
       </div>
 
-      <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+      <div className="grid gap-3 grid-cols-2 md:grid-cols-5">
         <Card>
           <CardContent className="p-4 text-center">
             <ShieldCheck className="h-5 w-5 text-emerald-600 mx-auto mb-1" />
@@ -151,11 +183,19 @@ export default function LedgerTruthPage() {
             <p className="text-[10px] text-muted-foreground mt-1">من {formatNumber(summary.manualTotal)} يدوي</p>
           </CardContent>
         </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <Unlink className="h-5 w-5 text-destructive mx-auto mb-1" />
+            <p className="text-xs text-muted-foreground">قيود يتيمة المصدر</p>
+            <p className="text-xl font-bold text-destructive mt-1">{formatNumber(summary.orphanSourceTotal)}</p>
+            <p className="text-[10px] text-muted-foreground mt-1">قيد آلي مُرحَّل بلا مصدر</p>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="mt-6">
         <h3 className="text-base font-semibold mb-3">اكتمال الأبعاد حسب الصنف</h3>
-        <DataTable columns={dimColumns} data={dimensionCompleteness} emptyMessage="لا توجد سطور مُبعّدة في هذه الفترة" noToolbar />
+        <DataTable columns={dimColumns} data={dimensionCompleteness} onSortedDataChange={setPrintRows} emptyMessage="لا توجد سطور مُبعّدة في هذه الفترة" noToolbar />
       </div>
 
       <div className="mt-6">
@@ -186,6 +226,11 @@ export default function LedgerTruthPage() {
       <div className="mt-6">
         <h3 className="text-base font-semibold mb-3">قيود يدوية مرتبطة تشغيليًا بلا سبب</h3>
         <DataTable columns={manualNoReasonColumns} data={manualOperationalNoReason} emptyMessage="لا قيود يدوية تشغيلية بلا سبب" noToolbar />
+      </div>
+
+      <div className="mt-6">
+        <h3 className="text-base font-semibold mb-3">قيود يتيمة المصدر (قيد آلي مُرحَّل بلا مصدر — تُستثنى أبواب الإقفال/التسوية/المطابقة)</h3>
+        <DataTable columns={orphanSourceColumns} data={orphanSourceEntries} emptyMessage="لا قيود آلية يتيمة بالمصدر" noToolbar />
       </div>
 
       <div className="mt-6">

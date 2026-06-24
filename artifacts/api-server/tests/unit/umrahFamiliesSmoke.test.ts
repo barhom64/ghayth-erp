@@ -23,8 +23,11 @@ const MIGRATION = readFileSync(
   join(import.meta.dirname!, "../../src/migrations/265_umrah_families.sql"),
   "utf8",
 );
+// U-07 Phase 2 — families CRUD now lives in its own sub-router file.
+// Mounted via umrah-entities.ts so the URL surface (/umrah/families/...)
+// is unchanged, but the route definitions themselves moved here.
 const ROUTES = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-families.ts"),
   "utf8",
 );
 
@@ -74,7 +77,10 @@ describe("umrah-entities.ts — families CRUD endpoints", () => {
 
   it("POST /families inserts + emits audit + event", () => {
     expect(ROUTES).toMatch(/INSERT INTO umrah_families[\s\S]{0,200}"familyName","headPilgrimId"/);
-    expect(ROUTES).toMatch(/createAuditLog\(\{[\s\S]{0,400}action: "create"[\s\S]{0,200}entity: "umrah_families"/);
+    // U-07 Phase 2 — audit migrated to auditFromRequest(req, action, entity,
+    // entityId, {...}) so IGOC context (activeRoleKey/activeDepartmentId/
+    // resolvedScope/impersonation) lands on every row (ratchet-enforced).
+    expect(ROUTES).toMatch(/auditFromRequest\(\s*req,\s*"create",\s*"umrah_families"/);
     expect(ROUTES).toMatch(/action: "umrah\.family\.created"/);
   });
 
@@ -95,7 +101,8 @@ describe("umrah-entities.ts — families CRUD endpoints", () => {
     // Count tenant-scoped WHERE clauses in the families block — every
     // query MUST touch both columns; if a future refactor drops one,
     // this assertion catches it.
-    const familiesBlock = ROUTES.slice(ROUTES.indexOf("UMRAH FAMILIES (migration 265)"));
+    // U-07 Phase 2 — the whole file IS the families block now (5 routes).
+    const familiesBlock = ROUTES;
     const companyChecks = familiesBlock.match(/"companyId" = \$\d/g) ?? [];
     const deletedChecks = familiesBlock.match(/"deletedAt" IS NULL/g) ?? [];
     // 6 WHERE-clause `companyId = $N` checks across GET list, GET detail,

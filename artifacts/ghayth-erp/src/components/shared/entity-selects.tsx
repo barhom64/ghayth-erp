@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { FormShell, FormTextField } from "@workspace/ui-core";
+import { AllowCreateDrawer, type EntityKind } from "./allow-create-drawer";
 
 interface QuickCreateField {
   key: string;
@@ -188,6 +189,20 @@ interface EntitySelectConfig {
    * AND unfindable, since cmdk only filters what's already loaded.
    */
   serverSearch?: boolean;
+  /**
+   * When set, "+ جديد" opens the unified FULL create form in a drawer
+   * (`AllowCreateDrawer`) instead of the truncated `QuickCreateDialog`. Set it
+   * once a registered embedded form exists for the entity (migration is
+   * selector-by-selector). See allow-create-drawer.tsx.
+   */
+  createEntityKind?: EntityKind;
+  /**
+   * Default value for the component's `allowCreate` prop. Defaults to true.
+   * Set false for selects with NO working create endpoint (e.g.
+   * EmployeeCategorySelect → no POST /org/employee-categories) so a call site
+   * that forgets `allowCreate={false}` doesn't expose a "+ create" that 404s.
+   */
+  allowCreateDefault?: boolean;
 }
 
 /**
@@ -223,6 +238,8 @@ interface EntitySelectProps {
   error?: string;
   allowCreate?: boolean;
   filter?: (item: any) => boolean;
+  /** Visually hide the label (sr-only) for dense inline/toolbar contexts. */
+  hideLabel?: boolean;
 }
 
 function buildEntitySelect(config: EntitySelectConfig) {
@@ -234,8 +251,12 @@ function buildEntitySelect(config: EntitySelectConfig) {
     placeholder = config.defaultPlaceholder,
     className,
     error,
-    allowCreate = true,
+    // Default per-select via config.allowCreateDefault (true unless the select
+    // has no working create endpoint, e.g. EmployeeCategorySelect). A call site
+    // can still override explicitly.
+    allowCreate = config.allowCreateDefault ?? true,
     filter,
+    hideLabel,
   }: EntitySelectProps) {
     const [showCreate, setShowCreate] = useState(false);
     // #2134 — entities created from «+ جديد» are appended locally so they
@@ -277,12 +298,30 @@ function buildEntitySelect(config: EntitySelectConfig) {
       return mergeEntityOptions(createdOptions, rows.map(toOption), searchRows.map(toOption));
     }, [rows, searchRows, createdOptions]);
 
+    // #2134 — append + select the new entity instantly, before the refetch
+    // round-trip lands. Shared by both create surfaces (drawer / dialog).
+    const handleCreated = (res: any) => {
+      const row = res?.data && res.data.id ? res.data : res;
+      // Select by the configured value field (e.g. accounts store the code,
+      // not the id) so an inline-created entity is actually selected.
+      const newId = String(row?.[config.getValueField || "id"] ?? row?.id ?? "");
+      if (newId) {
+        setCreatedOptions((prev) => mergeEntityOptions(
+          [{ value: newId, label: config.getName(row), sublabel: config.getSublabel?.(row) }],
+          prev, [],
+        ));
+        onChange(newId);
+      }
+      refetch();
+    };
+
     return (
       <>
         <SearchableSelectField
           label={label}
           required={required}
           error={error}
+          hideLabel={hideLabel}
           options={options}
           value={value}
           onValueChange={onChange}
@@ -294,7 +333,14 @@ function buildEntitySelect(config: EntitySelectConfig) {
           createNewLabel={config.createLabel}
           onSearchChange={config.serverSearch ? setSearchText : undefined}
         />
-        {allowCreate && (
+        {allowCreate && (config.createEntityKind ? (
+          <AllowCreateDrawer
+            kind={config.createEntityKind}
+            open={showCreate}
+            onOpenChange={setShowCreate}
+            onCreated={handleCreated}
+          />
+        ) : (
           <QuickCreateDialog
             open={showCreate}
             onOpenChange={setShowCreate}
@@ -302,20 +348,9 @@ function buildEntitySelect(config: EntitySelectConfig) {
             fields={config.createFields}
             apiPath={config.createApiPath}
             invalidateKey={config.queryKey}
-            onCreated={(res) => {
-              const row = res?.data && res.data.id ? res.data : res;
-              const newId = String(row?.id || "");
-              if (newId) {
-                setCreatedOptions((prev) => mergeEntityOptions(
-                  [{ value: newId, label: config.getName(row), sublabel: config.getSublabel?.(row) }],
-                  prev, [],
-                ));
-                onChange(newId);
-              }
-              refetch();
-            }}
+            onCreated={handleCreated}
           />
-        )}
+        ))}
       </>
     );
   };
@@ -330,6 +365,9 @@ export const EmployeeSelect = buildEntitySelect({
   createTitle: "إضافة موظف جديد",
   createLabel: "+ موظف جديد",
   createApiPath: "/employees",
+  // AllowCreateDrawer: full employee form (embedded — wizard/success-view are
+  // page-only; nested inline-create is disabled to avoid recursive drawers).
+  createEntityKind: "employee",
   createFields: [
     { key: "name", label: "اسم الموظف", required: true },
     { key: "empNumber", label: "الرقم الوظيفي", required: true },
@@ -352,6 +390,9 @@ export const ClientSelect = buildEntitySelect({
   createTitle: "إضافة عميل جديد",
   createLabel: "+ عميل جديد",
   createApiPath: "/clients",
+  // AllowCreateDrawer: full client form (type/classification/source/portal
+  // account…) vs the 3-field quick-add.
+  createEntityKind: "client",
   createFields: [
     { key: "name", label: "اسم العميل", required: true },
     { key: "phone", label: "الهاتف" },
@@ -370,6 +411,8 @@ export const VendorSelect = buildEntitySelect({
   createTitle: "إضافة مورد جديد",
   createLabel: "+ مورد جديد",
   createApiPath: "/finance/vendors",
+  // AllowCreateDrawer: full AP-aware vendor form (incl. WHT) vs the 3-field quick-add.
+  createEntityKind: "vendor",
   createFields: [
     { key: "name", label: "اسم المورد", required: true },
     { key: "taxNumber", label: "الرقم الضريبي" },
@@ -404,6 +447,9 @@ export const DriverSelect = buildEntitySelect({
   createTitle: "إضافة سائق جديد",
   createLabel: "+ سائق جديد",
   createApiPath: "/fleet/drivers",
+  // AllowCreateDrawer: full driver form (KSA license identity + employee link)
+  // vs the 3-field quick-add.
+  createEntityKind: "driver",
   createFields: [
     { key: "name", label: "اسم السائق", required: true },
     { key: "phone", label: "الهاتف" },
@@ -422,6 +468,9 @@ export const BranchSelect = buildEntitySelect({
   createTitle: "إضافة فرع جديد",
   createLabel: "+ فرع جديد",
   createApiPath: "/settings/branches",
+  // AllowCreateDrawer: full branch form (incl. the required companyId the
+  // truncated quick-add dropped). createFields kept as fallback.
+  createEntityKind: "branch",
   createFields: [
     { key: "name", label: "اسم الفرع", required: true },
     { key: "city", label: "المدينة" },
@@ -439,6 +488,11 @@ export const DepartmentSelect = buildEntitySelect({
   createTitle: "إضافة قسم جديد",
   createLabel: "+ قسم جديد",
   createApiPath: "/settings/departments",
+  // Pilot of the AllowCreateDrawer generalisation: "+ قسم جديد" now opens the
+  // FULL department form (name + branch + parent + manager + status) in a
+  // drawer, not the 1-field quick-add. `createFields` stays as the fallback
+  // for any caller that hasn't been migrated.
+  createEntityKind: "department",
   createFields: [
     { key: "name", label: "اسم القسم", required: true },
   ],
@@ -454,12 +508,29 @@ export const ProjectSelect = buildEntitySelect({
   createTitle: "إضافة مشروع جديد",
   createLabel: "+ مشروع جديد",
   createApiPath: "/projects",
+  // AllowCreateDrawer: full project form (client/manager/budget/dates/description)
+  // vs the 2-field quick-add (whose bogus `code` the backend ignores).
+  createEntityKind: "project",
   createFields: [
     { key: "name", label: "اسم المشروع", required: true },
     { key: "code", label: "رمز المشروع" },
   ],
   getName: (r) => r?.name || r?.title || `#${r?.id}`,
   getSublabel: (r) => r?.code || "",
+});
+
+export const UnitSelect = buildEntitySelect({
+  queryKey: "property-units-list",
+  endpoint: "/properties/units?limit=500",
+  defaultLabel: "الوحدة العقارية",
+  defaultPlaceholder: "اختر الوحدة",
+  searchPlaceholder: "ابحث عن وحدة...",
+  createTitle: "إضافة وحدة",
+  createLabel: "+ وحدة جديدة",
+  createApiPath: "/properties/units",
+  createFields: [{ key: "unitNumber", label: "رقم الوحدة", required: true }],
+  getName: (r) => [r?.buildingName, r?.unitNumber].filter(Boolean).join(" - ") || `#${r?.id}`,
+  getSublabel: (r) => r?.unitType || r?.status || "",
 });
 
 export const AccountSelect = buildEntitySelect({
@@ -471,6 +542,9 @@ export const AccountSelect = buildEntitySelect({
   createTitle: "إضافة حساب جديد",
   createLabel: "+ حساب جديد",
   createApiPath: "/finance/accounts",
+  // AllowCreateDrawer: full chart-of-accounts form (parent/type/usage/branch)
+  // vs the 2-field quick-add. Selection respects getValueField (code or id).
+  createEntityKind: "account",
   createFields: [
     { key: "code", label: "رقم الحساب", required: true },
     { key: "name", label: "اسم الحساب", required: true },
@@ -493,6 +567,9 @@ export const PostingAccountSelect = buildEntitySelect({
   createTitle: "إضافة حساب جديد",
   createLabel: "+ حساب جديد",
   createApiPath: "/finance/accounts",
+  // AllowCreateDrawer: full chart-of-accounts form (parent/type/usage/branch)
+  // vs the 2-field quick-add. Selection respects getValueField (code or id).
+  createEntityKind: "account",
   createFields: [
     { key: "code", label: "رقم الحساب", required: true },
     { key: "name", label: "اسم الحساب", required: true },
@@ -511,6 +588,9 @@ export const AccountIdSelect = buildEntitySelect({
   createTitle: "إضافة حساب جديد",
   createLabel: "+ حساب جديد",
   createApiPath: "/finance/accounts",
+  // AllowCreateDrawer: full chart-of-accounts form (parent/type/usage/branch)
+  // vs the 2-field quick-add. Selection respects getValueField (code or id).
+  createEntityKind: "account",
   createFields: [
     { key: "code", label: "رقم الحساب", required: true },
     { key: "name", label: "اسم الحساب", required: true },
@@ -533,6 +613,8 @@ export const VehicleSelect = buildEntitySelect({
   createTitle: "إضافة مركبة جديدة",
   createLabel: "+ مركبة جديدة",
   createApiPath: "/fleet/vehicles",
+  // AllowCreateDrawer: full vehicle technical profile vs the 3-field quick-add.
+  createEntityKind: "vehicle",
   createFields: [
     { key: "plateNumber", label: "رقم اللوحة", required: true },
     { key: "make", label: "الشركة المصنعة" },
@@ -583,6 +665,9 @@ export const CostCenterMasterSelect = buildEntitySelect({
   createTitle: "إضافة مركز تكلفة جديد",
   createLabel: "+ مركز تكلفة جديد",
   createApiPath: "/finance/cost-centers",
+  // AllowCreateDrawer: full cost-center form (code + type + name + budget) vs
+  // the 2-field quick-add.
+  createEntityKind: "cost-center",
   createFields: [
     { key: "code", label: "رمز المركز", required: true },
     { key: "name", label: "اسم المركز", required: true },
@@ -666,6 +751,9 @@ export const EmployeeCategorySelect = buildEntitySelect({
   createTitle: "إضافة فئة موظفين",
   createLabel: "+ فئة جديدة",
   createApiPath: "/org/employee-categories",
+  // لا يوجد POST /org/employee-categories (الفئات مبذورة بالهجرة) — فالإنشاء
+  // معطّل افتراضيًا كي لا يظهر «+» يُرجع 404 من أي موضع استخدام.
+  allowCreateDefault: false,
   createFields: [
     { key: "categoryKey", label: "مفتاح الفئة", required: true },
     { key: "labelAr", label: "الاسم بالعربية", required: true },
@@ -673,4 +761,75 @@ export const EmployeeCategorySelect = buildEntitySelect({
   getValueField: "categoryKey",
   getName: (r) => r?.labelAr || r?.labelEn || r?.categoryKey || `#${r?.id}`,
   getSublabel: (r) => r?.exemptFromAutoDeduction ? "مُعفاة من الخصم التلقائي" : "",
+});
+
+// ── كيانات جذرية كانت بلا مُحدِّد موحّد (الخطوة C) — بحث + إنشاء «+» خفيف ────────
+export const UmrahAgentSelect = buildEntitySelect({
+  queryKey: "umrah-agents-list",
+  endpoint: "/umrah/agents",
+  defaultLabel: "وكيل العمرة",
+  defaultPlaceholder: "اختر الوكيل",
+  searchPlaceholder: "ابحث عن وكيل...",
+  createTitle: "إضافة وكيل عمرة",
+  createLabel: "+ وكيل جديد",
+  createApiPath: "/umrah/agents",
+  createFields: [
+    { key: "name", label: "اسم الوكيل", required: true },
+    { key: "phone", label: "الهاتف" },
+    { key: "country", label: "الدولة" },
+  ],
+  getName: (r) => r?.name || `#${r?.id}`,
+  getSublabel: (r) => r?.country || "",
+});
+
+export const UmrahSeasonSelect = buildEntitySelect({
+  queryKey: "umrah-seasons-list",
+  endpoint: "/umrah/seasons",
+  defaultLabel: "موسم العمرة",
+  defaultPlaceholder: "اختر الموسم",
+  searchPlaceholder: "ابحث عن موسم...",
+  createTitle: "إضافة موسم عمرة",
+  createLabel: "+ موسم جديد",
+  createApiPath: "/umrah/seasons",
+  createFields: [
+    { key: "title", label: "اسم الموسم", required: true },
+    { key: "startDate", label: "تاريخ البداية", required: true, type: "date" },
+    { key: "endDate", label: "تاريخ النهاية", required: true, type: "date" },
+  ],
+  getName: (r) => r?.title || `#${r?.id}`,
+  getSublabel: (r) => r?.startDate ? `${r.startDate}${r.endDate ? ` → ${r.endDate}` : ""}` : "",
+});
+
+export const BuildingSelect = buildEntitySelect({
+  queryKey: "property-buildings-list",
+  endpoint: "/properties/buildings",
+  defaultLabel: "المبنى",
+  defaultPlaceholder: "اختر المبنى",
+  searchPlaceholder: "ابحث عن مبنى...",
+  createTitle: "إضافة مبنى",
+  createLabel: "+ مبنى جديد",
+  createApiPath: "/properties/buildings",
+  createFields: [
+    { key: "name", label: "اسم المبنى", required: true },
+    { key: "city", label: "المدينة" },
+  ],
+  getName: (r) => r?.name || `#${r?.id}`,
+  getSublabel: (r) => r?.city || r?.address || "",
+});
+
+export const PropertyOwnerSelect = buildEntitySelect({
+  queryKey: "property-owners-list",
+  endpoint: "/properties/owners",
+  defaultLabel: "مالك العقار",
+  defaultPlaceholder: "اختر المالك",
+  searchPlaceholder: "ابحث عن مالك...",
+  createTitle: "إضافة مالك عقار",
+  createLabel: "+ مالك جديد",
+  createApiPath: "/properties/owners",
+  createFields: [
+    { key: "name", label: "اسم المالك", required: true },
+    { key: "phone", label: "الهاتف" },
+  ],
+  getName: (r) => r?.name || `#${r?.id}`,
+  getSublabel: (r) => r?.phone || "",
 });

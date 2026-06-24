@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useApiQuery, useApiMutation, getErrorMessage } from "@/lib/api";
-import { CreatePageLayout } from "@workspace/ui-core";
+import { CreatePageLayout, DataTable } from "@workspace/ui-core";
 import { ActiveContextNotice, useActiveFinanceContext } from "@/components/shared/active-context-gate";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +13,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { ClientSelect } from "@/components/shared/entity-selects";
+import { ClientSelect, AccountSelect } from "@/components/shared/entity-selects";
+import { allowedUsagesForPaymentMethod, isMoneyAccount } from "@/lib/finance-account-usage";
 import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { FinanceOperationContextPanel } from "@/components/shared/finance-operation-context-panel";
@@ -73,6 +74,8 @@ export default function CustomerReceiptWizardPage() {
     amount: "" as number | string,
     reference: "",
     notes: "",
+    // #2698 — خزنة/بنك الإيداع صراحةً (اختياري). الفراغ = يحدّده محرك الترحيل بالطريقة.
+    cashAccountCode: "",
   });
   // #1945 FIN-03 — stable idempotency key for this wizard session: a network
   // retry of the same submit must not double-apply the invoice payments.
@@ -207,6 +210,7 @@ export default function CustomerReceiptWizardPage() {
         date: header.date,
         reference: header.reference || undefined,
         notes: header.notes || undefined,
+        cashAccountCode: header.cashAccountCode || undefined,
         applications: rows
           .filter((r) => r.selected && r.applyAmount > 0)
           .map((r) => ({ invoiceId: r.invoiceId, amount: r.applyAmount })),
@@ -274,6 +278,22 @@ export default function CustomerReceiptWizardPage() {
             <Input type="number" step="0.01" value={header.amount}
               onChange={(e) => setHeader({ ...header, amount: e.target.value })}
               placeholder="0.00" className="h-9 font-mono text-lg" />
+          </div>
+          {/* #2698 — اختيار خزنة/بنك الإيداع صراحةً (اختياري). يُفلتر حسب طريقة
+              الاستلام (نقد→صندوق، تحويل/بنك→بنك، شيك→بنك/شيكات)؛ الخادم يفرض
+              القاعدة نفسها (assertPaymentSourceAllowed). الفراغ = الحلّ الآلي. */}
+          <div className="md:col-span-3">
+            <Label className="text-xs">الخزنة / البنك (اختياري)</Label>
+            <AccountSelect
+              value={header.cashAccountCode}
+              onChange={(v) => setHeader({ ...header, cashAccountCode: String(v ?? "") })}
+              placeholder="يحدّده النظام تلقائيًا حسب الطريقة — أو اختر خزنة/بنكًا محدّدًا"
+              filter={(a: any) => {
+                const allowed = allowedUsagesForPaymentMethod(header.paymentMethod);
+                if (!allowed) return isMoneyAccount(a);
+                return a.accountUsage ? allowed.includes(a.accountUsage) : isMoneyAccount(a);
+              }}
+            />
           </div>
           <div className="md:col-span-2">
             <Label className="text-xs">مرجع (شيك / SWIFT / SADAD)</Label>
@@ -413,35 +433,18 @@ export default function CustomerReceiptWizardPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-3">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-muted-foreground border-b">
-                  <th className="text-end p-1">البند</th>
-                  <th className="text-end p-1">الوصف</th>
-                  <th className="text-end p-1">مدين</th>
-                  <th className="text-end p-1">دائن</th>
-                </tr>
-              </thead>
-              <tbody>
-                {previewLegs().map((jl, i) => (
-                  <tr key={i} className="border-b border-dashed">
-                    <td className="p-1">{jl.label}</td>
-                    <td className="p-1 text-muted-foreground">{jl.description}</td>
-                    <td className="p-1 font-mono text-end text-emerald-700">
-                      {Number(jl.debit) > 0 ? formatCurrency(Number(jl.debit)) : "—"}
-                    </td>
-                    <td className="p-1 font-mono text-end text-red-700">
-                      {Number(jl.credit) > 0 ? formatCurrency(Number(jl.credit)) : "—"}
-                    </td>
-                  </tr>
-                ))}
-                <tr className="bg-muted/40 font-bold">
-                  <td colSpan={2} className="p-1 text-end">الإجمالي</td>
-                  <td className="p-1 font-mono text-end text-emerald-700">{formatCurrency(totalAmount)}</td>
-                  <td className="p-1 font-mono text-end text-red-700">{formatCurrency(totalAmount)}</td>
-                </tr>
-              </tbody>
-            </table>
+            <DataTable<{ label: string; description: string; debit: number; credit: number }>
+              noToolbar
+              pageSize={0}
+              data={previewLegs()}
+              rowKey={(_jl, i) => i}
+              columns={[
+                { key: "label", header: "البند", sortable: false, render: (jl) => jl.label, footer: () => "الإجمالي" },
+                { key: "description", header: "الوصف", sortable: false, className: "text-muted-foreground", render: (jl) => jl.description },
+                { key: "debit", header: "مدين", sortable: false, align: "end", className: "font-mono text-emerald-700", render: (jl) => (Number(jl.debit) > 0 ? formatCurrency(Number(jl.debit)) : "—"), footer: () => formatCurrency(totalAmount) },
+                { key: "credit", header: "دائن", sortable: false, align: "end", className: "font-mono text-red-700", render: (jl) => (Number(jl.credit) > 0 ? formatCurrency(Number(jl.credit)) : "—"), footer: () => formatCurrency(totalAmount) },
+              ]}
+            />
             {/* #1945 (FIN-03) — الحسابات الفعلية يحدّدها محرك الترحيل
                 (resolveAccountCode) عند الحفظ؛ لا نعرض أكوادًا ثابتة قد تخالف
                 ما يُرحَّل فعليًا (كانت 1200/1220/2110 وهي رأس غير قابل للترحيل /

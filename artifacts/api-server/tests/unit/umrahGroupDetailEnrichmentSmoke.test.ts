@@ -9,8 +9,9 @@ import { join } from "node:path";
  * time. The endpoint now folds the six aggregates into a single
  * roundtrip + the JOINs are tenant-scoped against a stale-row leak.
  */
+// U-07 Phase 22 — GET /umrah/groups/:id (enrichment) carved into umrah-groups.ts.
 const ROUTE = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-groups.ts"),
   "utf8",
 );
 const PAGE = readFileSync(

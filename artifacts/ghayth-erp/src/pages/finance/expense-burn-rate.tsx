@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { exportRowsToCsv } from "@/lib/unified-export";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -364,53 +364,62 @@ export default function ExpenseBurnRatePage() {
               <CardTitle className="text-base">الجدول التفصيلي</CardTitle>
             </CardHeader>
             <CardContent>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-xs text-muted-foreground">
-                    <th className="text-start py-2 px-2">الشهر</th>
-                    <th className="text-end py-2 px-2">الإيرادات</th>
-                    <th className="text-end py-2 px-2">المصاريف</th>
-                    <th className="text-end py-2 px-2">صافي الدخل</th>
-                    <th className="text-end py-2 px-2">الحرق/الربح</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {monthlyStats.map(m => (
-                    <tr key={m.label} className="border-b">
-                      <td className="py-2 px-2 font-mono text-xs">{m.label}</td>
-                      <td className="py-2 px-2 text-end tabular-nums">{formatCurrency(m.revenue)}</td>
-                      <td className="py-2 px-2 text-end tabular-nums text-status-danger-foreground">
-                        {formatCurrency(m.expenses)}
-                      </td>
-                      <td className={`py-2 px-2 text-end tabular-nums font-semibold ${m.netIncome >= 0 ? "text-status-success-foreground" : "text-status-danger-foreground"}`}>
+              <DataTable
+                noToolbar
+                pageSize={0}
+                data={monthlyStats}
+                rowKey={(m) => m.label}
+                columns={[
+                  {
+                    key: "label", header: "الشهر", ltr: true,
+                    render: (m) => <span className="font-mono text-xs">{m.label}</span>,
+                    footer: () => "المتوسط",
+                  },
+                  {
+                    key: "revenue", header: "الإيرادات", align: "end",
+                    render: (m) => <span className="tabular-nums">{formatCurrency(m.revenue)}</span>,
+                    footer: () => (
+                      <span className="tabular-nums">
+                        {formatCurrency(monthlyStats.reduce((s, m) => s + m.revenue, 0) / 6)}
+                      </span>
+                    ),
+                  },
+                  {
+                    key: "expenses", header: "المصاريف", align: "end",
+                    render: (m) => (
+                      <span className="tabular-nums text-status-danger-foreground">{formatCurrency(m.expenses)}</span>
+                    ),
+                    footer: () => (
+                      <span className="tabular-nums text-status-danger-foreground">
+                        {formatCurrency(monthlyStats.reduce((s, m) => s + m.expenses, 0) / 6)}
+                      </span>
+                    ),
+                  },
+                  {
+                    key: "netIncome", header: "صافي الدخل", align: "end",
+                    render: (m) => (
+                      <span className={`tabular-nums font-semibold ${m.netIncome >= 0 ? "text-status-success-foreground" : "text-status-danger-foreground"}`}>
                         {m.netIncome >= 0 ? "+" : ""}{formatCurrency(m.netIncome)}
-                      </td>
-                      <td className="py-2 px-2 text-end">
-                        <Badge variant="outline" className={`text-[10px] ${m.isBurning ? "text-status-danger-foreground" : "text-status-success-foreground"}`}>
-                          {m.isBurning ? "حرق" : "ربح"} {formatCurrency(Math.abs(m.burn))}
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="font-semibold bg-muted/40 border-t-2">
-                    <td className="py-2 px-2">المتوسط</td>
-                    <td className="py-2 px-2 text-end tabular-nums">
-                      {formatCurrency(monthlyStats.reduce((s, m) => s + m.revenue, 0) / 6)}
-                    </td>
-                    <td className="py-2 px-2 text-end tabular-nums text-status-danger-foreground">
-                      {formatCurrency(monthlyStats.reduce((s, m) => s + m.expenses, 0) / 6)}
-                    </td>
-                    <td className={`py-2 px-2 text-end tabular-nums ${(monthlyStats.reduce((s, m) => s + m.netIncome, 0) / 6) >= 0 ? "text-status-success-foreground" : "text-status-danger-foreground"}`}>
-                      {formatCurrency(monthlyStats.reduce((s, m) => s + m.netIncome, 0) / 6)}
-                    </td>
-                    <td className="py-2 px-2 text-end font-bold">
-                      {formatCurrency(avgBurn)}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
+                      </span>
+                    ),
+                    footer: () => (
+                      <span className={`tabular-nums ${(monthlyStats.reduce((s, m) => s + m.netIncome, 0) / 6) >= 0 ? "text-status-success-foreground" : "text-status-danger-foreground"}`}>
+                        {formatCurrency(monthlyStats.reduce((s, m) => s + m.netIncome, 0) / 6)}
+                      </span>
+                    ),
+                  },
+                  {
+                    key: "burn", header: "الحرق/الربح", align: "end",
+                    render: (m) => (
+                      <Badge variant="outline" className={`text-[10px] ${m.isBurning ? "text-status-danger-foreground" : "text-status-success-foreground"}`}>
+                        {m.isBurning ? "حرق" : "ربح"} {formatCurrency(Math.abs(m.burn))}
+                      </Badge>
+                    ),
+                    exportValue: (m) => Math.abs(m.burn),
+                    footer: () => <span className="font-bold">{formatCurrency(avgBurn)}</span>,
+                  },
+                ] satisfies DataTableColumn<(typeof monthlyStats)[number]>[]}
+              />
             </CardContent>
           </Card>
         </>

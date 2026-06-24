@@ -11,6 +11,13 @@ const Dashboard = lazy(() => import("@/pages/finance/dashboard"));
 const CfoCockpit = lazy(() => import("@/pages/finance/cfo-cockpit"));
 const FinanceWorkflowsHub = lazy(() => import("@/pages/finance/finance-workflows-hub"));
 const MonthlyClosePack = lazy(() => import("@/pages/finance/monthly-close-pack"));
+const Amortization = lazy(() => import("@/pages/finance/amortization"));
+const DeferredRevenue = lazy(() => import("@/pages/finance/deferred-revenue"));
+const SubsidiaryAccountFailures = lazy(() => import("@/pages/finance/subsidiary-account-failures"));
+const MisparentedSubsidiaries = lazy(() => import("@/pages/finance/misparented-subsidiaries"));
+const Cip = lazy(() => import("@/pages/finance/cip"));
+const ClassificationCenter = lazy(() => import("@/pages/finance/classification-center"));
+const InsurancePremium = lazy(() => import("@/pages/finance/insurance-premium"));
 const DailyCloseChecklist = lazy(() => import("@/pages/finance/daily-close-checklist"));
 const GlHealthScore = lazy(() => import("@/pages/finance/gl-health-score"));
 const ApprovalsInbox = lazy(() => import("@/pages/finance/approvals-inbox"));
@@ -159,7 +166,7 @@ const JournalQuickTemplates = lazy(() => import("@/pages/create/finance/journal-
 const JournalReversal = lazy(() => import("@/pages/create/finance/journal-reversal"));
 const JournalManualDetail = lazy(() => import("@/pages/finance/journal-manual-detail"));
 const Intercompany = lazy(() => import("@/pages/finance/intercompany"));
-const IntercompanyConsolidationCreate = lazy(() => import("@/pages/create/finance/intercompany-consolidation-create"));
+const IntercompanyConsolidation = lazy(() => import("@/pages/finance/intercompany-consolidation"));
 const CashFlowForecast = lazy(() => import("@/pages/finance/cash-flow-forecast"));
 const CashCalendar = lazy(() => import("@/pages/finance/cash-calendar"));
 const Cash13Week = lazy(() => import("@/pages/finance/cash-13week"));
@@ -173,6 +180,8 @@ const CashflowDashboard = lazy(() => import("@/pages/finance/cashflow-dashboard"
 const OpeningBalances = lazy(() => import("@/pages/finance/opening-balances"));
 const OpeningBalancesCreate = lazy(() => import("@/pages/create/finance/opening-balances-create"));
 const RecurringJournals = lazy(() => import("@/pages/finance/recurring-journals"));
+const RecurringInvoices = lazy(() => import("@/pages/finance/recurring-invoices"));
+const CashInTransit = lazy(() => import("@/pages/finance/cash-in-transit"));
 const RecurringJournalsCreate = lazy(() => import("@/pages/create/finance/recurring-journals-create"));
 const RecurringCalendar = lazy(() => import("@/pages/finance/recurring-calendar"));
 const RecurringJournalDetail = lazy(() => import("@/pages/finance/recurring-journal-detail"));
@@ -414,7 +423,10 @@ export const financeRoutes = [
   { path: "/finance/journal-manual/:id", component: JournalManualDetail, minRoleLevel: 70 },
   { path: "/finance/gl-posting-queue", component: GLPostingQueue },
   { path: "/finance/intercompany", component: Intercompany },
-  { path: "/finance/intercompany/consolidation/create", component: IntercompanyConsolidationCreate },
+  { path: "/finance/intercompany/consolidation", component: IntercompanyConsolidation },
+  // عرض «القوائم الموحدة» للقراءة فقط (GET فقط في الخلفية — لا إنشاء/ترحيل).
+  // المسار القديم بلاحقة /create مُضلِّل لعرضٍ لا يُنشئ شيئًا؛ يُعاد توجيهه (لا 404 للروابط القديمة).
+  { path: "/finance/intercompany/consolidation/create", component: redirectTo("/finance/intercompany/consolidation") },
   { path: "/finance/cash-flow-forecast", component: CashFlowForecast },
   { path: "/finance/cash-calendar", component: CashCalendar },
   { path: "/finance/cash-13week", component: Cash13Week },
@@ -429,6 +441,15 @@ export const financeRoutes = [
   { path: "/finance/opening-balances", component: OpeningBalances, minRoleLevel: 70 },
   { path: "/finance/opening-balances/create", component: OpeningBalancesCreate, minRoleLevel: 70 },
   { path: "/finance/recurring-journals", component: RecurringJournals },
+  { path: "/finance/recurring-invoices", component: RecurringInvoices },
+  { path: "/finance/cash-in-transit", component: CashInTransit },
+  { path: "/finance/amortization", component: Amortization },
+  { path: "/finance/deferred-revenue", component: DeferredRevenue },
+  { path: "/finance/subsidiary-account-failures", component: SubsidiaryAccountFailures },
+  { path: "/finance/datafix/misparented-subsidiaries", component: MisparentedSubsidiaries },
+  { path: "/finance/cip", component: Cip },
+  { path: "/finance/classification-center", component: ClassificationCenter },
+  { path: "/finance/insurance", component: InsurancePremium },
   { path: "/finance/recurring-calendar", component: RecurringCalendar },
   { path: "/finance/recurring-journals/create", component: RecurringJournalsCreate },
   { path: "/finance/recurring-journals/:id", component: RecurringJournalDetail },

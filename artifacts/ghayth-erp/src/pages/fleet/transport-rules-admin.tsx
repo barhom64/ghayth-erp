@@ -16,7 +16,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable } from "@workspace/ui-core";
 import { ArrowLeft, Plus, Pencil, Trash2, Fuel, Wrench, AlertTriangle, Clipboard } from "lucide-react";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
@@ -318,62 +318,48 @@ function ExpenseRulesPanel() {
               سجلات الوقود والصيانة والمخالفات.
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-surface-subtle text-xs text-muted-foreground">
-                  <tr>
-                    <th className="px-3 py-2 text-start">الاسم</th>
-                    <th className="px-3 py-2 text-start">المصدر</th>
-                    <th className="px-3 py-2 text-start">معايير المطابقة</th>
-                    <th className="px-3 py-2 text-start">المعالجة</th>
-                    <th className="px-3 py-2 text-start">إعادة تحميل</th>
-                    <th className="px-3 py-2 text-start">المسؤولية</th>
-                    <th className="px-3 py-2 text-start">الأولوية</th>
-                    <th className="px-3 py-2 text-start">الحالة</th>
-                    <th className="px-3 py-2 text-start" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {visible.map((r) => (
-                    <tr key={r.id} className="border-t hover:bg-surface-subtle">
-                      <td className="px-3 py-2 font-medium">{r.ruleName}</td>
-                      <td className="px-3 py-2">{expenseSourceLabel(r.expenseSource)}</td>
-                      <td className="px-3 py-2 text-xs space-y-0.5">
-                        {r.vehicleId != null && <div>المركبة #{r.vehicleId}</div>}
-                        {r.vehicleType && <div>النوع: {r.vehicleType}</div>}
-                        {r.stationName && <div>المحطة: {r.stationName}</div>}
-                        {r.maintenanceType && <div>صيانة: {r.maintenanceType}</div>}
-                        {r.violationType && <div>مخالفة: {r.violationType}</div>}
-                        {!r.vehicleId && !r.vehicleType && !r.stationName && !r.maintenanceType && !r.violationType && (
-                          <span className="text-muted-foreground">قاعدة عامة</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2">{treatmentLabel(r.defaultAccountingTreatment)}</td>
-                      <td className="px-3 py-2">
-                        {r.defaultRechargeable ? (
-                          <Badge className="bg-purple-50 text-purple-700">نعم</Badge>
-                        ) : <span className="text-muted-foreground text-xs">—</span>}
-                      </td>
-                      <td className="px-3 py-2">{liabilityLabel(r.defaultLiabilityParty)}</td>
-                      <td className="px-3 py-2 font-mono">{r.priority}</td>
-                      <td className="px-3 py-2">
-                        <Switch checked={r.isActive} onCheckedChange={() => toggleActive(r)} />
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="sm" onClick={() => openEdit(r)}>
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => remove(r)} className="text-rose-600">
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable<(typeof visible)[number]>
+              noToolbar
+              pageSize={0}
+              data={visible}
+              rowKey={(r) => r.id}
+              columns={[
+                { key: "ruleName", header: "الاسم", sortable: false, className: "font-medium", render: (r) => r.ruleName },
+                { key: "source", header: "المصدر", sortable: false, render: (r) => expenseSourceLabel(r.expenseSource) },
+                {
+                  key: "criteria", header: "معايير المطابقة", sortable: false, className: "text-xs space-y-0.5",
+                  render: (r) => (
+                    <>
+                      {r.vehicleId != null && <div>المركبة #{r.vehicleId}</div>}
+                      {r.vehicleType && <div>النوع: {r.vehicleType}</div>}
+                      {r.stationName && <div>المحطة: {r.stationName}</div>}
+                      {r.maintenanceType && <div>صيانة: {r.maintenanceType}</div>}
+                      {r.violationType && <div>مخالفة: {r.violationType}</div>}
+                      {!r.vehicleId && !r.vehicleType && !r.stationName && !r.maintenanceType && !r.violationType && (
+                        <span className="text-muted-foreground">قاعدة عامة</span>
+                      )}
+                    </>
+                  ),
+                },
+                { key: "treatment", header: "المعالجة", sortable: false, render: (r) => treatmentLabel(r.defaultAccountingTreatment) },
+                {
+                  key: "rechargeable", header: "إعادة تحميل", sortable: false,
+                  render: (r) => (r.defaultRechargeable ? <Badge className="bg-purple-50 text-purple-700">نعم</Badge> : <span className="text-muted-foreground text-xs">—</span>),
+                },
+                { key: "liability", header: "المسؤولية", sortable: false, render: (r) => liabilityLabel(r.defaultLiabilityParty) },
+                { key: "priority", header: "الأولوية", sortable: false, className: "font-mono", render: (r) => r.priority },
+                { key: "status", header: "الحالة", sortable: false, render: (r) => <Switch checked={r.isActive} onCheckedChange={() => toggleActive(r)} /> },
+                {
+                  key: "_actions", header: "", sortable: false,
+                  render: (r) => (
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => openEdit(r)}><Pencil className="h-3.5 w-3.5" /></Button>
+                      <Button variant="ghost" size="sm" onClick={() => remove(r)} className="text-rose-600"><Trash2 className="h-3.5 w-3.5" /></Button>
+                    </div>
+                  ),
+                },
+              ]}
+            />
           )}
         </CardContent>
       </Card>
@@ -703,61 +689,54 @@ function IntakeRulesPanel() {
               مركز التكلفة الافتراضية على شاشات الإدخال.
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-surface-subtle text-xs text-muted-foreground">
-                  <tr>
-                    <th className="px-3 py-2 text-start">الاسم</th>
-                    <th className="px-3 py-2 text-start">العملية</th>
-                    <th className="px-3 py-2 text-start">نوع الخدمة</th>
-                    <th className="px-3 py-2 text-start">معايير المطابقة</th>
-                    <th className="px-3 py-2 text-start">الافتراضات</th>
-                    <th className="px-3 py-2 text-start">الأولوية</th>
-                    <th className="px-3 py-2 text-start">الحالة</th>
-                    <th className="px-3 py-2 text-start" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {visible.map((r) => (
-                    <tr key={r.id} className="border-t hover:bg-surface-subtle">
-                      <td className="px-3 py-2 font-medium">{r.ruleName}</td>
-                      <td className="px-3 py-2">{opTypeLabel(r.operationType)}</td>
-                      <td className="px-3 py-2">{serviceLabel(r.transportServiceType)}</td>
-                      <td className="px-3 py-2 text-xs space-y-0.5">
-                        {r.customerId != null && <div>العميل #{r.customerId}</div>}
-                        {r.bookingSource && <div>المصدر: {r.bookingSource}</div>}
-                        {!r.customerId && !r.bookingSource && (
-                          <span className="text-muted-foreground">قاعدة عامة</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-xs space-y-0.5">
-                        {r.requiredVehicleType && <div>مركبة: {r.requiredVehicleType}</div>}
-                        {r.requiredLicenseClass && <div>رخصة: {r.requiredLicenseClass}</div>}
-                        {r.defaultCostCenterId != null && <div>مركز تكلفة #{r.defaultCostCenterId}</div>}
-                        {r.requiresAttachment && <Badge variant="outline" className="text-[10px]">مرفق إلزامي</Badge>}
-                        {r.requiresApproval && <Badge variant="outline" className="text-[10px]">اعتماد</Badge>}
-                        {r.createsBookingDraft && <Badge variant="outline" className="text-[10px]">يفتح مسودة حجز</Badge>}
-                        {r.createsBillingCandidate && <Badge variant="outline" className="text-[10px] bg-purple-50">يولّد أثراً محاسبياً</Badge>}
-                      </td>
-                      <td className="px-3 py-2 font-mono">{r.priority}</td>
-                      <td className="px-3 py-2">
-                        <Switch checked={r.isActive} onCheckedChange={() => toggleActive(r)} />
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="sm" onClick={() => openEdit(r)}>
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => remove(r)} className="text-rose-600">
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable<(typeof visible)[number]>
+              noToolbar
+              pageSize={0}
+              data={visible}
+              rowKey={(r) => r.id}
+              columns={[
+                { key: "ruleName", header: "الاسم", sortable: false, className: "font-medium", render: (r) => r.ruleName },
+                { key: "operation", header: "العملية", sortable: false, render: (r) => opTypeLabel(r.operationType) },
+                { key: "service", header: "نوع الخدمة", sortable: false, render: (r) => serviceLabel(r.transportServiceType) },
+                {
+                  key: "criteria", header: "معايير المطابقة", sortable: false, className: "text-xs space-y-0.5",
+                  render: (r) => (
+                    <>
+                      {r.customerId != null && <div>العميل #{r.customerId}</div>}
+                      {r.bookingSource && <div>المصدر: {r.bookingSource}</div>}
+                      {!r.customerId && !r.bookingSource && (
+                        <span className="text-muted-foreground">قاعدة عامة</span>
+                      )}
+                    </>
+                  ),
+                },
+                {
+                  key: "defaults", header: "الافتراضات", sortable: false, className: "text-xs space-y-0.5",
+                  render: (r) => (
+                    <>
+                      {r.requiredVehicleType && <div>مركبة: {r.requiredVehicleType}</div>}
+                      {r.requiredLicenseClass && <div>رخصة: {r.requiredLicenseClass}</div>}
+                      {r.defaultCostCenterId != null && <div>مركز تكلفة #{r.defaultCostCenterId}</div>}
+                      {r.requiresAttachment && <Badge variant="outline" className="text-[10px]">مرفق إلزامي</Badge>}
+                      {r.requiresApproval && <Badge variant="outline" className="text-[10px]">اعتماد</Badge>}
+                      {r.createsBookingDraft && <Badge variant="outline" className="text-[10px]">يفتح مسودة حجز</Badge>}
+                      {r.createsBillingCandidate && <Badge variant="outline" className="text-[10px] bg-purple-50">يولّد أثراً محاسبياً</Badge>}
+                    </>
+                  ),
+                },
+                { key: "priority", header: "الأولوية", sortable: false, className: "font-mono", render: (r) => r.priority },
+                { key: "status", header: "الحالة", sortable: false, render: (r) => <Switch checked={r.isActive} onCheckedChange={() => toggleActive(r)} /> },
+                {
+                  key: "_actions", header: "", sortable: false,
+                  render: (r) => (
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => openEdit(r)}><Pencil className="h-3.5 w-3.5" /></Button>
+                      <Button variant="ghost" size="sm" onClick={() => remove(r)} className="text-rose-600"><Trash2 className="h-3.5 w-3.5" /></Button>
+                    </div>
+                  ),
+                },
+              ]}
+            />
           )}
         </CardContent>
       </Card>

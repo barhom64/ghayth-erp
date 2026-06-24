@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
+import { API_BASE } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Download, Maximize2, ExternalLink, FileText, Image as ImageIcon, FileQuestion, X, Eye } from "lucide-react";
+import { Download, ExternalLink, FileText, Image as ImageIcon, FileQuestion, X, Eye, ZoomIn, ZoomOut, RotateCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+const BASE = API_BASE;
 
 /**
  * Shape of the attachment a caller passes in. The minimum is `id` + a way to
@@ -77,6 +78,9 @@ export function AttachmentPreview({ attachment, open, onOpenChange }: Attachment
   const [srcUrl, setSrcUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Image-only view controls (zoom/rotate). Reset whenever the attachment changes.
+  const [zoom, setZoom] = useState(1);
+  const [rotation, setRotation] = useState(0);
 
   useEffect(() => {
     if (!open || !attachment) {
@@ -84,6 +88,9 @@ export function AttachmentPreview({ attachment, open, onOpenChange }: Attachment
       setError(null);
       return;
     }
+
+    setZoom(1);
+    setRotation(0);
 
     let revokeUrl: string | null = null;
     let cancelled = false;
@@ -237,8 +244,29 @@ export function AttachmentPreview({ attachment, open, onOpenChange }: Attachment
                 </object>
               )}
               {isImage && (
-                <div className="flex items-center justify-center p-4 min-h-[70vh]">
-                  <img src={srcUrl} alt={attachment.title || attachment.fileName} className="max-w-full max-h-[80vh] object-contain" />
+                <div className="relative min-h-[70vh]">
+                  <div className="absolute top-3 start-3 z-10 flex items-center gap-0.5 rounded-md border bg-background/90 px-1 py-0.5 shadow-sm backdrop-blur">
+                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setZoom((z) => Math.min(4, +(z + 0.25).toFixed(2)))} title="تكبير">
+                      <ZoomIn className="h-4 w-4" />
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setZoom((z) => Math.max(0.25, +(z - 0.25).toFixed(2)))} title="تصغير">
+                      <ZoomOut className="h-4 w-4" />
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setRotation((r) => (r + 90) % 360)} title="تدوير">
+                      <RotateCw className="h-4 w-4" />
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => { setZoom(1); setRotation(0); }} title="إعادة الضبط">
+                      إعادة الضبط
+                    </Button>
+                  </div>
+                  <div className="flex items-center justify-center overflow-auto p-4 min-h-[70vh]">
+                    <img
+                      src={srcUrl}
+                      alt={attachment.title || attachment.fileName}
+                      className="max-w-full max-h-[80vh] object-contain transition-transform"
+                      style={{ transform: `scale(${zoom}) rotate(${rotation}deg)` }}
+                    />
+                  </div>
                 </div>
               )}
               {!isPdf && !isImage && (

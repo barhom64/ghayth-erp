@@ -42,7 +42,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
-import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, assertInsert, withTransaction } from "../lib/rawdb.js";
 import {
   MapsService, loadPlanningSettings, updatePlanningSettings,
 } from "../lib/fleet/mapsService.js";
@@ -1311,31 +1311,37 @@ transportPlanningRouter.post(
     try {
       const scope = req.scope!;
       const dispatchOrderId = parseId(req.params.id, "id");
-      const { affectedRows } = await rawExecute(
-        `UPDATE driver_navigation_sessions
-            SET status = 'ended',
-                "endedAt" = NOW(),
-                "updatedAt" = NOW()
-          WHERE "dispatchOrderId" = $1 AND "companyId" = $2
-            AND status NOT IN ('ended', 'cancelled')
-            AND "driverId" IN (
-              SELECT fd.id FROM fleet_drivers fd
-               WHERE fd."employeeId" = $3 AND fd."companyId" = $2 AND fd."deletedAt" IS NULL
-            )`,
-        [dispatchOrderId, scope.companyId, scope.userId],
-      );
-      if (affectedRows === 0) throw new NotFoundError("لا توجد جلسة ملاحة نشطة");
+      // Ending the nav session + stamping the driver's lastDutyEndedAt are
+      // atomic: a session ended without the duty-end stamp would leave the
+      // rest-constraint engine thinking the driver is still on duty (or
+      // free to over-assign). rawQuery joins the ambient tx (txStore).
+      await withTransaction(async () => {
+        const { affectedRows } = await rawExecute(
+          `UPDATE driver_navigation_sessions
+              SET status = 'ended',
+                  "endedAt" = NOW(),
+                  "updatedAt" = NOW()
+            WHERE "dispatchOrderId" = $1 AND "companyId" = $2
+              AND status NOT IN ('ended', 'cancelled')
+              AND "driverId" IN (
+                SELECT fd.id FROM fleet_drivers fd
+                 WHERE fd."employeeId" = $3 AND fd."companyId" = $2 AND fd."deletedAt" IS NULL
+              )`,
+          [dispatchOrderId, scope.companyId, scope.userId],
+        );
+        if (affectedRows === 0) throw new NotFoundError("لا توجد جلسة ملاحة نشطة");
 
-      // Stamp the driver's lastDutyEndedAt — drives the rest-constraint
-      // engine on the next assignment.
-      await rawExecute(
-        `UPDATE fleet_drivers
-            SET "lastDutyEndedAt" = NOW(), "updatedAt" = NOW()
-           FROM transport_dispatch_orders d
-          WHERE fleet_drivers.id = d."driverId"
-            AND d.id = $1 AND d."companyId" = $2 AND fleet_drivers."companyId" = $2`,
-        [dispatchOrderId, scope.companyId],
-      );
+        // Stamp the driver's lastDutyEndedAt — drives the rest-constraint
+        // engine on the next assignment.
+        await rawExecute(
+          `UPDATE fleet_drivers
+              SET "lastDutyEndedAt" = NOW(), "updatedAt" = NOW()
+             FROM transport_dispatch_orders d
+            WHERE fleet_drivers.id = d."driverId"
+              AND d.id = $1 AND d."companyId" = $2 AND fleet_drivers."companyId" = $2`,
+          [dispatchOrderId, scope.companyId],
+        );
+      });
 
       emitEvent({
         companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId,

@@ -1,4 +1,5 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { API_BASE, nativeAuthHeaders } from "@/lib/api";
 import { useFormContext } from "react-hook-form";
 import { z } from "zod";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
@@ -10,9 +11,15 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { FormShell, FormTextField, FormSelectField } from "@workspace/ui-core";
-import { FileText, Upload, Download, Plus, X, FileUp, Eye } from "lucide-react";
+import { FileText, Upload, Download, Plus, X, FileUp, Eye, List, LayoutGrid, ClipboardCheck, Printer, MessageCircle } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { AttachmentPreview, type PreviewableAttachment } from "./attachment-preview";
+import { DecisionImpactPreview } from "./decision-impact";
+import { EntityComments } from "./entity-comments";
+import { computeDuplicateMarks, computeFileSha256, type DuplicateKind } from "@/lib/duplicate-detection";
+import { buildBundleHtml, openBundlePrint, type BundleImage, type BundleOtherFile } from "@/lib/print-bundle";
+import { renderDocument, decodeRenderResponse } from "@/lib/print-client";
 import { formatDateAr } from "@/lib/formatters";
 
 const uploadDocSchema = z.object({
@@ -31,11 +38,40 @@ const CATEGORIES = [
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   draft: { label: "مسودة", color: "bg-gray-100 text-gray-700" },
+  active: { label: "نشط", color: "bg-blue-100 text-status-info-foreground" },
   approved: { label: "معتمد", color: "bg-green-100 text-status-success-foreground" },
   cancelled: { label: "ملغي", color: "bg-red-100 text-status-error-foreground" },
+  archived: { label: "مؤرشف", color: "bg-gray-100 text-gray-500" },
 };
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+// Per-link reviewer verdict (backend: document_entity_links.reviewStatus).
+const REVIEW_STATUS_MAP: Record<string, { label: string; color: string }> = {
+  new: { label: "لم يُراجَع", color: "bg-gray-100 text-gray-600" },
+  accepted: { label: "مقبول", color: "bg-green-100 text-status-success-foreground" },
+  rejected: { label: "مرفوض", color: "bg-red-100 text-status-error-foreground" },
+  needs_replacement: { label: "يحتاج استبدال", color: "bg-amber-100 text-amber-700" },
+  duplicate: { label: "مكرر", color: "bg-purple-100 text-purple-700" },
+};
+
+// Verdicts a reviewer can pick. Reject / needs-replacement require a reason.
+const REVIEW_VERDICTS = [
+  { value: "accepted", label: "قبول" },
+  { value: "needs_replacement", label: "يحتاج استبدال" },
+  { value: "rejected", label: "رفض" },
+  { value: "duplicate", label: "مكرر" },
+];
+const REASON_REQUIRED = new Set(["rejected", "needs_replacement"]);
+
+// What the review endpoint actually triggers per verdict (verdict stamp +
+// notification event + audit trail) — shown as «الأثر المتوقع» before confirm.
+const REVIEW_IMPACT: Record<string, string[]> = {
+  accepted: ["اعتماد المرفق للكيان", "إشعار مقدم الطلب", "تسجيل القرار في سجل التدقيق"],
+  rejected: ["رفض المرفق", "إشعار المقدم بسبب الرفض", "تسجيل القرار في سجل التدقيق"],
+  needs_replacement: ["طلب استبدال المرفق", "إشعار المقدم بالمطلوب", "تسجيل القرار في سجل التدقيق"],
+  duplicate: ["وسم المرفق كمكرر", "تسجيل القرار في سجل التدقيق"],
+};
+
+const BASE = API_BASE;
 
 function formatSize(bytes: number) {
   if (!bytes) return "";
@@ -44,14 +80,43 @@ function formatSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/** Arabic label for a document category (falls back to the raw value). */
+function categoryLabel(value?: string): string {
+  if (!value) return "غير مصنّف";
+  return CATEGORIES.find((c) => c.value === value)?.label ?? value;
+}
+
+/**
+ * A document is "expired" when its retention date has passed. Derived purely
+ * from data already on the row — when the API doesn't send `retentionUntil`
+ * the badge simply never shows (no breakage, no dead UI).
+ */
+function isExpired(d: any): boolean {
+  if (!d?.retentionUntil) return false;
+  const t = new Date(d.retentionUntil).getTime();
+  return Number.isFinite(t) && t < Date.now();
+}
+
 interface EntityDocumentsProps {
   entityType: string;
   entityId: number | string;
   title?: string;
+  /** Initial presentation: compact list (default) or a card grid. The user
+   *  can switch at runtime via the toolbar toggle. */
+  viewMode?: "list" | "grid";
+  /** Show reviewer verdict controls (قبول/رفض/استبدال/مكرر) on each attachment.
+   *  The caller gates this (e.g. reviewer perspective); the server enforces the
+   *  approver-role permission regardless. Default false. */
+  canReview?: boolean;
 }
 
-export function EntityDocuments({ entityType, entityId, title = "المستندات المرتبطة" }: EntityDocumentsProps) {
+export function EntityDocuments({ entityType, entityId, title = "المستندات المرتبطة", viewMode = "list", canReview = false }: EntityDocumentsProps) {
   const { toast } = useToast();
+  const [view, setView] = useState<"list" | "grid">(viewMode);
+  const [grouped, setGrouped] = useState(false);
+  const [reviewDoc, setReviewDoc] = useState<any | null>(null);
+  const [commentsDoc, setCommentsDoc] = useState<any | null>(null);
+  const [bundling, setBundling] = useState(false);
   const { data: docsResp, refetch } = useApiQuery<any>(
     ["entity-docs", entityType, String(entityId)],
     `/documents?entity=${entityType}&entityId=${entityId}`,
@@ -72,10 +137,20 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
   const printArchive: any[] = printArchiveResp?.items ?? [];
   const [previewDoc, setPreviewDoc] = useState<PreviewableAttachment | null>(null);
 
+  // Required-documents checklist for this entity type (config). The completeness
+  // is DERIVED (requirements ∩ loaded docs) — nothing is stored per entity.
+  const { data: reqsResp, refetch: refetchReqs } = useApiQuery<any>(
+    ["entity-doc-reqs", entityType],
+    `/documents/requirements?entityType=${entityType}`,
+    !!entityType,
+  );
+  const requirements = asList(reqsResp);
+
   const handleDownload = async (docId: number, fileName: string) => {
     try {
       const res = await fetch(`${BASE}/api/documents/${docId}/download`, {
         credentials: "include",
+        headers: { ...nativeAuthHeaders() },
       });
       if (res.status === 429) {
         throw new RateLimitError(notifyRateLimited(res));
@@ -99,6 +174,215 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
     }
   };
 
+  // Fetch one document's bytes and return a data URL (for inline embedding).
+  const fetchDataUrl = async (docId: number): Promise<string | null> => {
+    try {
+      const res = await fetch(`${BASE}/api/documents/${docId}/download`, {
+        credentials: "include",
+        headers: { ...nativeAuthHeaders() },
+      });
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      return await new Promise<string | null>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(typeof reader.result === "string" ? reader.result : null);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      return null;
+    }
+  };
+
+  // «طباعة مجمّعة» — compose the record print + image attachments into one
+  // browser-printed document. Reuses the HTML print pipeline (no server PDF).
+  const handleBundlePrint = async () => {
+    if (bundling) return;
+    setBundling(true);
+    try {
+      const images: BundleImage[] = [];
+      const others: BundleOtherFile[] = [];
+      for (const d of docs) {
+        if (!d.storageKey) continue;
+        const name = d.title || d.fileName || `مستند #${d.id}`;
+        if (typeof d.mimeType === "string" && d.mimeType.startsWith("image/")) {
+          const dataUrl = await fetchDataUrl(d.id);
+          if (dataUrl) images.push({ name, dataUrl });
+          else others.push({ name });
+        } else {
+          others.push({ name });
+        }
+      }
+      // Best-effort: render the entity's record print HTML; bundle still works
+      // (attachments only) if the entity has no print profile.
+      let recordHtml: string | null = null;
+      try {
+        const resp = await renderDocument({ entityType, entityId: Number(entityId), inline: false });
+        recordHtml = decodeRenderResponse(resp);
+      } catch {
+        recordHtml = null;
+      }
+      if (!recordHtml && images.length === 0 && others.length === 0) {
+        toast({ title: "لا يوجد ما يُطبع", description: "لا سجل قابل للطباعة ولا مرفقات." });
+        return;
+      }
+      const opened = openBundlePrint(buildBundleHtml({ title, recordHtml, images, otherFiles: others }));
+      if (!opened) {
+        toast({ variant: "destructive", title: "تعذّر فتح نافذة الطباعة", description: "اسمح بالنوافذ المنبثقة ثم أعد المحاولة." });
+      }
+    } finally {
+      setBundling(false);
+    }
+  };
+
+  // Group documents by category, preserving first-seen order. Display-only.
+  const docGroups: [string, any[]][] = (() => {
+    const m = new Map<string, any[]>();
+    for (const d of docs) {
+      const k = String(d.category ?? "");
+      if (!m.has(k)) m.set(k, []);
+      m.get(k)!.push(d);
+    }
+    return Array.from(m.entries());
+  })();
+
+  // Two-tier duplicate detection (derived, no backend): exact = same content
+  // hash (renamed-but-identical), likely = same name + size. Reviewer decides
+  // the «مكرر» verdict; this only flags.
+  const duplicateMarks: Map<number | string, DuplicateKind> = computeDuplicateMarks(docs);
+  const DUP_BADGE: Record<DuplicateKind, { label: string; color: string }> = {
+    exact: { label: "مكرر", color: "bg-red-100 text-status-error-foreground" },
+    likely: { label: "مكرر محتمل", color: "bg-purple-100 text-purple-700" },
+  };
+
+  const docBadges = (d: any) => {
+    const st = STATUS_MAP[d.status] || STATUS_MAP.draft;
+    const cat = CATEGORIES.find((c) => c.value === d.category);
+    const rv = d.reviewStatus ? REVIEW_STATUS_MAP[d.reviewStatus] : null;
+    // Show the verdict once a decision exists, or always to a reviewer.
+    const showReview = rv && (d.reviewStatus !== "new" || canReview);
+    const dup = duplicateMarks.get(d.id);
+    return (
+      <>
+        {cat && <Badge variant="outline" className="text-[10px]">{cat.label}</Badge>}
+        <Badge className={cn("text-[10px]", st.color)}>{st.label}</Badge>
+        {d.currentVersion > 1 && <Badge variant="secondary" className="text-[10px]">v{d.currentVersion}</Badge>}
+        {isExpired(d) && <Badge className="text-[10px] bg-amber-100 text-amber-700">منتهي</Badge>}
+        {dup && <Badge className={cn("text-[10px]", DUP_BADGE[dup].color)}>{DUP_BADGE[dup].label}</Badge>}
+        {showReview && <Badge className={cn("text-[10px]", rv!.color)}>{rv!.label}</Badge>}
+      </>
+    );
+  };
+
+  const docActions = (d: any) => (
+    <>
+      {d.storageKey && (
+        <>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0"
+            onClick={() => setPreviewDoc({
+              id: d.id,
+              title: d.title,
+              fileName: d.fileName,
+              mimeType: d.mimeType,
+              fileSize: d.fileSize,
+              category: d.category,
+              uploadedAt: d.createdAt,
+              uploaderName: d.uploaderName,
+            })}
+            title="معاينة"
+          >
+            <Eye className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleDownload(d.id, d.fileName)} title="تنزيل">
+            <Download className="h-3.5 w-3.5" />
+          </Button>
+        </>
+      )}
+      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setCommentsDoc(d)} title="تعليقات المرفق">
+        <MessageCircle className="h-3.5 w-3.5" />
+      </Button>
+      {canReview && (
+        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setReviewDoc(d)} title="مراجعة المرفق">
+          <ClipboardCheck className="h-3.5 w-3.5" />
+        </Button>
+      )}
+    </>
+  );
+
+  /** Reviewer note shown under a row/card once a reviewer left one. */
+  const docNote = (d: any) =>
+    d.reviewNote ? (
+      <p className="text-[11px] text-muted-foreground">
+        <span className="font-medium">ملاحظة المراجع:</span> {d.reviewNote}
+      </p>
+    ) : null;
+
+  const docListRow = (d: any) => (
+    <div key={d.id} className="p-3 rounded-lg border hover:bg-surface-subtle transition-colors">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-8 h-8 rounded bg-status-info-surface flex items-center justify-center flex-shrink-0">
+            <FileText className="h-4 w-4 text-status-info-foreground" />
+          </div>
+          <div className="min-w-0">
+            <p className="font-medium text-sm truncate">{d.title}</p>
+            <div className="flex items-center gap-2 mt-0.5">
+              {d.fileName && <span className="text-xs text-muted-foreground truncate">{d.fileName}</span>}
+              {d.fileSize && <span className="text-xs text-muted-foreground">({formatSize(d.fileSize)})</span>}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {docBadges(d)}
+          {docActions(d)}
+        </div>
+      </div>
+      {d.reviewNote && <div className="mt-1.5 ps-11">{docNote(d)}</div>}
+    </div>
+  );
+
+  const docGridCard = (d: any) => (
+    <div key={d.id} className="flex flex-col gap-2 rounded-lg border p-3 hover:bg-surface-subtle transition-colors">
+      <div className="flex items-start gap-2 min-w-0">
+        <div className="w-8 h-8 rounded bg-status-info-surface flex items-center justify-center flex-shrink-0">
+          <FileText className="h-4 w-4 text-status-info-foreground" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="font-medium text-sm truncate">{d.title}</p>
+          {d.fileName && <p className="text-xs text-muted-foreground truncate">{d.fileName}</p>}
+          {d.fileSize ? <p className="text-[11px] text-muted-foreground">{formatSize(d.fileSize)}</p> : null}
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">{docBadges(d)}</div>
+      {docNote(d)}
+      <div className="flex items-center gap-1">{docActions(d)}</div>
+    </div>
+  );
+
+  const renderDocItems = (items: any[]) =>
+    view === "grid" ? (
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" data-testid="docs-grid">
+        {items.map(docGridCard)}
+      </div>
+    ) : (
+      <div className="space-y-2" data-testid="docs-list">
+        {items.map(docListRow)}
+      </div>
+    );
+
+  // Derive completeness: a requirement is satisfied when a linked document
+  // matches its category (or any document, when the requirement is category-less).
+  const requirementStatus = requirements.map((r: any) => ({
+    ...r,
+    present: r.docCategory
+      ? docs.some((d: any) => d.category === r.docCategory)
+      : docs.length > 0,
+  }));
+  const missingRequired = requirementStatus.filter((r: any) => r.required && !r.present);
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -111,60 +395,72 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
         </div>
       </CardHeader>
       <CardContent>
+        {(requirementStatus.length > 0 || canReview) && (
+          <RequirementsCompletenessCard
+            entityType={entityType}
+            items={requirementStatus}
+            missingCount={missingRequired.length}
+            canManage={canReview}
+            onChanged={refetchReqs}
+          />
+        )}
         {docs.length === 0 ? (
           <p className="text-muted-foreground text-center py-6">لا توجد مستندات مرتبطة</p>
         ) : (
-          <div className="space-y-2">
-            {docs.map((d: any) => {
-              const st = STATUS_MAP[d.status] || STATUS_MAP.draft;
-              const cat = CATEGORIES.find(c => c.value === d.category);
-              return (
-                <div key={d.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-surface-subtle transition-colors">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded bg-status-info-surface flex items-center justify-center flex-shrink-0">
-                      <FileText className="h-4 w-4 text-status-info-foreground" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-medium text-sm truncate">{d.title}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        {d.fileName && <span className="text-xs text-muted-foreground">{d.fileName}</span>}
-                        {d.fileSize && <span className="text-xs text-muted-foreground">({formatSize(d.fileSize)})</span>}
-                      </div>
-                    </div>
+          <div className="space-y-3">
+            <div className="flex items-center justify-end gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs gap-1 me-auto"
+                disabled={bundling}
+                onClick={handleBundlePrint}
+                title="طباعة السجل والمرفقات في ملف واحد"
+              >
+                <Printer className="h-3.5 w-3.5" />
+                {bundling ? "جاري التجهيز..." : "طباعة مجمّعة"}
+              </Button>
+              <Button
+                variant={grouped ? "default" : "outline"}
+                size="sm"
+                className="h-7 text-xs"
+                aria-pressed={grouped}
+                onClick={() => setGrouped((g) => !g)}
+                title="تجميع حسب النوع"
+              >
+                تجميع حسب النوع
+              </Button>
+              <Button
+                variant={view === "list" ? "default" : "outline"}
+                size="sm"
+                className="h-7 w-7 p-0"
+                aria-pressed={view === "list"}
+                onClick={() => setView("list")}
+                title="عرض قائمة"
+              >
+                <List className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                variant={view === "grid" ? "default" : "outline"}
+                size="sm"
+                className="h-7 w-7 p-0"
+                aria-pressed={view === "grid"}
+                onClick={() => setView("grid")}
+                title="عرض شبكي"
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+            {grouped
+              ? docGroups.map(([catVal, items]) => (
+                  <div key={catVal || "__none__"} className="space-y-2">
+                    <p className="text-xs font-semibold text-muted-foreground">
+                      {categoryLabel(catVal)} ({items.length})
+                    </p>
+                    {renderDocItems(items)}
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    {cat && <Badge variant="outline" className="text-[10px]">{cat.label}</Badge>}
-                    <Badge className={cn("text-[10px]", st.color)}>{st.label}</Badge>
-                    {d.currentVersion > 1 && <Badge variant="secondary" className="text-[10px]">v{d.currentVersion}</Badge>}
-                    {d.storageKey && (
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0"
-                          onClick={() => setPreviewDoc({
-                            id: d.id,
-                            title: d.title,
-                            fileName: d.fileName,
-                            mimeType: d.mimeType,
-                            fileSize: d.fileSize,
-                            category: d.category,
-                            uploadedAt: d.createdAt,
-                            uploaderName: d.uploaderName,
-                          })}
-                          title="معاينة"
-                        >
-                          <Eye className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleDownload(d.id, d.fileName)} title="تنزيل">
-                          <Download className="h-3.5 w-3.5" />
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+                ))
+              : renderDocItems(docs)}
           </div>
         )}
         {printArchive.length > 0 && (
@@ -182,7 +478,247 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
         )}
       </CardContent>
       <AttachmentPreview attachment={previewDoc} open={!!previewDoc} onOpenChange={(o) => !o && setPreviewDoc(null)} />
+      <ReviewVerdictDialog
+        doc={reviewDoc}
+        entityType={entityType}
+        entityId={entityId}
+        onClose={() => setReviewDoc(null)}
+        onReviewed={() => { setReviewDoc(null); refetch(); }}
+      />
+      <Dialog open={!!commentsDoc} onOpenChange={(o) => !o && setCommentsDoc(null)}>
+        <DialogContent className="sm:max-w-lg" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>تعليقات المرفق{commentsDoc?.title ? ` — ${commentsDoc.title}` : ""}</DialogTitle>
+          </DialogHeader>
+          {commentsDoc && (
+            <EntityComments entityType={entityType} entityId={entityId} documentId={commentsDoc.id} />
+          )}
+        </DialogContent>
+      </Dialog>
     </Card>
+  );
+}
+
+/**
+ * «اكتمال المرفقات» — derived checklist of the documents an entity type is
+ * expected to carry (config from /documents/requirements). Read-only for most;
+ * admins (canManage) can add/deactivate requirements inline so the checklist is
+ * configurable without a separate settings trip. Adds no per-entity storage.
+ */
+function RequirementsCompletenessCard({
+  entityType, items, missingCount, canManage, onChanged,
+}: {
+  entityType: string;
+  items: any[];
+  missingCount: number;
+  canManage: boolean;
+  onChanged: () => void;
+}) {
+  const { toast } = useToast();
+  const [adding, setAdding] = useState(false);
+  const [label, setLabel] = useState("");
+  const [category, setCategory] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const complete = items.length > 0 && missingCount === 0;
+
+  const addRequirement = async () => {
+    if (!label.trim()) return;
+    setBusy(true);
+    try {
+      await apiFetch(`/documents/requirements`, {
+        method: "POST",
+        body: JSON.stringify({ entityType, label: label.trim(), docCategory: category || null }),
+      });
+      setLabel(""); setCategory(""); setAdding(false);
+      onChanged();
+    } catch (err: any) {
+      if (!(err instanceof RateLimitError)) toast({ variant: "destructive", title: "تعذّر إضافة المتطلب", description: err?.message });
+    } finally { setBusy(false); }
+  };
+
+  const removeRequirement = async (id: number) => {
+    setBusy(true);
+    try {
+      await apiFetch(`/documents/requirements/${id}`, { method: "DELETE" });
+      onChanged();
+    } catch (err: any) {
+      if (!(err instanceof RateLimitError)) toast({ variant: "destructive", title: "تعذّر حذف المتطلب", description: err?.message });
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="mb-3 rounded-lg border p-3" data-testid="requirements-card">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold">
+          اكتمال المرفقات
+          {items.length > 0 && (
+            <Badge className={cn("ms-2 text-[10px]", complete ? "bg-green-100 text-status-success-foreground" : "bg-amber-100 text-amber-700")}>
+              {complete ? "مكتمل" : `ناقص (${missingCount})`}
+            </Badge>
+          )}
+        </p>
+        {canManage && (
+          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => setAdding((a) => !a)}>
+            <Plus className="h-3.5 w-3.5" /> إضافة متطلب
+          </Button>
+        )}
+      </div>
+
+      {items.length === 0 ? (
+        <p className="mt-1.5 text-xs text-muted-foreground">لا متطلبات معرّفة لهذا النوع بعد.</p>
+      ) : (
+        <ul className="mt-2 space-y-1">
+          {items.map((r) => (
+            <li key={r.id} className="flex items-center justify-between gap-2 text-xs">
+              <span className="flex items-center gap-1.5">
+                {r.present ? (
+                  <Badge className="text-[10px] bg-green-100 text-status-success-foreground">متوفر</Badge>
+                ) : r.required ? (
+                  <Badge className="text-[10px] bg-red-100 text-status-error-foreground">ناقص</Badge>
+                ) : (
+                  <Badge variant="outline" className="text-[10px]">اختياري</Badge>
+                )}
+                <span>{r.label}</span>
+                {r.docCategory && <span className="text-muted-foreground">({categoryLabel(r.docCategory)})</span>}
+              </span>
+              {canManage && (
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" disabled={busy} onClick={() => removeRequirement(r.id)} title="حذف المتطلب">
+                  <X className="h-3 w-3" />
+                </Button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {canManage && adding && (
+        <div className="mt-2 flex flex-wrap items-end gap-2 border-t pt-2">
+          <div className="flex-1 min-w-[140px]">
+            <Label className="text-[11px]">اسم المتطلب</Label>
+            <input
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder="مثال: صورة الهوية"
+              className="mt-1 w-full rounded-md border px-2 py-1 text-xs"
+            />
+          </div>
+          <div className="min-w-[120px]">
+            <Label className="text-[11px]">التصنيف (اختياري)</Label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="mt-1 w-full rounded-md border px-2 py-1 text-xs"
+            >
+              <option value="">أي تصنيف</option>
+              {CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+            </select>
+          </div>
+          <Button size="sm" className="h-7 text-xs" disabled={busy || !label.trim()} onClick={addRequirement} rateLimitAware>
+            حفظ
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Captures a reviewer's verdict on one attachment and PATCHes the per-link
+ * review endpoint. Reject / needs-replacement require a reason (enforced both
+ * here and server-side). Adds no approval engine — it records the decision.
+ */
+function ReviewVerdictDialog({
+  doc, entityType, entityId, onClose, onReviewed,
+}: {
+  doc: any | null;
+  entityType: string;
+  entityId: number | string;
+  onClose: () => void;
+  onReviewed: () => void;
+}) {
+  const { toast } = useToast();
+  const [verdict, setVerdict] = useState<string>("accepted");
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  // Reset the form whenever a different document opens.
+  const docId = doc?.id ?? null;
+  useEffect(() => {
+    setVerdict(doc?.reviewStatus && doc.reviewStatus !== "new" ? doc.reviewStatus : "accepted");
+    setNote(doc?.reviewNote ?? "");
+  }, [docId]);
+
+  const reasonRequired = REASON_REQUIRED.has(verdict);
+  const canSubmit = !saving && !(reasonRequired && !note.trim());
+
+  const submit = async () => {
+    if (!doc) return;
+    setSaving(true);
+    try {
+      await apiFetch(`/documents/${doc.id}/review`, {
+        method: "PATCH",
+        body: JSON.stringify({ entityType, entityId: Number(entityId), reviewStatus: verdict, reviewNote: note.trim() || undefined }),
+      });
+      toast({ title: "تم تسجيل المراجعة", description: REVIEW_STATUS_MAP[verdict]?.label });
+      onReviewed();
+    } catch (err: any) {
+      if (err instanceof RateLimitError) return;
+      toast({ variant: "destructive", title: "تعذّر تسجيل المراجعة", description: err?.message || "حدث خطأ" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={!!doc} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-md" dir="rtl">
+        <DialogHeader>
+          <DialogTitle>مراجعة المرفق{doc?.title ? ` — ${doc.title}` : ""}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <Label className="text-sm">القرار</Label>
+            <div className="flex flex-wrap gap-1.5 mt-1.5">
+              {REVIEW_VERDICTS.map((v) => (
+                <Button
+                  key={v.value}
+                  type="button"
+                  variant={verdict === v.value ? "default" : "outline"}
+                  size="sm"
+                  aria-pressed={verdict === v.value}
+                  onClick={() => setVerdict(v.value)}
+                >
+                  {v.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <Label className="text-sm">
+              السبب{reasonRequired && <span className="text-red-500 ms-1">*</span>}
+            </Label>
+            <Textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={3}
+              placeholder={reasonRequired ? "سبب الرفض أو الاستبدال (إلزامي)" : "ملاحظة للمقدم (اختياري)"}
+              className="mt-1.5"
+            />
+          </div>
+          <DecisionImpactPreview
+            title="عند حفظ المراجعة سيتم:"
+            effects={(REVIEW_IMPACT[verdict] ?? []).map((label) => ({ label }))}
+          />
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <Button type="button" variant="ghost" size="sm" onClick={onClose} disabled={saving}>إلغاء</Button>
+            <Button type="button" size="sm" onClick={submit} disabled={!canSubmit} rateLimitAware>
+              {saving ? "جاري الحفظ..." : "حفظ المراجعة"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -212,7 +748,7 @@ function UploadEntityDocDialog({ entityType, entityId, onSuccess }: { entityType
     try {
       const urlRes = await fetch(`${BASE}/api/storage/uploads/request-url`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { ...nativeAuthHeaders(), "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
       });
@@ -222,6 +758,9 @@ function UploadEntityDocDialog({ entityType, entityId, onSuccess }: { entityType
       if (!urlRes.ok) throw new Error("فشل الرفع");
       const { uploadURL, objectPath } = await urlRes.json();
       await fetch(uploadURL, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
+
+      // Best-effort content fingerprint for exact-duplicate detection.
+      const contentHash = await computeFileSha256(file);
 
       await apiFetch("/documents/upload", {
         method: "POST",
@@ -233,6 +772,7 @@ function UploadEntityDocDialog({ entityType, entityId, onSuccess }: { entityType
           mimeType: file.type,
           category: values.category || null,
           storageKey: objectPath,
+          ...(contentHash ? { contentHash } : {}),
           entityLinks: [{ entityType, entityId: Number(entityId) }],
         }),
       });

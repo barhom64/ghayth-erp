@@ -2,6 +2,9 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { handleRouteError, zodParse } from "../lib/errorHandler.js";
+import { verifyOnboardingToken, markOnboardingTokenUsed } from "../lib/employeeOnboarding.js";
+import { ObjectStorageService } from "../lib/objectStorage.js";
+import { sendNotification } from "../lib/notificationService.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import rateLimit from "express-rate-limit";
 import { makeRateLimitStore } from "../lib/rateLimitStore.js";
@@ -152,6 +155,172 @@ router.post("/forgot-password", publicLimiter, async (req, res) => {
     res.json(genericOk);
   } catch (err) {
     handleRouteError(err, res, "طلب استعادة كلمة المرور");
+  }
+});
+
+// ─── الاستكمال الذاتي للموظف (token عام) ─────────────────────────────────────
+// الموظف المُضاف سريعًا يفتح هذه الصفحة برمز مؤقت، يرى ما حدّده صاحب الشركة
+// (قراءة فقط)، ويملأ بياناته الشخصية فقط. تُحفظ في مرحلة مؤقتة بانتظار اعتماد
+// HR — لا تُكتب على السجل ولا تُفعّل الموظف هنا. لا يمنح الرمز أي دخول للنظام.
+
+// الحقول التي يملؤها الموظف — تطابق تقسيم الحقول المعتمد (لا منصب/راتب/فرع/مدير).
+const selfOnboardingSchema = z.object({
+  nationalId: z.string().trim().max(40).optional().nullable(),
+  nationality: z.string().trim().max(80).optional().nullable(),
+  gender: z.enum(["male", "female"]).optional().nullable(),
+  dateOfBirth: z.string().trim().optional().nullable(),
+  phone: z.string().trim().max(40).optional().nullable(),
+  personalEmail: z.string().email().optional().nullable(),
+  iqamaNumber: z.string().trim().max(40).optional().nullable(),
+  iqamaExpiry: z.string().trim().optional().nullable(),
+  passportNumber: z.string().trim().max(40).optional().nullable(),
+  passportExpiry: z.string().trim().optional().nullable(),
+  borderNumber: z.string().trim().max(40).optional().nullable(),
+  visaNumber: z.string().trim().max(40).optional().nullable(),
+  visaType: z.string().trim().max(40).optional().nullable(),
+  visaExpiry: z.string().trim().optional().nullable(),
+  bankName: z.string().trim().max(120).optional().nullable(),
+  bankAccount: z.string().trim().max(60).optional().nullable(),
+  iban: z.string().trim().max(60).optional().nullable(),
+  emergencyContact: z.string().trim().max(120).optional().nullable(),
+  emergencyPhone: z.string().trim().max(40).optional().nullable(),
+  attachments: z.array(z.any()).optional().nullable(),
+});
+
+// GET — يعرض ملخص ما حدّده صاحب الشركة (قراءة فقط) + أي مُدخَلات سابقة.
+router.get("/onboarding/:token", publicLimiter, async (req, res) => {
+  try {
+    const verified = await verifyOnboardingToken(String(req.params.token || ""));
+    if (!verified) {
+      res.status(410).json({ error: "الرابط غير صالح أو منتهٍ. اطلب رابطًا جديدًا من جهة العمل." });
+      return;
+    }
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT e.id, e.name, e."empNumber", e."selfSubmittedData",
+              COALESCE(jt.name, ea."jobTitle") AS "jobTitle",
+              b.name AS "branchName", d.name AS "departmentName", ea."hireDate"
+         FROM employees e
+         JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."isPrimary" = TRUE
+         LEFT JOIN job_titles jt ON jt.id = ea."jobTitleId"
+         LEFT JOIN branches b ON b.id = ea."branchId"
+         LEFT JOIN departments d ON d.id = ea."departmentId"
+        WHERE e.id = $1 AND e."companyId" = $2 AND e."deletedAt" IS NULL
+        LIMIT 1`,
+      [verified.employeeId, verified.companyId],
+    );
+    if (rows.length === 0) {
+      res.status(410).json({ error: "الرابط غير صالح. اطلب رابطًا جديدًا من جهة العمل." });
+      return;
+    }
+    const r = rows[0] as any;
+    res.json({
+      // ما حدّده صاحب الشركة — قراءة فقط.
+      ownerSet: {
+        name: r.name, empNumber: r.empNumber, jobTitle: r.jobTitle,
+        branchName: r.branchName, departmentName: r.departmentName, hireDate: r.hireDate,
+      },
+      // مُدخَلات سابقة (إن أُرسلت ولم تُعتمد بعد) لإكمالها.
+      submitted: r.selfSubmittedData ?? null,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "فتح صفحة الاستكمال الذاتي");
+  }
+});
+
+// رفع وثيقة (صورة هوية/جواز/PDF) من صفحة الاستكمال العامة — نموذج خادمي:
+// الموظف يرسل base64، والخادم يتحقق من النوع والحجم ثم يرفعه بصلاحياته.
+// لا رابط تخزين موقّع يُسلَّم لِحامل الرمز (لا تعريض كتابة مباشرة للتخزين).
+const ALLOWED_DOC_MIME = ["image/jpeg", "image/png", "image/webp", "application/pdf"] as const;
+const MAX_DOC_BYTES = 5 * 1024 * 1024; // 5MB للملف الخام
+const onboardingDocSchema = z.object({
+  fileName: z.string().trim().min(1).max(160),
+  mimeType: z.enum(ALLOWED_DOC_MIME),
+  dataBase64: z.string().min(1),
+});
+const objectStorage = new ObjectStorageService();
+
+router.post("/onboarding/:token/document", publicLimiter, async (req, res) => {
+  try {
+    const verified = await verifyOnboardingToken(String(req.params.token || ""));
+    if (!verified) {
+      res.status(410).json({ error: "الرابط غير صالح أو منتهٍ. اطلب رابطًا جديدًا من جهة العمل." });
+      return;
+    }
+    const body = zodParse(onboardingDocSchema.safeParse(req.body ?? {}));
+    // تجريد بادئة data URL إن وُجدت ثم فك الترميز والتحقق من الحجم الفعلي.
+    const b64 = body.dataBase64.includes(",") ? body.dataBase64.slice(body.dataBase64.indexOf(",") + 1) : body.dataBase64;
+    let buffer: Buffer;
+    try {
+      buffer = Buffer.from(b64, "base64");
+    } catch {
+      res.status(400).json({ error: "تعذّر قراءة الملف. أعد المحاولة." });
+      return;
+    }
+    if (buffer.length === 0) {
+      res.status(400).json({ error: "الملف فارغ." });
+      return;
+    }
+    if (buffer.length > MAX_DOC_BYTES) {
+      res.status(413).json({ error: "حجم الملف يتجاوز الحد المسموح (5 ميغابايت)." });
+      return;
+    }
+    const path = await objectStorage.uploadBytes(buffer, body.mimeType);
+    void createAuditLog({
+      companyId: verified.companyId, branchId: undefined, userId: 0,
+      action: "employee.self_onboarding_document_uploaded", entity: "employees", entityId: verified.employeeId,
+      after: { fileName: body.fileName, mimeType: body.mimeType, size: buffer.length },
+    }).catch((e) => logger.error(e, "publicData background task failed"));
+    res.json({
+      ok: true,
+      attachment: { path, name: body.fileName, mimeType: body.mimeType, size: buffer.length, uploadedAt: new Date().toISOString() },
+    });
+  } catch (err) {
+    handleRouteError(err, res, "رفع وثيقة الاستكمال الذاتي");
+  }
+});
+
+// POST — يحفظ بيانات الموظف في المرحلة المؤقتة (بانتظار الاعتماد).
+router.post("/onboarding/:token", publicLimiter, async (req, res) => {
+  try {
+    const verified = await verifyOnboardingToken(String(req.params.token || ""));
+    if (!verified) {
+      res.status(410).json({ error: "الرابط غير صالح أو منتهٍ. اطلب رابطًا جديدًا من جهة العمل." });
+      return;
+    }
+    const data = zodParse(selfOnboardingSchema.safeParse(req.body ?? {}));
+    // حدود المسارات (#2839): الكتابة في جدول HR المملوك (employees) تتمّ عبر عقد
+    // المسار القائد (HR) لا مباشرةً من مسار البيانات العامة.
+    const { applySelfOnboardingSubmission } = await import("./employees.js");
+    const updatedRow = await applySelfOnboardingSubmission(verified.employeeId, verified.companyId, data);
+    await markOnboardingTokenUsed(verified.tokenId);
+    const empName = updatedRow?.name ?? "موظف";
+    // إغلاق الحلقة: إشعار داخلي لمسؤولي الموارد البشرية بأن طلبًا بانتظار المراجعة.
+    // الإشعارات مسار خادم (إرسال فقط) — لا قرار ولا سياسة هنا.
+    void sendNotification({
+      companyId: verified.companyId,
+      type: "hr",
+      title: "طلب استكمال بيانات جديد",
+      body: `أرسل الموظف ${empName} بياناته الشخصية — بانتظار المراجعة والاعتماد.`,
+      priority: "normal",
+      targetRole: "hr_manager",
+      refType: "employees",
+      refId: verified.employeeId,
+      actionUrl: "/hr/self-onboarding-review",
+      channels: ["in_app"],
+    }).catch((e) => logger.error(e, "self-onboarding notify failed"));
+    void createAuditLog({
+      companyId: verified.companyId, branchId: undefined, userId: 0,
+      action: "employee.self_onboarding_submitted", entity: "employees", entityId: verified.employeeId,
+      after: { selfSubmitted: true },
+    }).catch((e) => logger.error(e, "publicData background task failed"));
+    void emitEvent({
+      companyId: verified.companyId, branchId: 0, userId: 0,
+      action: "employee.self_onboarding_submitted", entity: "employees", entityId: verified.employeeId,
+      details: JSON.stringify({ submitted: true }),
+    }).catch((e) => logger.error(e, "publicData background task failed"));
+    res.json({ ok: true, message: "تم استلام بياناتك. ستتم مراجعتها واعتمادها لتفعيل حسابك." });
+  } catch (err) {
+    handleRouteError(err, res, "إرسال بيانات الاستكمال الذاتي");
   }
 });
 

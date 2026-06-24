@@ -24,6 +24,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ApiError } from "@/lib/api";
 
@@ -95,6 +97,14 @@ export interface FormShellProps<TSchema extends FieldValues> {
   submitVariant?: "default" | "destructive" | "outline" | "secondary" | "ghost" | "link";
   /** Secondary button slot (Cancel, Save draft, …). Rendered start-aligned. */
   secondaryActions?: ReactNode;
+  /**
+   * Optional side summary rendered beside the fields on wide screens (e.g. a
+   * running total, the expected effect, or a completeness hint) so the
+   * operator sees the consequence of their input while filling it in. On
+   * narrow screens it stacks below the fields. Omit it for the default
+   * single-column form (backward compatible).
+   */
+  aside?: ReactNode;
   /** Override disabled-state logic (e.g. disable until a dependency loads). */
   disabled?: boolean;
   /**
@@ -117,6 +127,7 @@ export function FormShell<TSchema extends FieldValues>({
   submitLabel = "حفظ",
   submitVariant = "default",
   secondaryActions,
+  aside,
   disabled,
   hideSubmit = false,
   className,
@@ -176,7 +187,14 @@ export function FormShell<TSchema extends FieldValues>({
         dir="rtl"
         className={cn("space-y-4", className)}
       >
-        <div className="space-y-4">{children}</div>
+        {aside ? (
+          <div className="grid gap-4 lg:grid-cols-3">
+            <div className="space-y-4 lg:col-span-2">{children}</div>
+            <aside className="space-y-3 lg:sticky lg:top-4 lg:self-start">{aside}</aside>
+          </div>
+        ) : (
+          <div className="space-y-4">{children}</div>
+        )}
 
         {!hideSubmit && (
           <div className="flex items-center justify-between gap-2 pt-4 border-t">
@@ -602,5 +620,56 @@ export function FormGrid({
     <div className={cn("grid grid-cols-1 gap-4", colClass, className)}>
       {children}
     </div>
+  );
+}
+
+/**
+ * FormSection — a collapsible, titled group of fields inside a FormShell.
+ * Long forms split into sections (e.g. «البيانات الأساسية» / «البيانات المالية»
+ * / «المرفقات») so the operator isn't faced with one wall of inputs. Optional
+ * fields can live in a section that defaults to collapsed («تفاصيل إضافية»).
+ *
+ * Pure layout: it does not touch form state, so validation/submit are
+ * unaffected whether a section is open or closed (collapsed content stays
+ * mounted). Built on the shared Collapsible primitive.
+ */
+export function FormSection({
+  title,
+  description,
+  defaultOpen = true,
+  badge,
+  className,
+  children,
+}: {
+  title: string;
+  description?: string;
+  /** Start expanded (default true). Set false for optional «تفاصيل إضافية». */
+  defaultOpen?: boolean;
+  /** Optional trailing hint next to the title (e.g. «ناقص» / عدد الحقول). */
+  badge?: ReactNode;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <Collapsible
+      defaultOpen={defaultOpen}
+      className={cn("rounded-xl border bg-card", className)}
+    >
+      <CollapsibleTrigger className="group flex w-full items-center justify-between gap-3 px-4 py-3 text-start">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold">{title}</h3>
+            {badge}
+          </div>
+          {description && (
+            <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+          )}
+        </div>
+        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="space-y-4 border-t p-4">{children}</div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }

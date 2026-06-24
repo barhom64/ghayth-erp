@@ -20,8 +20,11 @@ import {
   type DataTableColumn,
 } from "@workspace/ui-core";
 import { useState } from "react";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
+import { resolveStatus } from "@workspace/ui-core";
 import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
-import { apiFetch, useApiQuery } from "@/lib/api";
+import { apiFetch, useApiQuery, API_BASE, nativeAuthHeaders } from "@/lib/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { PageStateWrapper } from "@/components/shared/page-state";
@@ -33,9 +36,10 @@ import { Badge } from "@/components/ui/badge";
 import { formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import {
-  RefreshCw, AlertTriangle, AlertOctagon, Activity, Inbox,
+  AlertTriangle, AlertOctagon, Activity, Inbox,
   Plug, Cpu, Clock, Bot, Sparkles, CheckCircle2,
 } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 
 interface Anomaly {
   severity: "critical" | "warning" | "info";
@@ -177,7 +181,7 @@ export default function AdminObservability() {
   const metricsQ = useQuery({
     queryKey: ["k8s-metrics-probe"],
     queryFn: async () => {
-      const res = await fetch("/api/metrics", { credentials: "include" });
+      const res = await fetch(`${API_BASE}/api/metrics`, { credentials: "include", headers: { ...nativeAuthHeaders() } });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return { ok: true };
     },
@@ -247,6 +251,10 @@ export default function AdminObservability() {
 
   const criticalCount = anomalies.filter((a) => a.severity === "critical").length;
   const warningCount = anomalies.filter((a) => a.severity === "warning").length;
+
+  // Print wiring — the workers table (صحة المهام المجدولة) is the most
+  // operationally-meaningful row-level list on this observability pane.
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<WorkerRow>(workers);
 
   const dlqColumns: DataTableColumn<DlqTop>[] = [
     { key: "type", header: "النوع", searchable: true, render: (r) => (
@@ -379,9 +387,25 @@ export default function AdminObservability() {
       subtitle="رؤية موحّدة للطوابير، التكاملات، العمّال، خروقات الـ SLA، والشذوذات النشطة"
       loading={isLoading}
       actions={
-        <Button variant="outline" size="sm" onClick={() => refetch()}>
-          <RefreshCw className="h-4 w-4 me-1" />تحديث
-        </Button>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_admin_observability"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "صحة المهام المجدولة — مرصد المراقبة", total: printRows.length },
+              items: printRows.map((w: WorkerRow) => ({
+                "المهمة": w.jobName,
+                "تشغيلات (24س)": w.totalLast24h,
+                "فاشلة": w.failed,
+                "متوسط المدة": fmtMs(w.avgDurationMs),
+                "آخر حالة": w.lastStatus ? (resolveStatus(w.lastStatus)?.label ?? w.lastStatus) : "—",
+                "آخر تشغيل": w.lastRunAt ?? "—",
+              })),
+            })}
+          />
+          <RefreshAction onRefresh={() => refetch()} />
+        </div>
       }
     >
       <PageStateWrapper isLoading={isLoading && !data} error={error} onRetry={refetch}>
@@ -391,16 +415,16 @@ export default function AdminObservability() {
               Prometheus metrics. Failing probes show as red badges. */}
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <Badge variant="outline" className={livezQ.isError ? "bg-status-error-surface text-status-error-foreground border-status-error-surface" : livezQ.data ? "bg-status-success-surface text-status-success-foreground border-status-success-surface" : ""}>
-              livez: {livezQ.isError ? "DOWN" : livezQ.isLoading ? "…" : "OK"}
+              livez: {livezQ.isError ? "متوقّف" : livezQ.isLoading ? "…" : "يعمل"}
             </Badge>
             <Badge variant="outline" className={readyzQ.isError ? "bg-status-error-surface text-status-error-foreground border-status-error-surface" : readyzQ.data ? "bg-status-success-surface text-status-success-foreground border-status-success-surface" : ""}>
-              readyz: {readyzQ.isError ? "NOT READY" : readyzQ.isLoading ? "…" : "OK"}
+              readyz: {readyzQ.isError ? "غير جاهز" : readyzQ.isLoading ? "…" : "يعمل"}
             </Badge>
             <Badge variant="outline" className={healthzQ.isError ? "bg-status-error-surface text-status-error-foreground border-status-error-surface" : healthzQ.data ? "bg-status-success-surface text-status-success-foreground border-status-success-surface" : ""}>
-              healthz: {healthzQ.isError ? "DOWN" : healthzQ.isLoading ? "…" : "OK"}
+              healthz: {healthzQ.isError ? "متوقّف" : healthzQ.isLoading ? "…" : "يعمل"}
             </Badge>
             <Badge variant="outline" className={metricsQ.isError ? "bg-status-error-surface text-status-error-foreground border-status-error-surface" : "bg-status-success-surface text-status-success-foreground border-status-success-surface"}>
-              /metrics: {metricsQ.isError ? "DOWN" : metricsQ.isLoading ? "…" : "exposed"}
+              /metrics: {metricsQ.isError ? "متوقّف" : metricsQ.isLoading ? "…" : "متاح"}
             </Badge>
           </div>
 
@@ -651,6 +675,7 @@ export default function AdminObservability() {
                 <DataTable
                   columns={workerColumns}
                   data={workers}
+                  onSortedDataChange={setPrintRows}
                   noToolbar
                   pageSize={0}
                 />

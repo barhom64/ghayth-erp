@@ -45,7 +45,7 @@ const FLEET_ROUTES = readFileSync(
   "utf8",
 );
 const FLEET_TABS = readFileSync(
-  join(repoRoot, "artifacts/ghayth-erp/src/components/shared/fleet-tabs-nav.tsx"),
+  join(repoRoot, "artifacts/ghayth-erp/src/components/layout/navigation.registry.ts"),
   "utf8",
 );
 
@@ -76,16 +76,19 @@ describe("#2079 TA-T18-13 — FIX-10 — /fleet/trips/create route entry dropped
 
 /* ── FIX-12 — rental sub-app surfaces in FleetTabsNav ───────── */
 
-describe("#2079 TA-T18-13 — FIX-12 — rental sub-app surfaces in FleetTabsNav", () => {
-  it("FleetTabsNav declares a tab for /fleet/rental-contracts", () => {
+describe("#2079 TA-T18-13 — FIX-12 — rental sub-app surfaces in the fleet nav", () => {
+  // FleetTabsNav now derives its tabs from the sidebar registry (ModuleTabsNav),
+  // so an entry's presence in the registry IS its presence in the in-page bar —
+  // the two can no longer diverge.
+  it("the registry exposes /fleet/rental-contracts (mirrored into the fleet bar)", () => {
     expect(FLEET_TABS).toMatch(
-      /href:\s*"\/fleet\/rental-contracts"[\s\S]{0,200}?label:\s*"التأجير"/,
+      /label:\s*"تأجير المركبات",\s*path:\s*"\/fleet\/rental-contracts"/,
     );
   });
 
-  it("the rental tab carries the FileSignature icon (matches the sidebar entry)", () => {
+  it("the rental entry carries the FileSignature icon", () => {
     expect(FLEET_TABS).toMatch(
-      /href:\s*"\/fleet\/rental-contracts"[\s\S]{0,200}?icon:\s*FileSignature/,
+      /path:\s*"\/fleet\/rental-contracts",\s*icon:\s*FileSignature/,
     );
   });
 
@@ -95,15 +98,9 @@ describe("#2079 TA-T18-13 — FIX-12 — rental sub-app surfaces in FleetTabsNav
     );
   });
 
-  it("the rental tab matches /fleet/rental-contracts (active-state pin)", () => {
+  it("the existing cargo entry is preserved (regression pin)", () => {
     expect(FLEET_TABS).toMatch(
-      /href:\s*"\/fleet\/rental-contracts"[\s\S]{0,300}?match:\s*\[\s*"\/fleet\/rental-contracts"\s*\]/,
-    );
-  });
-
-  it("the existing cargo tab is preserved (regression pin)", () => {
-    expect(FLEET_TABS).toMatch(
-      /href:\s*"\/fleet\/cargo"[\s\S]{0,200}?label:\s*"نقل البضائع"/,
+      /label:\s*"الشحن والبضائع",\s*path:\s*"\/fleet\/cargo"/,
     );
   });
 });

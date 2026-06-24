@@ -24,11 +24,15 @@ import { cn } from "@/lib/utils";
 import {
   Activity, Database, Clock, AlertTriangle, Shield,
   Server, CheckCircle, XCircle, Users, Building2,
-  HardDrive, Cpu, MemoryStick, RefreshCw, Plug, Gauge,
+  HardDrive, Cpu, MemoryStick, Plug, Gauge,
   Power, PowerOff, Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { RefreshAction } from "@/components/page-actions";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
+import { resolveStatus } from "@workspace/ui-core";
 
 interface SystemStopRow {
   id: number;
@@ -339,6 +343,10 @@ export default function AdminMonitoring() {
   const failedCronJobs = cronJobs.filter((j: any) => j.lastStatus === "failed" && j.isActive);
   const healthyCronJobs = cronJobs.filter((j: any) => j.lastStatus !== "failed" || !j.isActive);
 
+  // Print wiring — the scheduled-jobs table (المهام المجدولة) is the most
+  // operationally-meaningful row-level list on this monitoring dashboard.
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(healthyCronJobs);
+
   const cronJobColumns: DataTableColumn<any>[] = [
     { key: "name", header: "المهمة", searchable: true, render: (r: any) => <span className="font-medium text-xs">{r.name}</span> },
     { key: "schedule", header: "الجدول", render: (r: any) => <span className="font-mono text-xs text-muted-foreground">{r.schedule}</span> },
@@ -380,6 +388,35 @@ export default function AdminMonitoring() {
     { key: "createdAt", header: "التاريخ", render: (r: any) => <span className="text-xs">{formatDateAr(r.createdAt)}</span> },
   ];
 
+  // SRE detailed health-checks — same 3 columns/rendering as the prior raw
+  // table (mono check name, colored status badge, muted detail). Read-only.
+  const healthCheckColumns: DataTableColumn<HealthCheck>[] = [
+    { key: "name", header: "الفحص", className: "font-mono text-xs", render: (c) => c.name },
+    {
+      key: "status",
+      header: "الحالة",
+      render: (c) => (
+        <Badge variant="outline" className={cn(
+          "text-xs",
+          c.status === "ok" && "bg-status-success-surface text-status-success-foreground",
+          c.status === "warn" && "bg-status-warning-surface text-status-warning-foreground",
+          c.status === "error" && "bg-status-error-surface text-status-error-foreground",
+        )}>
+          {c.status === "ok" ? "OK" : c.status === "warn" ? "تحذير" : "خطأ"}
+        </Badge>
+      ),
+    },
+    { key: "detail", header: "التفاصيل", className: "text-xs text-muted-foreground", render: (c) => c.detail || "—" },
+  ];
+
+  // Cross-module dependency edges — same 3 columns/rendering as the prior raw
+  // table (from badge, to badge, mono via). Read-only.
+  const depEdgeColumns: DataTableColumn<DependencyEdge>[] = [
+    { key: "from", header: "من", sortable: false, render: (e) => <Badge variant="outline" className="text-xs">{e.from}</Badge> },
+    { key: "to", header: "إلى", sortable: false, render: (e) => <Badge variant="outline" className="text-xs">{e.to}</Badge> },
+    { key: "via", header: "عبر", className: "font-mono text-xs text-muted-foreground", render: (e) => e.via },
+  ];
+
   return (
     <PageShell
       title="مركز المراقبة"
@@ -390,9 +427,23 @@ export default function AdminMonitoring() {
       subtitle="مراقبة صحة النظام والخدمات"
       loading={isLoading}
       actions={
-        <Button variant="outline" size="sm" onClick={() => refetch()}>
-          <RefreshCw className="h-4 w-4 me-1" />تحديث
-        </Button>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_admin_monitoring"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "المهام المجدولة — مركز المراقبة", total: printRows.length },
+              items: printRows.map((j: any) => ({
+                "المهمة": j.name,
+                "الجدول": j.schedule,
+                "آخر تشغيل": j.lastRunAt,
+                "الحالة": resolveStatus(j.lastStatus)?.label ?? (j.isActive ? "نشط" : "غير نشط"),
+              })),
+            })}
+          />
+          <RefreshAction onRefresh={() => refetch()} />
+        </div>
       }
     >
       <PageStateWrapper isLoading={isLoading && !health} error={error} onRetry={refetch}>
@@ -636,6 +687,7 @@ export default function AdminMonitoring() {
             <DataTable
               columns={cronJobColumns}
               data={healthyCronJobs}
+              onSortedDataChange={setPrintRows}
               noToolbar
               pageSize={0}
               emptyMessage="لا توجد مهام مجدولة"
@@ -680,33 +732,13 @@ export default function AdminMonitoring() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-surface-subtle">
-                  <th className="text-start p-2">الفحص</th>
-                  <th className="text-start p-2">الحالة</th>
-                  <th className="text-start p-2">التفاصيل</th>
-                </tr>
-              </thead>
-              <tbody>
-                {healthChecks.map((c) => (
-                  <tr key={c.name} className="border-t hover:bg-muted/30">
-                    <td className="p-2 font-mono text-xs">{c.name}</td>
-                    <td className="p-2">
-                      <Badge variant="outline" className={cn(
-                        "text-xs",
-                        c.status === "ok" && "bg-status-success-surface text-status-success-foreground",
-                        c.status === "warn" && "bg-status-warning-surface text-status-warning-foreground",
-                        c.status === "error" && "bg-status-error-surface text-status-error-foreground",
-                      )}>
-                        {c.status === "ok" ? "OK" : c.status === "warn" ? "تحذير" : "خطأ"}
-                      </Badge>
-                    </td>
-                    <td className="p-2 text-xs text-muted-foreground">{c.detail || "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <DataTable
+              columns={healthCheckColumns}
+              data={healthChecks}
+              rowKey={(c) => c.name}
+              noToolbar
+              pageSize={0}
+            />
           </CardContent>
         </Card>
       )}
@@ -720,24 +752,13 @@ export default function AdminMonitoring() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-surface-subtle">
-                  <th className="text-start p-2">من</th>
-                  <th className="text-start p-2">إلى</th>
-                  <th className="text-start p-2">عبر</th>
-                </tr>
-              </thead>
-              <tbody>
-                {depEdges.map((e, i) => (
-                  <tr key={`${e.from}->${e.to}:${e.via}:${i}`} className="border-t hover:bg-muted/30">
-                    <td className="p-2"><Badge variant="outline" className="text-xs">{e.from}</Badge></td>
-                    <td className="p-2"><Badge variant="outline" className="text-xs">{e.to}</Badge></td>
-                    <td className="p-2 font-mono text-xs text-muted-foreground">{e.via}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <DataTable
+              columns={depEdgeColumns}
+              data={depEdges}
+              rowKey={(e, i) => `${e.from}->${e.to}:${e.via}:${i}`}
+              noToolbar
+              pageSize={0}
+            />
           </CardContent>
         </Card>
       )}

@@ -43,6 +43,19 @@ vi.mock("@workspace/entity-kit", () => ({
 vi.mock("@workspace/ui-core", () => ({
   FormGrid: ({ children }: any) => <div>{children}</div>,
   FormTextareaField: () => null,
+  DataTable: ({ columns, data }: any) => (
+    <table>
+      <tbody>
+        {(data ?? []).map((row: any, i: number) => (
+          <tr key={i}>
+            {columns.map((c: any, ci: number) => (
+              <td key={ci} data-key={String(c.key)}>{c.render ? c.render(row) : row[c.key]}</td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  ),
 }));
 
 vi.mock("@workspace/workflow-kit", () => ({

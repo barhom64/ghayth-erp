@@ -332,6 +332,7 @@ export default function BankGuaranteesPage() {
       key: "ref",
       header: "رقم الضمان",
       sortable: true,
+      searchable: true,
       render: (row) => <span className="font-mono text-status-info-foreground text-xs">{row.ref}</span>,
     },
     {
@@ -354,8 +355,8 @@ export default function BankGuaranteesPage() {
         </span>
       ),
     },
-    { key: "bank", header: "البنك", sortable: true },
-    { key: "beneficiary", header: "الجهة المستفيدة", sortable: true },
+    { key: "bank", header: "البنك", sortable: true, searchable: true },
+    { key: "beneficiary", header: "الجهة المستفيدة", sortable: true, searchable: true },
     {
       key: "amount",
       header: "المبلغ",
@@ -549,12 +550,12 @@ export default function BankGuaranteesPage() {
               {alerts.map((g) => (
                 <div
                   key={g.id}
-                  className="flex items-center justify-between bg-background rounded-lg px-4 py-2 text-sm"
+                  className="flex items-center justify-between gap-2 bg-background rounded-lg px-4 py-2 text-sm"
                 >
-                  <div className="font-medium">
+                  <div className="font-medium min-w-0 truncate">
                     {g.ref} — {g.beneficiary}
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 shrink-0">
                     <span className="text-muted-foreground">{g.bank}</span>
                     <span className="text-muted-foreground">{formatCurrency(g.amount)}</span>
                     <PageStatusBadge status={ALERT_RENDER[g.alertStatus]?.statusKey ?? "expired"}>
@@ -572,9 +573,9 @@ export default function BankGuaranteesPage() {
           onSortedDataChange={setPrintRows}
           data={list}
           isLoading={isLoading}
+          searchPlaceholder="بحث برقم الضمان أو البنك أو المستفيد…"
           emptyMessage="لا توجد ضمانات بنكية مسجلة"
           emptyIcon={<Shield className="h-6 w-6 text-slate-400" />}
-          noToolbar
         />
       </PageShell>
 

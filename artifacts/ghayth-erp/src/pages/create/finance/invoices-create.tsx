@@ -23,6 +23,7 @@ import { ImpactPreviewButton } from "@/components/shared/impact-preview";
 import { ClientSelect, BranchSelect, CostCenterSelect } from "@/components/shared/entity-selects";
 import { ProductSelect } from "@/components/shared/product-select";
 import { LineAllocationPanel, type LineAllocation, deriveAllocationStatus, buildAllocationPayload } from "@/components/shared/line-allocation-panel";
+import { LineItemsTable } from "@/components/shared/line-items-table";
 
 interface TaxCode {
   id: number;
@@ -193,10 +194,7 @@ export default function InvoicesCreate() {
       toast({ variant: "destructive", title: firstError });
       return;
     }
-    if (!form.branchId) {
-      toast({ variant: "destructive", title: "الفرع مطلوب" });
-      return;
-    }
+    // الفرع اختياري في الخلفية (.optional) ويُعبّأ من سياق الدخول — لا يُفرض.
     try {
       await createMut.mutateAsync({
         clientId: Number(form.clientId),
@@ -257,7 +255,7 @@ export default function InvoicesCreate() {
       <CreationDateField />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <AutoField label="رقم الفاتورة" value={autoNumberRef.current} />
-        <FormFieldWrapper label="التاريخ" required>
+        <FormFieldWrapper label="تاريخ الفاتورة" required>
           <DatePicker value={form.date} onChange={(v) => setForm({ ...form, date: v })} />
         </FormFieldWrapper>
       </div>
@@ -347,15 +345,20 @@ export default function InvoicesCreate() {
           </span>
         </div>
         {fieldErrors.lines && <p className="text-xs text-status-error-foreground mt-1">{fieldErrors.lines}</p>}
-        {lines.map((line, idx) => {
-          const split = lineSplits[idx];
-          const lineCode = line.taxCode || form.taxCode;
-          const lineInclusive = line.taxInclusive ?? form.taxInclusive;
-          return (
-            <div key={idx} className="border border-border rounded-md p-3 mt-3 bg-card">
-              <div className="grid grid-cols-12 gap-2 items-end">
-                <div className="col-span-12 md:col-span-3">
-                  <Label className="text-xs">المنتج / الخدمة</Label>
+        {/* الجدول الموحّد للإدخالات المالية — المكوّن المشترك <LineItemsTable>
+            بدل جدول HTML يدوي (نفس الأعمدة والسلوك: منتقي المنتج، الضريبة لكل
+            سطر، الإجمالي، لوحة الأبعاد عبر renderExpansion، إضافة/حذف بند). */}
+        <div className="mt-3">
+          <LineItemsTable
+            items={lines}
+            minItems={1}
+            onAdd={addLine}
+            onRemove={removeLine}
+            addLabel="إضافة بند"
+            columns={[
+              {
+                header: "المنتج / الخدمة", className: "min-w-[10rem]",
+                render: (line, idx) => (
                   <ProductSelect
                     value={line.productId}
                     includeFreeOption
@@ -378,29 +381,37 @@ export default function InvoicesCreate() {
                       setLines(updated);
                     }}
                   />
-                </div>
-                <div className="col-span-12 md:col-span-3">
-                  <Label className="text-xs">الوصف</Label>
-                  <Input value={line.description}
+                ),
+              },
+              {
+                header: "الوصف", className: "min-w-[10rem]",
+                render: (line, idx) => (
+                  <Input value={line.description} placeholder="الوصف"
                     onChange={(e) => updateLine(idx, "description", e.target.value)} />
-                </div>
-                <div className="col-span-6 md:col-span-1">
-                  <NumberField label="كمية" value={line.quantity}
+                ),
+              },
+              {
+                header: "كمية",
+                render: (line, idx) => (
+                  <NumberField label="كمية" hideLabel className="w-20" value={line.quantity}
                     onChange={(v) => updateLine(idx, "quantity", v)} placeholder="1" />
-                </div>
-                <div className="col-span-6 md:col-span-2">
-                  <NumberField label="سعر الوحدة" value={line.unitPrice}
+                ),
+              },
+              {
+                header: "سعر الوحدة",
+                render: (line, idx) => (
+                  <NumberField label="سعر الوحدة" hideLabel className="w-24" value={line.unitPrice}
                     onChange={(v) => updateLine(idx, "unitPrice", v)} placeholder="0.00" />
-                </div>
-                <div className="col-span-6 md:col-span-2">
-                  <Label className="text-xs">رمز الضريبة</Label>
+                ),
+              },
+              {
+                header: "رمز الضريبة",
+                render: (line, idx) => (
                   <Select
                     value={line.taxCode || "_inherit"}
                     onValueChange={(v) => updateLine(idx, "taxCode", v === "_inherit" ? "" : v)}
                   >
-                    <SelectTrigger className="h-9 text-xs">
-                      <SelectValue placeholder={form.taxCode ? `↓ ${form.taxCode}` : "بدون"} />
-                    </SelectTrigger>
+                    <SelectTrigger className="h-9 text-xs w-28"><SelectValue placeholder={form.taxCode ? `↓ ${form.taxCode}` : "بدون"} /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="_inherit">↓ يرث من الترويسة ({form.taxCode || "بدون"})</SelectItem>
                       {taxCodes.filter((t: any) => t.code).map((t) => (
@@ -410,49 +421,58 @@ export default function InvoicesCreate() {
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
-                <div className="col-span-6 md:col-span-2">
-                  <Label className="text-xs">نوع السعر</Label>
+                ),
+              },
+              {
+                header: "نوع السعر",
+                render: (line, idx) => (
                   <Select
                     value={line.taxInclusive === undefined ? "_inherit" : line.taxInclusive ? "inclusive" : "exclusive"}
-                    onValueChange={(v) => updateLine(idx, "taxInclusive",
-                      v === "_inherit" ? undefined : v === "inclusive")}
+                    onValueChange={(v) => updateLine(idx, "taxInclusive", v === "_inherit" ? undefined : v === "inclusive")}
                   >
-                    <SelectTrigger className="h-9 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
+                    <SelectTrigger className="h-9 text-xs w-28"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="_inherit">↓ يرث ({form.taxInclusive ? "شامل" : "غير شامل"})</SelectItem>
                       <SelectItem value="inclusive">شامل الضريبة</SelectItem>
                       <SelectItem value="exclusive">غير شامل</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
-                <div className="col-span-12 md:col-span-1">
-                  <Button type="button" variant="ghost" size="sm" className="w-full text-destructive"
-                    onClick={() => removeLine(idx)} disabled={lines.length <= 1}>حذف</Button>
-                </div>
-              </div>
-              {/* Live tax split for THIS line */}
-              {(Number(line.quantity) > 0 && Number(line.unitPrice) > 0) && (
-                <div className="mt-3 pt-3 border-t border-dashed flex flex-wrap items-center gap-3 text-xs">
-                  <Badge variant="outline" className="font-mono">{lineCode || "—"}</Badge>
-                  <Badge variant="secondary">{lineInclusive ? "شامل" : "غير شامل"}</Badge>
-                  <span className="text-muted-foreground">صافي: <span className="font-semibold text-foreground">{formatCurrency(split.net)}</span></span>
-                  <span className="text-muted-foreground">ضريبة: <span className="font-semibold text-status-warning-foreground">{formatCurrency(split.vat)}</span></span>
-                  <span className="text-muted-foreground">إجمالي: <span className="font-semibold text-emerald-700">{formatCurrency(split.gross)}</span></span>
-                </div>
-              )}
-              <LineAllocationPanel
-                value={line.allocation ?? {}}
-                onChange={(next) => updateLine(idx, "allocation", next)}
-                status={deriveAllocationStatus(line.allocation ?? {})}
-                required={false}
-              />
-            </div>
-          );
-        })}
-        <Button type="button" variant="outline" size="sm" className="mt-3" onClick={addLine}>+ إضافة بند</Button>
+                ),
+              },
+              {
+                header: "الإجمالي", className: "whitespace-nowrap font-semibold text-emerald-700",
+                render: (line, idx) => {
+                  const hasSplit = Number(line.quantity) > 0 && Number(line.unitPrice) > 0;
+                  return hasSplit ? formatCurrency(lineSplits[idx].gross) : "—";
+                },
+              },
+            ]}
+            renderExpansion={(line, idx) => {
+              const split = lineSplits[idx];
+              const lineCode = line.taxCode || form.taxCode;
+              const lineInclusive = line.taxInclusive ?? form.taxInclusive;
+              const hasSplit = Number(line.quantity) > 0 && Number(line.unitPrice) > 0;
+              return (
+                <>
+                  {hasSplit && (
+                    <div className="mb-2 flex flex-wrap items-center gap-3 text-xs">
+                      <Badge variant="outline" className="font-mono">{lineCode || "—"}</Badge>
+                      <Badge variant="secondary">{lineInclusive ? "شامل" : "غير شامل"}</Badge>
+                      <span className="text-muted-foreground">صافي: <span className="font-semibold text-foreground">{formatCurrency(split.net)}</span></span>
+                      <span className="text-muted-foreground">ضريبة: <span className="font-semibold text-status-warning-foreground">{formatCurrency(split.vat)}</span></span>
+                    </div>
+                  )}
+                  <LineAllocationPanel
+                    value={line.allocation ?? {}}
+                    onChange={(next) => updateLine(idx, "allocation", next)}
+                    status={deriveAllocationStatus(line.allocation ?? {})}
+                    required={false}
+                  />
+                </>
+              );
+            }}
+          />
+        </div>
       </div>
 
       <div className={`bg-muted/50 p-4 rounded-md text-sm space-y-1 ${fieldErrorClass(fieldErrors.totalAmount)}`}>

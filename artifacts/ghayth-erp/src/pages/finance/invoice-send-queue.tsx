@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { exportRowsToCsv } from "@/lib/unified-export";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -258,67 +258,70 @@ export default function InvoiceSendQueuePage() {
                 <CardTitle className="text-base">القائمة ({filtered.length})</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b text-xs text-muted-foreground">
-                        <th className="text-start py-2 px-2">الفاتورة</th>
-                        <th className="text-start py-2 px-2">العميل</th>
-                        <th className="text-end py-2 px-2">المبلغ</th>
-                        <th className="text-start py-2 px-2">الحالة</th>
-                        <th className="text-end py-2 px-2">عمر</th>
-                        <th className="py-2 px-2 w-32">إجراء</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filtered.map(i => {
+                <DataTable
+                  noToolbar
+                  data={filtered}
+                  columns={[
+                    {
+                      key: "ref", header: "الفاتورة", ltr: true,
+                      render: (i) => <span className="font-mono text-xs">{i.ref}</span>,
+                      footer: (rows) => `الإجمالي (${rows.length} فاتورة)`,
+                    },
+                    {
+                      key: "clientName", header: "العميل",
+                      render: (i) => (
+                        i.clientId ? (
+                          <Link href={`/finance/customer-360-sheet?clientId=${i.clientId}`}>
+                            <span className="hover:underline cursor-pointer">{i.clientName ?? `عميل #${i.clientId}`}</span>
+                          </Link>
+                        ) : (
+                          <span>{i.clientName ?? "—"}</span>
+                        )
+                      ),
+                    },
+                    {
+                      key: "total", header: "المبلغ", align: "end",
+                      render: (i) => (
+                        <span className="tabular-nums font-semibold">{formatCurrency(Number(i.total))}</span>
+                      ),
+                      footer: (rows) => (
+                        <span className="tabular-nums">
+                          {formatCurrency(rows.reduce((s, i) => s + Number(i.total), 0))}
+                        </span>
+                      ),
+                    },
+                    {
+                      key: "status", header: "الحالة",
+                      render: (i) => {
                         const status = STATUS_LABELS[i.status] ?? { label: i.status, color: "" };
+                        return (
+                          <Badge variant="outline" className={`text-[10px] ${status.color}`}>
+                            {status.label}
+                          </Badge>
+                        );
+                      },
+                      exportValue: (i) => STATUS_LABELS[i.status]?.label ?? i.status,
+                    },
+                    {
+                      key: "createdAt", header: "عمر", align: "end",
+                      render: (i) => {
                         const age = daysSince(i.createdAt, today);
                         const ageColor = age > 14 ? "text-status-danger-foreground" : age > 7 ? "text-status-warning-foreground" : "";
-                        return (
-                          <tr key={i.id} className="border-b hover:bg-muted/30">
-                            <td className="py-2 px-2 font-mono text-xs">{i.ref}</td>
-                            <td className="py-2 px-2">
-                              {i.clientId ? (
-                                <Link href={`/finance/customer-360-sheet?clientId=${i.clientId}`}>
-                                  <span className="hover:underline cursor-pointer">{i.clientName ?? `عميل #${i.clientId}`}</span>
-                                </Link>
-                              ) : (
-                                <span>{i.clientName ?? "—"}</span>
-                              )}
-                            </td>
-                            <td className="py-2 px-2 text-end tabular-nums font-semibold">
-                              {formatCurrency(Number(i.total))}
-                            </td>
-                            <td className="py-2 px-2">
-                              <Badge variant="outline" className={`text-[10px] ${status.color}`}>
-                                {status.label}
-                              </Badge>
-                            </td>
-                            <td className={`py-2 px-2 text-end tabular-nums ${ageColor}`}>
-                              {age} يوم
-                            </td>
-                            <td className="py-2 px-2">
-                              <Button asChild variant="outline" size="sm" className="w-full"><Link href={`/finance/invoices/${i.id}`}>
-                                  <ExternalLink className="w-3 h-3 ml-1" />
-                                  فتح
-                                </Link></Button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                    <tfoot>
-                      <tr className="font-semibold bg-muted/40">
-                        <td colSpan={2} className="py-2 px-2">الإجمالي ({filtered.length} فاتورة)</td>
-                        <td className="py-2 px-2 text-end tabular-nums">
-                          {formatCurrency(filtered.reduce((s, i) => s + Number(i.total), 0))}
-                        </td>
-                        <td colSpan={3}></td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
+                        return <span className={`tabular-nums ${ageColor}`}>{age} يوم</span>;
+                      },
+                      exportValue: (i) => daysSince(i.createdAt, today),
+                    },
+                    {
+                      key: "_action", header: "إجراء", width: "8rem", sortable: false,
+                      render: (i) => (
+                        <Button asChild variant="outline" size="sm" className="w-full"><Link href={`/finance/invoices/${i.id}`}>
+                            <ExternalLink className="w-3 h-3 ml-1" />
+                            فتح
+                          </Link></Button>
+                      ),
+                    },
+                  ] satisfies DataTableColumn<Invoice>[]}
+                />
               </CardContent>
             </Card>
           )}

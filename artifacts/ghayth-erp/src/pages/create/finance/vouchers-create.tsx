@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { CreatePageLayout, AutoField, CreationDateField } from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useAppContext } from "@/contexts/app-context";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { formatCurrency , todayLocal } from "@/lib/formatters";
 import { amountTaxSplit } from "@/lib/tax-math";
@@ -18,9 +19,10 @@ import { allowedUsagesForPaymentMethod, isMoneyAccount } from "@/lib/finance-acc
 import { EMPTY_ALLOCATION_TARGET, buildOperationalEffectsPayload, type AllocationTargetValue } from "@/components/shared/allocation-target-select";
 import { FinanceOperationContextPanel } from "@/components/shared/finance-operation-context-panel";
 import { ActiveContextNotice, useActiveFinanceContext } from "@/components/shared/active-context-gate";
-import { deriveRelatedEntity, voucherCounterAccountHint } from "@/lib/finance/scenario-model";
+import { deriveRelatedEntity, voucherCounterAccountHint, VOUCHER_COUNTER_ACCOUNT_TYPES } from "@/lib/finance/scenario-model";
 import { buildAllocationPayload } from "@/components/shared/line-allocation-panel";
-import { AlertCircle, Paperclip } from "lucide-react";
+import { AlertCircle, Paperclip, Lock, ChevronDown } from "lucide-react";
+import { usePermission } from "@/components/shared/permission-gate";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
 import { SupplierContextCard } from "@/components/shared/supplier-context-card";
@@ -29,6 +31,7 @@ import { PropertyUnitContextCard } from "@/components/shared/property-unit-conte
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { AccountSelect, BranchSelect, DepartmentSelect, CostCenterSelect } from "@/components/shared/entity-selects";
 import { Switch } from "@/components/ui/switch";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 
 
 const voucherTaxSplit = amountTaxSplit;
@@ -76,6 +79,10 @@ export default function VouchersCreate() {
   // Dedicated dry-run mutation (no cache invalidation — it never commits).
   const previewMut = useApiMutation<{ lines: Array<{ accountCode: string; debit: number; credit: number }>; totals?: { totalDebit: number; totalCredit: number } }, any>("/finance/vouchers", "POST", []);
   const [preview, setPreview] = useState<{ lines: Array<{ accountCode: string; debit: number; credit: number }>; totals?: { totalDebit: number; totalCredit: number } } | null>(null);
+  // العقيدة «مساعد لا عائق»: الحساب المقابل مطويّ للقراءة ويُشتق من اتجاه السند —
+  // التجاوز اليدوي خلف زر «تعديل» لذوي صلاحية الاعتماد المالي فقط.
+  const canManualOverride = usePermission("finance:approve");
+  const [manualCounterOpen, setManualCounterOpen] = useState(false);
   const { data: taxCodesData } = useApiQuery<{ data: TaxCodeOption[] }>(
     ["tax-codes", "active"],
     "/finance/tax-codes?active=true",
@@ -112,7 +119,14 @@ export default function VouchersCreate() {
     autoDescription: true,
     beneficiaryType: "",
   };
-  const { form, setForm, clearDraft, hasDraft } = useAutoDraft("finance_vouchers_create", INITIAL_FORM);
+  // #2230 — single-branch users shouldn't re-pick a branch; default it from
+  // the active scope (mirrors purchase-orders-create). Multi-branch users
+  // still pick it, and the backend stays the guard.
+  const { selectedBranchId } = useAppContext();
+  const { form, setForm, clearDraft, hasDraft } = useAutoDraft("finance_vouchers_create", {
+    ...INITIAL_FORM,
+    branchId: selectedBranchId ? String(selectedBranchId) : "",
+  });
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   // #1715 PR-4: master «ربط السند بـ» field shared with expenses.
   const [allocTarget, setAllocTarget] = useState<AllocationTargetValue>(EMPTY_ALLOCATION_TARGET);
@@ -225,12 +239,24 @@ export default function VouchersCreate() {
     ...extra,
   });
 
+  // التوجيه التلقائي للحساب المقابل الفارغ (صرف→5399، قبض→4930) يصحّ فقط عندما
+  // يقبل نوع العملية حساب مصروف/إيراد. أنواع تتطلّب أصلًا/التزامًا (invoice_payment،
+  // deposit، advance، custody…) لا يصحّ توجيهها — لها يبقى الحساب مطلوبًا ويظهر
+  // المنتقي للجميع. (نفس منطق الخادم — Codex P2 #2920.)
+  const counterAutoRoutable = (() => {
+    const allowed = VOUCHER_COUNTER_ACCOUNT_TYPES[form.operationType];
+    return !allowed || allowed.includes(form.type === "receipt" ? "revenue" : "expense");
+  })();
+
   const validateVoucher = () => validate({
     type: form.type ? null : "يرجى اختيار نوع السند",
     amount: !form.amount ? "المبلغ مطلوب" : Number(form.amount) <= 0 ? "المبلغ يجب أن يكون أكبر من صفر" : null,
-    accountCode: form.accountCode ? null : "الحساب المحاسبي مطلوب",
-    sourceAccountCode: !form.sourceAccountCode && !form.accountCode ? "يجب تحديد حساب مدين وحساب دائن" : null,
-    branchId: form.branchId ? null : "الفرع مطلوب",
+    // العقيدة «النظام مساعد لا عائق»: الحساب المقابل اختياري عندما يصحّ التوجيه
+    // التلقائي (صرف→5399، قبض→4930). أنواع تتطلّب أصلًا/التزامًا يبقى الحساب
+    // مطلوبًا لها (الخادم يرفضها بـ422 وإلا). تبقى الخزنة مطلوبة دائمًا.
+    accountCode: counterAutoRoutable || form.accountCode ? null : "حدّد الحساب المقابل — هذا النوع من السندات يتطلّب حسابًا محدّدًا",
+    sourceAccountCode: form.sourceAccountCode ? null : "حدد الخزنة / البنك (مصدر أو وجهة المال)",
+    // الفرع اختياري في الخلفية ويُعبّأ من سياق الدخول — لا يُفرض.
   });
 
   // #1715 §11 — «معاينة القيد قبل الحفظ». Calls the SAME endpoint with
@@ -282,7 +308,7 @@ export default function VouchersCreate() {
       <CreationDateField />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <AutoField label="رقم السند" value={autoNumberRef.current} />
-        <FormFieldWrapper label="التاريخ" required>
+        <FormFieldWrapper label="تاريخ السند" required>
           <DatePicker value={form.date} onChange={(v) => setField("date", v)} />
         </FormFieldWrapper>
       </div>
@@ -381,21 +407,63 @@ export default function VouchersCreate() {
       <div className="border rounded-lg p-4 mb-4 space-y-3">
         <h3 className="font-semibold text-sm text-muted-foreground">الحسابات</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <AccountSelect
-              value={form.accountCode}
-              onChange={(v) => setField("accountCode", v)}
-              label="الحساب المقابل"
-              required
-              error={fieldErrors.accountCode}
-              placeholder="اختر الحساب..."
-            />
-            {/* #1945 item 5 — direction-aware hint (صرف=مصروف / قبض=إيراد);
-                the backend enforces the same rule and rejects mismatches. */}
-            <p className="text-[10px] text-muted-foreground mt-1">
-              {voucherCounterAccountHint(form.operationType, form.type === "receipt" ? "receipt" : "payment")}
-            </p>
-          </div>
+          {counterAutoRoutable ? (
+            <FormFieldWrapper label="الحساب المقابل (توجيه تلقائي حسب اتجاه السند)">
+              {/* العقيدة: مطويّ ومُشتق — صرف→5399 «مصروفات عمومية أخرى»،
+                  قبض→4930 «إيرادات متنوعة» (يحلّه الخادم). زر «تعديل» لذوي صلاحية
+                  الاعتماد فقط للتجاوز اليدوي النادر. */}
+              <div className="rounded-md border bg-muted/40 p-2 text-sm flex items-start gap-2">
+                <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <span className="block">
+                    {form.accountCode
+                      ? `الحساب المقابل: ${form.accountCode}`
+                      : (form.type === "receipt"
+                          ? "يُشتق تلقائيًا: إيرادات متنوعة (4930)"
+                          : "يُشتق تلقائيًا: مصروفات عمومية أخرى (5399)")}
+                  </span>
+                  <span className="block text-[10px] text-muted-foreground mt-0.5">
+                    {voucherCounterAccountHint(form.operationType, form.type === "receipt" ? "receipt" : "payment")}
+                  </span>
+                </div>
+                {canManualOverride && (
+                  <button type="button" onClick={() => setManualCounterOpen((v) => !v)}
+                    className="text-xs text-status-info-foreground hover:underline shrink-0 flex items-center gap-1">
+                    {manualCounterOpen ? "إخفاء" : "تعديل"}
+                    <ChevronDown className={`h-3 w-3 transition-transform ${manualCounterOpen ? "rotate-180" : ""}`} />
+                  </button>
+                )}
+              </div>
+              {canManualOverride && manualCounterOpen && (
+                <div className="mt-2">
+                  <AccountSelect
+                    value={form.accountCode}
+                    onChange={(v) => setField("accountCode", v)}
+                    label=""
+                    error={fieldErrors.accountCode}
+                    placeholder="تجاوز يدوي — اتركه فارغًا للتوجيه التلقائي…"
+                  />
+                </div>
+              )}
+            </FormFieldWrapper>
+          ) : (
+            /* أنواع تتطلّب نوع حساب محدّدًا (أصل/التزام مثل invoice_payment/
+               deposit/advance/custody) — لا يصحّ التوجيه التلقائي، فالمنتقي
+               يظهر مطلوبًا للجميع. */
+            <div>
+              <AccountSelect
+                value={form.accountCode}
+                onChange={(v) => setField("accountCode", v)}
+                label="الحساب المقابل"
+                required
+                error={fieldErrors.accountCode}
+                placeholder="اختر الحساب..."
+              />
+              <p className="text-[10px] text-muted-foreground mt-1">
+                {voucherCounterAccountHint(form.operationType, form.type === "receipt" ? "receipt" : "payment")}
+              </p>
+            </div>
+          )}
           <AccountSelect
             value={form.sourceAccountCode}
             onChange={(v) => setField("sourceAccountCode", v)}
@@ -524,24 +592,24 @@ export default function VouchersCreate() {
       {preview && preview.lines?.length > 0 && (
         <div className="mt-4 border rounded-lg p-3 bg-muted/30">
           <p className="text-xs font-semibold mb-2">معاينة القيد المُولّد (قبل الحفظ)</p>
-          <table className="w-full text-xs font-mono">
-            <thead>
-              <tr className="text-muted-foreground">
-                <th className="text-start p-1">الحساب</th>
-                <th className="text-end p-1">مدين</th>
-                <th className="text-end p-1">دائن</th>
-              </tr>
-            </thead>
-            <tbody>
-              {preview.lines.map((jl, i) => (
-                <tr key={i} className="border-t">
-                  <td className="p-1">{jl.accountCode}</td>
-                  <td className="text-end p-1 text-orange-700">{jl.debit ? formatCurrency(jl.debit) : ""}</td>
-                  <td className="text-end p-1 text-emerald-700">{jl.credit ? formatCurrency(jl.credit) : ""}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <DataTable<{ accountCode: string; debit: number; credit: number }>
+            noToolbar
+            pageSize={0}
+            className="text-xs font-mono"
+            data={preview.lines}
+            rowKey={(_jl, i) => i}
+            columns={[
+              { key: "accountCode", header: "الحساب", render: (jl) => jl.accountCode },
+              {
+                key: "debit", header: "مدين", align: "end",
+                render: (jl) => <span className="text-orange-700">{jl.debit ? formatCurrency(jl.debit) : ""}</span>,
+              },
+              {
+                key: "credit", header: "دائن", align: "end",
+                render: (jl) => <span className="text-emerald-700">{jl.credit ? formatCurrency(jl.credit) : ""}</span>,
+              },
+            ] satisfies DataTableColumn<{ accountCode: string; debit: number; credit: number }>[]}
+          />
         </div>
       )}
 

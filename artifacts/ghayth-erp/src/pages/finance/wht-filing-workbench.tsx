@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { exportRowsToCsv } from "@/lib/unified-export";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable } from "@workspace/ui-core";
 import { PrintButton } from "@/components/shared/print-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -397,45 +397,28 @@ export default function WhtFilingWorkbenchPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b text-xs text-muted-foreground">
-                        <th className="text-start py-2 px-2">الفئة</th>
-                        <th className="text-end py-2 px-2 w-20">النسبة</th>
-                        <th className="text-end py-2 px-2 w-20">عدد</th>
-                        <th className="text-end py-2 px-2">قاعدة الحساب</th>
-                        <th className="text-end py-2 px-2">الاستقطاع</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {categoryBreakdown.map(c => (
-                        <tr key={c.code} className="border-b">
-                          <td className="py-1.5 px-2">
+                  <DataTable<{ code: string; name: string; rate: number | null; totalAmount: number; totalWht: number; count: number }>
+                    noToolbar
+                    pageSize={0}
+                    rowKey={(c) => c.code}
+                    data={categoryBreakdown}
+                    columns={[
+                      {
+                        key: "name", header: "الفئة", sortable: false,
+                        render: (c) => (
+                          <>
                             <div className="font-medium">{c.name}</div>
                             <code className="text-[10px] text-muted-foreground">{c.code}</code>
-                          </td>
-                          <td className="py-1.5 px-2 text-end tabular-nums">
-                            {c.rate ? `${c.rate}%` : "—"}
-                          </td>
-                          <td className="py-1.5 px-2 text-end tabular-nums">{c.count}</td>
-                          <td className="py-1.5 px-2 text-end tabular-nums">{formatCurrency(c.totalAmount)}</td>
-                          <td className="py-1.5 px-2 text-end tabular-nums font-semibold text-status-danger-foreground">
-                            {formatCurrency(c.totalWht)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot>
-                      <tr className="font-semibold bg-muted/40 border-t-2">
-                        <td colSpan={2} className="py-2 px-2">الإجمالي</td>
-                        <td className="py-2 px-2 text-end tabular-nums">{totals.count}</td>
-                        <td className="py-2 px-2 text-end tabular-nums">{formatCurrency(totals.totalAmount)}</td>
-                        <td className="py-2 px-2 text-end tabular-nums text-status-danger-foreground">
-                          {formatCurrency(totals.totalWht)}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
+                          </>
+                        ),
+                        footer: () => "الإجمالي",
+                      },
+                      { key: "rate", header: "النسبة", sortable: false, align: "end", width: "5rem", className: "tabular-nums", render: (c) => (c.rate ? `${c.rate}%` : "—") },
+                      { key: "count", header: "عدد", sortable: false, align: "end", width: "5rem", className: "tabular-nums", render: (c) => c.count, footer: () => totals.count },
+                      { key: "totalAmount", header: "قاعدة الحساب", sortable: false, align: "end", className: "tabular-nums", render: (c) => formatCurrency(c.totalAmount), footer: () => formatCurrency(totals.totalAmount) },
+                      { key: "totalWht", header: "الاستقطاع", sortable: false, align: "end", className: "tabular-nums font-semibold text-status-danger-foreground", render: (c) => formatCurrency(c.totalWht), footer: () => formatCurrency(totals.totalWht) },
+                    ]}
+                  />
                 </CardContent>
               </Card>
 
@@ -492,41 +475,25 @@ export default function WhtFilingWorkbenchPage() {
                             </div>
                           </div>
                           {isOpen && (
-                            <div className="border-t bg-muted/10 p-2">
-                              <table className="w-full text-xs">
-                                <thead>
-                                  <tr className="border-b text-muted-foreground">
-                                    <th className="text-start py-1 px-2">تاريخ</th>
-                                    <th className="text-start py-1 px-2">مرجع</th>
-                                    <th className="text-start py-1 px-2">فئة</th>
-                                    <th className="text-end py-1 px-2">نسبة</th>
-                                    <th className="text-end py-1 px-2">قاعدة</th>
-                                    <th className="text-end py-1 px-2">الاستقطاع</th>
-                                    <th className="py-1 px-2 w-8"></th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {g.rows.map(r => (
-                                    <tr key={r.allocationId} className="border-b last:border-b-0">
-                                      <td className="py-1 px-2 tabular-nums">
-                                        {r.postingDate ? formatDateAr(r.postingDate) : "—"}
-                                      </td>
-                                      <td className="py-1 px-2 font-mono">{r.journalRef ?? "—"}</td>
-                                      <td className="py-1 px-2">{r.whtCategoryName ?? r.whtCategory ?? "—"}</td>
-                                      <td className="py-1 px-2 text-end tabular-nums">
-                                        {r.whtRate ? `${r.whtRate}%` : "—"}
-                                      </td>
-                                      <td className="py-1 px-2 text-end tabular-nums">{formatCurrency(Number(r.amount))}</td>
-                                      <td className="py-1 px-2 text-end tabular-nums font-semibold text-status-danger-foreground">
-                                        {formatCurrency(Number(r.whtAmount))}
-                                      </td>
-                                      <td className="py-1 px-2">
-                                        <Button asChild variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-6 w-6"><Link href={`/finance/journal/${r.journalEntryId}`}><ExternalLink className="w-3 h-3" /></Link></Button>
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
+                            <div className="border-t bg-muted/10 p-2 text-xs">
+                              <DataTable<WhtRow>
+                                noToolbar
+                                pageSize={0}
+                                rowKey={(r) => r.allocationId}
+                                data={g.rows}
+                                columns={[
+                                  { key: "postingDate", header: "تاريخ", sortable: false, className: "tabular-nums", render: (r) => (r.postingDate ? formatDateAr(r.postingDate) : "—") },
+                                  { key: "journalRef", header: "مرجع", sortable: false, className: "font-mono", render: (r) => r.journalRef ?? "—" },
+                                  { key: "whtCategory", header: "فئة", sortable: false, render: (r) => r.whtCategoryName ?? r.whtCategory ?? "—" },
+                                  { key: "whtRate", header: "نسبة", sortable: false, align: "end", className: "tabular-nums", render: (r) => (r.whtRate ? `${r.whtRate}%` : "—") },
+                                  { key: "amount", header: "قاعدة", sortable: false, align: "end", className: "tabular-nums", render: (r) => formatCurrency(Number(r.amount)) },
+                                  { key: "whtAmount", header: "الاستقطاع", sortable: false, align: "end", className: "tabular-nums font-semibold text-status-danger-foreground", render: (r) => formatCurrency(Number(r.whtAmount)) },
+                                  {
+                                    key: "_actions", header: "", sortable: false, width: "2rem",
+                                    render: (r) => <Button asChild variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-6 w-6"><Link href={`/finance/journal/${r.journalEntryId}`}><ExternalLink className="w-3 h-3" /></Link></Button>,
+                                  },
+                                ]}
+                              />
                             </div>
                           )}
                         </div>

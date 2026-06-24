@@ -6,6 +6,9 @@ import {
   PageShell,
   DataTable,
   type DataTableColumn,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
 } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatCurrency } from "@/lib/formatters";
 import { currentYearRiyadh, currentMonthPaddedRiyadh } from "@/lib/formatters";
-import { TrendingUp, AlertTriangle, CheckCircle2, BarChart3 } from "lucide-react";
+import { TrendingUp, AlertTriangle, BarChart3 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
@@ -55,7 +58,7 @@ const STATUS_BADGE: Record<VarianceLine["status"], string> = {
 export default function BudgetVariancePage() {
   const defaultPeriod = `${currentYearRiyadh()}-${currentMonthPaddedRiyadh()}`;
   const [period, setPeriod] = useState<string>(defaultPeriod);
-  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [filters, setFilters] = useFilters();
 
   const { data, isLoading, isError } = useApiQuery<VarianceResponse>(
     ["budget-variance", period],
@@ -63,9 +66,10 @@ export default function BudgetVariancePage() {
   );
 
   const lines = data?.lines ?? [];
-  const filtered = statusFilter
-    ? lines.filter((l) => l.status === statusFilter)
-    : lines;
+  const filtered = applyFilters(lines, filters, {
+    searchFields: ["accountCode", "accountName"],
+    statusField: "status",
+  });
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   if (isLoading) return <LoadingSpinner />;
@@ -74,9 +78,6 @@ export default function BudgetVariancePage() {
 
 
   const overCount = lines.filter((l) => l.status === "over_budget").length;
-  const nearCount = lines.filter((l) => l.status === "near_limit").length;
-  const withinCount = lines.filter((l) => l.status === "within_budget").length;
-  const noBudgetCount = lines.filter((l) => l.status === "no_budget").length;
 
   const cols: DataTableColumn<VarianceLine>[] = [
     {
@@ -242,32 +243,21 @@ export default function BudgetVariancePage() {
         </Card>
       </div>
 
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <span className="text-xs text-muted-foreground">الحالة:</span>
-        <Badge variant={statusFilter === "" ? "default" : "outline"}
-          className="cursor-pointer text-xs"
-          onClick={() => setStatusFilter("")}>الكل ({lines.length})</Badge>
-        <Badge variant={statusFilter === "over_budget" ? "default" : "outline"}
-          className="cursor-pointer text-xs bg-red-100 text-status-error-foreground hover:bg-red-200"
-          onClick={() => setStatusFilter("over_budget")}>
-          <AlertTriangle className="h-3 w-3 me-1" /> تجاوز ({overCount})
-        </Badge>
-        <Badge variant={statusFilter === "near_limit" ? "default" : "outline"}
-          className="cursor-pointer text-xs bg-amber-100 text-status-warning-foreground hover:bg-amber-200"
-          onClick={() => setStatusFilter("near_limit")}>
-          اقترب ({nearCount})
-        </Badge>
-        <Badge variant={statusFilter === "within_budget" ? "default" : "outline"}
-          className="cursor-pointer text-xs bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
-          onClick={() => setStatusFilter("within_budget")}>
-          <CheckCircle2 className="h-3 w-3 me-1" /> ضمن ({withinCount})
-        </Badge>
-        <Badge variant={statusFilter === "no_budget" ? "default" : "outline"}
-          className="cursor-pointer text-xs"
-          onClick={() => setStatusFilter("no_budget")}>
-          بدون ميزانية ({noBudgetCount})
-        </Badge>
-      </div>
+      <AdvancedFilters
+        config={{
+          searchPlaceholder: "بحث برمز أو اسم الحساب...",
+          statuses: [
+            { value: "over_budget", label: "تجاوز الميزانية" },
+            { value: "near_limit", label: "اقترب من السقف" },
+            { value: "within_budget", label: "ضمن الميزانية" },
+            { value: "no_budget", label: "بدون ميزانية" },
+          ],
+          showDateRange: false,
+        }}
+        values={filters}
+        onChange={setFilters}
+        resultCount={filtered.length}
+      />
 
       <Card>
         <CardHeader className="pb-2">
@@ -280,9 +270,10 @@ export default function BudgetVariancePage() {
             columns={cols} data={filtered}
             onSortedDataChange={setPrintRows}
             pageSize={50}
+            noToolbar
             emptyMessage={
-              statusFilter
-                ? `لا توجد بنود بحالة "${STATUS_LABEL[statusFilter as VarianceLine["status"]]}"`
+              filters.status
+                ? `لا توجد بنود بحالة "${STATUS_LABEL[filters.status as VarianceLine["status"]]}"`
                 : "ما في ميزانية مُعرّفة لهذه الفترة — افتح /finance/budget لإضافة بنود"
             }
           />

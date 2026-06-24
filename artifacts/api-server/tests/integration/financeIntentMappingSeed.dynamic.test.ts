@@ -37,7 +37,7 @@ const KEYS: Array<{ op: string; side: "debit" | "credit"; fallback: string }> = 
   { op: "inventory_receipt",            side: "debit",  fallback: "1150" },
   { op: "employee_custody",             side: "debit",  fallback: "1142" },
   { op: "supplier_prepayment",          side: "debit",  fallback: "1170" },
-  { op: "fixed_asset_purchase",         side: "debit",  fallback: "1500" },
+  { op: "fixed_asset_purchase",         side: "debit",  fallback: "1280" },
   { op: "general_expense",              side: "debit",  fallback: "6900" },
   { op: "service_expense",              side: "debit",  fallback: "6920" },
   { op: "vehicle_expense",              side: "debit",  fallback: "6500" },

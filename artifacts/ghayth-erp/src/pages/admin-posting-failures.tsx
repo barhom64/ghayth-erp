@@ -1,4 +1,4 @@
-import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn, AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,8 +10,9 @@ import { useToast } from "@/hooks/use-toast";
 import { formatDateAr } from "@/lib/formatters";
 import { useMemo, useState } from "react";
 import {
-  RefreshCw, AlertTriangle, CheckCircle, XCircle, PlayCircle, Trash2,
+  AlertTriangle, CheckCircle, XCircle, PlayCircle, Trash2,
 } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 import { PrintButton } from "@/components/shared/print-button";
 
 type SummaryRow = { sourceType: string; cnt: number; sampleError: string | null; firstAt: string; lastAt: string };
@@ -40,6 +41,11 @@ export default function AdminPostingFailures() {
   const rows = data?.data ?? [];
   const summary: SummaryRow[] = summaryData?.data ?? [];
   const openTotal = summaryData?.total ?? 0;
+
+  const [filters, setFilters] = useFilters();
+  const filteredRows = applyFilters(rows, filters, {
+    searchFields: ["sourceType", "operation", "error", "errorMessage"],
+  });
 
   function refreshAll() {
     refetch();
@@ -196,9 +202,7 @@ export default function AdminPostingFailures() {
           <Button variant={showResolved ? "default" : "outline"} size="sm" onClick={() => setShowResolved(!showResolved)}>
             {showResolved ? "المحلولة" : "المفتوحة"}
           </Button>
-          <Button variant="outline" size="sm" onClick={refreshAll}>
-            <RefreshCw className="h-4 w-4 me-1" />تحديث
-          </Button>
+          <RefreshAction onRefresh={refreshAll} />
         </div>
       }
     >
@@ -288,9 +292,17 @@ export default function AdminPostingFailures() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
+              <div className="p-4 pb-0">
+                <AdvancedFilters
+                  config={{ searchPlaceholder: "بحث بالنوع أو نص الخطأ…", showDateRange: false }}
+                  values={filters}
+                  onChange={setFilters}
+                  resultCount={filteredRows.length}
+                />
+              </div>
               <DataTable
                 columns={failureColumns}
-                data={rows}
+                data={filteredRows}
                 noToolbar
                 pageSize={0}
                 emptyMessage={showResolved ? "لا توجد سجلات محلولة" : "لا توجد أعطال — النظام يعمل بشكل طبيعي"}

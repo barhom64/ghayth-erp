@@ -142,7 +142,7 @@ describe("#2238 evaluateExpensePlan", () => {
     expect(r.blockers.some((b) => b.code === "unbalanced")).toBe(true);
   });
 
-  it("property maintenance without dim → warning, not blocker (staged ratchet)", () => {
+  it("property maintenance without propertyId → dimension_contract blocker (comprehensive enforce)", () => {
     const lines = buildExpenseLines({
       expenseAccountCode: "5610",
       baseAmount: 100,
@@ -152,7 +152,6 @@ describe("#2238 evaluateExpensePlan", () => {
       entityLink: {},
     });
     const r = evaluateExpensePlan({ lines, knownAccountCodes: new Set(["5610", "1111"]) });
-    expect(r.blockers.some((b) => b.code === "dimension_contract")).toBe(false);
-    expect(r.warnings.length).toBeGreaterThan(0);
+    expect(r.blockers.some((b) => b.code === "dimension_contract")).toBe(true);
   });
 });

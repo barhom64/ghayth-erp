@@ -93,7 +93,6 @@ export default function UmrahViolations() {
   const seasonsQ = useApiQuery<{ data: any[] }>(["umrah-seasons"], "/umrah/seasons");
 
   const violations = violationsQ.data?.data ?? [];
-  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(violations);
   const agents = agentsQ.data?.data ?? [];
   const subAgents = subAgentsQ.data?.data ?? [];
   const seasons = seasonsQ.data?.data ?? [];
@@ -102,6 +101,7 @@ export default function UmrahViolations() {
   const [agentFilter, setAgentFilter] = useState("");
   const [subAgentFilter, setSubAgentFilter] = useState("");
   const [seasonFilter, setSeasonFilter] = useState("");
+  const [q, setQ] = useState("");
 
   const [editing, setEditing] = useState<(ViolationForm & { id?: number }) | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -159,14 +159,20 @@ export default function UmrahViolations() {
   }
 
   const filtered = useMemo(() => {
+    const query = q.trim().toLowerCase();
     return violations.filter((v) => {
       if (tab !== "all" && v.status !== tab) return false;
       if (agentFilter && String(v.agentId) !== agentFilter) return false;
       if (subAgentFilter && String(v.subAgentId) !== subAgentFilter) return false;
       if (seasonFilter && String(v.seasonId) !== seasonFilter) return false;
+      if (query && !["referenceNumber", "mutamerName", "agentName", "passportNumber"].some((k) =>
+        String((v as any)[k] ?? "").toLowerCase().includes(query),
+      )) return false;
       return true;
     });
-  }, [violations, tab, agentFilter, subAgentFilter, seasonFilter]);
+  }, [violations, tab, agentFilter, subAgentFilter, seasonFilter, q]);
+
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const summary = useMemo(() => {
     const openItems = violations.filter((v) => v.status === "open" || v.status === "detected");
@@ -280,7 +286,7 @@ export default function UmrahViolations() {
 
   return (
     <PageShell
-      title="المخالفات"
+      title="المخالفات النظامية"
       subtitle="رصد المخالفات: تأخر المغادرة، الهروب، وأخرى"
       breadcrumbs={[{ label: "العمرة" }, { label: "المخالفات" }]}
       actions={
@@ -373,6 +379,16 @@ export default function UmrahViolations() {
       </Tabs>
 
       <div className="flex flex-wrap gap-3 items-end">
+        <div className="min-w-[220px]">
+          <Label className="text-xs">بحث</Label>
+          <Input
+            type="text"
+            placeholder="بحث بالمرجع أو المعتمر أو الوكيل…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            data-testid="umrah-violations-search"
+          />
+        </div>
         <div className="min-w-[200px]">
           <Label className="text-xs">الوكيل</Label>
           <Select value={agentFilter || "all"} onValueChange={(v) => setAgentFilter(v === "all" ? "" : v)}>

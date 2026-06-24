@@ -24,7 +24,33 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 
 COPY lib/ ./lib/
 COPY artifacts/api-server/ ./artifacts/api-server/
-RUN PNPM_CONFIG_IGNORE_SCRIPTS=true CI=true pnpm --filter @workspace/api-server run build
+# Bake the deployed revision into the bundle so GET /api/version reports it.
+# The deploy scripts MAY pass the resolved SHA as the APP_COMMIT build arg
+# (preferred when present), but the prod deploy runner is an out-of-band copy
+# that won't always plumb it. So as a self-sufficient fallback we derive the
+# commit from the build context's own git metadata (the repo IS the context and
+# is `git reset --hard origin/main`'d before every build) WITHOUT a git binary:
+# read .git/HEAD -> loose ref -> packed-refs. build.mjs reads $APP_COMMIT first.
+ARG APP_COMMIT=unknown
+COPY .git/HEAD .git/packed-ref[s] ./.git/
+COPY .git/refs ./.git/refs
+RUN set -e; \
+    commit="$APP_COMMIT"; \
+    if [ -z "$commit" ] || [ "$commit" = "unknown" ]; then \
+      head="$(cat .git/HEAD 2>/dev/null | tr -d '\n')"; \
+      case "$head" in \
+        ref:*) ref="$(printf '%s' "$head" | cut -d' ' -f2)"; \
+               commit="$(cat ".git/$ref" 2>/dev/null | tr -d '\n')"; \
+               if [ -z "$commit" ] && [ -f .git/packed-refs ]; then \
+                 commit="$(grep " $ref$" .git/packed-refs 2>/dev/null | cut -d' ' -f1 | tr -d '\n')"; \
+               fi ;; \
+        *) commit="$head" ;; \
+      esac; \
+    fi; \
+    [ -z "$commit" ] && commit=unknown; \
+    echo "api build APP_COMMIT=$commit"; \
+    APP_COMMIT="$commit" PNPM_CONFIG_IGNORE_SCRIPTS=true CI=true pnpm --filter @workspace/api-server run build; \
+    rm -rf .git
 
 WORKDIR /app/artifacts/api-server
 EXPOSE 8080

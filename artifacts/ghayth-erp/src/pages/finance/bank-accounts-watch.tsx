@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { exportRowsToCsv } from "@/lib/unified-export";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -334,48 +334,57 @@ export default function BankAccountsWatchPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-xs text-muted-foreground">
-                      <th className="text-start py-2 px-2">التاريخ</th>
-                      <th className="text-start py-2 px-2">المرجع</th>
-                      <th className="text-start py-2 px-2">الوصف</th>
-                      <th className="text-end py-2 px-2">داخل</th>
-                      <th className="text-end py-2 px-2">خارج</th>
-                      <th className="text-end py-2 px-2">الرصيد</th>
-                      <th className="py-2 px-2 w-8"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selected.recentEntries.map(e => (
-                      <tr key={e.id} className="border-b hover:bg-muted/30">
-                        <td className="py-2 px-2 text-xs tabular-nums whitespace-nowrap">
-                          {formatDateAr(e.date.split("T")[0])}
-                        </td>
-                        <td className="py-2 px-2 font-mono text-xs">{e.ref}</td>
-                        <td className="py-2 px-2 text-xs max-w-xs truncate" title={e.description}>
-                          {e.description}
-                        </td>
-                        <td className="py-2 px-2 text-end tabular-nums">
-                          {Number(e.debit) > 0 ? (
-                            <span className="text-status-success-foreground">+{formatCurrency(Number(e.debit))}</span>
-                          ) : "—"}
-                        </td>
-                        <td className="py-2 px-2 text-end tabular-nums">
-                          {Number(e.credit) > 0 ? (
-                            <span className="text-status-danger-foreground">-{formatCurrency(Number(e.credit))}</span>
-                          ) : "—"}
-                        </td>
-                        <td className="py-2 px-2 text-end tabular-nums font-semibold">
-                          {formatCurrency(e.runningBalance)}
-                        </td>
-                        <td className="py-2 px-2">
-                          <Button asChild variant="ghost" size="icon" title="التالي" className="h-7 w-7"><Link href={`/finance/journal/${e.id}`}><ChevronRight className="w-3 h-3" /></Link></Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <DataTable
+                  noToolbar
+                  pageSize={0}
+                  data={selected.recentEntries}
+                  columns={[
+                    {
+                      key: "date", header: "التاريخ",
+                      render: (e) => (
+                        <span className="text-xs tabular-nums whitespace-nowrap">{formatDateAr(e.date.split("T")[0])}</span>
+                      ),
+                    },
+                    {
+                      key: "ref", header: "المرجع", ltr: true,
+                      render: (e) => <span className="font-mono text-xs">{e.ref}</span>,
+                    },
+                    {
+                      key: "description", header: "الوصف", className: "max-w-xs",
+                      render: (e) => (
+                        <span className="block text-xs max-w-xs truncate" title={e.description}>{e.description}</span>
+                      ),
+                    },
+                    {
+                      key: "debit", header: "داخل", align: "end",
+                      render: (e) => (
+                        Number(e.debit) > 0 ? (
+                          <span className="tabular-nums text-status-success-foreground">+{formatCurrency(Number(e.debit))}</span>
+                        ) : <span className="tabular-nums">—</span>
+                      ),
+                    },
+                    {
+                      key: "credit", header: "خارج", align: "end",
+                      render: (e) => (
+                        Number(e.credit) > 0 ? (
+                          <span className="tabular-nums text-status-danger-foreground">-{formatCurrency(Number(e.credit))}</span>
+                        ) : <span className="tabular-nums">—</span>
+                      ),
+                    },
+                    {
+                      key: "runningBalance", header: "الرصيد", align: "end",
+                      render: (e) => (
+                        <span className="tabular-nums font-semibold">{formatCurrency(e.runningBalance)}</span>
+                      ),
+                    },
+                    {
+                      key: "_action", header: "", width: "2rem", sortable: false,
+                      render: (e) => (
+                        <Button asChild variant="ghost" size="icon" title="التالي" className="h-7 w-7"><Link href={`/finance/journal/${e.id}`}><ChevronRight className="w-3 h-3" /></Link></Button>
+                      ),
+                    },
+                  ] satisfies DataTableColumn<LedgerResp["entries"][number]>[]}
+                />
               </CardContent>
             </Card>
           )}

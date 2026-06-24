@@ -23,6 +23,7 @@ import { zatcaRouter } from "./finance-zatca.js";
 import notificationsRouter from "./notifications.js";
 import tasksRouter from "./tasks.js";
 import fleetRouter from "./fleet.js";
+import fleetInspectionsRouter from "./fleet-inspections.js";
 import fleetTelematicsRouter from "./fleet-telematics.js";
 import fleetTelematicsWebhookRouter from "./fleet-telematics-webhook.js";
 import cargoRouter from "./cargo.js";
@@ -74,6 +75,8 @@ import storageRouter from "./storage.js";
 import activityIngestRouter from "./activityIngest.js";
 import mySpaceRouter from "./mySpace.js";
 import myFieldTrackingRouter from "./myFieldTracking.js";
+import realtimeRouter from "./realtime.js";
+import employeeTrackingPolicyRouter from "./employeeTrackingPolicy.js";
 import meInsightsRouter from "./meInsights.js";
 import actionCenterRouter from "./actionCenter.js";
 import workspaceRouter from "./workspace.js";
@@ -81,6 +84,8 @@ import accountingEngineRouter from "./accounting-engine.js";
 import { financeAlgorithmsRouter } from "./finance-algorithms.js";
 import financeHardeningRouter from "./finance-hardening.js";
 import { recurringRouter } from "./finance-recurring.js";
+import { recurringInvoicesRouter } from "./finance-recurring-invoices.js";
+import { cashInTransitRouter } from "./finance-cash-in-transit.js";
 import { financeMemoryRouter } from "./finance-memory.js";
 import { financeAmortizationRouter } from "./finance-amortization.js";
 import { financeDeferredRevenueRouter } from "./finance-deferred-revenue.js";
@@ -103,6 +108,61 @@ import umrahEntitiesRouter from "./umrah-entities.js";
 // A dead-code wiring-scanner mount lives below the `router` declaration so
 // the FE↔BE wiring audit can discover the routes inside this file.
 import journeyReportsRouter from "./umrah-journey-reports.js";
+// U-07 Phase 2 — families CRUD split; imported for the wiring-scanner hint
+// below. Mounted at runtime via umrah-entities.ts (router.use(familiesRouter)).
+import familiesRouter from "./umrah-families.js";
+// U-07 Phase 4 — accommodation (hotels/room-blocks/allocations) split; imported
+// for the wiring-scanner hint below. Mounted via umrah-entities.ts.
+import accommodationRouter from "./umrah-accommodation.js";
+// U-07 Phase 5 — commission plans/calculations split; imported for the
+// wiring-scanner hint below. Mounted via umrah-entities.ts.
+import commissionRouter from "./umrah-commission.js";
+// U-07 Phase 6 — sub-agents (CRUD + linking) split; imported for the
+// wiring-scanner hint below. Mounted via umrah-entities.ts.
+import subAgentsRouter from "./umrah-sub-agents.js";
+// U-07 Phase 7 — pricing (CRUD) split; imported for the wiring-scanner
+// hint below. Mounted via umrah-entities.ts.
+import umrahPricingRouter from "./umrah-pricing.js";
+// U-07 Phase 8 — import-batches (listing + unlinked-rows recovery) split;
+// imported for the wiring-scanner hint below. Mounted via umrah-entities.ts.
+import umrahImportBatchesRouter from "./umrah-import-batches.js";
+// U-07 Phase 9 — sub-agent statements (JSON + PDF) split; imported for the
+// wiring-scanner hint below. Mounted via umrah-entities.ts.
+import umrahStatementsRouter from "./umrah-statements.js";
+// U-07 Phase 10 — attachments (polymorphic document storage) split; imported
+// for the wiring-scanner hint below. Mounted via umrah-entities.ts.
+import umrahAttachmentsRouter from "./umrah-attachments.js";
+// U-07 Phase 11 — operational reports (daily-runsheet, reconciliation,
+// exempt-pilgrims, group/season portfolio) split; imported for the
+// wiring-scanner hint below. Mounted via umrah-entities.ts.
+import umrahReportsRouter from "./umrah-reports.js";
+// U-07 Phase 12 — letters (PDF + dispatch) split; imported for the
+// wiring-scanner hint below. Mounted via umrah-entities.ts.
+import umrahLettersRouter from "./umrah-letters.js";
+// U-07 Phase 14 — refund requests split; imported for the wiring-scanner hint
+// below. Mounted via umrah-entities.ts.
+import umrahRefundsRouter from "./umrah-refunds.js";
+// U-07 Phase 15 — operational calendar split; imported for the wiring-scanner
+// hint below. Mounted via umrah-entities.ts.
+import umrahCalendarRouter from "./umrah-calendar.js";
+// U-07 Phase 18 — settings policies split; imported for the wiring-scanner hint
+// below. Mounted via umrah-entities.ts.
+import umrahSettingsRouter from "./umrah-settings.js";
+// U-07 Phase 19 — nusk invoices split; imported for the wiring-scanner hint
+// below. Mounted via umrah-entities.ts.
+import umrahNuskInvoicesRouter from "./umrah-nusk-invoices.js";
+// U-07 Phase 20 — payments + revenue reclassification split; imported for the
+// wiring-scanner hint below. Mounted via umrah-entities.ts.
+import umrahPaymentsRouter from "./umrah-payments.js";
+// U-07 Phase 21 — sales-invoices split; imported for the wiring-scanner hint
+// below. Mounted via umrah-entities.ts.
+import umrahInvoicesRouter from "./umrah-invoices.js";
+// U-07 Phase 22 — groups CRUD split; imported for the wiring-scanner hint
+// below. Mounted via umrah-entities.ts.
+import umrahGroupsRouter from "./umrah-groups.js";
+// U-07 Phase 23 — group service-contract (transport + cost-breakdown) split;
+// imported for the wiring-scanner hint below. Mounted via umrah-entities.ts.
+import umrahGroupTransportRouter from "./umrah-group-transport.js";
 import operationsCenterRouter from "./operationsCenter.js";
 import {
   warehouseStubsRouter,
@@ -112,6 +172,7 @@ import {
   adminStubsRouter,
   wiringScopeErrorHandler,
 } from "./wiring-stubs.js";
+import pricingRouter from "./finance-pricing.js";
 import notificationEngineRouter from "./notification-engine.js";
 import printRouter from "./print.js";
 import printVerifyRouter from "./printVerify.js";
@@ -152,6 +213,7 @@ import { execDashboardRouter } from "./execDashboard.js";
 import assistantRouter from "./assistant.js";
 import { obligationsRouter } from "./obligations.js";
 import { calendarRouter } from "./calendar.js";
+import { customFieldsRouter } from "./customFields.js";
 import contractsRouter from "./hr-contracts.js";
 import correspondenceRouter from "./correspondence.js";
 import numberingRouter from "./numbering.js";
@@ -171,6 +233,24 @@ const router: IRouter = Router();
 const __WIRING_SCANNER_HINT__: boolean = false;
 if (__WIRING_SCANNER_HINT__) {
   router.use("/umrah", journeyReportsRouter);
+  router.use("/umrah", familiesRouter);
+  router.use("/umrah", accommodationRouter);
+  router.use("/umrah", commissionRouter);
+  router.use("/umrah", subAgentsRouter);
+  router.use("/umrah", umrahPricingRouter);
+  router.use("/umrah", umrahImportBatchesRouter);
+  router.use("/umrah", umrahStatementsRouter);
+  router.use("/umrah", umrahAttachmentsRouter);
+  router.use("/umrah", umrahReportsRouter);
+  router.use("/umrah", umrahLettersRouter);
+  router.use("/umrah", umrahRefundsRouter);
+  router.use("/umrah", umrahCalendarRouter);
+  router.use("/umrah", umrahSettingsRouter);
+  router.use("/umrah", umrahNuskInvoicesRouter);
+  router.use("/umrah", umrahPaymentsRouter);
+  router.use("/umrah", umrahInvoicesRouter);
+  router.use("/umrah", umrahGroupsRouter);
+  router.use("/umrah", umrahGroupTransportRouter);
 }
 
 router.use(healthRouter);
@@ -248,6 +328,12 @@ router.use("/communications", communicationsSmsWebhookRouter);
 // were registered on the authenticated communications router and got 401'd —
 // inbound WhatsApp messages and PBX call events never reached the system.
 router.use("/communications", communicationsPublicWebhookRouter);
+
+// Realtime SSE stream. Mounted BEFORE authMiddleware because EventSource can't
+// send an Authorization header, so the route authenticates itself from a query
+// token (native) / cookie (web) / Bearer. It pushes live change-events so the
+// web and native app stay in sync without a manual refresh.
+router.use("/realtime", realtimeRouter);
 
 router.get("/settings/display", async (req, res) => {
   try {
@@ -391,6 +477,11 @@ router.use("/clients", requireModule("crm", "finance"), clientsRouter);
 // Per-user HR limiter mounted once on /hr so it runs exactly once per
 // request, regardless of which sub-router handles it. See umrah notes below.
 router.use("/hr", hrUserLimiter);
+// Mount the tracking-policy router BEFORE hrRouter: hr.ts defines a generic
+// GET/PATCH "/attendance/:id" that would otherwise shadow the more specific
+// "/attendance/tracking-policies" list/create routes (parsing "tracking-policies"
+// as an :id → 422). Specific router first wins.
+router.use("/hr", requireModule("hr"), employeeTrackingPolicyRouter);
 router.use("/hr", requireModule("hr"), hrRouter);
 router.use("/hr/discipline", requireModule("hr"), disciplineRouter);
 router.use("/hr", requireModule("hr"), loansRouter);
@@ -421,6 +512,10 @@ router.use("/finance", requireModule("finance"), requireGuards("financial"), ven
 router.use("/finance", requireModule("finance"), requireGuards("financial"), vendorContractsRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), financeHardeningRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), recurringRouter);
+// قوالب الفوترة المتكررة للعملاء (#كلها). CRUD غير دفتري؛ التوليد دفعة لاحقة.
+router.use("/finance", requireModule("finance"), requireGuards("financial"), recurringInvoicesRouter);
+// النقد في الطريق (#2714). طوران يُرحَّلان عبر postJournalEntry القائم.
+router.use("/finance", requireModule("finance"), requireGuards("financial"), cashInTransitRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), financeMemoryRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), financeAmortizationRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), financeDeferredRevenueRouter);
@@ -440,6 +535,8 @@ router.use("/notifications", notificationsRouter);
 router.use("/tasks", requireModule("operations"), tasksRouter);
 router.use("/fleet", fleetUserLimiter);
 router.use("/fleet", requireModule("fleet"), requireGuards("financial"), fleetRouter);
+// Vehicle inspections + photos (متابعة النقل بالصور). Same /fleet module gate.
+router.use("/fleet", requireModule("fleet"), requireGuards("financial"), fleetInspectionsRouter);
 // Telematics surface (#1354). Mounted under /fleet so it inherits the same
 // module + financial guard + per-user limiter as the rest of the fleet
 // module, and so URLs stay /fleet/telematics/* in the SPA.
@@ -531,6 +628,9 @@ router.use("/request-catalog", requireModule("requests"), (req, res, next) => {
 });
 router.use("/marketing", requireModule("marketing"), marketingRouter);
 router.use("/settings", requireModule("settings"), requireMinLevel(70), settingsRouter);
+// #2719 — الحقول المخصّصة لكل شركة: تعريفات + قيم EAV (هجرة 394). إدارة المخطط
+// عبر صلاحية settings؛ القيم تُحفظ في جدولها فقط (لا مساس بجداول الكيانات).
+router.use("/custom-fields", requireModule("settings"), requireMinLevel(50), customFieldsRouter);
 // Numbering center (Issue #1141): admin surface for the central numbering
 // authority. authMiddleware is applied inside the router (it carries
 // per-route authorize() guards on `settings.numbering[.override|.reset|.audit]`).
@@ -640,6 +740,11 @@ router.use("/operations-center", requireModule("operations"), requireMinLevel(50
 router.use("/warehouse", requireModule("warehouse"), requireMinLevel(10), warehouseStubsRouter);
 router.use("/documents", requireModule("documents"), requireMinLevel(10), documentsStubsRouter);
 router.use("/hr", requireModule("hr"), requireMinLevel(10), hrStubsRouter);
+// Pricing rules — real CRUD + engine preview (migration 171). Mounted BEFORE
+// financeStubsRouter so /finance/pricing/* resolves to the real handlers (the
+// 6 stubs were removed from wiring-stubs.ts). Carries its own authMiddleware +
+// per-route authorize({feature:"finance.invoices"}).
+router.use("/finance", requireModule("finance"), requireMinLevel(10), pricingRouter);
 router.use("/finance", requireModule("finance"), requireMinLevel(10), financeStubsRouter);
 router.use("/admin", requireModule("admin"), requireMinLevel(90), adminStubsRouter);
 router.use(wiringScopeErrorHandler);

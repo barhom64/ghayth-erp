@@ -24,6 +24,7 @@ import {
   createNotification,
   emitEvent,
   createAuditLog,
+  auditFromRequest,
   getManagerAssignmentId,
   initiateApprovalChain,
   processApprovalStep,
@@ -163,12 +164,26 @@ const performanceSchema = z.object({
   status: z.enum(["pending", "in_progress", "completed", "acknowledged"]).optional(),
 });
 
-const salaryComponentSchema = z.object({
+// value is validated CONDITIONALLY by calculationType (Ibrahim 2026-06-21:
+// ثابت/نسبة/معادلة حسب اختيار المستخدم). The payroll calc (computePayroll)
+// uses value as `basic * value/100` for percentage and as a direct amount for
+// fixed/formula — so: percentage ⇒ 0..100, fixed/formula ⇒ non-negative amount.
+// A flat .min(0).max(100) would wrongly cap a fixed SAR amount; hence superRefine.
+export const salaryComponentSchema = z.object({
   name: z.string().min(1, "اسم مكوّن الراتب مطلوب"),
   type: z.enum(["earning", "deduction", "benefit"]).optional(),
   calculationType: z.enum(["fixed", "percentage", "formula"]).optional(),
   value: z.coerce.number().optional(),
   taxable: z.boolean().optional(),
+}).superRefine((d, ctx) => {
+  if (d.value == null) return;
+  if ((d.calculationType ?? "fixed") === "percentage") {
+    if (d.value < 0 || d.value > 100) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["value"], message: "نسبة المكوّن يجب أن تكون بين 0 و100" });
+    }
+  } else if (d.value < 0) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["value"], message: "قيمة المكوّن يجب ألا تكون سالبة" });
+  }
 });
 
 const salaryComponentPatchSchema = z.object({
@@ -513,6 +528,21 @@ const excuseApprovalSchema = z.object({
   rejectionReason: z.string().optional(),
 });
 
+// عقد قائد/خادم (#2839): إعادة إسناد التكليفات النشطة لفرع بديل. مسار الإعدادات
+// (خادم لإدارة الفروع) يُنسّق تعطيل فرع، لكن **الكتابة** في جدول HR المملوك
+// (employee_assignments) تبقى هنا في المسار القائد (HR). يعمل ضمن المعاملة
+// المحيطة (rawExecute ينضمّ لـ txStore) فتبقى ذرّية مع تعطيل الفرع.
+export async function reassignActiveAssignmentsToBranch(
+  companyId: number,
+  fromBranchId: number,
+  toBranchId: number,
+): Promise<void> {
+  await rawExecute(
+    `UPDATE employee_assignments SET "branchId" = $1 WHERE "branchId" = $2 AND status = 'active' AND "companyId" = $3`,
+    [toBranchId, fromBranchId, companyId],
+  );
+}
+
 const router = Router();
 
 // Per-user check-in limiter. The /hr router runs after authMiddleware in
@@ -617,11 +647,11 @@ router.post("/check-in", checkInLimiter, authorize({ feature: "hr.attendance.che
     const [shiftAssignment] = await rawQuery<Record<string, unknown>>(
       `SELECT s.id, s."startTime", s."endTime", s.days, s."shiftType", s."remoteAllowed", s."flexStartEarliest", s."flexStartLatest"
        FROM employee_shift_assignments esa
-       JOIN shifts s ON s.id = esa."shiftId"
+       JOIN shifts s ON s.id = esa."shiftId" AND s."companyId" = $3
        WHERE esa."assignmentId" = $1
          AND (esa."endDate" IS NULL OR esa."endDate" >= $2)
        ORDER BY esa.id DESC LIMIT 1`,
-      [scope.activeAssignmentId, today]
+      [scope.activeAssignmentId, today, scope.companyId]
     );
     let shift = shiftAssignment;
     if (!shift) {
@@ -1001,11 +1031,11 @@ router.post("/check-out", authorize({ feature: "hr.attendance.checkin", action: 
     const [shiftAssignment] = await rawQuery<Record<string, unknown>>(
       `SELECT s."endTime", s."startTime"
        FROM employee_shift_assignments esa
-       JOIN shifts s ON s.id = esa."shiftId"
+       JOIN shifts s ON s.id = esa."shiftId" AND s."companyId" = $3
        WHERE esa."assignmentId" = $1
          AND (esa."endDate" IS NULL OR esa."endDate" >= $2)
        ORDER BY esa.id DESC LIMIT 1`,
-      [scope.activeAssignmentId, today]
+      [scope.activeAssignmentId, today, scope.companyId]
     );
     if (shiftAssignment) {
       shift = shiftAssignment;
@@ -1310,8 +1340,8 @@ router.post("/attendance/field-ping", authorize({ feature: "hr.attendance.checki
           fix: "يجب أن يكون لديك تعيين نشط في الشركة لإرسال نقاط الموقع.",
         });
       case "forbidden":
-        throw new ForbiddenError("فئة الموظف لا تخضع للتتبع اللحظي", {
-          fix: "التتبع الميداني مفعّل فقط للسائقين والموظفين الميدانيين. راجع فئة الموظف في إعدادات الحضور.",
+        throw new ForbiddenError("لا توجد سياسة تتبع فعّالة لهذا الموظف", {
+          fix: "يتطلب التتبع الميداني سياسة تتبع صريحة ومفعّلة لهذا الموظف. تواصل مع المسؤول لتفعيل سياسة التتبع.",
           meta: { categoryKey: r.categoryKey, trackingFrequencySeconds: r.freq },
         });
       case "throttled":
@@ -1329,11 +1359,16 @@ router.post("/attendance/field-ping", authorize({ feature: "hr.attendance.checki
   }
 });
 
-router.get("/attendance/field-track", authorize({ feature: "hr.attendance", action: "list" }), async (req, res) => {
+router.get("/attendance/field-track", authorize({ feature: "hr.attendance.tracking_view", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { assignmentId, date } = req.query as { assignmentId?: string; date?: string };
     const day = date || todayISO();
+    // Per-policy viewer restriction: an empty/NULL allowedViewerRoles means
+    // "any tracking_view holder", otherwise the caller's active role must be a
+    // member. scope.role is the always-populated active role (reflects any
+    // role-picker downgrade); NULL viewerRole never satisfies a restricted policy.
+    const viewerRole = scope.role ?? null;
 
     // Two modes:
     //   - assignmentId set  → one employee's full breadcrumb for the day
@@ -1352,10 +1387,27 @@ router.get("/attendance/field-track", authorize({ feature: "hr.attendance", acti
           WHERE ftp."assignmentId" = $1
             AND ftp."companyId" = $2
             AND ftp."capturedAt"::date = $3::date
+            AND EXISTS (
+              SELECT 1 FROM employee_tracking_policies etp
+               WHERE etp."companyId" = ftp."companyId"
+                 AND etp."employeeId" = ea."employeeId"
+                 AND etp."deletedAt" IS NULL
+                 AND etp."trackingEnabled" = TRUE
+                 AND (etp."startsAt" IS NULL OR etp."startsAt" <= NOW())
+                 AND (etp."endsAt" IS NULL OR etp."endsAt" >= NOW())
+                 AND (
+                   jsonb_array_length(COALESCE(etp."allowedViewerRoles", '[]'::jsonb)) = 0
+                   OR etp."allowedViewerRoles" ? $4
+                 )
+            )
           ORDER BY ftp."capturedAt" ASC
           LIMIT 5000`,
-        [aid, scope.companyId, day],
+        [aid, scope.companyId, day, viewerRole],
       );
+      // Location is a sensitive view — audit every breadcrumb read.
+      await auditFromRequest(req, "tracking.view", "field_tracking_points", aid, {
+        after: { mode: "breadcrumb", date: day, points: points.length },
+      });
       res.json(maskFields(req, { data: points, total: points.length, mode: "breadcrumb", date: day }));
       return;
     }
@@ -1371,10 +1423,27 @@ router.get("/attendance/field-track", authorize({ feature: "hr.attendance", acti
          JOIN employees e ON e.id = ea."employeeId"
         WHERE ftp."companyId" = $1
           AND ftp."capturedAt"::date = $2::date
+          AND EXISTS (
+            SELECT 1 FROM employee_tracking_policies etp
+             WHERE etp."companyId" = ftp."companyId"
+               AND etp."employeeId" = ea."employeeId"
+               AND etp."deletedAt" IS NULL
+               AND etp."trackingEnabled" = TRUE
+               AND (etp."startsAt" IS NULL OR etp."startsAt" <= NOW())
+               AND (etp."endsAt" IS NULL OR etp."endsAt" >= NOW())
+               AND (
+                 jsonb_array_length(COALESCE(etp."allowedViewerRoles", '[]'::jsonb)) = 0
+                 OR etp."allowedViewerRoles" ? $3
+               )
+          )
         ORDER BY ftp."assignmentId", ftp."capturedAt" DESC
         LIMIT 2000`,
-      [scope.companyId, day],
+      [scope.companyId, day, viewerRole],
     );
+    // Live map is a sensitive multi-employee location view — audit it.
+    await auditFromRequest(req, "tracking.view", "field_tracking_points", 0, {
+      after: { mode: "live", date: day, points: latest.length },
+    });
     res.json(maskFields(req, { data: latest, total: latest.length, mode: "live", date: day }));
   } catch (err) {
     handleRouteError(err, res, "Field track error:");
@@ -3305,6 +3374,18 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
     const totalOtherDeductions = roundTo2(lines.reduce((s, l) => s + l.lateDeduction + l.absenceDeduction + l.violationDeduction + l.loanDeduction, 0));
     const totalBankPayout = roundTo2(totalNet);
     const totalGosiPayable = roundTo2(totalGosiEmployer + totalGosiEmployee);
+    // WHT totals — net pay drops by whtAmount per employee; recompute total bank
+    // payout net of WHT so the engine sees the correct cash CR. Umrah commission
+    // total drives a dedicated DR on the commission-expense account. Both are
+    // derived from `lines` up-front because the accrual JE is now posted INSIDE
+    // the creation transaction below.
+    const totalWht = roundTo2(lines.reduce((s, l) => s + l.whtAmount, 0));
+    const totalBankPayoutNetOfWht = roundTo2(totalBankPayout - totalWht);
+    const totalCommission = roundTo2(lines.reduce((s, l) => s + l.commission, 0));
+    // HR-002 (atomicity) — resolve the engine before the tx so the accrual GL is
+    // posted INSIDE it. The old flow posted after commit, so a GL failure left a
+    // committed run with consumed loans/overtime but no ledger entry.
+    const { hrEngine } = await import("../lib/engines/index.js");
 
     const runId = await withTransaction(async (client) => {
       // RACE-2 (HR audit P1): two concurrent `POST /hr/payroll` calls
@@ -3466,71 +3547,56 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
         );
       }
 
+      // HR-002 (atomicity) — accrual JE INSIDE the creation transaction. The
+      // engine's internal postJournalEntry joins THIS transaction via SAVEPOINT
+      // (reentrant withTransaction), so the run, its lines, the loan/installment/
+      // overtime side-effects, and the GL all commit together or all roll back.
+      // A GL failure now aborts the whole creation instead of orphaning the run.
+      try {
+        await hrEngine.postPayrollRunGL(
+          { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId },
+          {
+            runId: newRunId,
+            period: targetPeriod,
+            employeeCount: lines.length,
+            totalGross,
+            totalOvertime,
+            totalGosiEmployer,
+            totalBankPayout: totalBankPayoutNetOfWht,
+            totalGosiPayable,
+            totalOtherDeductions,
+            totalWht,
+            totalCommission,
+            // Per-employee breakdown — splits salary + OT + GOSI + commission DR
+            // lines per employee (departmentId/branchId stamped) so payroll cost
+            // is dimensional; liabilities stay aggregated. #2303 deduction split:
+            // loan repayment closes the receivable, late/absence/violation hit
+            // their contra-expense leaves — Σ unchanged, entry stays balanced.
+            breakdown: lines.map((l) => ({
+              employeeId: l.employeeId,
+              departmentId: l.departmentId,
+              branchId: l.branchId,
+              basic: l.gross,
+              overtime: l.overtime,
+              gosiEmployer: l.gosiEmployer,
+              whtAmount: l.whtAmount,
+              commission: l.commission,
+              loanRepayment: l.loanDeduction,
+              lateDeduction: l.lateDeduction,
+              absenceDeduction: l.absenceDeduction,
+              violationDeduction: l.violationDeduction,
+            })),
+          }
+        );
+      } catch (journalErr) {
+        throw new IntegrationError(
+          "فشل القيد المحاسبي للرواتب — أُلغيت العملية بالكامل. راجع المدير المالي",
+          { meta: { integration: "journal", period: targetPeriod }, cause: journalErr },
+        );
+      }
+
       return newRunId;
     });
-
-    // WHT totals — net pay drops by whtAmount per employee; we recompute
-    // total bank payout net of WHT here so the engine sees the correct
-    // cash CR. The engine writes a separate CR line on the WHT-payable
-    // account (default 2330, configurable via accounting_mappings).
-    const totalWht = roundTo2(lines.reduce((s, l) => s + l.whtAmount, 0));
-    const totalBankPayoutNetOfWht = roundTo2(totalBankPayout - totalWht);
-    // Umrah commission total — the engine emits a dedicated DR on the
-    // commission-expense account (op payroll_commission_expense → 5240).
-    const totalCommission = roundTo2(lines.reduce((s, l) => s + l.commission, 0));
-
-    try {
-      const { hrEngine } = await import("../lib/engines/index.js");
-      await hrEngine.postPayrollRunGL(
-        { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId },
-        {
-          runId,
-          period: targetPeriod,
-          employeeCount: lines.length,
-          totalGross,
-          totalOvertime,
-          totalGosiEmployer,
-          totalBankPayout: totalBankPayoutNetOfWht,
-          totalGosiPayable,
-          totalOtherDeductions,
-          totalWht,
-          totalCommission,
-          // Per-employee breakdown — the engine splits salary + OT +
-          // GOSI + commission debit lines per employee with departmentId
-          // stamped on each, so payroll cost is dimensional. Liabilities
-          // stay aggregated.
-          breakdown: lines.map((l) => ({
-            employeeId: l.employeeId,
-            departmentId: l.departmentId,
-            branchId: l.branchId,
-            // Use the GROSS (basic + allowances) as the salary-expense
-            // basis so the per-employee split matches the totalGross
-            // aggregate the engine computes from credit liabilities.
-            basic: l.gross,
-            overtime: l.overtime,
-            gosiEmployer: l.gosiEmployer,
-            whtAmount: l.whtAmount,
-            commission: l.commission,
-            // #2303 — per-employee deduction split: loan repayment CLOSES the
-            // loan receivable (1143), late/absence/violation hit their
-            // contra-expense leaves (5215/5216/5217). Σ == totalOtherDeductions
-            // above, so the credit total and the entry's balance are unchanged.
-            loanRepayment: l.loanDeduction,
-            lateDeduction: l.lateDeduction,
-            absenceDeduction: l.absenceDeduction,
-            violationDeduction: l.violationDeduction,
-          })),
-        }
-      );
-    } catch (journalErr) {
-      throw new IntegrationError(
-        "تم صرف الرواتب لكن فشل القيد المحاسبي. راجع المدير المالي",
-        {
-          meta: { integration: "journal", period: targetPeriod },
-          cause: journalErr,
-        },
-      );
-    }
 
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
@@ -3622,7 +3688,7 @@ router.get("/violations", authorize({ feature: "hr.violations", action: "list" }
       params
     );
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
-  } catch (err) { logger.error(err, "Get violations error:"); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
+  } catch (err) { handleRouteError(err, res, "Get violations error:"); }
 });
 
 router.get("/violations/:id", authorize({ feature: "hr.violations", action: "view" }), async (req, res) => {
@@ -3800,7 +3866,7 @@ router.get("/shifts", authorize({ feature: "hr.attendance", action: "list" }), a
     const scope = req.scope!;
     const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM shifts WHERE "companyId" = $1 AND "deletedAt" IS NULL ORDER BY name LIMIT 500`, [scope.companyId]);
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
-  } catch (err) { logger.error(err, "Get shifts error:"); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
+  } catch (err) { handleRouteError(err, res, "Get shifts error:"); }
 });
 
 router.post("/shifts", authorize({ feature: "hr.attendance", action: "create" }), async (req, res) => {
@@ -3872,7 +3938,7 @@ router.get("/performance", authorize({ feature: "hr.performance", action: "list"
       [scope.companyId]
     );
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
-  } catch (err) { logger.error(err, "Get performance error:"); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
+  } catch (err) { handleRouteError(err, res, "Get performance error:"); }
 });
 
 router.get("/performance/:id", authorize({ feature: "hr.performance", action: "view" }), async (req, res) => {
@@ -4002,7 +4068,7 @@ router.get("/attendance-stats", authorize({ feature: "hr.attendance", action: "l
       totalEmployees: Number(totalEmp?.count ?? 0),
       month,
     }));
-  } catch (_e) { logger.error(_e, "attendance-stats query failed"); res.json({ present: 0, absent: 0, late: 0, totalEmployees: 0 }); }
+  } catch (_e) { handleRouteError(_e, res, "attendance-stats query failed"); }
 });
 
 router.get("/leave-stats", authorize({ feature: "hr.leaves", action: "list" }), async (req, res) => {
@@ -4020,7 +4086,7 @@ router.get("/leave-stats", authorize({ feature: "hr.leaves", action: "list" }), 
       rejected: Number(rejected?.count ?? 0),
       total: Number(total?.count ?? 0),
     }));
-  } catch (_e) { logger.error(_e, "leave-stats query failed"); res.json({ pending: 0, approved: 0, rejected: 0, total: 0 }); }
+  } catch (_e) { handleRouteError(_e, res, "leave-stats query failed"); }
 });
 
 router.get("/salary-components", authorize({ feature: "hr.payroll.runs", action: "list" }), async (req, res) => {
@@ -4030,7 +4096,7 @@ router.get("/salary-components", authorize({ feature: "hr.payroll.runs", action:
       `SELECT * FROM salary_components WHERE "companyId"=$1 ORDER BY name LIMIT 500`, [scope.companyId]
     );
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
-  } catch (_e) { logger.error(_e, "salary-components query failed"); res.json({ data: [], total: 0 }); }
+  } catch (_e) { handleRouteError(_e, res, "salary-components query failed"); }
 });
 
 router.post("/salary-components", authorize({ feature: "hr.payroll.runs", action: "create" }), async (req, res) => {
@@ -4094,6 +4160,22 @@ router.patch("/salary-components/:id", authorize({ feature: "hr.payroll.runs", a
     if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
     sets.push(`"updatedAt"=NOW()`);
     const [beforeRow] = await rawQuery<Record<string, unknown>>(`SELECT * FROM salary_components WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    // validate value against the EFFECTIVE (merged) calculationType — a partial
+    // update can change value without calculationType (or vice-versa). percentage
+    // ⇒ 0..100, fixed/formula ⇒ non-negative (mirrors the create-time superRefine).
+    {
+      const effType = String(b.calculationType ?? beforeRow?.calculationType ?? "fixed");
+      const effValue = b.value !== undefined
+        ? Number(b.value)
+        : (beforeRow?.value != null ? Number(beforeRow.value) : undefined);
+      if (effValue != null) {
+        if (effType === "percentage") {
+          if (effValue < 0 || effValue > 100) throw new ValidationError("نسبة المكوّن يجب أن تكون بين 0 و100", { field: "value" });
+        } else if (effValue < 0) {
+          throw new ValidationError("قيمة المكوّن يجب ألا تكون سالبة", { field: "value" });
+        }
+      }
+    }
     params.push(id); params.push(scope.companyId);
     const { affectedRows } = await rawExecute(`UPDATE salary_components SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     if (!affectedRows) throw new NotFoundError("مكوّن الراتب غير موجود");
@@ -4151,7 +4233,7 @@ router.get("/approval-chains", authorize({ feature: "hr.employees", action: "lis
       [scope.companyId]
     );
     res.json(maskFields(req, { data: rows, total: rows.length }));
-  } catch (_e) { logger.error(_e, "approval-chains query failed"); res.json({ data: [], total: 0 }); }
+  } catch (_e) { handleRouteError(_e, res, "approval-chains query failed"); }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -4172,7 +4254,7 @@ router.get("/approval-chain-definitions", authorize({ feature: "hr.employees", a
       [scope.companyId]
     );
     res.json(maskFields(req, { data: chains, total: chains.length }));
-  } catch (_e) { logger.error(_e, "approval-chain-definitions query failed"); res.json({ data: [], total: 0 }); }
+  } catch (_e) { handleRouteError(_e, res, "approval-chain-definitions query failed"); }
 });
 
 router.post("/approval-chain-definitions", authorize({ feature: "hr.employees", action: "create" }), async (req, res) => {
@@ -4240,18 +4322,27 @@ router.delete("/approval-chain-definitions/:id", authorize({ feature: "hr.employ
 router.get("/approval-requests", authorize({ feature: "hr.organization", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const statusFilter = (req.query.status as string) ?? "pending";
+    // status optional: an explicit status filters; omitting it ⇒ all statuses
+    // (the «الكل» tab of the unified filter bar). Single caller:
+    // ghayth-erp/src/pages/hr/approval-inbox.tsx (defaults to "pending").
+    const statusFilter = (req.query.status as string) || null;
+    const params: unknown[] = [scope.companyId];
+    let statusClause = "";
+    if (statusFilter) {
+      params.push(statusFilter);
+      statusClause = ` AND ar.status = $${params.length}`;
+    }
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT ar.*, e.name AS "assignedToName"
        FROM approval_requests ar
        LEFT JOIN employee_assignments ea ON ea.id = ar."assignedTo"
        LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
-       WHERE ar."companyId" = $1 AND ar.status = $2
+       WHERE ar."companyId" = $1${statusClause}
        ORDER BY ar."createdAt" DESC LIMIT 500`,
-      [scope.companyId, statusFilter]
+      params
     );
     res.json(maskFields(req, { data: rows, total: rows.length }));
-  } catch (_e) { logger.error(_e, "approval-requests query failed"); res.json({ data: [], total: 0 }); }
+  } catch (_e) { handleRouteError(_e, res, "approval-requests query failed"); }
 });
 
 router.patch("/approval-requests/:id/decide", authorize({ feature: "hr.organization", action: "approve" }), async (req, res) => {
@@ -4397,7 +4488,7 @@ router.get("/attendance-policy", authorize({ feature: "hr.attendance", action: "
       penaltyLevel3Label: "خصم يوم", penaltyLevel4Label: "خصم يومين",
       penaltyLevel5Label: "خصم ثلاثة أيام + إنذار نهائي",
     }));
-  } catch (e) { logger.error(e, "attendance-policy GET error"); res.json({}); }
+  } catch (e) { handleRouteError(e, res, "attendance-policy GET error"); }
 });
 
 router.put("/attendance-policy", authorize({ feature: "hr.attendance", action: "update" }), async (req, res) => {
@@ -4487,7 +4578,7 @@ router.get("/payroll-summary", authorize({ feature: "hr.payroll.runs", action: "
 
     const data = Array.from(empMap.values());
     res.json(maskFields(req, { data, total: data.length, period: targetPeriod }));
-  } catch (err) { logger.error(err, "payslip-preview query failed"); res.json({ data: [], total: 0 }); }
+  } catch (err) { handleRouteError(err, res, "payslip-preview query failed"); }
 });
 
 router.get("/violations-stats", authorize({ feature: "hr.violations", action: "list" }), async (req, res) => {
@@ -4504,7 +4595,7 @@ router.get("/violations-stats", authorize({ feature: "hr.violations", action: "l
       thisMonth: Number(thisMonthRow?.count ?? 0),
       totalDeductions: Number(totalDeductions?.total ?? 0),
     }));
-  } catch (_e) { logger.error(_e, "violations-stats query failed"); res.json({ total: 0, thisMonth: 0, totalDeductions: 0 }); }
+  } catch (_e) { handleRouteError(_e, res, "violations-stats query failed"); }
 });
 
 router.patch("/violations/:id", authorize({ feature: "hr.violations", action: "update" }), async (req, res) => {
@@ -4662,7 +4753,7 @@ router.get("/shift-assignments", authorize({ feature: "hr.attendance", action: "
       [scope.companyId]
     );
     res.json(maskFields(req, { data: rows, total: rows.length }));
-  } catch (_e) { logger.error(_e, "shift-assignments query failed"); res.json({ data: [], total: 0 }); }
+  } catch (_e) { handleRouteError(_e, res, "shift-assignments query failed"); }
 });
 
 router.post("/shift-assignments", authorize({ feature: "hr.attendance", action: "create" }), async (req, res) => {
@@ -4736,7 +4827,7 @@ router.get("/official-letters", authorize({ feature: "hr.organization", action: 
       [scope.companyId]
     );
     res.json(maskFields(req, { data: rows, total: rows.length }));
-  } catch (_e) { logger.error(_e, "official-letters query failed"); res.json({ data: [], total: 0 }); }
+  } catch (_e) { handleRouteError(_e, res, "official-letters query failed"); }
 });
 
 router.post("/official-letters", authorize({ feature: "hr.organization", action: "create" }), async (req, res) => {
@@ -4855,7 +4946,7 @@ router.get("/monthly-attendance", authorize({ feature: "hr.attendance", action: 
       [scope.companyId, month]
     );
     res.json(maskFields(req, { data: rows, total: rows.length }));
-  } catch (_e) { logger.error(_e, "monthly-attendance query failed"); res.json({ data: [], total: 0 }); }
+  } catch (_e) { handleRouteError(_e, res, "monthly-attendance query failed"); }
 });
 
 // ─── Leave requests general PATCH/DELETE ──────────────────────
@@ -5096,17 +5187,17 @@ router.patch("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "up
       const totalGosiPayable = totalGosiEmployee + totalGosiEmployer;
       const totalBankPayout = Math.max(0, totalNet);
 
-      const [updatedRun] = await rawQuery<Record<string, unknown>>(
-        `UPDATE payroll_runs SET status = $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL AND status = $4 RETURNING *`,
-        [status, id, scope.companyId, existing.status]
+      // HR-002 (atomicity) — flip the run to 'posted' AND post its payment JE
+      // in ONE transaction (reentrant withTransaction) so a GL failure can
+      // never leave the run posted-without-entry, nor a status flip without a
+      // settlement. Returns null when no row matched the expected status (a
+      // concurrent post / vanished run) → same 404 as before; no JE is posted.
+      const { hrEngine } = await import("../lib/engines/index.js");
+      const updatedRun = await hrEngine.postPayrollRunWithGL(
+        { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId },
+        { runId: id, period, totalBankPayout, fromStatus: existing.status as string }
       );
       if (!updatedRun) throw new NotFoundError("دورة الرواتب غير موجودة");
-
-      const { hrEngine } = await import("../lib/engines/index.js");
-      await hrEngine.postPayrollPostGL(
-        { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId },
-        { runId: id, period, totalBankPayout }
-      );
 
       // Register monthly GOSI submission obligation (due 14th of NEXT month)
       try {
@@ -5449,34 +5540,48 @@ router.patch("/official-letters/:id/approve", authorize({ feature: "hr.organizat
       throw new ValidationError("يجب ذكر سبب الرفض", { field: "notes" });
     }
 
-    if (newStatus === "approved") {
-      await rawExecute(
-        `UPDATE official_letters
-           SET status = $1, "approvedAt" = NOW(), "approvedBy" = $3
-         WHERE id = $2 AND "companyId" = $4 AND status = 'pending_approval' AND "deletedAt" IS NULL`,
-        [newStatus, Number(id), scope.userId, scope.companyId]
-      );
-    } else {
-      await rawExecute(
-        `UPDATE official_letters SET status = $1 WHERE id = $2 AND "companyId" = $3 AND status = 'pending_approval' AND "deletedAt" IS NULL`,
-        [newStatus, Number(id), scope.companyId]
-      );
-    }
+    // Status change + (on reject/return) the queued-dispatch cancellation
+    // + the approval-action audit row are written atomically: a rejected
+    // letter must NEVER leave its dispatch queued (it would get sent after
+    // rejection), and the approval decision must never be recorded without
+    // its audit row. rawQuery joins the ambient transaction (txStore).
+    await withTransaction(async () => {
+      if (newStatus === "approved") {
+        await rawExecute(
+          `UPDATE official_letters
+             SET status = $1, "approvedAt" = NOW(), "approvedBy" = $3
+           WHERE id = $2 AND "companyId" = $4 AND status = 'pending_approval' AND "deletedAt" IS NULL`,
+          [newStatus, Number(id), scope.userId, scope.companyId]
+        );
+      } else {
+        await rawExecute(
+          `UPDATE official_letters SET status = $1 WHERE id = $2 AND "companyId" = $3 AND status = 'pending_approval' AND "deletedAt" IS NULL`,
+          [newStatus, Number(id), scope.companyId]
+        );
+      }
 
-    // If the letter was rejected or returned, cancel any queued dispatches
-    // so the queue worker doesn't send it after the fact. Phase 4 final
-    // contract: one UPDATE against the unified outbound_queue.
+      // If the letter was rejected or returned, cancel any queued dispatches
+      // so the queue worker doesn't send it after the fact. Phase 4 final
+      // contract: one UPDATE against the unified outbound_queue.
+      if (newStatus === "rejected" || newStatus === "returned") {
+        await rawExecute(
+          `UPDATE outbound_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
+            WHERE "refType"='official_letter' AND "refId"=$1 AND "companyId"=$2 AND status='pending'`,
+          [Number(id), scope.companyId]
+        );
+      }
+
+      await rawExecute(
+        `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('official_letter',$1,$2,$3,$4,$5)`,
+        [Number(id), newStatus, notes || null, scope.userId, scope.companyId]
+      );
+    });
+
+    // Notify whoever filed the letter about the rejection/return so they
+    // can see the reason and take action. Best-effort serving path, after
+    // the transaction. Prefer the creator assignment (the HR officer who
+    // filed it), fall back to the employee's own assignment.
     if (newStatus === "rejected" || newStatus === "returned") {
-      await rawExecute(
-        `UPDATE outbound_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
-          WHERE "refType"='official_letter' AND "refId"=$1 AND "companyId"=$2 AND status='pending'`,
-        [Number(id), scope.companyId]
-      ).catch((e) => logger.error(e, "cancel outbound_queue for rejected letter failed:"));
-
-      // Notify whoever filed the letter about the rejection/return so they
-      // can see the reason and take action. Prefer the creator assignment
-      // (the HR officer who filed it), fall back to the employee's own
-      // assignment when the letter was filed by the employee themselves.
       const [targetAssignment] = await rawQuery<Record<string, unknown>>(
         `SELECT COALESCE(
                   ol."createdByAssignmentId",
@@ -5505,13 +5610,6 @@ router.patch("/official-letters/:id/approve", authorize({ feature: "hr.organizat
         }).catch((e) => logger.error(e, "notify letter creator failed:"));
       }
     }
-
-    try {
-      await rawExecute(
-        `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('official_letter',$1,$2,$3,$4,$5)`,
-        [Number(id), newStatus, notes || null, scope.userId, scope.companyId]
-      );
-    } catch (e) { logger.error(e, "Failed to log approval action:"); }
 
     // Close the loop: emit a lifecycle event so the letter actually gets
     // dispatched (email_queue). Without this the route used to stop at
@@ -5597,7 +5695,7 @@ router.get("/deductions", authorize({ feature: "hr.payroll.runs", action: "list"
       [scope.companyId, month]
     );
     res.json(maskFields(req, { data: rows, total: rows.length }));
-  } catch (_e) { logger.error(_e, "deductions query failed"); res.json({ data: [], total: 0 }); }
+  } catch (_e) { handleRouteError(_e, res, "deductions query failed"); }
 });
 
 router.get("/onboarding-steps", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
@@ -5612,7 +5710,7 @@ router.get("/onboarding-steps", authorize({ feature: "hr.employees", action: "li
       res.json(maskFields(req, { data: val })); return;
     }
     res.json(maskFields(req, { data: ["تسليم أجهزة IT", "توقيع عقد العمل", "تعريف المدير المباشر", "دورة التعريف بالشركة", "فتح حساب بنكي", "تسجيل التأمينات"] }));
-  } catch (e) { logger.error(e, "failed to load onboarding steps"); res.json({ data: [] }); }
+  } catch (e) { handleRouteError(e, res, "failed to load onboarding steps"); }
 });
 
 router.put("/onboarding-steps", authorize({ feature: "hr.employees", action: "update" }), async (req, res) => {
@@ -6612,7 +6710,7 @@ router.get("/delegations", authorize({ feature: "hr.organization", action: "list
       // as-any-reason: justified-pragmatic - catch fallback preserves existing empty-result behavior while satisfying route return typing
     ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
     res.json(maskFields(req, { data: rows, total: rows.length }));
-  } catch (err) { logger.error(err, "delegations query failed"); res.json({ data: [], total: 0 }); }
+  } catch (err) { handleRouteError(err, res, "delegations query failed"); }
 });
 
 router.post("/delegations", authorize({ feature: "hr.organization", action: "approve" }), async (req, res) => {

@@ -1,8 +1,8 @@
-import { handleRouteError, ValidationError, ForbiddenError, NotFoundError, zodParse } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, ForbiddenError, NotFoundError, ConflictError, parseId, zodParse } from "../lib/errorHandler.js";
 import { Router, type Response as ExpressResponse } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { signToken, signRefreshToken, verifyPassword, hashPassword } from "../lib/auth.js";
+import { signToken, signRefreshToken, verifyPassword, hashPassword, signPending2faToken, verifyPending2faToken } from "../lib/auth.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { setCsrfCookie } from "../middlewares/csrfMiddleware.js";
 import { canonicalizeModules } from "../lib/rbac/roleModulesCatalog.js";
@@ -19,7 +19,17 @@ import {
   authenticateUserByPassword,
   createUserSession,
   rotateUserSession,
+  loadUserSessionContext,
 } from "../lib/authSession.js";
+import { encryptField, decryptField } from "../lib/fieldEncryption.js";
+import {
+  generateSecret,
+  otpauthURL,
+  verifyTOTP,
+  generateBackupCodes,
+  hashBackupCode,
+} from "../lib/totp.js";
+import QRCode from "qrcode";
 
 const router = Router();
 
@@ -50,6 +60,7 @@ interface EmployeeMeRow {
   branchName: string | null;
   preferredCalendar: "hijri" | "gregorian";
   preferredLocale: "ar" | "en";
+  tablePrefs: Record<string, unknown>;
 }
 
 interface UserPasswordRow {
@@ -392,6 +403,17 @@ router.post("/login", loginLimiter, async (req, res) => {
     const auth = await authenticateUserByPassword(email, password);
     const { primary, assignments, userRoles } = auth;
 
+    // #2712 (1ب) — إن كانت 2FA مفعّلة: لا تُصدر جلسة؛ أعد رمزًا مؤقّتًا فقط
+    // (لا يصلح كرمز وصول)، يكملها العميل عبر /auth/2fa/verify-login.
+    const [twofaRow] = await rawQuery<{ twoFactorEnabled: boolean }>(
+      `SELECT "twoFactorEnabled" FROM users WHERE id=$1`, [auth.userId]);
+    if (twofaRow?.twoFactorEnabled) {
+      const pendingToken = signPending2faToken({ userId: auth.userId, employeeId: auth.employeeId, assignmentId: primary.id, role: primary.role });
+      emitEvent({ companyId: primary.companyId, branchId: primary.branchId ?? undefined, userId: auth.userId, action: "auth.login.2fa_required", entity: "users", entityId: auth.userId, ip: (req.ip ?? null) || "unknown", details: JSON.stringify({ email }) }).catch((e) => logger.error(e, "auth background task failed"));
+      res.json({ twoFactorRequired: true, pendingToken });
+      return;
+    }
+
     const ipAddress = req.ip ?? null;
     const session = await createUserSession({
       userId: auth.userId,
@@ -465,6 +487,17 @@ router.post("/mobile/login", loginLimiter, async (req, res) => {
 
     const auth = await authenticateUserByPassword(email, password);
     const { primary, assignments, userRoles } = auth;
+
+    // #2712 (1ب) — 2FA مفعّلة: أعد رمزًا مؤقّتًا في الجسم (لا يصلح كرمز وصول)؛
+    // يكملها العميل عبر /auth/mobile/2fa/verify-login.
+    const [twofaRow] = await rawQuery<{ twoFactorEnabled: boolean }>(
+      `SELECT "twoFactorEnabled" FROM users WHERE id=$1`, [auth.userId]);
+    if (twofaRow?.twoFactorEnabled) {
+      const pendingToken = signPending2faToken({ userId: auth.userId, employeeId: auth.employeeId, assignmentId: primary.id, role: primary.role });
+      emitEvent({ companyId: primary.companyId, branchId: primary.branchId ?? undefined, userId: auth.userId, action: "auth.login.2fa_required", entity: "users", entityId: auth.userId, ip: (req.ip ?? null) || "unknown", details: JSON.stringify({ email, channel: "mobile" }) }).catch((e) => logger.error(e, "auth background task failed"));
+      res.json({ twoFactorRequired: true, pendingToken });
+      return;
+    }
 
     const ipAddress = req.ip ?? null;
     const session = await createUserSession({
@@ -608,7 +641,7 @@ router.get("/me", authMiddleware, authedUserLimiter, async (req, res) => {
               ea."jobTitleId", ea.role, ea.salary,
               ea."companyId", ea."branchId",
               c.name AS "companyName", b.name AS "branchName",
-              u."preferredCalendar", u."preferredLocale"
+              u."preferredCalendar", u."preferredLocale", u."tablePrefs"
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId" = e.id
        JOIN users u ON u."employeeId" = e.id
@@ -672,8 +705,15 @@ router.get("/me", authMiddleware, authedUserLimiter, async (req, res) => {
 const updatePreferencesSchema = z.object({
   preferredCalendar: z.enum(["hijri", "gregorian"]).optional(),
   preferredLocale: z.enum(["ar", "en"]).optional(),
+  // Per-user table UI prefs, merged into the existing jsonb (never
+  // overwritten). `pageSize` is validated against the allowed set; any
+  // other key (future column order / hidden columns / sort) passes through
+  // permissively so new prefs don't need another schema change.
+  tablePrefs: z.object({
+    pageSize: z.number().int().refine((v) => [10, 20, 50, 100, 200].includes(v)).optional(),
+  }).passthrough().optional(),
 }).refine(
-  (b) => b.preferredCalendar !== undefined || b.preferredLocale !== undefined,
+  (b) => b.preferredCalendar !== undefined || b.preferredLocale !== undefined || b.tablePrefs !== undefined,
   { message: "لم يتم تحديد أي تفضيل لتحديثه" },
 );
 
@@ -684,7 +724,7 @@ router.patch("/me/preferences", authMiddleware, authedUserLimiter, async (req, r
     if (!parsed.success) {
       throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     }
-    const { preferredCalendar, preferredLocale } = parsed.data;
+    const { preferredCalendar, preferredLocale, tablePrefs } = parsed.data;
 
     const sets: string[] = [];
     const params: unknown[] = [];
@@ -695,6 +735,12 @@ router.patch("/me/preferences", authMiddleware, authedUserLimiter, async (req, r
     if (preferredLocale !== undefined) {
       params.push(preferredLocale);
       sets.push(`"preferredLocale" = $${params.length}`);
+    }
+    if (tablePrefs !== undefined) {
+      // Merge into the existing object (|| is a shallow jsonb merge) so a
+      // PATCH carrying only { pageSize } keeps any other table prefs intact.
+      params.push(JSON.stringify(tablePrefs));
+      sets.push(`"tablePrefs" = COALESCE("tablePrefs", '{}'::jsonb) || $${params.length}::jsonb`);
     }
     params.push(scope.userId);
     const { affectedRows } = await rawExecute(
@@ -709,13 +755,14 @@ router.patch("/me/preferences", authMiddleware, authedUserLimiter, async (req, r
       action: "update",
       entity: "users",
       entityId: scope.userId,
-      after: { preferredCalendar, preferredLocale },
+      after: { preferredCalendar, preferredLocale, tablePrefs },
     }).catch((e) => logger.error(e, "auth background task failed"));
 
     res.json({
       success: true,
       preferredCalendar: preferredCalendar ?? null,
       preferredLocale: preferredLocale ?? null,
+      tablePrefs: tablePrefs ?? null,
     });
   } catch (err) {
     handleRouteError(err, res, "UpdatePreferences error:");
@@ -764,6 +811,292 @@ router.post("/change-password", authMiddleware, changePasswordLimiter, async (re
     res.json({ success: true, message: "تم تغيير كلمة المرور بنجاح" });
   } catch (err) {
     handleRouteError(err, res, "Change password error:");
+  }
+});
+
+// ─────────────────────── #2712 — المصادقة الثنائية (2FA / TOTP) ─────────────
+// الدفعة 1أ: التسجيل فقط (إعداد/تفعيل/تعطيل/حالة). الإنفاذ عند تسجيل الدخول
+// دفعة لاحقة منفصلة (1ب) — هذه الدفعة لا تلمس /login فلا خطر إقفال. السرّ
+// يُخزَّن مشفّرًا (fieldEncryption AES) والرموز الاحتياطية مُجزّأة (SHA-256).
+// كل النقاط محميّة بـauthMiddleware + authedUserLimiter (نفس /me و/logout).
+const TOTP_ISSUER = "Ghayth ERP";
+
+interface User2faRow {
+  id: number;
+  email: string | null;
+  passwordHash: string;
+  twoFactorEnabled: boolean;
+  twoFactorSecret: string | null;
+  twoFactorEnrolledAt: string | null;
+  twoFactorBackupCodes: Array<{ hash: string; usedAt: string | null }> | null;
+}
+
+const enable2faSchema = z.object({ token: z.string().min(6, "رمز التحقق مطلوب") });
+const disable2faSchema = z.object({
+  password: z.string().min(1, "كلمة المرور مطلوبة"),
+  token: z.string().optional(),
+});
+
+// POST /2fa/setup — يولّد سرًّا (غير مفعّل) ويعيد QR + السرّ للإدخال اليدوي.
+router.post("/2fa/setup", authMiddleware, authedUserLimiter, async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const [user] = await rawQuery<Pick<User2faRow, "id" | "email" | "twoFactorEnabled">>(
+      `SELECT id, email, "twoFactorEnabled" FROM users WHERE id=$1`, [scope.userId]);
+    if (!user) throw new NotFoundError("المستخدم غير موجود");
+    if (user.twoFactorEnabled) throw new ConflictError("المصادقة الثنائية مفعّلة بالفعل", { fix: "عطّلها أولًا إن أردت إعادة التسجيل" });
+
+    const secret = generateSecret();
+    await rawExecute(
+      `UPDATE users SET "twoFactorSecret"=$1, "twoFactorEnabled"=FALSE WHERE id=$2`,
+      [encryptField(secret), scope.userId]);
+
+    const label = user.email || `user-${scope.userId}`;
+    const otpauthUrl = otpauthURL({ secret, label, issuer: TOTP_ISSUER });
+    const qrDataUrl = await QRCode.toDataURL(otpauthUrl);
+
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "users", entityId: scope.userId, after: { reason: "2fa_setup_started" } }).catch((e) => logger.error(e, "auth background task failed"));
+    res.json({ secret, otpauthUrl, qrDataUrl });
+  } catch (err) {
+    handleRouteError(err, res, "2FA setup error:");
+  }
+});
+
+// POST /2fa/enable — يتحقق من أول رمز ثم يفعّل ويُصدر الرموز الاحتياطية مرة واحدة.
+router.post("/2fa/enable", authMiddleware, authedUserLimiter, async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { token } = zodParse(enable2faSchema.safeParse(req.body ?? {}));
+    const [user] = await rawQuery<Pick<User2faRow, "id" | "twoFactorEnabled" | "twoFactorSecret">>(
+      `SELECT id, "twoFactorEnabled", "twoFactorSecret" FROM users WHERE id=$1`, [scope.userId]);
+    if (!user) throw new NotFoundError("المستخدم غير موجود");
+    if (user.twoFactorEnabled) throw new ConflictError("المصادقة الثنائية مفعّلة بالفعل");
+    if (!user.twoFactorSecret) throw new ValidationError("ابدأ بإعداد المصادقة الثنائية أولًا", { fix: "اطلب /2fa/setup ثم امسح رمز QR" });
+
+    const secret = decryptField(user.twoFactorSecret);
+    if (!verifyTOTP(secret, token)) throw new ForbiddenError("رمز التحقق غير صحيح");
+
+    const backupCodes = generateBackupCodes();
+    const hashed = backupCodes.map((c) => ({ hash: hashBackupCode(c), usedAt: null }));
+    await rawExecute(
+      `UPDATE users SET "twoFactorEnabled"=TRUE, "twoFactorEnrolledAt"=NOW(), "twoFactorBackupCodes"=$1 WHERE id=$2`,
+      [JSON.stringify(hashed), scope.userId]);
+
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "users", entityId: scope.userId, after: { reason: "2fa_enabled" } }).catch((e) => logger.error(e, "auth background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "auth.2fa.enabled", entity: "users", entityId: scope.userId }).catch((e) => logger.error(e, "auth background task failed"));
+    res.json({ success: true, backupCodes, message: "تم تفعيل المصادقة الثنائية. احفظ الرموز الاحتياطية في مكان آمن — لن تظهر مرة أخرى." });
+  } catch (err) {
+    handleRouteError(err, res, "2FA enable error:");
+  }
+});
+
+// POST /2fa/disable — يتطلب كلمة المرور (+ رمزًا حاليًا إن كانت مفعّلة).
+router.post("/2fa/disable", authMiddleware, authedUserLimiter, async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { password, token } = zodParse(disable2faSchema.safeParse(req.body ?? {}));
+    const [user] = await rawQuery<Pick<User2faRow, "id" | "passwordHash" | "twoFactorEnabled" | "twoFactorSecret">>(
+      `SELECT id, "passwordHash", "twoFactorEnabled", "twoFactorSecret" FROM users WHERE id=$1`, [scope.userId]);
+    if (!user) throw new NotFoundError("المستخدم غير موجود");
+    const valid = await verifyPassword(password, user.passwordHash);
+    if (!valid) throw new ForbiddenError("كلمة المرور غير صحيحة");
+    // إن كانت مفعّلة، اطلب رمزًا حاليًا صحيحًا أيضًا (دفاع ضد جلسة مخطوفة).
+    if (user.twoFactorEnabled && user.twoFactorSecret) {
+      if (!token || !verifyTOTP(decryptField(user.twoFactorSecret), token)) {
+        throw new ForbiddenError("رمز التحقق غير صحيح");
+      }
+    }
+    await rawExecute(
+      `UPDATE users SET "twoFactorEnabled"=FALSE, "twoFactorSecret"=NULL, "twoFactorBackupCodes"=NULL, "twoFactorEnrolledAt"=NULL WHERE id=$1`,
+      [scope.userId]);
+
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "users", entityId: scope.userId, after: { reason: "2fa_disabled" } }).catch((e) => logger.error(e, "auth background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "auth.2fa.disabled", entity: "users", entityId: scope.userId }).catch((e) => logger.error(e, "auth background task failed"));
+    res.json({ success: true, message: "تم تعطيل المصادقة الثنائية" });
+  } catch (err) {
+    handleRouteError(err, res, "2FA disable error:");
+  }
+});
+
+// GET /2fa/status — حالة التفعيل + عدد الرموز الاحتياطية المتبقية.
+router.get("/2fa/status", authMiddleware, authedUserLimiter, async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const [user] = await rawQuery<Pick<User2faRow, "twoFactorEnabled" | "twoFactorEnrolledAt" | "twoFactorBackupCodes">>(
+      `SELECT "twoFactorEnabled", "twoFactorEnrolledAt", "twoFactorBackupCodes" FROM users WHERE id=$1`, [scope.userId]);
+    if (!user) throw new NotFoundError("المستخدم غير موجود");
+    const codes = Array.isArray(user.twoFactorBackupCodes) ? user.twoFactorBackupCodes : [];
+    const remaining = codes.filter((c) => c && !c.usedAt).length;
+    res.json({
+      enabled: !!user.twoFactorEnabled,
+      enrolledAt: user.twoFactorEnrolledAt ?? null,
+      backupCodesRemaining: remaining,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "2FA status error:");
+  }
+});
+
+// ─── #2712 (1ب) — إنفاذ 2FA عند تسجيل الدخول ────────────────────────────────
+// بعد نجاح كلمة المرور، إن كانت 2FA مفعّلة يعيد /login رمزًا مؤقّتًا (لا جلسة)؛
+// يُكمل العميل هنا برمز TOTP أو رمز احتياطي فتُصدر الجلسة الحقيقية.
+const verifyLogin2faSchema = z.object({
+  pendingToken: z.string().min(1, "انتهت الجلسة المؤقتة، أعد تسجيل الدخول"),
+  token: z.string().optional(),
+  backupCode: z.string().optional(),
+}).refine((v) => !!v.token || !!v.backupCode, { message: "أدخل رمز التحقق أو رمزًا احتياطيًا" });
+
+interface User2faVerifyRow {
+  twoFactorEnabled: boolean;
+  twoFactorSecret: string | null;
+  twoFactorBackupCodes: Array<{ hash: string; usedAt: string | null }> | null;
+}
+
+// يتحقق من العامل الثاني: رمز TOTP أو رمز احتياطي (يُستهلك مرة واحدة). true عند النجاح.
+async function passSecondFactor(userId: number, token?: string, backupCode?: string): Promise<boolean> {
+  const [u] = await rawQuery<User2faVerifyRow>(
+    `SELECT "twoFactorEnabled", "twoFactorSecret", "twoFactorBackupCodes" FROM users WHERE id=$1`, [userId]);
+  if (!u || !u.twoFactorEnabled || !u.twoFactorSecret) return false;
+  if (token && verifyTOTP(decryptField(u.twoFactorSecret), token)) return true;
+  if (backupCode) {
+    const wanted = hashBackupCode(backupCode);
+    const codes = Array.isArray(u.twoFactorBackupCodes) ? u.twoFactorBackupCodes : [];
+    const idx = codes.findIndex((c) => c && !c.usedAt && c.hash === wanted);
+    if (idx >= 0) {
+      codes[idx]!.usedAt = new Date().toISOString();
+      await rawExecute(`UPDATE users SET "twoFactorBackupCodes"=$1 WHERE id=$2`, [JSON.stringify(codes), userId]);
+      return true;
+    }
+  }
+  return false;
+}
+
+// POST /2fa/verify-login (ويب) — يكمل الدخول بكوكيز الجلسة.
+router.post("/2fa/verify-login", loginLimiter, async (req, res) => {
+  try {
+    const { pendingToken, token, backupCode } = zodParse(verifyLogin2faSchema.safeParse(req.body ?? {}));
+    const pending = (() => {
+      try { return verifyPending2faToken(pendingToken); }
+      catch { throw new ForbiddenError("انتهت الجلسة المؤقتة، أعد تسجيل الدخول"); }
+    })();
+    if (!(await passSecondFactor(pending.userId, token, backupCode))) {
+      throw new ForbiddenError("رمز التحقق غير صحيح");
+    }
+    const ctx = await loadUserSessionContext(pending.userId, pending.employeeId);
+    const ipAddress = req.ip ?? null;
+    const session = await createUserSession({
+      userId: pending.userId, assignmentId: pending.assignmentId, role: pending.role,
+      userAgent: req.headers["user-agent"] ?? null, ipAddress,
+    });
+    setAccessTokenCookie(res, session.accessToken);
+    setRefreshTokenCookie(res, session.refreshToken);
+    setCsrfCookie(res);
+    emitEvent({ companyId: ctx.primary.companyId, branchId: ctx.primary.branchId ?? undefined, userId: pending.userId, action: "auth.login.2fa_success", entity: "users", entityId: pending.userId, ip: ipAddress || "unknown" }).catch((e) => logger.error(e, "auth background task failed"));
+    res.json({ assignments: ctx.assignments, userRoles: ctx.userRoles });
+  } catch (err) {
+    handleRouteError(err, res, "2FA verify-login error:");
+  }
+});
+
+// POST /mobile/2fa/verify-login — نفس المنطق، التوكنات في الجسم.
+router.post("/mobile/2fa/verify-login", loginLimiter, async (req, res) => {
+  try {
+    const { pendingToken, token, backupCode } = zodParse(verifyLogin2faSchema.safeParse(req.body ?? {}));
+    const pending = (() => {
+      try { return verifyPending2faToken(pendingToken); }
+      catch { throw new ForbiddenError("انتهت الجلسة المؤقتة، أعد تسجيل الدخول"); }
+    })();
+    if (!(await passSecondFactor(pending.userId, token, backupCode))) {
+      throw new ForbiddenError("رمز التحقق غير صحيح");
+    }
+    const ctx = await loadUserSessionContext(pending.userId, pending.employeeId);
+    const ipAddress = req.ip ?? null;
+    const session = await createUserSession({
+      userId: pending.userId, assignmentId: pending.assignmentId, role: pending.role,
+      userAgent: req.headers["user-agent"] ?? null, ipAddress,
+    });
+    emitEvent({ companyId: ctx.primary.companyId, branchId: ctx.primary.branchId ?? undefined, userId: pending.userId, action: "auth.login.2fa_success", entity: "users", entityId: pending.userId, ip: ipAddress || "unknown", details: JSON.stringify({ channel: "mobile" }) }).catch((e) => logger.error(e, "auth background task failed"));
+    res.json({
+      tokenType: session.tokenType,
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+      accessTokenExpiresIn: session.accessTokenExpiresIn,
+      refreshTokenExpiresIn: session.refreshTokenExpiresIn,
+      assignments: ctx.assignments,
+      userRoles: ctx.userRoles,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Mobile 2FA verify-login error:");
+  }
+});
+
+// ─── #2712 (الدفعة 2) — إدارة الجلسات النشطة (الأجهزة) ───────────────────────
+// مبنية على refresh_tokens (مخزن الجلسات الفعلي). يتصرّف المستخدم في جلساته
+// هو فقط (ownership عبر userId)، والجلسة الحالية تُميَّز بمطابقة كوكي التحديث.
+interface SessionListRow {
+  id: number;
+  ipAddress: string | null;
+  userAgent: string | null;
+  createdAt: string;
+}
+
+// GET /sessions — الجلسات النشطة (غير الملغاة وغير المنتهية).
+router.get("/sessions", authMiddleware, authedUserLimiter, async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const currentRefresh: string | null = req.cookies?.erp_refresh ?? null;
+    const rows = await rawQuery<SessionListRow>(
+      `SELECT id, "ipAddress", "userAgent", "createdAt"
+         FROM refresh_tokens
+        WHERE "userId"=$1 AND "revokedAt" IS NULL AND "expiresAt" > NOW()
+        ORDER BY "createdAt" DESC`,
+      [scope.userId],
+    );
+    let currentId: number | null = null;
+    if (currentRefresh) {
+      const [cur] = await rawQuery<{ id: number }>(
+        `SELECT id FROM refresh_tokens WHERE token=$1 AND "userId"=$2 LIMIT 1`,
+        [currentRefresh, scope.userId],
+      );
+      currentId = cur?.id ?? null;
+    }
+    res.json({ data: rows.map((r) => ({ ...r, current: r.id === currentId })) });
+  } catch (err) {
+    handleRouteError(err, res, "List sessions error:");
+  }
+});
+
+// POST /sessions/:id/revoke — إنهاء جلسة محددة (يملكها المستخدم).
+router.post("/sessions/:id/revoke", authMiddleware, authedUserLimiter, async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id);
+    const { affectedRows } = await rawExecute(
+      `UPDATE refresh_tokens SET "revokedAt"=NOW() WHERE id=$1 AND "userId"=$2 AND "revokedAt" IS NULL`,
+      [id, scope.userId],
+    );
+    if (!affectedRows) throw new NotFoundError("الجلسة غير موجودة أو منتهية");
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "users", entityId: scope.userId, after: { reason: "session_revoked", sessionId: id } }).catch((e) => logger.error(e, "auth background task failed"));
+    res.json({ success: true, message: "تم إنهاء الجلسة" });
+  } catch (err) {
+    handleRouteError(err, res, "Revoke session error:");
+  }
+});
+
+// POST /sessions/revoke-others — إنهاء كل الجلسات عدا الحالية.
+router.post("/sessions/revoke-others", authMiddleware, authedUserLimiter, async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const currentRefresh: string | null = req.cookies?.erp_refresh ?? null;
+    const { affectedRows } = await rawExecute(
+      `UPDATE refresh_tokens SET "revokedAt"=NOW()
+        WHERE "userId"=$1 AND "revokedAt" IS NULL AND ($2::text IS NULL OR token <> $2)`,
+      [scope.userId, currentRefresh],
+    );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "users", entityId: scope.userId, after: { reason: "sessions_revoked_others", count: affectedRows } }).catch((e) => logger.error(e, "auth background task failed"));
+    res.json({ success: true, revoked: affectedRows, message: "تم إنهاء بقية الجلسات" });
+  } catch (err) {
+    handleRouteError(err, res, "Revoke other sessions error:");
   }
 });
 

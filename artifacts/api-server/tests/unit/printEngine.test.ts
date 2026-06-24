@@ -338,6 +338,14 @@ describe("Print Engine v2 — variable substitution", () => {
       // CRM activity types
       ["call", "مكالمة"],
       ["meeting", "اجتماع"],
+      // Warehouse lot / serial lifecycle — mirrored from the SPA STATUS_LABELS
+      ["in_stock", "في المخزن"],
+      ["reserved", "محجوز"],
+      ["sold", "مُباع"],
+      ["scrapped", "متلف"],
+      ["quarantine", "حجر صحي"],
+      ["recalled", "مستدعى"],
+      ["reviewed", "مراجَع"],
       // Currency codes — Saudi convention renders the Arabic symbol next
       // to amounts instead of the ISO triplet.
       ["SAR", "ر.س"],

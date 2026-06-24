@@ -22,8 +22,10 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const REPO_ROOT = join(import.meta.dirname!, "../../../..");
+// U-07 Phase 13 — the agent-balances report (which owns the
+// agent_pilgrim_counts CTE) was carved into umrah-reports.ts.
 const SRC = readFileSync(
-  join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-entities.ts"),
+  join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-reports.ts"),
   "utf8",
 );
 

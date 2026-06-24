@@ -21,7 +21,7 @@ import {
  *      and renders status badges + category filter.
  */
 const ROUTE = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-reports.ts"),
   "utf8",
 );
 const HUB = readFileSync(

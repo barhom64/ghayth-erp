@@ -1,0 +1,171 @@
+name: e2e
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ghayth
+          POSTGRES_PASSWORD: ghayth
+          POSTGRES_DB: ghayth
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgres://ghayth:ghayth@localhost:5432/ghayth
+      # api-server bootstraps this admin on a fresh DB; the values match the
+      # e2e login defaults in e2e/tests/_helpers/login.ts so login() works.
+      ADMIN_EMAIL: admin@ghayth.com
+      ADMIN_PASSWORD: Admin@123456
+      # auth.ts refuses to load with a JWT_SECRET shorter than 32 chars.
+      # CI-only value — never authenticates a production session.
+      JWT_SECRET: ci-only-jwt-secret-thirty-two-chars-aaaaaaaaaaaaaaaa
+      # NODE_ENV intentionally unset: `vite build` derives its own
+      # NODE_ENV=production internally (see audit-runtime.yml Task #404 note).
+      HUSKY: '0'
+      # vite.config.ts requires BASE_PATH at build time (normally injected by
+      # the Replit workflow runner). PORT is set per-step, not globally, so each
+      # service binds its own port.
+      BASE_PATH: '/'
+      # ghayth-erp bundles ~1.4MB of vendor code; give Node enough heap so
+      # minification doesn't OOM on the runner.
+      NODE_OPTIONS: '--max-old-space-size=4096'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        # REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE is unset in CI, so the e2e
+        # config falls back to Playwright's own managed browser — install it
+        # (with OS deps) via the package's install-browsers script.
+        run: pnpm --filter @workspace/e2e run install-browsers
+
+      - name: Build ghayth-erp frontend
+        # PORT is read by vite.config.ts at build time but doesn't bind a
+        # socket; any value satisfies the assertion.
+        env:
+          PORT: '5173'
+        run: pnpm --filter @workspace/ghayth-erp run build
+
+      - name: Start api-server
+        env:
+          PORT: '8080'
+        run: |
+          pnpm --filter @workspace/api-server start > /tmp/api-server.log 2>&1 &
+          echo $! > /tmp/api-server.pid
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:8080/api/healthz >/dev/null 2>&1; then
+              echo "api-server up"; break
+            fi
+            sleep 2
+          done
+          curl -fsS http://localhost:8080/api/healthz || (echo "api-server failed to start"; tail -200 /tmp/api-server.log; exit 1)
+
+      - name: Start ghayth-erp (preview)
+        env:
+          # The vite preview script in artifacts/ghayth-erp/package.json is
+          # named `serve` (not `preview`). vite preview honours PORT.
+          PORT: '5173'
+        run: |
+          pnpm --filter @workspace/ghayth-erp run serve > /tmp/ghayth-erp.log 2>&1 &
+          echo $! > /tmp/ghayth-erp.pid
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:5173/ >/dev/null 2>&1; then
+              echo "ghayth-erp up"; break
+            fi
+            sleep 2
+          done
+          curl -fsS http://localhost:5173/ >/dev/null || (echo "ghayth-erp failed to start"; tail -200 /tmp/ghayth-erp.log; exit 1)
+
+      - name: Start reverse proxy (api on /api, frontend on /)
+        run: |
+          # Mimic the Replit shared proxy: route /api/* to api-server (8080)
+          # and everything else to the Vite preview (5173) on localhost:80.
+          npm install -g http-proxy@1.18.1
+          node -e "
+            const http = require('http');
+            const httpProxy = require('http-proxy');
+            const api = httpProxy.createProxyServer({ target: 'http://localhost:8080' });
+            const fe  = httpProxy.createProxyServer({ target: 'http://localhost:5173' });
+            http.createServer((req, res) => {
+              if (req.url.startsWith('/api')) return api.web(req, res, {}, e => { res.statusCode = 502; res.end(String(e)); });
+              return fe.web(req, res, {}, e => { res.statusCode = 502; res.end(String(e)); });
+            }).listen(80, () => console.log('proxy on :80'));
+          " > /tmp/proxy.log 2>&1 &
+          echo $! > /tmp/proxy.pid
+          sleep 2
+          curl -fsS http://localhost/api/healthz || (echo "proxy failed"; tail -200 /tmp/proxy.log; exit 1)
+
+      - name: Run e2e suite
+        # CI is set by GitHub Actions, so the e2e config enables retries(2),
+        # the github + html reporters, and workers(1). Single-worker is
+        # deliberate: every persona spec logs in as the SAME admin account and
+        # the server rotates refresh tokens per-user, so two parallel workers
+        # invalidate each other's session mid-test (see the workers note in
+        # playwright.config.ts). Serializing trades wall-clock for determinism —
+        # the full suite still finishes well inside the 30-min budget.
+        run: pnpm --filter @workspace/e2e test
+
+      - name: Upload Playwright HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          if-no-files-found: warn
+
+      - name: Upload Playwright traces/screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results
+          path: e2e/test-results/
+          if-no-files-found: warn
+
+      - name: Tail server logs on failure
+        if: failure()
+        run: |
+          echo "=== api-server.log (tail) ==="; tail -200 /tmp/api-server.log || true
+          echo "=== ghayth-erp.log (tail) ==="; tail -200 /tmp/ghayth-erp.log || true
+          echo "=== proxy.log (tail) ===";       tail -200 /tmp/proxy.log     || true
+
+      - name: Stop services
+        if: always()
+        run: |
+          for f in /tmp/api-server.pid /tmp/ghayth-erp.pid /tmp/proxy.pid; do
+            [ -f "$f" ] && kill "$(cat "$f")" 2>/dev/null || true
+          done

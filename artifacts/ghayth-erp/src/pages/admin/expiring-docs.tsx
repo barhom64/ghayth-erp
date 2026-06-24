@@ -16,7 +16,8 @@ import {
 } from "@/components/ui/tabs";
 import { Link } from "wouter";
 import { formatNumber } from "@/lib/formatters";
-import { Stamp, Car, AlertTriangle, RefreshCw, IdCard, Calendar } from "lucide-react";
+import { Stamp, Car, AlertTriangle, IdCard, Calendar } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 import { PrintButton } from "@/components/shared/print-button";
 
 interface ExpiringEmployee {
@@ -288,12 +289,7 @@ export default function ExpiringDocsPage() {
             onChange={(e) => setDays(Math.max(1, Number(e.target.value) || 30))}
             className="h-8 w-20 text-xs font-mono" />
           <span className="text-xs text-muted-foreground">يوم</span>
-          <Button variant="outline" size="sm"
-            onClick={() => { refetchEmp(); refetchVeh(); }}
-            disabled={empFetching || vehFetching}>
-            <RefreshCw className={`h-4 w-4 me-1 ${(empFetching || vehFetching) ? "animate-spin" : ""}`} />
-            تحديث
-          </Button>
+          <RefreshAction onRefresh={() => { refetchEmp(); refetchVeh(); }} disabled={empFetching || vehFetching} />
         </div>
       }
     >

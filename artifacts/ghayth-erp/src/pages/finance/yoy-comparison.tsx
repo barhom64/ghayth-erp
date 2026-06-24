@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { exportRowsToCsv } from "@/lib/unified-export";
 import { useApiQuery } from "@/lib/api";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -367,94 +367,90 @@ export default function YoyComparisonPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead className="bg-muted/50">
-              <tr>
-                <th className="text-start p-2">الحساب</th>
-                <th className="text-end p-2">{year} YTD</th>
-                <th className="text-end p-2">{year - 1} YTD</th>
-                <th className="text-end p-2">الفرق</th>
-                <th className="text-end p-2">% النمو</th>
-              </tr>
-            </thead>
-            <tbody>
-              {revenues.length > 0 && (
-                <tr className="bg-emerald-50/50 font-semibold">
-                  <td colSpan={5} className="p-2">الإيرادات</td>
-                </tr>
-              )}
-              {revenues.map((r) => (
-                <tr key={`rev-${r.code}`} className="border-t hover:bg-muted/30">
-                  <td className="p-2">
-                    <div className="flex flex-col">
-                      <span className="font-mono text-[10px]">{r.code}</span>
-                      <span>{r.name}</span>
-                    </div>
-                  </td>
-                  <td className="p-2 text-end font-mono">{r.current === 0 ? "—" : formatCurrency(r.current)}</td>
-                  <td className="p-2 text-end font-mono text-muted-foreground">{r.prior === 0 ? "—" : formatCurrency(r.prior)}</td>
-                  <td className={`p-2 text-end font-mono ${r.variance > 0 ? "text-emerald-700" : r.variance < 0 ? "text-red-700" : ""}`}>
+          <DataTable
+            data={rows}
+            rowKey={(r) => `${r.type}-${r.code}`}
+            noToolbar
+            pageSize={0}
+            className="text-xs"
+            groupBy="type"
+            columns={[
+              {
+                key: "account", header: "الحساب", sortable: false,
+                render: (r) => (
+                  <div className="flex flex-col">
+                    <span className="font-mono text-[10px]">{r.code}</span>
+                    <span>{r.name}</span>
+                  </div>
+                ),
+                footer: () => <span className="text-status-info-foreground">صافي الربح</span>,
+              },
+              {
+                key: "current", header: `${year} YTD`, align: "end", sortable: false,
+                render: (r) => <span className="font-mono">{r.current === 0 ? "—" : formatCurrency(r.current)}</span>,
+                footer: () => (
+                  <span className={`font-mono ${curNet >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                    {formatCurrency(curNet)}
+                  </span>
+                ),
+              },
+              {
+                key: "prior", header: `${year - 1} YTD`, align: "end", sortable: false,
+                render: (r) => <span className="font-mono text-muted-foreground">{r.prior === 0 ? "—" : formatCurrency(r.prior)}</span>,
+                footer: () => (
+                  <span className={`font-mono ${priorNet >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                    {formatCurrency(priorNet)}
+                  </span>
+                ),
+              },
+              {
+                key: "variance", header: "الفرق", align: "end", sortable: false,
+                render: (r) => (
+                  <span className={`font-mono ${r.type === "revenue"
+                    ? (r.variance > 0 ? "text-emerald-700" : r.variance < 0 ? "text-red-700" : "")
+                    : (r.variance > 0 ? "text-red-700" : r.variance < 0 ? "text-emerald-700" : "")}`}>
                     {Math.abs(r.variance) < 0.005 ? "—" : (r.variance > 0 ? "+" : "") + formatCurrency(r.variance)}
+                  </span>
+                ),
+                footer: () => (
+                  <span className={`font-mono ${netVariance >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                    {netVariance > 0 ? "+" : ""}{formatCurrency(netVariance)}
+                  </span>
+                ),
+              },
+              {
+                key: "variancePct", header: "% النمو", align: "end", sortable: false,
+                render: (r) => renderPct(r.variancePct, r.type === "revenue"),
+                footer: () => renderPct(netVariancePct, true),
+              },
+            ] satisfies DataTableColumn<ComparisonRow>[]}
+            renderGroupHeader={(groupValue) => (
+              groupValue === "revenue" ? "الإيرادات" : "المصروفات"
+            )}
+            renderGroupSubtotal={(groupValue) => (
+              groupValue === "revenue" ? (
+                <tr className="bg-emerald-100/60 font-bold">
+                  <td className="p-2">إجمالي الإيرادات</td>
+                  <td className="p-2 text-end font-mono">{formatCurrency(totalCurRevenue)}</td>
+                  <td className="p-2 text-end font-mono">{formatCurrency(totalPriorRevenue)}</td>
+                  <td className={`p-2 text-end font-mono ${revVariance >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                    {revVariance > 0 ? "+" : ""}{formatCurrency(revVariance)}
                   </td>
-                  <td className="p-2 text-end">{renderPct(r.variancePct, true)}</td>
+                  <td className="p-2 text-end">{renderPct(revVariancePct, true)}</td>
                 </tr>
-              ))}
-              <tr className="bg-emerald-100/60 font-bold border-t-2 border-emerald-300">
-                <td className="p-2">إجمالي الإيرادات</td>
-                <td className="p-2 text-end font-mono">{formatCurrency(totalCurRevenue)}</td>
-                <td className="p-2 text-end font-mono">{formatCurrency(totalPriorRevenue)}</td>
-                <td className={`p-2 text-end font-mono ${revVariance >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-                  {revVariance > 0 ? "+" : ""}{formatCurrency(revVariance)}
-                </td>
-                <td className="p-2 text-end">{renderPct(revVariancePct, true)}</td>
-              </tr>
-
-              {expenses.length > 0 && (
-                <tr className="bg-red-50/50 font-semibold">
-                  <td colSpan={5} className="p-2">المصروفات</td>
-                </tr>
-              )}
-              {expenses.map((r) => (
-                <tr key={`exp-${r.code}`} className="border-t hover:bg-muted/30">
-                  <td className="p-2">
-                    <div className="flex flex-col">
-                      <span className="font-mono text-[10px]">{r.code}</span>
-                      <span>{r.name}</span>
-                    </div>
+              ) : (
+                <tr className="bg-red-100/60 font-bold">
+                  <td className="p-2">إجمالي المصروفات</td>
+                  <td className="p-2 text-end font-mono">{formatCurrency(totalCurExpense)}</td>
+                  <td className="p-2 text-end font-mono">{formatCurrency(totalPriorExpense)}</td>
+                  <td className={`p-2 text-end font-mono ${expVariance <= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                    {expVariance > 0 ? "+" : ""}{formatCurrency(expVariance)}
                   </td>
-                  <td className="p-2 text-end font-mono">{r.current === 0 ? "—" : formatCurrency(r.current)}</td>
-                  <td className="p-2 text-end font-mono text-muted-foreground">{r.prior === 0 ? "—" : formatCurrency(r.prior)}</td>
-                  <td className={`p-2 text-end font-mono ${r.variance > 0 ? "text-red-700" : r.variance < 0 ? "text-emerald-700" : ""}`}>
-                    {Math.abs(r.variance) < 0.005 ? "—" : (r.variance > 0 ? "+" : "") + formatCurrency(r.variance)}
-                  </td>
-                  <td className="p-2 text-end">{renderPct(r.variancePct, false)}</td>
+                  <td className="p-2 text-end">{renderPct(expVariancePct, false)}</td>
                 </tr>
-              ))}
-              <tr className="bg-red-100/60 font-bold border-t-2 border-red-300">
-                <td className="p-2">إجمالي المصروفات</td>
-                <td className="p-2 text-end font-mono">{formatCurrency(totalCurExpense)}</td>
-                <td className="p-2 text-end font-mono">{formatCurrency(totalPriorExpense)}</td>
-                <td className={`p-2 text-end font-mono ${expVariance <= 0 ? "text-emerald-700" : "text-red-700"}`}>
-                  {expVariance > 0 ? "+" : ""}{formatCurrency(expVariance)}
-                </td>
-                <td className="p-2 text-end">{renderPct(expVariancePct, false)}</td>
-              </tr>
-
-              <tr className="bg-status-info-surface/40 font-bold border-t-2 border-status-info-surface">
-                <td className="p-2 text-status-info-foreground">صافي الربح</td>
-                <td className={`p-2 text-end font-mono ${curNet >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-                  {formatCurrency(curNet)}
-                </td>
-                <td className={`p-2 text-end font-mono ${priorNet >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-                  {formatCurrency(priorNet)}
-                </td>
-                <td className={`p-2 text-end font-mono ${netVariance >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-                  {netVariance > 0 ? "+" : ""}{formatCurrency(netVariance)}
-                </td>
-                <td className="p-2 text-end">{renderPct(netVariancePct, true)}</td>
-              </tr>
-            </tbody>
-          </table>
+              )
+            )}
+          />
         </CardContent>
       </Card>
     </PageShell>

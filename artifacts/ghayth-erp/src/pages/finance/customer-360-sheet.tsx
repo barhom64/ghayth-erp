@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { exportRowsToCsv } from "@/lib/unified-export";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -374,7 +374,7 @@ export default function Customer360SheetPage() {
                 <CardTitle className="text-base">أعمار الفواتير المفتوحة</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-5 gap-2">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
                   {[
                     { key: "current" as const, label: "حالي", color: "" },
                     { key: "1-30" as const, label: "1-30 يوم", color: "text-status-success-foreground" },
@@ -407,32 +407,41 @@ export default function Customer360SheetPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-0">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-xs text-muted-foreground">
-                      <th className="text-start py-2 px-2">التاريخ</th>
-                      <th className="text-start py-2 px-2">المرجع</th>
-                      <th className="text-start py-2 px-2">الوصف</th>
-                      <th className="text-end py-2 px-2">مدين</th>
-                      <th className="text-end py-2 px-2">دائن</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recentMovements.map(m => (
-                      <tr key={`${m.movementType}-${m.id}`} className="border-b">
-                        <td className="py-1.5 px-2 text-xs tabular-nums">{formatDateAr(m.date.split("T")[0])}</td>
-                        <td className="py-1.5 px-2 font-mono text-xs">{m.ref}</td>
-                        <td className="py-1.5 px-2 text-xs">{m.description}</td>
-                        <td className="py-1.5 px-2 text-end tabular-nums">
-                          {Number(m.debit) > 0 ? formatCurrency(Number(m.debit)) : "—"}
-                        </td>
-                        <td className="py-1.5 px-2 text-end tabular-nums">
-                          {Number(m.credit) > 0 ? formatCurrency(Number(m.credit)) : "—"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div className="overflow-x-auto">
+                  <DataTable
+                    data={recentMovements}
+                    rowKey={(m) => `${m.movementType}-${m.id}`}
+                    noToolbar
+                    pageSize={0}
+                    className="text-sm"
+                    columns={[
+                      {
+                        key: "date", header: "التاريخ",
+                        render: (m) => <span className="text-xs tabular-nums">{formatDateAr(m.date.split("T")[0])}</span>,
+                      },
+                      {
+                        key: "ref", header: "المرجع", ltr: true,
+                        render: (m) => <span className="font-mono text-xs">{m.ref}</span>,
+                      },
+                      {
+                        key: "description", header: "الوصف",
+                        render: (m) => <span className="text-xs">{m.description}</span>,
+                      },
+                      {
+                        key: "debit", header: "مدين", align: "end",
+                        render: (m) => (
+                          <span className="tabular-nums">{Number(m.debit) > 0 ? formatCurrency(Number(m.debit)) : "—"}</span>
+                        ),
+                      },
+                      {
+                        key: "credit", header: "دائن", align: "end",
+                        render: (m) => (
+                          <span className="tabular-nums">{Number(m.credit) > 0 ? formatCurrency(Number(m.credit)) : "—"}</span>
+                        ),
+                      },
+                    ] satisfies DataTableColumn<StmtResp["movements"][number]>[]}
+                  />
+                </div>
               </CardContent>
             </Card>
           )}

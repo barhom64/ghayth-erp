@@ -37,35 +37,12 @@
 # Baseline: hardened generic-tolerant rawQuery extractor
 # ──────────────────────────────────────────────────────────────────────
 # The shared lib/raw-query-bodies.mjs extractor now scans typed
-# rawQuery<T>(`…`) calls the old narrow matcher skipped. The entries below
-# are bare columns inside JOIN/EXISTS that the static scanner cannot prove
-# unambiguous (most are EXISTS-subquery refs bound to a single relation —
-# false positives the scanner can't resolve). Captured as a baseline so
-# the guard can be enforced in CI; new ambiguous refs outside this list
-# still fail. Qualify + remove the matching line when a query is touched.
-routes/cargo.ts:action
-routes/cargo.ts:companyId
-routes/cargo.ts:createdAt
-routes/cargo.ts:details
-routes/cargo.ts:entity
-routes/cargo.ts:entityId
-routes/cargo.ts:userId
-routes/finance-accounts.ts:code
-routes/finance-accounts.ts:companyId
-routes/finance-accounts.ts:deletedAt
-routes/finance-accounts.ts:parentCode
-routes/finance-accounts.ts:type
-routes/finance-algorithms.ts:supplierId
-routes/finance-algorithms.ts:totalAmount
-routes/finance-cost-centers.ts:companyId
-routes/finance-cost-centers.ts:createdAt
-routes/finance-cost-centers.ts:id
-routes/finance-cost-centers.ts:parentId
-routes/finance-cost-centers.ts:status
-routes/finance-custodies.ts:employeeId
-routes/finance-reports.ts:activityType
-routes/finance-reports.ts:createdAt
-routes/hr-saudi-compliance.ts:employeeId
+# rawQuery<T>(`…`) calls the old narrow matcher skipped. The original
+# bare-column baseline here was retired as the finance CTE/JOIN columns
+# were qualified (ghost-row/tenant work) and the scanner improved — only
+# hr.ts:status remains: a bare "status" inside an EXISTS bound to a single
+# relation that the static scanner cannot prove unambiguous (false
+# positive). Qualify + remove the line when that query is next touched.
 routes/hr.ts:status
 
 # ── Scanner-heuristic FPs (missing-column class) ───────────────────────
@@ -77,33 +54,16 @@ routes/hr.ts:status
 #                   detector mis-binds `d` to a `departments d` in another handler.
 #   v.brand       → `v.make AS brand` (output alias; fleet_vehicles has `make`).
 #   pr.deductions → `pr."totalDeductions" AS credit` (output alias).
-#   grn.status    → `CASE WHEN grn."journalId"… END AS status` (output alias).
-#   je.postingDate→ `je."date"::text AS "postingDate"` (output alias).
 #   cd.title/type → company_documents is created dynamically at runtime with
 #                   title/type cols (INSERT proves it); not in the static dump.
 #   ea.isActive   → no literal ea.isActive; alias mis-resolution (employee_assignments has `status`).
 routes/documents.ts:d.deletedAt
 routes/employees.ts:v.brand
 routes/finance-reports.ts:pr.deductions
-routes/finance-reports.ts:grn.status
-routes/finance-reports.ts:je.postingDate
 routes/hr.ts:cd.title
 routes/hr.ts:cd.type
 routes/workspace.ts:ea.isActive
 
-# ── Stale-dump FPs (missing-column class, surfaced 2026-06-08) ──────────
-# Same root cause as scripts/schema-drift-allowlist.txt: CI loads the
-# committed (stale) db/schema*.sql dump and marks every migration at or
-# below db/.baseline-cutoff (258) "applied" WITHOUT running it. Several
-# columns added by PRE-cutoff migrations are therefore missing from the CI
-# harness even though production has them, so the scanner reports them as
-# "column does not exist". Each was verified to EXIST in the live DB:
-#   jl.branchId      → journal_lines.branchId    (migration 236)
-#   gl.deletedAt     → gov_integration_links.deletedAt (pre-cutoff)
-#   e.isNonResident  → employees.isNonResident   (migration 233)
-#   e.whtRate        → employees.whtRate         (migration 233)
-# Drop the matching line once the committed dump is regenerated.
-routes/finance-cost-centers.ts:jl.branchId
-routes/gov-integrations.ts:gl.deletedAt
-routes/hr.ts:e.isNonResident
-routes/hr.ts:e.whtRate
+# (The 2026-06-08 "stale-dump FPs" block — jl.branchId / gl.deletedAt /
+# e.isNonResident / e.whtRate — was retired: those columns now resolve in
+# the CI harness, so the entries went stale and were removed.)

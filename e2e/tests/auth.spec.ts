@@ -14,7 +14,12 @@ const PASSWORD = process.env.E2E_USER_PASSWORD ?? "Admin@123456";
 
 test.describe("Auth", () => {
   test("logs in, lands on dashboard, then logs out", async ({ page }) => {
-    await page.goto("/");
+    // Go straight to /login. goto("/") relies on the SPA's unauthenticated
+    // "/" → "/login" client redirect, which races the field fills (the
+    // email can land on the about-to-unmount form and get dropped on
+    // remount → empty-email login → bounce back to /login). See
+    // _helpers/login.ts for the canonical race-free flow.
+    await page.goto("/login");
 
     // Login form should be the entry surface for an anonymous visit.
     // Use the input id directly: getByLabel(/كلمة/i) matches both the
@@ -36,7 +41,7 @@ test.describe("Auth", () => {
   });
 
   test("rejects invalid credentials with a visible error", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/login");
     await page.locator("input#email").fill(EMAIL);
     await page.locator("input#password").fill("definitely-not-the-password");
     await page.getByRole("button", { name: /login|دخول/i }).click();

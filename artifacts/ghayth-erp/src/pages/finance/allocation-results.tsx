@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn, AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
@@ -57,20 +57,22 @@ function getEntityLink(sourceTable: string, sourceLineId: number): string | null
 }
 
 export default function AllocationResultsPage() {
-  const [sourceFilter, setSourceFilter] = useState<string>("");
-  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [filters, setFilters] = useFilters();
 
   const params = new URLSearchParams();
-  if (sourceFilter) params.set("sourceTable", sourceFilter);
-  if (statusFilter) params.set("status", statusFilter);
+  if (filters.sourceTable) params.set("sourceTable", filters.sourceTable);
+  if (filters.status) params.set("status", filters.status);
   const qs = params.toString();
 
   const { data, isLoading, isError } = useApiQuery<{ data: AllocationResult[]; total: number }>(
-    ["allocation-results", sourceFilter, statusFilter],
+    ["allocation-results", filters.sourceTable, filters.status],
     `/finance/allocation-results${qs ? `?${qs}` : ""}`,
   );
 
   const rows = data?.data ?? [];
+  const filtered = applyFilters(rows, filters, {
+    searchFields: ["resolvedAccountCode", "documentType"],
+  });
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   if (isLoading) return <LoadingSpinner />;
@@ -165,7 +167,7 @@ export default function AllocationResultsPage() {
 
   return (
     <PageShell
-      title="سجل توجيه البنود (Allocation Audit Trail)"
+      title="سجل توجيه البنود"
       subtitle="نتائج التوجيه المحاسبي — أي بند تم توجيهه، بأي قاعدة، إلى أي حساب ومركز تكلفة، ومن قام بالتجاوز اليدوي"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
@@ -242,33 +244,21 @@ export default function AllocationResultsPage() {
         </Card>
       </div>
 
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <span className="text-xs text-muted-foreground">المصدر:</span>
-        <Badge variant={sourceFilter === "" ? "default" : "outline"}
-          className="cursor-pointer text-xs"
-          onClick={() => setSourceFilter("")}>الكل</Badge>
-        {Object.entries(SOURCE_LABEL).map(([k, v]) => (
-          <Badge
-            key={k}
-            variant={sourceFilter === k ? "default" : "outline"}
-            className="cursor-pointer text-xs"
-            onClick={() => setSourceFilter(k)}
-          >{v}</Badge>
-        ))}
-        <div className="w-px h-4 bg-border mx-2" />
-        <span className="text-xs text-muted-foreground">الحالة:</span>
-        <Badge variant={statusFilter === "" ? "default" : "outline"}
-          className="cursor-pointer text-xs"
-          onClick={() => setStatusFilter("")}>الكل</Badge>
-        {Object.entries(STATUS_INFO).map(([k, v]) => (
-          <Badge
-            key={k}
-            variant={statusFilter === k ? "default" : "outline"}
-            className="cursor-pointer text-xs"
-            onClick={() => setStatusFilter(k)}
-          >{v.label}</Badge>
-        ))}
-      </div>
+      <AdvancedFilters
+        config={{
+          searchPlaceholder: "بحث بالحساب أو نوع المستند...",
+          statuses: Object.entries(STATUS_INFO).map(([value, v]) => ({ value, label: v.label })),
+          extraFilters: [{
+            key: "sourceTable",
+            label: "المصدر",
+            options: Object.entries(SOURCE_LABEL).map(([value, label]) => ({ value, label })),
+          }],
+          showDateRange: false,
+        }}
+        values={filters}
+        onChange={setFilters}
+        resultCount={filtered.length}
+      />
 
       <Card>
         <CardHeader className="pb-2">
@@ -276,11 +266,12 @@ export default function AllocationResultsPage() {
         </CardHeader>
         <CardContent className="p-0">
           <DataTable
-            columns={cols} data={rows}
+            columns={cols} data={filtered}
             onSortedDataChange={setPrintRows}
             pageSize={50}
+            noToolbar
             emptyMessage={
-              sourceFilter || statusFilter
+              filters.sourceTable || filters.status
                 ? "لا توجد قرارات بهذي الفلاتر"
                 : "لا توجد قرارات بعد — الـ resolver يحفظ كل قرار توجيه آلي ويدوي هنا"
             }

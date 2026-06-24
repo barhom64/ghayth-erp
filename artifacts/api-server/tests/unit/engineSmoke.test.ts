@@ -65,8 +65,6 @@ describe("HREngine public API", () => {
     expect(typeof hrEngine.postPayrollGL).toBe("function");
     expect(typeof hrEngine.postLoanDisbursementGL).toBe("function");
     expect(typeof hrEngine.postExitSettlementGL).toBe("function");
-    expect(typeof hrEngine.postLeaveAccrualGL).toBe("function");
-    expect(typeof hrEngine.postEOSAccrualGL).toBe("function");
     expect(typeof hrEngine.postPayrollRunGL).toBe("function");
   });
 

@@ -293,8 +293,7 @@ custodiesRouter.get("/custodies", authorize({ feature: "finance.custodies", acti
       },
     }));
   } catch (err) {
-    logger.error(err, "Get custodies error:");
-    res.json({ data: [], summary: { total: 0, totalAmount: 0, totalRemaining: 0, activeCount: 0, overdueCount: 0, pendingCount: 0 } });
+    handleRouteError(err, res, "Get custodies error:");
   }
 });
 
@@ -603,7 +602,7 @@ custodiesRouter.post("/custodies", authorize({ feature: "finance.custodies", act
       });
     }
 
-    const sourceAcct = sourceAccountCode || "1100";
+    const sourceAcct = sourceAccountCode || "1111";
 
     // #1715 guardrail #6 — the custody disbursement is a finance operation,
     // so it flows through the unified FinanceOperationContext. When the caller
@@ -634,7 +633,7 @@ custodiesRouter.post("/custodies", authorize({ feature: "finance.custodies", act
     // which silently linked subsidiary balances to the wrong row.
     let custodyEmployeeId: number | null = null;
     const { financialEngine } = await import("../lib/engines/index.js");
-    let custodyAccountCode = await financialEngine.resolveAccountCode(scope.companyId, "custody_account", "debit", "1400");
+    let custodyAccountCode = await financialEngine.resolveAccountCode(scope.companyId, "custody_account", "debit", "1113");
     if (resolvedAssignmentId) {
       const [empRow] = await rawQuery<{ id: number }>(
         `SELECT e.id FROM employee_assignments ea JOIN employees e ON e.id = ea."employeeId" AND e."deletedAt" IS NULL WHERE ea.id = $1 AND ea."companyId" = $2`,
@@ -841,7 +840,7 @@ custodiesRouter.post("/custodies/settle", authorize({ feature: "finance.custodie
       const originalAmount = custodyEntries.reduce(
         (sum: number, e: any) => sum + Number(e.debit || 0), 0
       );
-      const custodyAccountCode = custodyEntries[0]?.accountCode || "1400";
+      const custodyAccountCode = custodyEntries[0]?.accountCode || "1113";
       // Propagate the employeeId from the original custody DR line onto
       // the settlement JE so per-employee custody-outstanding aging stays
       // accurate (the settle entry is the credit-side that closes out
@@ -872,7 +871,7 @@ custodiesRouter.post("/custodies/settle", authorize({ feature: "finance.custodie
         );
       }
 
-      const sourceAcct = sourceAccountCode || "1100";
+      const sourceAcct = sourceAccountCode || "1111";
       const settleRef = `CUSTODY-SETTLE-${idempotencyToken}`;
       // Settlement lands on the custody grant's branch, not the operator's
       // working branch. The header was pulled with branchId above (the
@@ -1023,7 +1022,7 @@ custodiesRouter.post("/custodies/:id/settle", authorize({ feature: "finance.cust
       const originalAmount = custodyLines.reduce(
         (sum: number, e: any) => sum + Number(e.debit || 0) - Number(e.credit || 0), 0
       );
-      const custodyAccountCode = custodyLines[0]?.accountCode || "1400";
+      const custodyAccountCode = custodyLines[0]?.accountCode || "1113";
       // Propagate the employeeId from the original custody DR onto the
       // settlement so per-employee custody-outstanding aging stays tied
       // to the same actor across post + settle.
@@ -1053,7 +1052,7 @@ custodiesRouter.post("/custodies/:id/settle", authorize({ feature: "finance.cust
         );
       }
 
-      const sourceAcct = sourceAccountCode || "1100";
+      const sourceAcct = sourceAccountCode || "1111";
       const { financialEngine } = await import("../lib/engines/index.js");
       const settleRef = `CUSTODY-SETTLE-${idempotencyToken}`;
       const { journalId, alreadyExists } = await financialEngine.postJournalEntry({

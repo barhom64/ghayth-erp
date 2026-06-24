@@ -11,6 +11,9 @@ import {
   PageShell,
   DataTable,
   type DataTableColumn,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
 } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -70,14 +73,14 @@ const STATUS_COLOR: Record<string, string> = {
 
 export default function PurchaseRequestsPage() {
   const { toast } = useToast();
-  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [filters, setFilters] = useFilters();
 
   const params = new URLSearchParams();
-  if (statusFilter) params.set("status", statusFilter);
+  if (filters.status) params.set("status", filters.status);
   const qs = params.toString();
 
   const { data, isLoading, isError } = useApiQuery<{ data: PurchaseRequest[]; total: number }>(
-    ["purchase-requests", statusFilter],
+    ["purchase-requests", filters.status],
     `/finance/purchase-requests${qs ? `?${qs}` : ""}`,
   );
 
@@ -131,6 +134,9 @@ export default function PurchaseRequestsPage() {
   };
 
   const rows = data?.data ?? [];
+  const filtered = applyFilters(rows, filters, {
+    searchFields: ["ref", "description", "supplierName"],
+  });
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   if (isLoading) return <LoadingSpinner />;
@@ -253,7 +259,7 @@ export default function PurchaseRequestsPage() {
 
   return (
     <PageShell
-      title="طلبات الشراء (Purchase Requests)"
+      title="طلبات الشراء"
       subtitle="تدفّق طلب الشراء قبل إصدار أمر الشراء الرسمي — لكل طلب اعتماد ثم تحويل إلى أمر شراء"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
@@ -337,24 +343,16 @@ export default function PurchaseRequestsPage() {
         </CardContent>
       </Card>
 
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <span className="text-xs text-muted-foreground">الحالة:</span>
-        <Badge variant={statusFilter === "" ? "default" : "outline"}
-          className="cursor-pointer text-xs"
-          onClick={() => setStatusFilter("")}>الكل ({rows.length})</Badge>
-        {Object.keys(STATUS_LABEL).map((s) => {
-          const count = rows.filter((r) => r.status === s).length;
-          if (count === 0 && statusFilter !== s) return null;
-          return (
-            <Badge key={s}
-              variant={statusFilter === s ? "default" : "outline"}
-              className="cursor-pointer text-xs"
-              onClick={() => setStatusFilter(s)}>
-              {STATUS_LABEL[s]} ({count})
-            </Badge>
-          );
-        })}
-      </div>
+      <AdvancedFilters
+        config={{
+          searchPlaceholder: "بحث بالمرجع أو الوصف أو المورّد...",
+          statuses: Object.entries(STATUS_LABEL).map(([value, label]) => ({ value, label })),
+          showDateRange: false,
+        }}
+        values={filters}
+        onChange={setFilters}
+        resultCount={filtered.length}
+      />
 
       <Card>
         <CardHeader className="pb-2">
@@ -362,12 +360,13 @@ export default function PurchaseRequestsPage() {
         </CardHeader>
         <CardContent className="p-0">
           <DataTable
-            columns={cols} data={rows}
+            columns={cols} data={filtered}
             onSortedDataChange={setPrintRows}
             pageSize={30}
+            noToolbar
             emptyMessage={
-              statusFilter
-                ? `لا توجد طلبات بحالة "${STATUS_LABEL[statusFilter]}"`
+              filters.status
+                ? `لا توجد طلبات بحالة "${STATUS_LABEL[filters.status]}"`
                 : "لا توجد طلبات شراء — اضغط 'طلب جديد'"
             }
           />

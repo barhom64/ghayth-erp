@@ -176,6 +176,10 @@ const uploadDocumentSchema = z.object({
   storageKey: z.string().min(1),
   retentionUntil: z.string().optional(),
   retentionPolicy: z.string().max(40).optional(),
+  // SHA-256 of the file content, computed client-side at upload (the server
+  // never sees the bytes in the direct-to-storage flow). Enables exact-content
+  // duplicate detection even when a file is renamed. Optional/best-effort.
+  contentHash: z.string().regex(/^[a-f0-9]{64}$/i).optional(),
   entityLinks: z.array(entityLinkItem).optional(),
 });
 
@@ -185,6 +189,16 @@ const createVersionSchema = z.object({
   mimeType: z.string().optional(),
   storageKey: z.string().optional(),
   notes: z.string().optional(),
+});
+
+// Per-link attachment review decision. The verdict lives on the document↔entity
+// link (not the document) so the same file can be accepted for one entity and
+// rejected for another.
+const reviewLinkSchema = z.object({
+  entityType: z.string().min(1),
+  entityId: z.coerce.number().int(),
+  reviewStatus: z.enum(["new", "accepted", "rejected", "needs_replacement", "duplicate"]),
+  reviewNote: z.string().max(2000).optional(),
 });
 
 const updateStatusSchema = z.object({
@@ -254,8 +268,12 @@ router.get("/", authorize({ feature: "documents", action: "list" }), async (req:
 
     if (entity && entityId) {
       const rows = await rawQuery(
-        `SELECT d.* FROM documents d
+        `SELECT d.*, del."reviewStatus", del."reviewedAt", del."reviewNote",
+                emp.name AS "uploaderName"
+         FROM documents d
          JOIN document_entity_links del ON del."documentId" = d.id
+         LEFT JOIN users u ON u.id = d."uploadedBy"
+         LEFT JOIN employees emp ON emp.id = u."employeeId" AND emp."deletedAt" IS NULL
          WHERE del."entityType" = $1 AND del."entityId" = $2
          AND (d."companyId" = $3 OR d."companyId" IS NULL) AND d."deletedAt" IS NULL
          ORDER BY d."createdAt" DESC LIMIT 500`,
@@ -321,7 +339,7 @@ router.post("/upload", authorize({ feature: "documents", action: "create" }), as
   try {
     const body = zodParse(uploadDocumentSchema.safeParse(req.body));
     const scope = req.scope!;
-    const { title, description, fileName, fileSize, mimeType, category, storageKey, entityLinks } = body;
+    const { title, description, fileName, fileSize, mimeType, category, storageKey, contentHash, entityLinks } = body;
 
     const ALLOWED_ENTITY_TYPES = [
       "employee", "client", "project", "invoice", "vehicle",
@@ -341,9 +359,9 @@ router.post("/upload", authorize({ feature: "documents", action: "create" }), as
     let docId!: number;
     await withTransaction(async (client) => {
       const r = await client.query(
-        `INSERT INTO documents (title, description, "fileName", "fileSize", "mimeType", category, status, "storageKey", "currentVersion", "uploadedBy", "companyId")
-         VALUES ($1,$2,$3,$4,$5,$6,'draft',$7,1,$8,$9) RETURNING id`,
-        [title, description, fileName, fileSize, mimeType, category || null, storageKey, scope.userId, scope.companyId]
+        `INSERT INTO documents (title, description, "fileName", "fileSize", "mimeType", category, status, "storageKey", "contentHash", "currentVersion", "uploadedBy", "companyId")
+         VALUES ($1,$2,$3,$4,$5,$6,'draft',$7,$8,1,$9,$10) RETURNING id`,
+        [title, description, fileName, fileSize, mimeType, category || null, storageKey, contentHash || null, scope.userId, scope.companyId]
       );
       docId = r.rows[0].id;
 
@@ -614,6 +632,78 @@ router.patch("/:id/status", authorize({ feature: "documents", action: "update" }
 
     const [doc] = await rawQuery(`SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [docId, scope.companyId]);
     res.json({ ...(doc as any), impact });
+  } catch (err) { handleRouteError(err, res, "documents"); }
+});
+
+// PATCH /:id/review — record a reviewer's verdict on a document↔entity link.
+// Mirrors the /:id/status approval pattern: gated by documents:update AND an
+// approver role; a rejecting verdict must carry a reason. The layout adds no
+// new approval engine — it stamps the link + writes audit/event/approval_action.
+router.patch("/:id/review", authorize({ feature: "documents", action: "update" }), async (req: Request, res: Response) => {
+  try {
+    const body = zodParse(reviewLinkSchema.safeParse(req.body));
+    const scope = req.scope!;
+    const docId = parseId(req.params.id, "id");
+    const { entityType, entityId, reviewStatus, reviewNote } = body;
+
+    // Reviewing is a decision — gate behind owner/approver roles (mirrors /:id/status).
+    if (!scope.isOwner && !APPROVE_ROLES.includes(scope.role || "")) {
+      throw new ForbiddenError("ليس لديك صلاحية مراجعة المرفقات");
+    }
+    // A rejecting / replacement verdict must state why.
+    if ((reviewStatus === "rejected" || reviewStatus === "needs_replacement") && !String(reviewNote ?? "").trim()) {
+      throw new ValidationError("سبب القرار مطلوب عند الرفض أو طلب الاستبدال", {
+        field: "reviewNote",
+        fix: "اكتب سبب الرفض أو الاستبدال",
+      });
+    }
+
+    const [doc] = await rawQuery<{ id: number }>(
+      `SELECT id FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
+      [docId, scope.companyId]
+    );
+    if (!doc) throw new NotFoundError("المستند غير موجود");
+
+    const [beforeLink] = await rawQuery<{ reviewStatus: string }>(
+      `SELECT "reviewStatus" FROM document_entity_links WHERE "documentId"=$1 AND "entityType"=$2 AND "entityId"=$3`,
+      [docId, entityType, Number(entityId)]
+    );
+    if (!beforeLink) throw new NotFoundError("ربط المستند بالكيان غير موجود");
+
+    // Stamp the verdict and record the approval action atomically — a verdict
+    // without its approval-action trail (or vice-versa) is an inconsistent state.
+    await withTransaction(async () => {
+      await rawExecute(
+        `UPDATE document_entity_links
+         SET "reviewStatus"=$1, "reviewedBy"=$2, "reviewedAt"=NOW(), "reviewNote"=$3
+         WHERE "documentId"=$4 AND "entityType"=$5 AND "entityId"=$6`,
+        [reviewStatus, scope.userId, reviewNote ?? null, docId, entityType, Number(entityId)]
+      );
+      await rawExecute(
+        `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId")
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        ["document", docId, `attachment_${reviewStatus}`, reviewNote ?? null, scope.userId, scope.companyId]
+      );
+    });
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "review", entity: "document_entity_links", entityId: docId,
+      before: { reviewStatus: beforeLink.reviewStatus },
+      after: { reviewStatus, entityType, entityId: Number(entityId) },
+      reason: reviewNote ?? undefined,
+    }).catch((e) => logger.error(e, "documents background task failed"));
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "documents.attachment.reviewed",
+      entity: "document_entity_links",
+      entityId: docId,
+      details: JSON.stringify({ entityType, entityId: Number(entityId), reviewStatus }),
+    }).catch((e) => logger.error(e, "documents background task failed"));
+
+    res.json({ documentId: docId, entityType, entityId: Number(entityId), reviewStatus, reviewNote: reviewNote ?? null });
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
@@ -1072,6 +1162,126 @@ router.get("/templates/:id/variables", authorize({ feature: "documents", action:
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
+// ── Document requirements (per entityType checklist) ─────────────────────────
+// Configurable list of documents an entity is expected to carry. The
+// completeness card is DERIVED on the client (requirements ∩ linked docs) —
+// this is config only. Registered before /:id so "/requirements" is not
+// captured as an :id param.
+const createRequirementSchema = z.object({
+  entityType: z.string().min(1).max(50),
+  docCategory: z.string().max(50).nullable().optional(),
+  label: z.string().min(1).max(255),
+  required: z.boolean().optional().default(true),
+  sortOrder: z.coerce.number().int().optional().default(0),
+});
+const updateRequirementSchema = z.object({
+  docCategory: z.string().max(50).nullable().optional(),
+  label: z.string().min(1).max(255).optional(),
+  required: z.boolean().optional(),
+  isActive: z.boolean().optional(),
+  sortOrder: z.coerce.number().int().optional(),
+});
+
+router.get("/requirements", authorize({ feature: "documents", action: "list" }), async (req: Request, res: Response) => {
+  try {
+    const scope = req.scope!;
+    const entityType = typeof req.query.entityType === "string" ? req.query.entityType : null;
+    const params: unknown[] = [scope.companyId];
+    let where = `"isActive" = true AND ("companyId" = $1 OR "companyId" IS NULL)`;
+    if (entityType) {
+      params.push(entityType);
+      where += ` AND "entityType" = $${params.length}`;
+    }
+    const rows = await rawQuery(
+      `SELECT * FROM document_requirements WHERE ${where} ORDER BY "sortOrder" ASC, id ASC`,
+      params,
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "documents"); }
+});
+
+router.post("/requirements", authorize({ feature: "documents", action: "update" }), async (req: Request, res: Response) => {
+  try {
+    const body = zodParse(createRequirementSchema.safeParse(req.body));
+    const scope = req.scope!;
+    if (!scope.isOwner && !APPROVE_ROLES.includes(scope.role || "")) {
+      throw new ForbiddenError("ليس لديك صلاحية ضبط متطلبات المستندات");
+    }
+    const r = await rawExecute(
+      `INSERT INTO document_requirements ("companyId", "entityType", "docCategory", label, required, "sortOrder", "createdBy")
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [scope.companyId, body.entityType, body.docCategory ?? null, body.label, body.required ?? true, body.sortOrder ?? 0, scope.userId],
+    );
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "document_requirements", entityId: r.insertId,
+      after: { entityType: body.entityType, label: body.label, docCategory: body.docCategory ?? null },
+    }).catch((e) => logger.error(e, "documents background task failed"));
+    const [row] = await rawQuery(`SELECT * FROM document_requirements WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [r.insertId, scope.companyId]);
+    res.status(201).json(row);
+  } catch (err) { handleRouteError(err, res, "documents"); }
+});
+
+router.patch("/requirements/:id", authorize({ feature: "documents", action: "update" }), async (req: Request, res: Response) => {
+  try {
+    const body = zodParse(updateRequirementSchema.safeParse(req.body));
+    const scope = req.scope!;
+    const reqId = parseId(req.params.id, "id");
+    if (!scope.isOwner && !APPROVE_ROLES.includes(scope.role || "")) {
+      throw new ForbiddenError("ليس لديك صلاحية ضبط متطلبات المستندات");
+    }
+    const [before] = await rawQuery<{ id: number }>(
+      `SELECT id FROM document_requirements WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
+      [reqId, scope.companyId],
+    );
+    if (!before) throw new NotFoundError("المتطلب غير موجود");
+
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    for (const key of ["docCategory", "label", "required", "isActive", "sortOrder"] as const) {
+      if (body[key] !== undefined) {
+        params.push(body[key]);
+        sets.push(`"${key}" = $${params.length}`);
+      }
+    }
+    if (sets.length === 0) throw new ValidationError("لا تغييرات");
+    params.push(reqId);
+    await rawExecute(
+      `UPDATE document_requirements SET ${sets.join(", ")}, "updatedAt"=NOW() WHERE id=$${params.length}`,
+      params,
+    );
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "document_requirements", entityId: reqId,
+      after: body,
+    }).catch((e) => logger.error(e, "documents background task failed"));
+    const [row] = await rawQuery(`SELECT * FROM document_requirements WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [reqId, scope.companyId]);
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "documents"); }
+});
+
+// Soft delete (deactivate) — physical delete is forbidden by the constitution.
+router.delete("/requirements/:id", authorize({ feature: "documents", action: "update" }), async (req: Request, res: Response) => {
+  try {
+    const scope = req.scope!;
+    const reqId = parseId(req.params.id, "id");
+    if (!scope.isOwner && !APPROVE_ROLES.includes(scope.role || "")) {
+      throw new ForbiddenError("ليس لديك صلاحية ضبط متطلبات المستندات");
+    }
+    const result = await rawExecute(
+      `UPDATE document_requirements SET "isActive"=false, "updatedAt"=NOW()
+       WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "isActive"=true`,
+      [reqId, scope.companyId],
+    );
+    if (result.affectedRows === 0) throw new NotFoundError("المتطلب غير موجود");
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "document_requirements", entityId: reqId,
+    }).catch((e) => logger.error(e, "documents background task failed"));
+    res.json({ ok: true });
+  } catch (err) { handleRouteError(err, res, "documents"); }
+});
+
 router.get("/stats", authorize({ feature: "documents", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -1207,6 +1417,11 @@ router.post("/retention/backfill", authorize({ feature: "documents", action: "de
       ).catch(() => ({ affectedRows: 0 }));
       updated += r.affectedRows ?? 0;
     }
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "document.retention_backfilled", entity: "documents", entityId: scope.companyId,
+      after: { updated },
+    }).catch((e) => logger.error(e, "documents retention-backfill audit failed"));
     res.json({ ok: true, updated, horizons: RETENTION_HORIZONS_YEARS });
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
@@ -1281,6 +1496,11 @@ router.post("/:id/acls", authorize({ feature: "documents", action: "update" }), 
        RETURNING id`,
       [scope.companyId, id, body.userId ?? null, body.roleKey ?? null, body.departmentId ?? null, body.permission, scope.userId, body.expiresAt ?? null]
     );
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "document.acl_granted", entity: "document_acls", entityId: insertId,
+      after: { documentId: id, userId: body.userId ?? null, roleKey: body.roleKey ?? null, departmentId: body.departmentId ?? null, permission: body.permission },
+    }).catch((e) => logger.error(e, "documents acl-grant audit failed"));
     res.status(201).json({ id: insertId, ok: true });
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
@@ -1295,6 +1515,11 @@ router.delete("/:id/acls/:aclId", authorize({ feature: "documents", action: "upd
         WHERE id = $1 AND "documentId" = $2 AND "companyId" = $3`,
       [aclId, id, scope.companyId]
     );
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "document.acl_revoked", entity: "document_acls", entityId: aclId,
+      before: { documentId: id },
+    }).catch((e) => logger.error(e, "documents acl-revoke audit failed"));
     res.json({ ok: true });
   } catch (err) { handleRouteError(err, res, "documents"); }
 });

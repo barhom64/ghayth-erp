@@ -31,6 +31,7 @@ import {
   recomputeAllDrivers,
 } from "../lib/fleet/driverReputation.js";
 import { z } from "zod";
+import { zCoerceBoolean } from "../lib/zodCoerce.js";
 
 // ─── Zod schemas for POST route body validation ─────────────────────────────
 
@@ -130,7 +131,7 @@ const createVehicleSchema = z.object({
   // FLT-003 — purchase data drives the TCO report and the vehicle-asset
   // capitalisation entry (postVehicleAssetGL); without these the schema
   // stripped the fields and both were dead.
-  purchasePrice: z.coerce.number().optional(),
+  purchasePrice: z.coerce.number().nonnegative().optional(),
   purchaseDate: z.string().optional(),
   // #1733 Phase 2 — eligibility guard reads this column on cargo /
   // umrah assignment to refuse drivers who don't hold (or cover) the
@@ -202,7 +203,7 @@ const createFuelLogSchema = z.object({
   vehiclePlate: z.string().optional(),
   liters: z.coerce.number().positive("كمية الوقود يجب أن تكون أكبر من صفر"),
   driverId: z.coerce.number().optional(),
-  costPerLiter: z.coerce.number().optional(),
+  costPerLiter: z.coerce.number().nonnegative().optional(),
   fuelDate: z.string().optional(),
   mileageAtFuel: z.coerce.number().optional(),
   stationName: z.string().optional(),
@@ -222,19 +223,19 @@ const createInsuranceSchema = z.object({
   type: z.string().optional(),
   policyNumber: z.string().optional(),
   premium: z.coerce.number().optional(),
-  coverageAmount: z.coerce.number().optional(),
+  coverageAmount: z.coerce.number().nonnegative().optional(),
   notes: z.string().optional(),
 });
 
 // ─── Zod schemas for PATCH / action route body validation ──────────────────
-const updateVehicleSchema = z.object({
+export const updateVehicleSchema = z.object({
   plateNumber: z.string().optional(),
   make: z.string().optional(),
   model: z.string().optional(),
   year: z.coerce.number().optional(),
   color: z.string().optional(),
   status: z.string().optional(),
-  fuelType: z.string().optional(),
+  fuelType: z.enum(["gasoline", "diesel", "electric", "hybrid", "lpg"]).optional(),
   notes: z.string().optional(),
   assignedDriverId: z.coerce.number().nullable().optional(),
   registrationNumber: z.string().optional(),
@@ -286,20 +287,20 @@ const createTripSchema = z.object({
   fromLng: z.coerce.number().optional(),
   toLat: z.coerce.number().optional(),
   toLng: z.coerce.number().optional(),
-  distance: z.coerce.number().optional(),
+  distance: z.coerce.number().nonnegative("المسافة يجب ألا تكون سالبة").optional(),
   startTime: z.string().optional(),
   endTime: z.string().optional(),
   notes: z.string().optional(),
-  fuelPricePerLiter: z.coerce.number().optional(),
+  fuelPricePerLiter: z.coerce.number().nonnegative().optional(),
   driverFare: z.coerce.number().optional(),
-  cost: z.coerce.number().optional(),
+  cost: z.coerce.number().nonnegative().optional(),
   status: z.string().optional(),
 });
 
 const completeTripSchema = z.object({
   endMileage: z.coerce.number().optional(),
   startMileage: z.coerce.number().optional(),
-  fuelPricePerLiter: z.coerce.number().optional(),
+  fuelPricePerLiter: z.coerce.number().nonnegative().optional(),
   driverFare: z.coerce.number().optional(),
 });
 
@@ -308,7 +309,7 @@ const cancelTripSchema = z.object({
 });
 
 const completeMaintenanceSchema = z.object({
-  cost: z.coerce.number().optional(),
+  cost: z.coerce.number().nonnegative().optional(),
 });
 
 const updateTripSchema = z.object({
@@ -317,20 +318,20 @@ const updateTripSchema = z.object({
   destination: z.string().optional(),
   status: z.string().optional(),
   notes: z.string().optional(),
-  cost: z.coerce.number().optional(),
+  cost: z.coerce.number().nonnegative().optional(),
 });
 
 const updateMaintenanceSchema = z.object({
   description: z.string().optional(),
   status: z.string().optional(),
-  cost: z.coerce.number().optional(),
+  cost: z.coerce.number().nonnegative().optional(),
 });
 
 const updateFuelLogSchema = z.object({
   liters: z.coerce.number().optional(),
   quantity: z.coerce.number().optional(),
-  costPerLiter: z.coerce.number().optional(),
-  totalCost: z.coerce.number().optional(),
+  costPerLiter: z.coerce.number().nonnegative().optional(),
+  totalCost: z.coerce.number().nonnegative().optional(),
   stationName: z.string().optional(),
 });
 
@@ -350,7 +351,7 @@ const createPreventivePlanSchema = z.object({
   lastServiceMileage: z.coerce.number().optional(),
   nextServiceDate: z.string().optional(),
   nextServiceMileage: z.coerce.number().optional(),
-  estimatedCost: z.coerce.number().optional(),
+  estimatedCost: z.coerce.number().nonnegative().optional(),
   notes: z.string().optional(),
 });
 
@@ -359,7 +360,7 @@ const updatePreventivePlanSchema = z.object({
   nextServiceMileage: z.coerce.number().optional(),
   lastServiceDate: z.string().optional(),
   lastServiceMileage: z.coerce.number().optional(),
-  estimatedCost: z.coerce.number().optional(),
+  estimatedCost: z.coerce.number().nonnegative().optional(),
   status: z.string().optional(),
   partsUsed: z.array(z.any()).optional(),
 });
@@ -671,7 +672,7 @@ router.post("/vehicles", authorize({ feature: "fleet.vehicles", action: "create"
 // chase. The operator-side fleet.cargo + fleet.trips features stay
 // invisible to the driver because the role doesn't carry them.
 // ─────────────────────────────────────────────────────────────────────────
-async function resolveDriverFromScope(req: import("express").Request): Promise<{ id: number; companyId: number; status: string } | null> {
+export async function resolveDriverFromScope(req: import("express").Request): Promise<{ id: number; companyId: number; status: string } | null> {
   const scope = req.scope!;
   if (!scope.employeeId) return null;
   const [driver] = await rawQuery<{ id: number; companyId: number; status: string }>(
@@ -729,6 +730,580 @@ router.patch("/me/availability", authorize({ feature: "fleet.driver.me", action:
   } catch (err) { handleRouteError(err, res, "Driver availability error:"); }
 });
 
+// ─── POST /me/fuel-logs — السائق يبلّغ عن تعبئة وقود ميدانيًا ─────────────────
+// بلاغ تشغيلي: السائق يسجّل واقعة التعبئة (مركبته + كمية + تكلفة)، فتُنشأ واقعة
+// وقود + مرشّح مصروف للمالية تُجسّده لاحقًا (لا ترحيل مباشر للدفتر — نموذج
+// «الحقيقة التشغيلية ← المالية تشتق»). driverId مُسنَد إجباريًا للسائق المُحلَّل،
+// فلا يبلّغ نيابة عن غيره.
+router.post("/me/fuel-logs", authorize({ feature: "fleet.driver.me", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
+    const b = zodParse(createFuelLogSchema.safeParse(req.body)) as any;
+
+    // المركبة مطلوبة وتُحلّ من المعرّف أو رقم اللوحة داخل شركة السائق.
+    let resolvedVehicleId = b.vehicleId || null;
+    if (!resolvedVehicleId && b.vehiclePlate) {
+      const [v] = await rawQuery<{ id: number }>(
+        `SELECT id FROM fleet_vehicles WHERE "plateNumber"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [b.vehiclePlate, driver.companyId]);
+      if (v) resolvedVehicleId = v.id;
+    }
+    if (!resolvedVehicleId) {
+      throw new ValidationError("المركبة مطلوبة", { field: "vehicleId", fix: "اختر مركبتك أو أدخل رقم اللوحة" });
+    }
+    const [veh] = await rawQuery<{ id: number; fuelCapacity: number | null; branchId: number | null }>(
+      `SELECT id, "fuelCapacity", "branchId" FROM fleet_vehicles WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [resolvedVehicleId, driver.companyId]);
+    if (!veh) {
+      throw new ValidationError(`المركبة رقم ${resolvedVehicleId} غير موجودة`, { field: "vehicleId", fix: "اختر مركبة مسجلة" });
+    }
+    const liters = b.liters;
+    const tankCapacity = Number(veh.fuelCapacity ?? 0);
+    if (tankCapacity > 0 && liters > tankCapacity) {
+      throw new ValidationError(
+        `لا يمكن تسجيل وقود يتجاوز سعة الخزان (${tankCapacity} لتر). الكمية المدخلة: ${liters} لتر`,
+        { field: "liters", fix: `أدخل كمية لا تتجاوز سعة الخزان (${tankCapacity} لتر)` });
+    }
+
+    // الرحلة اختيارية: إن وُجدت يجب أن تخصّ هذا السائق وهذه المركبة.
+    let validatedTripId: number | null = null;
+    if (b.tripId) {
+      const [trip] = await rawQuery<{ id: number; vehicleId: number | null }>(
+        `SELECT id, "vehicleId" FROM fleet_trips
+          WHERE id = $1 AND "companyId" = $2 AND "driverId" = $3 AND "deletedAt" IS NULL`,
+        [Number(b.tripId), driver.companyId, driver.id]);
+      if (!trip) throw new ValidationError("الرحلة غير موجودة أو لا تخصّك", { field: "tripId", fix: "اختر إحدى رحلاتك" });
+      if (trip.vehicleId && trip.vehicleId !== resolvedVehicleId) {
+        throw new ValidationError("الرحلة المختارة تخص مركبة أخرى", { field: "tripId" });
+      }
+      validatedTripId = trip.id;
+    }
+
+    const costPerLiter = Number(b.costPerLiter || b.cost) || 0;
+    const totalCost = liters * costPerLiter;
+    const fuelDate = b.fuelDate || b.date || todayISO();
+    const mileageAtFuel = Number(b.mileageAtFuel || b.mileage) || null;
+    const stationName = b.stationName || b.station || null;
+
+    const { insertId } = await rawExecute(
+      `INSERT INTO fleet_fuel_logs ("companyId","vehicleId","driverId","fuelDate",liters,"costPerLiter","totalCost","mileageAtFuel","stationName","tripId")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [driver.companyId, resolvedVehicleId, driver.id, fuelDate, liters, costPerLiter, totalCost, mileageAtFuel, stationName, validatedTripId]);
+    assertInsert(insertId, "fleet_fuel_logs");
+
+    // مرشّح مصروف للمالية (لا ترحيل مباشر للدفتر) — يُجسّده المحاسب لاحقًا.
+    if (totalCost > 0) {
+      const plateLabel = b.vehiclePlate ? ` / ${b.vehiclePlate}` : "";
+      const { fleetEngine } = await import("../lib/engines/index.js");
+      await fleetEngine.createFuelExpenseCandidate(
+        { companyId: driver.companyId, branchId: veh.branchId ?? scope.branchId, createdBy: scope.activeAssignmentId ?? scope.userId },
+        { id: insertId, vehicleId: resolvedVehicleId, cost: totalCost, description: `مصروف وقود (بلاغ سائق)${plateLabel} / ${liters} لتر / ${stationName ?? ""}` }
+      ).catch((e: unknown) => logger.error(e, "Driver fuel expense candidate failed:"));
+    }
+
+    void emitEvent({ companyId: driver.companyId, branchId: veh.branchId ?? scope.branchId, userId: scope.userId,
+      action: "fleet.fuel_log.created", entity: "fleet_fuel_logs", entityId: insertId,
+      details: JSON.stringify({ vehicleId: resolvedVehicleId, liters, totalCost, source: "driver_self" }) });
+    void createAuditLog({ companyId: driver.companyId, branchId: veh.branchId ?? scope.branchId, userId: scope.userId,
+      action: "create", entity: "fleet_fuel_logs", entityId: insertId,
+      after: { vehicleId: resolvedVehicleId, driverId: driver.id, liters, totalCost, fuelDate, stationName, source: "driver_self" } });
+
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM fleet_fuel_logs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, driver.companyId]);
+    res.status(201).json({ data: row });
+  } catch (err) { handleRouteError(err, res, "Driver fuel-log error:"); }
+});
+
+// ─── GET /me/fuel-logs — السائق يستعرض بلاغات وقوده ──────────────────────────
+router.get("/me/fuel-logs", authorize({ feature: "fleet.driver.me", action: "view" }), async (req, res) => {
+  try {
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT f.*, v."plateNumber"
+         FROM fleet_fuel_logs f
+         LEFT JOIN fleet_vehicles v ON v.id = f."vehicleId" AND v."deletedAt" IS NULL
+        WHERE f."driverId" = $1 AND f."companyId" = $2 AND f."deletedAt" IS NULL
+        ORDER BY f."fuelDate" DESC, f.id DESC LIMIT 200`,
+      [driver.id, driver.companyId]);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "Driver fuel-logs list error:"); }
+});
+
+// ─── بلاغ عطل مركبة (نقاط السائق الميدانية، الدفعة B) ────────────────────────
+// البلاغ واقعة تشغيلية بلا تكلفة — كلفة الإصلاح (إن وُجدت) تُعالَج لاحقًا عبر
+// مسار الصيانة القائم بمنطق costBearer هناك، لا هنا. (خالٍ من الدفتر.)
+const driverBreakdownSchema = z.object({
+  vehicleId: z.coerce.number().optional(),
+  vehiclePlate: z.string().optional(),
+  description: z.string().min(3, "وصف العطل مطلوب"),
+  category: z.enum(["engine", "tire", "electrical", "brakes", "transmission", "cooling", "bodywork", "other"]).optional(),
+  severity: z.enum(["low", "medium", "high", "critical"]).optional(),
+  odometer: z.coerce.number().optional(),
+  locationLat: z.coerce.number().optional(),
+  locationLng: z.coerce.number().optional(),
+  tripId: z.coerce.number().optional(),
+});
+
+// POST /me/breakdowns — السائق يبلّغ عن عطل مركبته. driverId مُسنَد ذاتيًا.
+router.post("/me/breakdowns", authorize({ feature: "fleet.driver.me", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
+    const b = zodParse(driverBreakdownSchema.safeParse(req.body)) as any;
+
+    let resolvedVehicleId = b.vehicleId || null;
+    if (!resolvedVehicleId && b.vehiclePlate) {
+      const [v] = await rawQuery<{ id: number }>(
+        `SELECT id FROM fleet_vehicles WHERE "plateNumber"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [b.vehiclePlate, driver.companyId]);
+      if (v) resolvedVehicleId = v.id;
+    }
+    if (!resolvedVehicleId) {
+      throw new ValidationError("المركبة مطلوبة", { field: "vehicleId", fix: "اختر مركبتك أو أدخل رقم اللوحة" });
+    }
+    const [veh] = await rawQuery<{ id: number; branchId: number | null; plateNumber: string | null }>(
+      `SELECT id, "branchId", "plateNumber" FROM fleet_vehicles WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [resolvedVehicleId, driver.companyId]);
+    if (!veh) throw new ValidationError(`المركبة رقم ${resolvedVehicleId} غير موجودة`, { field: "vehicleId" });
+
+    let validatedTripId: number | null = null;
+    if (b.tripId) {
+      const [trip] = await rawQuery<{ id: number }>(
+        `SELECT id FROM fleet_trips WHERE id = $1 AND "companyId" = $2 AND "driverId" = $3 AND "deletedAt" IS NULL`,
+        [Number(b.tripId), driver.companyId, driver.id]);
+      if (!trip) throw new ValidationError("الرحلة غير موجودة أو لا تخصّك", { field: "tripId" });
+      validatedTripId = trip.id;
+    }
+
+    const { insertId } = await rawExecute(
+      `INSERT INTO fleet_breakdowns
+         ("companyId","branchId","vehicleId","driverId","tripId","category","severity","status",
+          "description","odometer","locationLat","locationLng","reportedByUserId","reportedByRole")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'reported',$8,$9,$10,$11,$12,'driver')`,
+      [driver.companyId, veh.branchId ?? scope.branchId, resolvedVehicleId, driver.id, validatedTripId,
+       b.category ?? null, b.severity ?? "medium", b.description, b.odometer ?? null,
+       b.locationLat ?? null, b.locationLng ?? null, scope.userId]);
+    assertInsert(insertId, "fleet_breakdowns");
+
+    void emitEvent({ companyId: driver.companyId, branchId: veh.branchId ?? scope.branchId, userId: scope.userId,
+      action: "fleet.breakdown.reported", entity: "fleet_breakdowns", entityId: insertId,
+      details: JSON.stringify({ vehicleId: resolvedVehicleId, severity: b.severity ?? "medium", category: b.category ?? null, source: "driver_self" }) });
+    // يُشغّل المعالج القائم proactiveVehicleBreakdown: تذكرة صيانة تلقائية + مهمة
+    // عاجلة لمدير الأسطول (entityId = vehicleId حسب توقيع المعالج).
+    void emitEvent({ companyId: driver.companyId, branchId: veh.branchId ?? scope.branchId, userId: scope.userId,
+      action: "fleet.vehicle.breakdown", entity: "fleet_vehicle", entityId: resolvedVehicleId,
+      plateNumber: veh.plateNumber ?? undefined, description: b.description, source: "driver" });
+    void createAuditLog({ companyId: driver.companyId, branchId: veh.branchId ?? scope.branchId, userId: scope.userId,
+      action: "create", entity: "fleet_breakdowns", entityId: insertId,
+      after: { vehicleId: resolvedVehicleId, driverId: driver.id, severity: b.severity ?? "medium", source: "driver_self" } });
+
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM fleet_breakdowns WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, driver.companyId]);
+    res.status(201).json({ data: row });
+  } catch (err) { handleRouteError(err, res, "Driver breakdown report error:"); }
+});
+
+// GET /me/breakdowns — السائق يستعرض بلاغات أعطاله.
+router.get("/me/breakdowns", authorize({ feature: "fleet.driver.me", action: "view" }), async (req, res) => {
+  try {
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT b.*, v."plateNumber"
+         FROM fleet_breakdowns b
+         LEFT JOIN fleet_vehicles v ON v.id = b."vehicleId" AND v."deletedAt" IS NULL
+        WHERE b."driverId" = $1 AND b."companyId" = $2 AND b."deletedAt" IS NULL
+        ORDER BY b."reportedAt" DESC, b.id DESC LIMIT 200`,
+      [driver.id, driver.companyId]);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "Driver breakdowns list error:"); }
+});
+
+// ─── صور بلاغ العطل ──────────────────────────────────────────────────────────
+const breakdownPhotoSchema = z.object({
+  photoType: z.enum(["fault", "dashboard", "vehicle", "other"]),
+  storageKey: z.string().min(1).max(1024),
+  fileName: z.string().max(512).optional(),
+  mimeType: z.string().max(60).optional(),
+  fileSize: z.coerce.number().int().nonnegative().optional(),
+});
+
+// POST /me/breakdowns/:id/photos — السائق يرفق صورة لبلاغ عطله.
+router.post("/me/breakdowns/:id/photos", authorize({ feature: "fleet.driver.me", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(breakdownPhotoSchema.safeParse(req.body));
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
+    const [bd] = await rawQuery<{ id: number; status: string }>(
+      `SELECT id, status FROM fleet_breakdowns WHERE id=$1 AND "companyId"=$2 AND "driverId"=$3 AND "deletedAt" IS NULL`,
+      [id, scope.companyId, driver.id]);
+    if (!bd) throw new NotFoundError("البلاغ غير موجود أو لا يخصّك");
+    if (bd.status === "resolved" || bd.status === "cancelled") {
+      throw new ValidationError("لا يمكن إضافة صور بعد إغلاق البلاغ");
+    }
+    const { insertId } = await rawExecute(
+      `INSERT INTO fleet_breakdown_photos ("companyId","breakdownId","photoType","storageKey","fileName","mimeType","fileSize","capturedAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())`,
+      [scope.companyId, id, b.photoType, b.storageKey, b.fileName ?? null, b.mimeType ?? null, b.fileSize ?? null]);
+    assertInsert(insertId, "fleet_breakdown_photos");
+    void createAuditLog({ companyId: scope.companyId, userId: scope.userId,
+      action: "create", entity: "fleet_breakdown_photos", entityId: insertId,
+      after: { breakdownId: id, photoType: b.photoType, source: "driver" } });
+    res.status(201).json({ id: insertId });
+  } catch (err) { handleRouteError(err, res, "Driver breakdown photo error:"); }
+});
+
+// GET /me/breakdowns/:id/photos — صور السائق لبلاغه. (المشرف يستخدم /breakdowns/:id/photos.)
+router.get("/me/breakdowns/:id/photos", authorize({ feature: "fleet.driver.me", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT p.* FROM fleet_breakdown_photos p
+         JOIN fleet_breakdowns b ON b.id = p."breakdownId" AND b."deletedAt" IS NULL
+        WHERE p."breakdownId"=$1 AND p."companyId"=$2 AND p."deletedAt" IS NULL AND b."driverId"=$3
+        ORDER BY p.id ASC`, [id, scope.companyId, driver.id]);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "Driver breakdown photos list error:"); }
+});
+
+// GET /breakdowns/:id/photos — المشرف يعرض صور بلاغ (مُفلتر بالنطاق).
+router.get("/breakdowns/:id/photos", authorize({ feature: "fleet.vehicles", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT p.* FROM fleet_breakdown_photos p
+        WHERE p."breakdownId"=$1 AND p."companyId"=$2 AND p."deletedAt" IS NULL
+        ORDER BY p.id ASC`, [id, scope.companyId]);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "Breakdown photos list error:"); }
+});
+
+// GET /breakdowns — مشرف الأسطول يتابع البلاغات (مُفلتر بالنطاق).
+router.get("/breakdowns", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const filters = parseScopeFilters(req);
+    const { where, params, nextParamIndex } = buildScopedWhere(scope, filters, {
+      companyColumn: 'b."companyId"', branchColumn: 'b."branchId"', enforceBranchScope: true });
+    let w = where; const p = params; let idx = nextParamIndex;
+    const status = (req.query.status as string) || "";
+    if (status) { w += ` AND b."status" = $${idx}`; p.push(status); idx++; }
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT b.*, v."plateNumber", d.name AS "driverName",
+              (SELECT COUNT(*)::int FROM fleet_breakdown_photos ph
+                WHERE ph."breakdownId" = b.id AND ph."deletedAt" IS NULL) AS "photoCount"
+         FROM fleet_breakdowns b
+         LEFT JOIN fleet_vehicles v ON v.id = b."vehicleId" AND v."deletedAt" IS NULL
+         LEFT JOIN fleet_drivers d ON d.id = b."driverId" AND d."deletedAt" IS NULL
+        WHERE ${w} AND b."deletedAt" IS NULL
+        ORDER BY b."reportedAt" DESC LIMIT 500`, p);
+    res.json(maskFields(req, { data: rows, total: rows.length }));
+  } catch (err) { handleRouteError(err, res, "Breakdowns list error:"); }
+});
+
+// PATCH /breakdowns/:id — المشرف يحدّث حالة البلاغ (إقرار/إصلاح/إغلاق).
+router.patch("/breakdowns/:id", authorize({ feature: "fleet.vehicles", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const status = String(req.body?.status ?? "");
+    if (!["acknowledged", "in_repair", "resolved", "cancelled"].includes(status)) {
+      throw new ValidationError("الحالة غير صحيحة", { field: "status", fix: "acknowledged / in_repair / resolved / cancelled" });
+    }
+    const [cur] = await rawQuery<{ id: number; status: string }>(
+      `SELECT id, status FROM fleet_breakdowns WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]);
+    if (!cur) throw new NotFoundError("البلاغ غير موجود");
+
+    const ack = status === "acknowledged";
+    const resolved = status === "resolved" || status === "cancelled";
+    await rawExecute(
+      `UPDATE fleet_breakdowns
+          SET status=$1,
+              "acknowledgedByUserId" = COALESCE("acknowledgedByUserId", $2),
+              "acknowledgedAt"       = COALESCE("acknowledgedAt", $3),
+              "resolutionNotes"      = COALESCE($4, "resolutionNotes"),
+              "resolvedAt"           = $5,
+              "updatedAt" = NOW()
+        WHERE id=$6 AND "companyId"=$7`,
+      [status, ack ? scope.userId : null, ack ? new Date() : null,
+       req.body?.resolutionNotes ?? null, resolved ? new Date() : null, id, scope.companyId]);
+
+    void createAuditLog({ companyId: scope.companyId, userId: scope.userId,
+      action: "update", entity: "fleet_breakdowns", entityId: id,
+      before: { status: cur.status }, after: { status } });
+    void emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "fleet.breakdown.status_changed", entity: "fleet_breakdowns", entityId: id,
+      details: JSON.stringify({ from: cur.status, to: status }) });
+    res.json({ data: { id, status } });
+  } catch (err) { handleRouteError(err, res, "Breakdown update error:"); }
+});
+
+// ─── بلاغ حادث مركبة (نقاط السائق الميدانية، الدفعة C1) ──────────────────────
+// البلاغ واقعة تشغيلية بحالة 'reported' — خالٍ من الدفتر. الترحيل المحاسبي حسب
+// costBearer (ذمة موظف/مطالبة HR/مخالفة) هو الدفعة C2 المستقلة عند التقييم، مع
+// assertion tests على سطور القيد (القاعدة 3). هنا: تسجيل الواقعة فقط.
+const driverAccidentSchema = z.object({
+  vehicleId: z.coerce.number().optional(),
+  vehiclePlate: z.string().optional(),
+  description: z.string().min(3, "وصف الحادث مطلوب"),
+  occurredAt: z.string().optional(),
+  severity: z.enum(["minor", "moderate", "severe", "total_loss"]).optional(),
+  locationText: z.string().optional(),
+  locationLat: z.coerce.number().optional(),
+  locationLng: z.coerce.number().optional(),
+  odometer: z.coerce.number().optional(),
+  hasInjuries: zCoerceBoolean().optional(),
+  thirdPartyInvolved: zCoerceBoolean().optional(),
+  thirdPartyDetails: z.string().optional(),
+  policeReportNo: z.string().optional(),
+  tripId: z.coerce.number().optional(),
+});
+
+// POST /me/accidents — السائق يبلّغ عن حادث مركبته. driverId مُسنَد ذاتيًا.
+router.post("/me/accidents", authorize({ feature: "fleet.driver.me", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
+    const b = zodParse(driverAccidentSchema.safeParse(req.body)) as any;
+
+    let resolvedVehicleId = b.vehicleId || null;
+    if (!resolvedVehicleId && b.vehiclePlate) {
+      const [v] = await rawQuery<{ id: number }>(
+        `SELECT id FROM fleet_vehicles WHERE "plateNumber"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [b.vehiclePlate, driver.companyId]);
+      if (v) resolvedVehicleId = v.id;
+    }
+    if (!resolvedVehicleId) {
+      throw new ValidationError("المركبة مطلوبة", { field: "vehicleId", fix: "اختر مركبتك أو أدخل رقم اللوحة" });
+    }
+    const [veh] = await rawQuery<{ id: number; branchId: number | null; plateNumber: string | null }>(
+      `SELECT id, "branchId", "plateNumber" FROM fleet_vehicles WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [resolvedVehicleId, driver.companyId]);
+    if (!veh) throw new ValidationError(`المركبة رقم ${resolvedVehicleId} غير موجودة`, { field: "vehicleId" });
+
+    let validatedTripId: number | null = null;
+    if (b.tripId) {
+      const [trip] = await rawQuery<{ id: number }>(
+        `SELECT id FROM fleet_trips WHERE id = $1 AND "companyId" = $2 AND "driverId" = $3 AND "deletedAt" IS NULL`,
+        [Number(b.tripId), driver.companyId, driver.id]);
+      if (!trip) throw new ValidationError("الرحلة غير موجودة أو لا تخصّك", { field: "tripId" });
+      validatedTripId = trip.id;
+    }
+
+    const { insertId } = await rawExecute(
+      `INSERT INTO fleet_accidents
+         ("companyId","branchId","vehicleId","driverId","tripId","occurredAt","severity","status",
+          "description","locationText","locationLat","locationLng","odometer","hasInjuries",
+          "thirdPartyInvolved","thirdPartyDetails","policeReportNo","reportedByUserId","reportedByRole")
+       VALUES ($1,$2,$3,$4,$5,COALESCE($6::timestamptz, NOW()),$7,'reported',$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,'driver')`,
+      [driver.companyId, veh.branchId ?? scope.branchId, resolvedVehicleId, driver.id, validatedTripId,
+       b.occurredAt ?? null, b.severity ?? "minor", b.description, b.locationText ?? null,
+       b.locationLat ?? null, b.locationLng ?? null, b.odometer ?? null, b.hasInjuries ?? false,
+       b.thirdPartyInvolved ?? false, b.thirdPartyDetails ?? null, b.policeReportNo ?? null, scope.userId]);
+    assertInsert(insertId, "fleet_accidents");
+
+    // top-level vehicleId/plateNumber/severity/hasInjuries ليقرأها معالج
+    // proactiveVehicleAccident → مهمة تقييم عاجلة + إشعار لمدير الأسطول.
+    void emitEvent({ companyId: driver.companyId, branchId: veh.branchId ?? scope.branchId, userId: scope.userId,
+      action: "fleet.accident.reported", entity: "fleet_accidents", entityId: insertId,
+      vehicleId: resolvedVehicleId, plateNumber: veh.plateNumber ?? undefined,
+      severity: b.severity ?? "minor", hasInjuries: b.hasInjuries ?? false,
+      details: JSON.stringify({ vehicleId: resolvedVehicleId, severity: b.severity ?? "minor", hasInjuries: b.hasInjuries ?? false, source: "driver_self" }) });
+    void createAuditLog({ companyId: driver.companyId, branchId: veh.branchId ?? scope.branchId, userId: scope.userId,
+      action: "create", entity: "fleet_accidents", entityId: insertId,
+      after: { vehicleId: resolvedVehicleId, driverId: driver.id, severity: b.severity ?? "minor", source: "driver_self" } });
+
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM fleet_accidents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, driver.companyId]);
+    res.status(201).json({ data: row });
+  } catch (err) { handleRouteError(err, res, "Driver accident report error:"); }
+});
+
+// GET /me/accidents — السائق يستعرض بلاغات حوادثه.
+router.get("/me/accidents", authorize({ feature: "fleet.driver.me", action: "view" }), async (req, res) => {
+  try {
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT a.*, v."plateNumber"
+         FROM fleet_accidents a
+         LEFT JOIN fleet_vehicles v ON v.id = a."vehicleId" AND v."deletedAt" IS NULL
+        WHERE a."driverId" = $1 AND a."companyId" = $2 AND a."deletedAt" IS NULL
+        ORDER BY a."occurredAt" DESC, a.id DESC LIMIT 200`,
+      [driver.id, driver.companyId]);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "Driver accidents list error:"); }
+});
+
+// ─── صور بلاغ الحادث (دليل تأمين) ────────────────────────────────────────────
+const accidentPhotoSchema = z.object({
+  photoType: z.enum(["scene", "damage", "vehicle", "plate", "document", "other"]),
+  storageKey: z.string().min(1).max(1024),
+  fileName: z.string().max(512).optional(),
+  mimeType: z.string().max(60).optional(),
+  fileSize: z.coerce.number().int().nonnegative().optional(),
+});
+
+// POST /me/accidents/:id/photos — السائق يرفق صورة لبلاغ حادثه (دليل).
+router.post("/me/accidents/:id/photos", authorize({ feature: "fleet.driver.me", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(accidentPhotoSchema.safeParse(req.body));
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
+    const [acc] = await rawQuery<{ id: number; status: string }>(
+      `SELECT id, status FROM fleet_accidents WHERE id=$1 AND "companyId"=$2 AND "driverId"=$3 AND "deletedAt" IS NULL`,
+      [id, scope.companyId, driver.id]);
+    if (!acc) throw new NotFoundError("البلاغ غير موجود أو لا يخصّك");
+    if (acc.status === "closed" || acc.status === "cancelled") {
+      throw new ValidationError("لا يمكن إضافة صور بعد إغلاق البلاغ");
+    }
+    const { insertId } = await rawExecute(
+      `INSERT INTO fleet_accident_photos ("companyId","accidentId","photoType","storageKey","fileName","mimeType","fileSize","capturedAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())`,
+      [scope.companyId, id, b.photoType, b.storageKey, b.fileName ?? null, b.mimeType ?? null, b.fileSize ?? null]);
+    assertInsert(insertId, "fleet_accident_photos");
+    void createAuditLog({ companyId: scope.companyId, userId: scope.userId,
+      action: "create", entity: "fleet_accident_photos", entityId: insertId,
+      after: { accidentId: id, photoType: b.photoType, source: "driver" } });
+    res.status(201).json({ id: insertId });
+  } catch (err) { handleRouteError(err, res, "Driver accident photo error:"); }
+});
+
+// GET /me/accidents/:id/photos — صور السائق لبلاغه.
+router.get("/me/accidents/:id/photos", authorize({ feature: "fleet.driver.me", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT p.* FROM fleet_accident_photos p
+         JOIN fleet_accidents a ON a.id = p."accidentId" AND a."deletedAt" IS NULL
+        WHERE p."accidentId"=$1 AND p."companyId"=$2 AND p."deletedAt" IS NULL AND a."driverId"=$3
+        ORDER BY p.id ASC`, [id, scope.companyId, driver.id]);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "Driver accident photos list error:"); }
+});
+
+// GET /accidents/:id/photos — المشرف يعرض صور الحادث (مُفلتر بالنطاق).
+router.get("/accidents/:id/photos", authorize({ feature: "fleet.vehicles", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT p.* FROM fleet_accident_photos p
+        WHERE p."accidentId"=$1 AND p."companyId"=$2 AND p."deletedAt" IS NULL
+        ORDER BY p.id ASC`, [id, scope.companyId]);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "Accident photos list error:"); }
+});
+
+// GET /accidents — مشرف الأسطول يتابع البلاغات (مُفلتر بالنطاق).
+router.get("/accidents", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const filters = parseScopeFilters(req);
+    const { where, params, nextParamIndex } = buildScopedWhere(scope, filters, {
+      companyColumn: 'a."companyId"', branchColumn: 'a."branchId"', enforceBranchScope: true });
+    let w = where; const p = params; let idx = nextParamIndex;
+    const status = (req.query.status as string) || "";
+    if (status) { w += ` AND a."status" = $${idx}`; p.push(status); idx++; }
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT a.*, v."plateNumber", d.name AS "driverName",
+              (SELECT COUNT(*)::int FROM fleet_accident_photos ph
+                WHERE ph."accidentId" = a.id AND ph."deletedAt" IS NULL) AS "photoCount"
+         FROM fleet_accidents a
+         LEFT JOIN fleet_vehicles v ON v.id = a."vehicleId" AND v."deletedAt" IS NULL
+         LEFT JOIN fleet_drivers d ON d.id = a."driverId" AND d."deletedAt" IS NULL
+        WHERE ${w} AND a."deletedAt" IS NULL
+        ORDER BY a."occurredAt" DESC LIMIT 500`, p);
+    res.json(maskFields(req, { data: rows, total: rows.length }));
+  } catch (err) { handleRouteError(err, res, "Accidents list error:"); }
+});
+
+// PATCH /accidents/:id/assess — المشرف يقيّم الحادث: يحدّد المتحمّل والكلفة فيُرحَّل
+// القيد حسب السياسة المعتمدة (الدفعة C2). يمسّ الدفتر — محروس بـfleet.vehicles.
+const assessAccidentSchema = z.object({
+  costBearer: z.enum(["company", "driver", "insurance", "customer", "tenant", "third_party"]),
+  estimatedCost: z.coerce.number().nonnegative("الكلفة يجب ألا تكون سالبة"),
+  assessmentNotes: z.string().optional(),
+});
+router.patch("/accidents/:id/assess", authorize({ feature: "fleet.vehicles", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(assessAccidentSchema.safeParse(req.body));
+
+    const [acc] = await rawQuery<{ id: number; vehicleId: number; driverId: number | null; status: string; branchId: number | null; costBearer: string | null }>(
+      `SELECT id, "vehicleId", "driverId", status, "branchId", "costBearer" FROM fleet_accidents
+        WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    if (!acc) throw new NotFoundError("بلاغ الحادث غير موجود");
+    if (acc.status === "closed" || acc.status === "cancelled") {
+      throw new ConflictError("لا يمكن تقييم بلاغ مغلق أو ملغى");
+    }
+
+    // تحديث التقييم أولًا (الحقيقة التشغيلية).
+    await rawExecute(
+      `UPDATE fleet_accidents
+          SET "costBearer"=$1, "estimatedCost"=$2, "assessmentNotes"=COALESCE($3,"assessmentNotes"),
+              status='assessed', "assessedByUserId"=$4, "assessedAt"=NOW(), "updatedAt"=NOW()
+        WHERE id=$5 AND "companyId"=$6`,
+      [b.costBearer, b.estimatedCost, b.assessmentNotes ?? null, scope.userId, id, scope.companyId]);
+
+    const { fleetEngine } = await import("../lib/engines/index.js");
+    const glCtx = { companyId: scope.companyId, branchId: acc.branchId ?? scope.branchId, createdBy: scope.userId };
+
+    // ترحيل القيد حسب السياسة. postAccidentGL يعكس القيد السابق تلقائيًا عند
+    // إعادة التقييم (idempotent عبر sourceKey)، ويُرجِع reversedJournalId.
+    // الكلفة الصفرية = عكس فقط بلا قيد جديد.
+    const gl = await fleetEngine.postAccidentGL(glCtx,
+      { id, vehicleId: acc.vehicleId, cost: b.estimatedCost, costBearer: b.costBearer });
+    const journalId: number | null = (gl as any)?.journalId ?? null;
+    const reversedJournalId: number | null = (gl as any)?.reversedJournalId ?? null;
+    const isReassessment = !!reversedJournalId;
+
+    // تسوية خصم السائق عبر عقد HR (لا كتابة مباشرة):
+    //  • التحوّل بعيدًا عن السائق في إعادة تقييم → إلغاء الخصم السابق غير المطبَّق.
+    //  • التحوّل إلى السائق (أول تقييم أو إعادة) → طلب خصم بالمبلغ الجديد. عند
+    //    driver→driver بمبلغ مختلف: إلغاء القديم + طلب الجديد (تسوية صحيحة).
+    if (isReassessment && acc.costBearer === "driver") {
+      await fleetEngine.requestAccidentDeductionReversal(glCtx, { accidentId: id });
+    }
+    if (b.estimatedCost > 0 && b.costBearer === "driver" && acc.driverId) {
+      const [drv] = await rawQuery<{ employeeId: number | null }>(
+        `SELECT "employeeId" FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [acc.driverId, scope.companyId]);
+      if (drv?.employeeId) {
+        await fleetEngine.requestAccidentDeduction(glCtx,
+          { employeeId: drv.employeeId, accidentId: id, amount: b.estimatedCost, reason: `استرداد كلفة حادث مركبة #${acc.vehicleId}` });
+      }
+    }
+
+    void createAuditLog({ companyId: scope.companyId, branchId: acc.branchId ?? scope.branchId, userId: scope.userId,
+      action: "update", entity: "fleet_accidents", entityId: id,
+      before: { status: acc.status }, after: { status: "assessed", costBearer: b.costBearer, estimatedCost: b.estimatedCost, journalId, reassessment: isReassessment, reversedJournalId } });
+    void emitEvent({ companyId: scope.companyId, branchId: acc.branchId ?? scope.branchId, userId: scope.userId,
+      action: "fleet.accident.assessed", entity: "fleet_accidents", entityId: id,
+      details: JSON.stringify({ costBearer: b.costBearer, estimatedCost: b.estimatedCost, journalId }) });
+
+    res.json({ data: { id, status: "assessed", costBearer: b.costBearer, estimatedCost: b.estimatedCost, journalId } });
+  } catch (err) { handleRouteError(err, res, "Accident assess error:"); }
+});
+
 router.get("/me/trips", authorize({ feature: "fleet.trips.my", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -776,6 +1351,12 @@ router.post("/me/trips/:id/start", authorize({ feature: "fleet.trips.my", action
     void emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "fleet.trip.driver_started", entity: "fleet_trips", entityId: id,
       details: JSON.stringify({ driverId: driver.id }) });
+    // الحدث القانوني: يُفعّل مسجّل التدقيق + خطوة «أول رحلة» في تأهّل الأسطول
+    // (journeyEngine) + محرّك القواعد. لم يكن يُطلَق من أي مكان (المسار يطلق
+    // driver_started فقط، بلا مستهلك) فظلّت تلك المستهلكات معطّلة. غير دفتري.
+    void emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "fleet.trip.started", entity: "fleet_trips", entityId: id,
+      details: JSON.stringify({ driverId: driver.id, source: "driver" }) });
     res.json({ data: { id, status: "in_progress" } });
   } catch (err) { handleRouteError(err, res, "Driver trip-start error:"); }
 });
@@ -795,21 +1376,31 @@ router.post("/me/trips/:id/complete", authorize({ feature: "fleet.trips.my", act
     if (trip.status !== "in_progress") {
       throw new ConflictError(`لا يمكن إنهاء رحلة بحالة ${trip.status}`);
     }
-    await rawExecute(
-      `UPDATE fleet_trips
-          SET status = 'completed', "endTime" = COALESCE("endTime", NOW()), "updatedAt" = NOW()
-        WHERE id = $1 AND "companyId" = $2`,
-      [id, scope.companyId]
-    );
-    // Free the driver (only flip when they're on_trip — operator-only states stay).
-    await rawExecute(
-      `UPDATE fleet_drivers SET status = 'available', "updatedAt" = NOW()
-        WHERE id = $1 AND "companyId" = $2 AND status = 'on_trip'`,
-      [driver.id, scope.companyId]
-    );
+    // Completing the trip + freeing the driver are atomic: a completed
+    // trip must never leave its driver stuck 'on_trip' (or a driver freed
+    // without the trip closed). rawQuery joins the ambient tx (txStore).
+    await withTransaction(async () => {
+      await rawExecute(
+        `UPDATE fleet_trips
+            SET status = 'completed', "endTime" = COALESCE("endTime", NOW()), "updatedAt" = NOW()
+          WHERE id = $1 AND "companyId" = $2`,
+        [id, scope.companyId]
+      );
+      // Free the driver (only flip when they're on_trip — operator-only states stay).
+      await rawExecute(
+        `UPDATE fleet_drivers SET status = 'available', "updatedAt" = NOW()
+          WHERE id = $1 AND "companyId" = $2 AND status = 'on_trip'`,
+        [driver.id, scope.companyId]
+      );
+    });
     void emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "fleet.trip.driver_completed", entity: "fleet_trips", entityId: id,
       details: JSON.stringify({ driverId: driver.id }) });
+    // الحدث القانوني (تدقيق + قواعد + تأهّل). القيد ليس مدفوعًا بالحدث (يُرحَّل
+    // مباشرة في مسار الإكمال الإداري)، فهذا الإطلاق غير دفتري ولا يُكرّر قيدًا.
+    void emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "fleet.trip.completed", entity: "fleet_trips", entityId: id,
+      details: JSON.stringify({ driverId: driver.id, source: "driver" }) });
     res.json({ data: { id, status: "completed" } });
   } catch (err) { handleRouteError(err, res, "Driver trip-complete error:"); }
 });
@@ -1036,6 +1627,8 @@ router.get("/drivers", authorize({ feature: "fleet.vehicles", action: "list" }),
   try {
     const scope = req.scope!;
     const { search, status } = req.query as Record<string, string | undefined>;
+    // #2713 (تعميم) — سلة المحذوفات: deleted=true يعرض السائقين المحذوفين فقط.
+    const showDeleted = (req.query as Record<string, string | undefined>).deleted === "true";
     const filters = parseScopeFilters(req);
     // fleet_drivers has no branchId column; the joined employees +
     // employee_assignments BOTH have one, so an unqualified branch filter
@@ -1045,13 +1638,14 @@ router.get("/drivers", authorize({ feature: "fleet.vehicles", action: "list" }),
     let paramIdx = nextParamIndex;
     if (search) { params.push(`%${search}%`); where += ` AND (d.name ILIKE $${paramIdx} OR d.phone ILIKE $${paramIdx} OR d."licenseNumber" ILIKE $${paramIdx})`; paramIdx++; }
     if (status) { where += ` AND d.status = $${paramIdx}`; params.push(status); paramIdx++; }
+    where += showDeleted ? ` AND d."deletedAt" IS NOT NULL` : ` AND d."deletedAt" IS NULL`;
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT d.*, e.name AS "employeeName", e."empNumber" AS "employeeNumber",
               ea."jobTitle" AS "employeeJobTitle"
        FROM fleet_drivers d
        LEFT JOIN employees e ON e.id = d."employeeId" AND e."deletedAt" IS NULL
        LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
-       WHERE ${where} AND d."deletedAt" IS NULL
+       WHERE ${where}
        ORDER BY d.name LIMIT 500`,
       params
     );
@@ -1685,6 +2279,19 @@ router.delete("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "de
 
     res.json({ message: "تم حذف السائق بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete driver error:"); }
+});
+
+// #2713 (تعميم) — استرجاع سائق محذوف ناعمًا (سلة المحذوفات). صلاحية حذف + Audit.
+router.post("/drivers/:id/restore", authorize({ feature: "fleet.vehicles", action: "delete", resource: { table: "fleet_drivers", idParam: "id" } }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const { affectedRows } = await rawExecute(`UPDATE fleet_drivers SET "deletedAt"=NULL WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NOT NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("لا يوجد سائق محذوف بهذا المعرّف");
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "fleet.driver.restored", entity: "fleet_drivers", entityId: id }).catch((e) => logger.error(e, "fleet background task failed"));
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "restore", entity: "fleet_drivers", entityId: id }).catch((e) => logger.error(e, "fleet background task failed"));
+    res.json({ message: "تم استرجاع السائق" });
+  } catch (err) { handleRouteError(err, res, "Restore driver error:"); }
 });
 
 // ─── Driver portal-account provisioning (#1354) ──────────────────────────
@@ -4923,6 +5530,11 @@ router.post("/rental-contracts/:id/payments", authorize({ feature: "fleet.vehicl
        VALUES ($1,$2,$3,$4,'pending',$5)`,
       [scope.companyId, id, b.data.dueDate, b.data.amount, b.data.notes ?? null]
     );
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "fleet.rental_payment.scheduled", entity: "fleet_rental_payments", entityId: insertId,
+      after: { contractId: id, dueDate: b.data.dueDate, amount: b.data.amount },
+    }).catch(() => undefined);
     res.status(201).json({ id: insertId, ok: true });
   } catch (err) { handleRouteError(err, res, "rental schedule error"); }
 });

@@ -4,8 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Activity, AlertTriangle, CheckCircle2, Clock, Database,
-  Network, Pause, RefreshCw, Shield, ShieldAlert, Wifi, WifiOff,
+  Network, Pause, Shield, ShieldAlert, Wifi, WifiOff,
 } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 import {
   DataTable,
   type DataTableColumn,
@@ -13,6 +14,8 @@ import {
 } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { KpiGrid } from "@/components/shared/kpi-card";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { FleetTelematicsTabsNav } from "@/components/shared/fleet-telematics-tabs-nav";
 
@@ -71,6 +74,7 @@ export default function FleetTelematicsOperations() {
       "/fleet/telematics/sync-logs",
     );
   const syncRows = asList(syncLogs) as SyncLogRow[];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<SyncLogRow>(syncRows);
 
   const { data: breaker, refetch: refetchBreaker } =
     useApiQuery<BreakerResponse>(
@@ -216,14 +220,30 @@ export default function FleetTelematicsOperations() {
 
   return (
     <PageShell
-      title="تشغيل التتبع — مراقبة CMSV6 و breakers"
+      title="تشغيل التتبع"
       breadcrumbs={[
         { href: "/fleet", label: "الأسطول" },
         { href: "/fleet/telematics/live-map", label: "التتبع المباشر" },
         { label: "لوحة التشغيل" },
       ]}
       actions={
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_fleet_telematics_sync_logs"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "تشغيل التتبع — سجل عمليات المزامنة (آخر 200)", total: printRows.length },
+              items: printRows.map((r) => ({
+                "النتيجة": STATUS_LABEL[r.status] ?? r.status,
+                "العملية": r.operation,
+                "تكامل": r.integrationId ?? "—",
+                "معالَج": r.itemsProcessed,
+                "أُنشئ": r.itemsCreated,
+                "بدأ في": r.startedAt,
+              })),
+            })}
+          />
           <button
             onClick={() => syncMut.mutate({})}
             disabled={syncMut.isPending}
@@ -232,13 +252,7 @@ export default function FleetTelematicsOperations() {
             <Network className="h-4 w-4" />
             {syncMut.isPending ? "جاري المزامنة…" : "مزامنة الآن"}
           </button>
-          <button
-            onClick={refresh}
-            className="inline-flex items-center gap-1 px-3 py-2 text-sm rounded-md border hover:bg-surface-subtle"
-          >
-            <RefreshCw className="h-4 w-4" />
-            تحديث
-          </button>
+          <RefreshAction onRefresh={refresh} />
         </div>
       }
     >
@@ -328,6 +342,7 @@ export default function FleetTelematicsOperations() {
           <DataTable
             columns={syncColumns}
             data={syncRows}
+            onSortedDataChange={setPrintRows}
             searchPlaceholder="ابحث في العمليات…"
             emptyMessage="لا سجلات مزامنة بعد"
           />

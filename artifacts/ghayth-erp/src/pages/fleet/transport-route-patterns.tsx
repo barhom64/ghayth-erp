@@ -47,10 +47,13 @@ import {
   PageStatusBadge, DataTable, type DataTableColumn, PageShell,
 } from "@workspace/ui-core";
 import {
-  Plus, Pencil, Trash2, Play, CalendarRange, RefreshCw, Route as RouteIcon,
+  Plus, Pencil, Trash2, Play, CalendarRange, Route as RouteIcon,
 } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 import { GuardedButton, usePermission } from "@/components/shared/permission-gate";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -198,6 +201,7 @@ export default function TransportRoutePatternsPage() {
     `/transport/route-patterns?status=${statusFilter}`,
   );
   const rows = data?.data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   const kpi = useMemo(() => ({
     total: rows.length,
@@ -504,9 +508,23 @@ export default function TransportRoutePatternsPage() {
       ]}
       actions={
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => refetch()}>
-            <RefreshCw className="h-4 w-4 me-1" />تحديث
-          </Button>
+          <PrintButton
+            entityType="report_transport_route_patterns"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "قوالب المسارات المتكررة", total: printRows.length },
+              items: printRows.map((r: any) => ({
+                "الرمز": r.patternCode,
+                "الاسم": r.name,
+                "الأيام": dayMaskLabel(r.daysOfWeekMask),
+                "الانطلاق": r.departureTime || "—",
+                "المسار": `${r.fromLocationText || "—"} → ${r.toLocationText || "—"}`,
+                "الحالة": STATUS_OPTIONS.find((o) => o.value === r.status)?.label ?? r.status,
+              })),
+            })}
+          />
+          <RefreshAction onRefresh={() => refetch()} />
           <GuardedButton perm="fleet.bookings:create" size="sm" onClick={openCreate}>
             <Plus className="h-4 w-4 me-1" />قالب جديد
           </GuardedButton>
@@ -543,6 +561,7 @@ export default function TransportRoutePatternsPage() {
           <DataTable
             columns={columns}
             data={rows}
+            onSortedDataChange={setPrintRows}
             searchPlaceholder="ابحث بالرمز أو الاسم…"
             emptyMessage="لا توجد قوالب — أنشئ قالبًا جديدًا لتفعيل التوليد."
           />
@@ -715,7 +734,7 @@ export default function TransportRoutePatternsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={busy}>إلغاء</Button>
-            <Button onClick={save} disabled={busy}>{busy ? "جارٍ الحفظ…" : "حفظ"}</Button>
+            <Button onClick={save} disabled={busy}>{busy ? "جاري الحفظ…" : "حفظ"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

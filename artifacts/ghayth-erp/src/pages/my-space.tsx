@@ -22,6 +22,8 @@ import { MonthlySummaryCard } from "./my-space/monthly-summary-card";
 import { SmartSuggestionsCard } from "./my-space/smart-suggestions-card";
 import { AccountInfoCard } from "./my-space/account-info-card";
 import { ChangePasswordSection } from "./my-space/change-password-section";
+import { TwoFactorSection } from "./my-space/two-factor-section";
+import { SessionsSection } from "./my-space/sessions-section";
 import { PreferencesCard } from "./my-space/preferences-card";
 
 export default function MySpace() {
@@ -126,6 +128,10 @@ export default function MySpace() {
         />
         <ChangePasswordSection />
       </div>
+
+      <TwoFactorSection />
+
+      <SessionsSection />
 
       <PreferencesCard />
     </PageShell>

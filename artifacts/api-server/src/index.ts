@@ -9,6 +9,7 @@ import { registerEventListeners } from "./lib/eventListeners.js";
 import { registerJourneyTracking } from "./lib/journeyTracking.js";
 import { registerRulesEngineListener } from "./lib/rulesEngine.js";
 import "./lib/engines/hrEngine.js";
+import "./lib/integrations/githubSupportSync.js";
 import { seedDemoData } from "./lib/seedDemoData.js";
 import { bootstrapAdminUser } from "./lib/bootstrapAdmin.js";
 import { syncFeatureCatalog } from "./lib/rbac/catalogSync.js";
@@ -154,6 +155,15 @@ async function start() {
 
   server.listen(port, "0.0.0.0", async () => {
     logger.info({ port }, "Server listening");
+
+    // Realtime SSE hub — subscribe to the event bus so every change is pushed
+    // live to connected clients (web + native app stay in sync).
+    try {
+      const { initRealtimeHub } = await import("./lib/realtimeHub.js");
+      initRealtimeHub();
+    } catch (err) {
+      logger.error({ err }, "[realtime] failed to init hub");
+    }
 
     try {
       await startCronScheduler();

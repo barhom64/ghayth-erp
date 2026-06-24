@@ -21,8 +21,9 @@ const ROUTE_UMRAH = readFileSync(
   join(import.meta.dirname!, "../../src/routes/umrah.ts"),
   "utf8",
 );
+// U-07 Phase 13 — /reports/compliance carved into umrah-reports.ts.
 const ROUTE_ENT = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-reports.ts"),
   "utf8",
 );
 const COMPLIANCE_PAGE = readFileSync(
@@ -34,7 +35,7 @@ const ROUTES_TSX = readFileSync(
   "utf8",
 );
 const TABS = readFileSync(
-  join(import.meta.dirname!, "../../../ghayth-erp/src/components/shared/umrah-tabs-nav.tsx"),
+  join(import.meta.dirname!, "../../../ghayth-erp/src/components/layout/navigation.registry.ts"),
   "utf8",
 );
 
@@ -147,7 +148,7 @@ describe("UmrahComplianceDashboard page — registration + UX", () => {
   it("registered under /umrah/compliance + listed in tabs nav", () => {
     expect(ROUTES_TSX).toMatch(/UmrahCompliance = lazy\(\(\) => import\("@\/pages\/umrah\/compliance"\)\)/);
     expect(ROUTES_TSX).toMatch(/path: "\/umrah\/compliance", component: UmrahCompliance/);
-    expect(TABS).toMatch(/href: "\/umrah\/compliance", label: "لوحة الامتثال"/);
+    expect(TABS).toMatch(/label: "امتثال العمرة", path: "\/umrah\/compliance"/);
   });
 
   it("season filter drives the query string (server-side scoping)", () => {

@@ -7,7 +7,7 @@ import {
   PageStatusBadge,
   PageShell,
 } from "@workspace/ui-core";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ProjectSelect } from "@/components/shared/entity-selects";
 import { Label } from "@/components/ui/label";
 import { BarChart2, Flag, CheckCircle2, Clock, AlertCircle } from "lucide-react";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -53,8 +53,7 @@ export default function GanttPage() {
   const urlProjectId = new URLSearchParams(search).get("projectId") || "";
   const [projectId, setProjectId] = useState(urlProjectId);
 
-  const { data: projects, isLoading: isProjectsLoading, isError: isProjectsError } = useApiQuery<any>(["projects-list"], "/projects?limit=100");
-  const projectList = asList(projects?.data || projects);
+  const { isLoading: isProjectsLoading, isError: isProjectsError } = useApiQuery<any>(["projects-list"], "/projects?limit=100");
 
   const { data: gantt, isLoading } = useApiQuery<any>(
     ["gantt", projectId],
@@ -85,12 +84,7 @@ export default function GanttPage() {
       actions={
         <div className="flex items-center gap-2">
           <Label>المشروع:</Label>
-          <Select value={projectId} onValueChange={setProjectId}>
-            <SelectTrigger className="w-64"><SelectValue placeholder="اختر مشروعاً" /></SelectTrigger>
-            <SelectContent>
-              {projectList.map((p: any) => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <ProjectSelect value={projectId} onChange={setProjectId} allowCreate={false} className="w-64" placeholder="اختر مشروعاً" />
         </div>
       }
     >
@@ -105,7 +99,7 @@ export default function GanttPage() {
 
       {gantt && (
         <>
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card><CardContent className="pt-4 text-center"><div className="text-xl font-bold">{tasks.length}</div><div className="text-xs text-muted-foreground">مهام</div></CardContent></Card>
             <Card><CardContent className="pt-4 text-center"><div className="text-xl font-bold text-status-success-foreground">{tasks.filter((t: any) => t.status === "completed").length}</div><div className="text-xs text-muted-foreground">مكتملة</div></CardContent></Card>
             <Card><CardContent className="pt-4 text-center"><div className="text-xl font-bold text-orange-600">{milestones.length}</div><div className="text-xs text-muted-foreground">معالم</div></CardContent></Card>

@@ -209,7 +209,7 @@ export default function DunningPage() {
 
   return (
     <PageShell
-      title="متابعة تحصيل الذمم (Dunning)"
+      title="متابعة تحصيل الذمم"
       subtitle="إرسال تذكيرات تدريجية للعملاء المتأخرين عن السداد — 5 مراحل من تذكير ودي إلى إحالة قانونية"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
@@ -316,7 +316,7 @@ export default function DunningPage() {
             <p className="text-xs text-muted-foreground">إجمالي المبالغ المتأخرة في الفترة المعروضة</p>
             <p className="text-2xl font-bold font-mono text-status-warning-foreground">{formatCurrency(preview.totalOutstanding)}</p>
           </div>
-          <p className="text-xs text-muted-foreground">As of: {preview.asOf}</p>
+          <p className="text-xs text-muted-foreground">بتاريخ: {preview.asOf}</p>
         </CardContent>
       </Card>
 

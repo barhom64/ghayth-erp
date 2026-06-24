@@ -38,6 +38,7 @@ export interface AllocationInput {
   // Optional dimensional context the line already carries; used both
   // for rule matching (conditionsJson) and to fill the journal line.
   dimensions?: {
+    branchId?: number | null;
     vehicleId?: number | null;
     propertyId?: number | null;
     unitId?: number | null;
@@ -53,6 +54,21 @@ export interface AllocationInput {
     vendorId?: number | null;
   };
   taxCode?: string | null;
+  /** The product this line sells, if any. When the rule-driven path
+   *  produces no account (no manual pin, no matching rule), the resolver
+   *  consults `productRevenueCodes` for this id and uses the product's
+   *  mapped revenue account BEFORE the caller's generic fallback — see
+   *  #2102 / #1945 item 6. Distinct from `dimensions.productId` only in
+   *  intent (this drives account selection); callers normally set both to
+   *  the same value. */
+  productId?: number | null;
+  /** Batch-loaded productId → revenue account code map, produced once per
+   *  document by {@link getProductRevenueCodes} and injected here so the
+   *  resolver applies product-revenue selection WITHOUT an N+1 per-line DB
+   *  call. #2102 folded this lookup INTO the resolver so every caller —
+   *  including direct resolveLineAllocation callers — gets product-revenue
+   *  fallback consistently, instead of bolting it on after the resolver. */
+  productRevenueCodes?: Map<number, string> | null;
   /** The line that this allocation describes — back-pointer to the
    *  source row so writeResult can UPSERT. */
   sourceTable: string;
@@ -142,6 +158,17 @@ export async function resolveLineAllocation(input: AllocationInput): Promise<All
 
   const dims = normalizeDimensions(input.dimensions);
 
+  // #2102 / #1945 item 6 — product-revenue fallback, folded INTO the
+  // resolver so every caller (not just the two invoice call sites) applies
+  // it consistently. Used ONLY when the rule-driven path produces no
+  // account; resolved here so it slots in at the SAME precedence point the
+  // call sites used to bolt it on AFTER the resolver:
+  //   manual pin  >  matching rule  >  product revenue  >  caller generic.
+  // The status is deliberately left as 'unmapped' (no rule/pin matched) so
+  // the enforce gate + preview warnings behave exactly as before — this is
+  // a posting-account fallback, not a successful mapping.
+  const productRevenueCode = resolveProductRevenueCode(input);
+
   // Step 1 — caller-pinned account always wins, but we ALSO run the
   // rule-driven path with the pin stripped so the "Manual Overrides"
   // report can show what the resolver WOULD have picked otherwise
@@ -194,7 +221,7 @@ export async function resolveLineAllocation(input: AllocationInput): Promise<All
     });
     return {
       status: "unmapped",
-      resolvedAccountCode: null,
+      resolvedAccountCode: productRevenueCode,
       resolvedAccountId: null,
       costCenterId: input.costCenterId ?? null,
       dimensions: dims,
@@ -213,7 +240,7 @@ export async function resolveLineAllocation(input: AllocationInput): Promise<All
     });
     return {
       status: "unmapped",
-      resolvedAccountCode: null,
+      resolvedAccountCode: productRevenueCode,
       resolvedAccountId: null,
       costCenterId: input.costCenterId ?? null,
       dimensions: dims,
@@ -238,7 +265,7 @@ export async function resolveLineAllocation(input: AllocationInput): Promise<All
       });
       return {
         status: "unmapped",
-        resolvedAccountCode: null,
+        resolvedAccountCode: productRevenueCode,
         resolvedAccountId: null,
         costCenterId,
         dimensions: dims,
@@ -507,6 +534,7 @@ export async function logAllocationOverride(params: {
 
 function normalizeDimensions(dims: AllocationInput["dimensions"]): Required<NonNullable<AllocationInput["dimensions"]>> {
   return {
+    branchId: dims?.branchId ?? null,
     vehicleId: dims?.vehicleId ?? null,
     propertyId: dims?.propertyId ?? null,
     unitId: dims?.unitId ?? null,
@@ -572,6 +600,7 @@ async function resolveCostCenter(
   let entityType: string | null = null;
   let entityId: number | null = null;
   switch (strategy) {
+    case "from_branch":   entityType = "branch";   entityId = dims.branchId;   break;
     case "from_vehicle":  entityType = "vehicle";  entityId = dims.vehicleId;  break;
     case "from_property": entityType = "property"; entityId = dims.propertyId; break;
     case "from_unit":     entityType = "unit";     entityId = dims.unitId;     break;
@@ -594,6 +623,20 @@ async function resolveCostCenter(
     [companyId, entityType, entityId]
   );
   return rows[0]?.id ?? null;
+}
+
+/**
+ * يشتق مركز التكلفة المرتبط بفرع (المركز التلقائي `BR-XXXX` المربوط عبر
+ * linkedEntityType='branch'). seam مشترك يستهلكه محرك الرواتب لاستمام بُعد
+ * مركز التكلفة على سطور قيد الرواتب دون تكرار منطق البحث في cost_centers.
+ * يُرجِع null إن لم يوجد مركز تكلفة للفرع (لا يفرض شيئًا على القيد).
+ */
+export async function deriveBranchCostCenter(
+  companyId: number,
+  branchId: number | null | undefined,
+): Promise<number | null> {
+  if (!branchId) return null;
+  return resolveCostCenter(companyId, "from_branch", normalizeDimensions({ branchId }), null);
 }
 
 function checkRequiredEntity(entityType: string | null, dims: Required<NonNullable<AllocationInput["dimensions"]>>): string | null {
@@ -626,6 +669,26 @@ function checkRequiredEntity(entityType: string | null, dims: Required<NonNullab
 // type 'revenue' qualify; a misconfigured product (e.g. pointing at an
 // expense or a header account) is skipped and the caller's generic
 // fallback applies — never a wrong-side posting.
+/**
+ * Pure, per-line product-revenue picker used INSIDE resolveLineAllocation
+ * (#2102). Returns the product's mapped revenue account CODE from the
+ * injected batch map, or null when the line carries no product / no map /
+ * no entry. No DB access — the map is loaded once per document by
+ * {@link getProductRevenueCodes} and passed in via
+ * AllocationInput.productRevenueCodes, so there is no N+1 per line.
+ *
+ * `input.productId` is the account-selection key; for back-compat it falls
+ * back to `dimensions.productId` (the invoice call sites set both to the
+ * same value, but a direct caller may only populate the dimension).
+ */
+function resolveProductRevenueCode(input: AllocationInput): string | null {
+  const map = input.productRevenueCodes;
+  if (!map) return null;
+  const productId = input.productId ?? input.dimensions?.productId ?? null;
+  if (productId == null) return null;
+  return map.get(Number(productId)) ?? null;
+}
+
 export async function getProductRevenueCodes(
   companyId: number,
   productIds: number[],

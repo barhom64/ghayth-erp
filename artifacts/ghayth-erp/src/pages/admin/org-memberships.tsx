@@ -24,7 +24,10 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { TeamSelect, CommitteeSelect, ProjectSelect } from "@/components/shared/entity-selects";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, X, Trash2, Users, Gavel, Briefcase } from "lucide-react";
 
@@ -74,8 +77,6 @@ const TEAM_ROLE_LABELS = { member: "عضو", lead: "قائد", observer: "مرا
 
 function TeamsMembersTab() {
   const { toast } = useToast();
-  const { data: teamsData } = useApiQuery<{ data: SimpleEntity[] }>(["teams-for-mems"], "/org/teams");
-  const teams = asList<SimpleEntity>(teamsData?.data || []);
   const [teamId, setTeamId] = useState<string>("");
   const [form, setForm] = useState({ assignmentId: "", role: "member" });
 
@@ -85,6 +86,15 @@ function TeamsMembersTab() {
     { enabled: !!teamId },
   );
   const members = asList<Member>(membersData?.data || []);
+  const [q, setQ] = useState("");
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    if (!term) return members;
+    return members.filter((m) =>
+      [m.employeeName, m.role, m.jobTitle].some((f) => String(f ?? "").toLowerCase().includes(term)),
+    );
+  }, [members, q]);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<Member>(filtered);
 
   const add = async () => {
     const aid = Number(form.assignmentId);
@@ -121,15 +131,12 @@ function TeamsMembersTab() {
   return (
     <div className="space-y-3">
       <div className="grid gap-3 md:grid-cols-[1fr_auto]">
-        <div>
-          <Label className="text-xs">اختر الفريق</Label>
-          <Select value={teamId} onValueChange={setTeamId}>
-            <SelectTrigger className="mt-1"><SelectValue placeholder="— لم يُختر بعد —" /></SelectTrigger>
-            <SelectContent>
-              {teams.map((t) => <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
+        <TeamSelect
+          label="اختر الفريق"
+          placeholder="— لم يُختر بعد —"
+          value={teamId}
+          onChange={setTeamId}
+        />
       </div>
 
       {teamId && (
@@ -163,12 +170,34 @@ function TeamsMembersTab() {
           </Card>
 
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2">
-              <Users className="h-4 w-4" /> الأعضاء النشطون ({members.length})
-            </CardTitle></CardHeader>
+            <CardHeader className="pb-2 flex flex-row items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Users className="h-4 w-4" /> الأعضاء النشطون ({members.length})
+              </CardTitle>
+              <PrintButton
+                entityType="report_admin_team_members"
+                entityId="list"
+                size="icon"
+                payload={() => ({
+                  entity: { title: "أعضاء الفريق", total: printRows.length },
+                  items: printRows.map((m) => ({
+                    "الموظف": m.employeeName,
+                    "الدور": TEAM_ROLE_LABELS[m.role as keyof typeof TEAM_ROLE_LABELS] || m.role,
+                    "منذ": m.startDate?.slice(0, 10) || "—",
+                  })),
+                })}
+              />
+            </CardHeader>
             <CardContent>
+              <div className="mb-3 max-w-sm">
+                <Input
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="بحث بالموظف أو الدور أو المسمى…"
+                />
+              </div>
               {isLoading ? <LoadingSpinner /> : (
-                <DataTable data={members} columns={columns} pageSize={20} noToolbar emptyMessage="لا يوجد أعضاء بعد." />
+                <DataTable data={filtered} columns={columns} onSortedDataChange={setPrintRows} pageSize={20} noToolbar emptyMessage="لا يوجد أعضاء بعد." />
               )}
             </CardContent>
           </Card>
@@ -185,8 +214,6 @@ const COMMITTEE_ROLE_LABELS = { member: "عضو", chair: "رئيس", secretary: 
 
 function CommitteesMembersTab() {
   const { toast } = useToast();
-  const { data: cData } = useApiQuery<{ data: SimpleEntity[] }>(["committees-for-mems"], "/org/committees");
-  const committees = asList<SimpleEntity>(cData?.data || []);
   const [committeeId, setCommitteeId] = useState<string>("");
   const [form, setForm] = useState({ assignmentId: "", role: "member", isVoting: true });
 
@@ -237,15 +264,12 @@ function CommitteesMembersTab() {
 
   return (
     <div className="space-y-3">
-      <div>
-        <Label className="text-xs">اختر اللجنة</Label>
-        <Select value={committeeId} onValueChange={setCommitteeId}>
-          <SelectTrigger className="mt-1"><SelectValue placeholder="— لم تُختر بعد —" /></SelectTrigger>
-          <SelectContent>
-            {committees.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name} {c.type ? `(${c.type})` : ""}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
+      <CommitteeSelect
+        label="اختر اللجنة"
+        placeholder="— لم تُختر بعد —"
+        value={committeeId}
+        onChange={setCommitteeId}
+      />
 
       {committeeId && (
         <>
@@ -298,8 +322,6 @@ function CommitteesMembersTab() {
 // ════════════════════════════════════════════════════════════════════════════
 function ProjectsContributorsTab() {
   const { toast } = useToast();
-  const { data: pData, isError: pErr } = useApiQuery<{ data: Project[] }>(["projects-for-mems"], "/projects");
-  const projects = asList<Project>(pData?.data || []);
   const [projectId, setProjectId] = useState<string>("");
   const [form, setForm] = useState({ assignmentId: "", role: "contributor", allocationPercent: "100" });
 
@@ -361,17 +383,12 @@ function ProjectsContributorsTab() {
 
   return (
     <div className="space-y-3">
-      <div>
-        <Label className="text-xs">اختر المشروع</Label>
-        <Select value={projectId} onValueChange={setProjectId}>
-          <SelectTrigger className="mt-1">
-            <SelectValue placeholder={pErr ? "تعذّر تحميل المشاريع" : "— لم يُختر بعد —"} />
-          </SelectTrigger>
-          <SelectContent>
-            {projects.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
+      <ProjectSelect
+        label="اختر المشروع"
+        placeholder="— لم يُختر بعد —"
+        value={projectId}
+        onChange={setProjectId}
+      />
 
       {projectId && (
         <>

@@ -13,6 +13,8 @@ import {
 import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -80,6 +82,13 @@ const STATUS_LABELS: Record<string, string> = {
   rejected: "مرفوض",
 };
 
+// Mirrors the Arabic labels shown in the reviews table's decision column.
+const DECISION_LABELS: Record<string, string> = {
+  approved: "اعتماد",
+  rejected: "رفض",
+  changes_requested: "طلب تعديلات",
+};
+
 function statusTone(s: string) {
   if (s === "approved") return "bg-emerald-100 text-emerald-800";
   if (s === "in_review") return "bg-status-info-surface text-status-info-foreground";
@@ -130,6 +139,9 @@ export default function AdminAiPromptDetailPage() {
   const reviews = reviewsQ.data?.data ?? [];
   const testCases = testCasesQ.data?.data ?? [];
   const evaluations = evaluationsQ.data?.data ?? [];
+
+  // Print wiring (DETAIL page) — print this prompt's review decision trail.
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<ReviewRow>(reviews);
 
   const reviewColumns: DataTableColumn<ReviewRow>[] = [
     {
@@ -253,6 +265,25 @@ export default function AdminAiPromptDetailPage() {
       ]}
       actions={
         <div className="flex items-center gap-2">
+          {prompt && id && (
+            <PrintButton
+              entityType="report_admin_ai_prompt"
+              entityId={String(id)}
+              size="icon"
+              payload={() => ({
+                entity: {
+                  title: `مراجعات الموجّه: ${prompt.slug} v${prompt.version}`,
+                  total: printRows.length,
+                },
+                items: printRows.map((r: ReviewRow) => ({
+                  "القرار": DECISION_LABELS[r.decision] ?? r.decision,
+                  "المراجع": r.reviewerName ?? `مستخدم #${r.reviewerId}`,
+                  "ملاحظات": r.comments ?? "—",
+                  "التاريخ": r.createdAt,
+                })),
+              })}
+            />
+          )}
           <Button asChild variant="outline" className="gap-2">
             <Link href="/admin/ai-governance">
               <ArrowLeft className="h-4 w-4" />
@@ -373,6 +404,7 @@ export default function AdminAiPromptDetailPage() {
                       <DataTable
                         columns={reviewColumns}
                         data={reviews}
+                        onSortedDataChange={setPrintRows}
                         emptyMessage="لا توجد مراجعات بعد"
                         noToolbar
                       />

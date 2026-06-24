@@ -144,12 +144,12 @@ export default function CashFlowForecastPage() {
                     <div key={group.label}>
                       <div className="px-5 py-2 text-xs font-medium text-muted-foreground bg-surface-subtle">{group.label}</div>
                       {group.items.slice(0, 5).map((item: any, i: number) => (
-                        <div key={i} className="px-5 py-2.5 flex items-center justify-between text-sm hover:bg-surface-subtle">
-                          <div>
-                            <div className="font-medium">{item.clientName ?? "عميل"}</div>
-                            <div className="text-xs text-muted-foreground">{item.ref} · استحقاق {formatDate(item.dueDate)}</div>
+                        <div key={i} className="px-5 py-2.5 flex items-center justify-between gap-2 text-sm hover:bg-surface-subtle">
+                          <div className="min-w-0">
+                            <div className="font-medium truncate">{item.clientName ?? "عميل"}</div>
+                            <div className="text-xs text-muted-foreground truncate">{item.ref} · استحقاق {formatDate(item.dueDate)}</div>
                           </div>
-                          <div className="font-semibold text-status-success-foreground">{formatCurrency(item.expected)}</div>
+                          <div className="font-semibold text-status-success-foreground shrink-0">{formatCurrency(item.expected)}</div>
                         </div>
                       ))}
                       {group.items.length > 5 && (
@@ -171,12 +171,12 @@ export default function CashFlowForecastPage() {
               </div>
               <div className="divide-y">
                 {(outflows.next30 ?? []).map((item: any, i: number) => (
-                  <div key={i} className="px-5 py-2.5 flex items-center justify-between text-sm hover:bg-surface-subtle">
-                    <div>
-                      <div className="font-medium">{item.supplierName ?? "مورد"}</div>
-                      <div className="text-xs text-muted-foreground">{item.ref} · {formatDate(item.dueDate)}</div>
+                  <div key={i} className="px-5 py-2.5 flex items-center justify-between gap-2 text-sm hover:bg-surface-subtle">
+                    <div className="min-w-0">
+                      <div className="font-medium truncate">{item.supplierName ?? "مورد"}</div>
+                      <div className="text-xs text-muted-foreground truncate">{item.ref} · {formatDate(item.dueDate)}</div>
                     </div>
-                    <div className="font-semibold text-status-error-foreground">{formatCurrency(item.expected)}</div>
+                    <div className="font-semibold text-status-error-foreground shrink-0">{formatCurrency(item.expected)}</div>
                   </div>
                 ))}
                 {(outflows.next30?.length ?? 0) === 0 && (

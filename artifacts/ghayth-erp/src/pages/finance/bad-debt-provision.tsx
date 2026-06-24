@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { RefreshAction } from "@/components/page-actions";
 import {
   AlertTriangle, TrendingDown, FileSignature, RefreshCw,
   Info, CheckCircle2, Lock,
@@ -119,7 +120,7 @@ export default function BadDebtProvisionPage() {
 
   return (
     <PageShell
-      title="مخصص ديون مشكوك فيها"
+      title="ورقة عمل مخصص الديون"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
         { label: "مخصص ديون مشكوك فيها" },
@@ -192,9 +193,7 @@ export default function BadDebtProvisionPage() {
               <RefreshCw className="w-4 h-4 ml-1" />
               نسب افتراضية
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => refetch()}>
-              تحديث
-            </Button>
+            <RefreshAction onRefresh={() => refetch()} />
           </div>
 
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
@@ -269,71 +268,53 @@ export default function BadDebtProvisionPage() {
               <CardTitle className="text-base">سطول العمر مع المخصص المحسوب</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-xs text-muted-foreground">
-                      <th className="text-start py-2 px-2">السطل</th>
-                      <th className="text-end py-2 px-2">المبلغ المستحق</th>
-                      <th className="text-end py-2 px-2">% من الإجمالي</th>
-                      <th className="text-end py-2 px-2">نسبة المخصص</th>
-                      <th className="text-end py-2 px-2">المخصص</th>
-                      <th className="py-2 px-2">المؤشر</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {BUCKET_DEFS.map(b => {
-                      const amt = data.buckets[b.key];
-                      const prov = data.provision[b.key];
-                      const pctOfTotal = totalOutstanding > 0 ? (amt / totalOutstanding) * 100 : 0;
-                      return (
-                        <tr key={b.key} className="border-b hover:bg-muted/30">
-                          <td className="py-2 px-2">
-                            <div className="font-medium">{b.label}</div>
-                            <div className="text-[11px] text-muted-foreground">{b.help}</div>
-                          </td>
-                          <td className="py-2 px-2 text-end tabular-nums font-semibold">
-                            {formatCurrency(amt)}
-                          </td>
-                          <td className="py-2 px-2 text-end tabular-nums text-muted-foreground">
-                            {pctOfTotal.toFixed(1)}%
-                          </td>
-                          <td className="py-2 px-2 text-end tabular-nums">
-                            <Badge variant="outline" className="font-mono">
-                              {(rates[b.key] * 100).toFixed(0)}%
-                            </Badge>
-                          </td>
-                          <td className="py-2 px-2 text-end tabular-nums font-semibold text-status-danger-foreground">
-                            {formatCurrency(prov)}
-                          </td>
-                          <td className="py-2 px-2 w-32">
-                            <div className="h-2 bg-muted rounded overflow-hidden">
-                              <div
-                                className={b.color}
-                                style={{ width: `${Math.min(pctOfTotal, 100)}%`, height: "100%" }}
-                              />
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                  <tfoot>
-                    <tr className="font-semibold bg-muted/40 border-t-2">
-                      <td className="py-2 px-2">الإجمالي</td>
-                      <td className="py-2 px-2 text-end tabular-nums">{formatCurrency(totalOutstanding)}</td>
-                      <td className="py-2 px-2 text-end tabular-nums">100%</td>
-                      <td className="py-2 px-2 text-end tabular-nums text-muted-foreground">
-                        — متوسط مرجح —
-                      </td>
-                      <td className="py-2 px-2 text-end tabular-nums text-status-danger-foreground">
-                        {formatCurrency(data.totalProvision)}
-                      </td>
-                      <td></td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
+              <DataTable<{ key: keyof Buckets; label: string; help: string; color: string; amt: number; prov: number; pctOfTotal: number }>
+                noToolbar
+                pageSize={0}
+                rowKey={(b) => b.key}
+                rowClassName={() => "hover:bg-muted/30"}
+                data={BUCKET_DEFS.map(b => {
+                  const amt = data.buckets[b.key];
+                  const prov = data.provision[b.key];
+                  const pctOfTotal = totalOutstanding > 0 ? (amt / totalOutstanding) * 100 : 0;
+                  return { ...b, amt, prov, pctOfTotal };
+                })}
+                columns={[
+                  {
+                    key: "label", header: "السطل", sortable: false,
+                    render: (b) => (
+                      <>
+                        <div className="font-medium">{b.label}</div>
+                        <div className="text-[11px] text-muted-foreground">{b.help}</div>
+                      </>
+                    ),
+                    footer: () => "الإجمالي",
+                  },
+                  { key: "amount", header: "المبلغ المستحق", sortable: false, align: "end", className: "tabular-nums font-semibold", render: (b) => formatCurrency(b.amt), footer: () => formatCurrency(totalOutstanding) },
+                  { key: "pctOfTotal", header: "% من الإجمالي", sortable: false, align: "end", className: "tabular-nums text-muted-foreground", render: (b) => `${b.pctOfTotal.toFixed(1)}%`, footer: () => "100%" },
+                  {
+                    key: "rate", header: "نسبة المخصص", sortable: false, align: "end", className: "tabular-nums",
+                    render: (b) => (
+                      <Badge variant="outline" className="font-mono">
+                        {(rates[b.key] * 100).toFixed(0)}%
+                      </Badge>
+                    ),
+                    footer: () => <span className="text-muted-foreground">— متوسط مرجح —</span>,
+                  },
+                  { key: "provision", header: "المخصص", sortable: false, align: "end", className: "tabular-nums font-semibold text-status-danger-foreground", render: (b) => formatCurrency(b.prov), footer: () => formatCurrency(data.totalProvision) },
+                  {
+                    key: "indicator", header: "المؤشر", sortable: false, className: "w-32",
+                    render: (b) => (
+                      <div className="h-2 bg-muted rounded overflow-hidden">
+                        <div
+                          className={b.color}
+                          style={{ width: `${Math.min(b.pctOfTotal, 100)}%`, height: "100%" }}
+                        />
+                      </div>
+                    ),
+                  },
+                ]}
+              />
             </CardContent>
           </Card>
 
@@ -346,7 +327,7 @@ export default function BadDebtProvisionPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto"><table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-xs text-muted-foreground">
                     <th className="text-start py-2 px-2">الحساب</th>
@@ -370,7 +351,7 @@ export default function BadDebtProvisionPage() {
                     </td>
                   </tr>
                 </tbody>
-              </table>
+              </table></div>
               <div className="mt-3 text-[11px] text-muted-foreground flex items-start gap-2 bg-status-info-surface p-2 rounded">
                 <Info className="w-4 h-4 flex-shrink-0 mt-0.5 text-status-info-foreground" />
                 <div>
