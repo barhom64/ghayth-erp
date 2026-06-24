@@ -8,6 +8,7 @@ import {
   zodParse,
 } from "../lib/errorHandler.js";
 import { z } from "zod";
+import { zCoerceBoolean } from "../lib/zodCoerce.js";
 import { FINANCE_ROLES, OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
@@ -240,7 +241,7 @@ const vendorInvoiceLineSchema = z.object({
 
 const vendorInvoicePreviewSchema = z.object({
   supplierId: z.coerce.number().int().positive(),
-  paid: z.coerce.boolean().optional().default(false),
+  paid: zCoerceBoolean().optional().default(false),
   sourceAccountCode: z.string().optional(),
   branchId: z.any().optional(),
   lines: z.array(vendorInvoiceLineSchema).min(1, "أدخل بندًا واحدًا على الأقل"),
@@ -248,7 +249,7 @@ const vendorInvoicePreviewSchema = z.object({
 
 const createVendorInvoiceSchema = z.object({
   supplierId: z.coerce.number().int().positive(),
-  paid: z.coerce.boolean().optional().default(false),
+  paid: zCoerceBoolean().optional().default(false),
   sourceAccountCode: z.string().optional(),
   invoiceNo: z.string().optional(),
   invoiceDate: z.string().optional(),
@@ -2156,9 +2157,28 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
         scope.allowedBranches.length > 0 && !scope.allowedBranches.includes(Number(branchId))) {
       throw new ForbiddenError("لا تملك صلاحية إنشاء سند في هذا الفرع", { field: "branchId" });
     }
-    if (!accountCode) {
-      throw new ValidationError("الحساب المحاسبي مطلوب", { field: "accountCode", fix: "حدد الحساب المحاسبي الرئيسي للسند" });
+    // العقيدة «النظام مساعد لا عائق»: لا نرفض السند بلا حساب مقابل عندما يكون
+    // التوجيه التلقائي صحيح النوع. عند تركه فارغًا يُوجَّه حسب اتجاه السند إلى
+    // ورقة قابلة للترحيل: صرف → 5399 «مصروفات عمومية أخرى» (مصروف)، قبض → 4930
+    // «إيرادات متنوعة» (إيراد). (راجَعه إبراهيم 2026-06-23.)
+    //
+    // لكن أنواع العمليات التي تتطلّب نوع حساب مختلفًا (invoice_payment=أصل،
+    // deposit=التزام، advance/custody=أصل…) لا يصحّ توجيهها لمصروف/إيراد —
+    // assertOperationValid سيرفضها (422). لهذه الأنواع يبقى الحساب المقابل
+    // مطلوبًا (والواجهة تُظهر المنتقي لها). (راجَعه Codex P2 #2920.)
+    const { VOUCHER_OPERATION_COUNTER_TYPES } = await import("../lib/financeOperationContext.js");
+    const defaultCounterType = type === "receipt" ? "revenue" : "expense";
+    const allowedCounterTypes = operationType ? VOUCHER_OPERATION_COUNTER_TYPES[operationType] : undefined;
+    const autoRouteOk = !allowedCounterTypes || allowedCounterTypes.includes(defaultCounterType);
+    const ACCT_TYPE_AR: Record<string, string> = { asset: "أصول/ذمم", liability: "التزامات", equity: "حقوق ملكية", revenue: "إيراد", expense: "مصروف" };
+    if (!accountCode && !autoRouteOk) {
+      const wanted = (allowedCounterTypes ?? []).map((t) => ACCT_TYPE_AR[t] ?? t).join(" أو ");
+      throw new ValidationError(`نوع السند «${operationType}» يتطلّب تحديد الحساب المقابل (${wanted})`, {
+        field: "accountCode",
+        fix: "اختر الحساب المقابل المناسب لهذا النوع من السندات",
+      });
     }
+    const resolvedCounterAccount = accountCode || (type === "receipt" ? "4930" : "5399");
 
     const voucherAttachCheck = checkAttachmentRequired({ operationType: type === "payment" ? "payment" : "receipt", amount: Number(amount) });
     if (voucherAttachCheck.required && !attachmentUrl) {
@@ -2242,7 +2262,7 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
         // #1945 item 5 — direction-aware counter account (صرف=مصروف /
         // قبض=إيراد): the chosen revenue/expense/AR/AP leg must match the
         // voucher direction + operationType (rule 4 in assertOperationValid).
-        counterAccountCode: subAccountCode || accountCode,
+        counterAccountCode: subAccountCode || resolvedCounterAccount,
         operationType: operationType || null,
       });
       await assertOperationValid(opCtx);
@@ -2354,7 +2374,7 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
         documentType: voucherDocType,
         lineType: operationType || type || undefined,
         entityType: relatedEntityType || undefined,
-        accountCode: (subAccountCode || accountCode) || undefined,
+        accountCode: (subAccountCode || resolvedCounterAccount) || undefined,
         costCenterId: voucherDims.costCenterId != null ? Number(voucherDims.costCenterId) : null,
         dimensions: {
           vehicleId: voucherDims.vehicleId ?? null,
@@ -2388,10 +2408,10 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
       ? [
           { accountCode: cashAcct, debit: totalWithVat, credit: 0, ...voucherDims },
           ...(computedVat > 0 ? [{ accountCode: outputVatCode, debit: 0, credit: computedVat, ...voucherDims }] : []),
-          { accountCode: subAccountCode || accountCode, debit: 0, credit: baseAmount, ...voucherDims },
+          { accountCode: subAccountCode || resolvedCounterAccount, debit: 0, credit: baseAmount, ...voucherDims },
         ]
       : [
-          { accountCode: subAccountCode || accountCode, debit: baseAmount, credit: 0, ...voucherDims },
+          { accountCode: subAccountCode || resolvedCounterAccount, debit: baseAmount, credit: 0, ...voucherDims },
           ...(computedVat > 0 ? [{ accountCode: inputVatCode2, debit: computedVat, credit: 0, ...voucherDims }] : []),
           ...whtCreditLines,
           { accountCode: cashAcct, debit: 0, credit: netCashOut, ...voucherDims },

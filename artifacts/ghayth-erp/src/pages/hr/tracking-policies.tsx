@@ -317,7 +317,7 @@ export default function TrackingPoliciesPage() {
 
           <div className="mt-4 flex justify-end">
             <Button onClick={submit} disabled={!employeeId || saveMut.isPending}>
-              {saveMut.isPending ? "جارٍ الحفظ…" : "حفظ السياسة"}
+              {saveMut.isPending ? "جاري الحفظ…" : "حفظ السياسة"}
             </Button>
           </div>
         </CardContent>

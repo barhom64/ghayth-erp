@@ -5,6 +5,14 @@ import { join } from "node:path";
 const REPO_ROOT = join(import.meta.dirname!, "../../../..");
 const UMRAH_ROUTE = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah.ts"), "utf8");
 const UMRAH_ENT = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-entities.ts"), "utf8");
+// U-07 Phase 19: nusk-invoice CRUD routes carved into a dedicated sub-router.
+const UMRAH_NUSK = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-nusk-invoices.ts"), "utf8");
+// U-07 Phase 20: payments + revenue reclassification carved into a dedicated sub-router.
+const UMRAH_PAYMENTS = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-payments.ts"), "utf8");
+// U-07 Phase 21: sales-invoices (list/generate/sales-wizard/patch) carved into a dedicated sub-router.
+const UMRAH_INVOICES = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-invoices.ts"), "utf8");
+// U-07 Phase 22: groups CRUD carved into a dedicated sub-router.
+const UMRAH_GROUPS = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-groups.ts"), "utf8");
 // U-07 Phase 6: sub-agent CRUD + linking routes carved into a dedicated sub-router.
 const UMRAH_SUB_AGENTS = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-sub-agents.ts"), "utf8");
 // U-07 Phase 7: pricing CRUD routes carved into a dedicated sub-router.
@@ -119,8 +127,9 @@ describe("Umrah entities route structure", () => {
   });
 
   it("groups and nusk-invoices endpoints exist", () => {
-    expect(UMRAH_ENT).toContain('router.get("/groups"');
-    expect(UMRAH_ENT).toContain('router.get("/nusk-invoices"');
+    // U-07 Phase 22: groups CRUD carved into umrah-groups.ts.
+    expect(UMRAH_GROUPS).toContain('router.get("/groups"');
+    expect(UMRAH_NUSK).toContain('router.get("/nusk-invoices"');
   });
 
   it("commission plan endpoints exist", () => {
@@ -130,8 +139,10 @@ describe("Umrah entities route structure", () => {
   });
 
   it("sales invoice and payment endpoints exist", () => {
-    expect(UMRAH_ENT).toContain('"/invoices/generate"');
-    expect(UMRAH_ENT).toContain('"/payments"');
+    // U-07 Phase 21: sales-invoices carved into umrah-invoices.ts.
+    expect(UMRAH_INVOICES).toContain('"/invoices/generate"');
+    // U-07 Phase 20: payments carved into umrah-payments.ts.
+    expect(UMRAH_PAYMENTS).toContain('"/payments"');
   });
 
   it("import preview and confirm endpoints exist", () => {
@@ -396,9 +407,14 @@ describe("Umrah entities security", () => {
     expect(UMRAH_SUB_AGENTS).toContain("link-client");
   });
 
-  it("entities create audit logs", () => {
-    const auditCalls = UMRAH_ENT.match(/createAuditLog\(/g);
-    expect(auditCalls!.length).toBeGreaterThanOrEqual(10);
+  it("group mutations are audited (now via auditFromRequest in umrah-groups.ts)", () => {
+    // U-07 Phase 19–22 emptied umrah-entities.ts of direct audit calls: nusk →
+    // umrah-nusk-invoices.ts, payments → umrah-payments.ts, sales-invoices →
+    // umrah-invoices.ts, and groups CRUD + split/merge → umrah-groups.ts (as
+    // auditFromRequest per the IGOC ratchet). The group write trail is pinned on
+    // its new home: create/update/delete + split + merge = 5 audit calls.
+    const auditCalls = UMRAH_GROUPS.match(/auditFromRequest\(/g);
+    expect(auditCalls!.length).toBeGreaterThanOrEqual(5);
   });
 });
 

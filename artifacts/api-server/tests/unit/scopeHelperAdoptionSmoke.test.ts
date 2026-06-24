@@ -305,6 +305,43 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // for buildScopedWhere — inherits the same allowlist justification as the
   // parent umrah-entities.ts.
   "umrah-calendar.ts",
+  // umrah-settings.ts: U-07 Phase 18 split — settings-policies catalog (GET) +
+  // per-category save (PUT) carved verbatim out of umrah-entities.ts. The GET
+  // reads the shared key-value `settings` table scoped on (key, scope, scopeId);
+  // the PUT persists via the upsertSetting service helper. No list cascade for
+  // buildScopedWhere — inherits the same allowlist justification as the parent
+  // umrah-entities.ts.
+  "umrah-settings.ts",
+  // umrah-nusk-invoices.ts: U-07 Phase 19 split — nusk-invoice CRUD (list/get/
+  // create/update/delete) + AP journal posting via the postNuskJournalEntries
+  // engine, carved verbatim out of umrah-entities.ts. All reads are tenant-scoped
+  // with explicit `"companyId" = $n AND "deletedAt" IS NULL`; the manual scoping
+  // inherits the same allowlist justification as the parent umrah-entities.ts.
+  "umrah-nusk-invoices.ts",
+  // umrah-payments.ts: U-07 Phase 20 split — payment register (POST) + list (GET)
+  // via the registerPayment engine, plus retroactive revenue reclassification via
+  // the reclassifyRevenueForInvoices engine, carved verbatim out of
+  // umrah-entities.ts. The GET reads umrah_payments tenant-scoped with explicit
+  // `"companyId" = $n AND "deletedAt" IS NULL`; same allowlist justification as
+  // the parent.
+  "umrah-payments.ts",
+  // umrah-invoices.ts: U-07 Phase 21 split — sales-invoice list/generate/
+  // sales-wizard/patch carved verbatim out of umrah-entities.ts. The GET reads
+  // umrah_sales_invoices tenant-scoped with explicit `"companyId" = $n AND
+  // "deletedAt" IS NULL`; same allowlist justification as the parent.
+  "umrah-invoices.ts",
+  // umrah-groups.ts: U-07 Phase 22 split — groups CRUD (list/get/create/update/
+  // delete) carved verbatim out of umrah-entities.ts. Reads umrah_groups
+  // tenant-scoped with explicit `"companyId" = $n AND "deletedAt" IS NULL`; same
+  // allowlist justification as the parent.
+  "umrah-groups.ts",
+  // umrah-group-transport.ts: U-07 Phase 23 split — group service-contract
+  // (transport-requests POST/GET via the umrahTransportContract engine) + the
+  // read-only cost-breakdown aggregation, carved verbatim out of
+  // umrah-entities.ts. cost-breakdown reads umrah_nusk_invoices / umrah_sales_
+  // invoices tenant-scoped with explicit `"companyId" = $n`; same allowlist
+  // justification as the parent.
+  "umrah-group-transport.ts",
   // umrah-journey-reports.ts: U-07 Phase 1 split — 4 read-only journey/recovery/
   // pricing-drift routes carved out of umrah-entities.ts verbatim. Pure SELECT
   // aggregates keyed on (companyId, …); inherits the same allowlist
@@ -502,9 +539,26 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // +1 total/manualOnly: U-07 Phase 15 routes/umrah-calendar.ts — the
       // read-only operational calendar aggregator carved verbatim out of
       // umrah-entities.ts. Same allowlist justification as the parent.
-      total: 147,
+      // +1 total/manualOnly: U-07 Phase 18 routes/umrah-settings.ts — the
+      // settings-policies catalog (GET) + per-category save (PUT) carved
+      // verbatim out of umrah-entities.ts. Same allowlist justification.
+      // +1 total/manualOnly: U-07 Phase 19 routes/umrah-nusk-invoices.ts — the
+      // nusk-invoice CRUD + AP journal posting carved verbatim out of
+      // umrah-entities.ts. Same allowlist justification.
+      // +1 total/manualOnly: U-07 Phase 20 routes/umrah-payments.ts — payments
+      // register/list + revenue reclassification carved verbatim out of
+      // umrah-entities.ts. Same allowlist justification.
+      // +1 total/manualOnly: U-07 Phase 21 routes/umrah-invoices.ts — sales-
+      // invoice list/generate/sales-wizard/patch carved verbatim out of
+      // umrah-entities.ts. Same allowlist justification.
+      // +1 total/manualOnly: U-07 Phase 22 routes/umrah-groups.ts — groups CRUD
+      // carved verbatim out of umrah-entities.ts. Same allowlist justification.
+      // +1 total/manualOnly: U-07 Phase 23 routes/umrah-group-transport.ts —
+      // group service-contract + cost-breakdown carved verbatim out of
+      // umrah-entities.ts. Same allowlist justification.
+      total: 153,
       helperUsers: 39,
-      manualOnly: 104,
+      manualOnly: 110,
     });
   });
 });

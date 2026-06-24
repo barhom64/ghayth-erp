@@ -168,7 +168,7 @@ export function FinancialAttachmentViewer({
       {/* body — the document preview / state */}
       <div className="relative flex-1 min-h-64 overflow-auto bg-muted/30 flex items-center justify-center p-3">
         {loading ? (
-          <div className="text-sm text-muted-foreground" data-state="loading">جارٍ التحميل…</div>
+          <div className="text-sm text-muted-foreground" data-state="loading">جاري التحميل…</div>
         ) : !active ? (
           <div className="text-center text-sm text-muted-foreground space-y-3" data-state="empty">
             <ImageOff className="h-8 w-8 mx-auto opacity-50" />

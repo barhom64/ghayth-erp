@@ -25,8 +25,10 @@ const ENGINE = readFileSync(
   join(import.meta.dirname!, "../../src/lib/umrahInvoicingEngine.ts"),
   "utf8",
 );
+// U-07 Phase 21 — sales-wizard + invoice-generate routes (and their schemas)
+// carved into umrah-invoices.ts; the route assertions read it there.
 const ROUTE = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-invoices.ts"),
   "utf8",
 );
 
@@ -108,7 +110,9 @@ describe("umrah-entities route — sales-wizard endpoint", () => {
   });
 
   it("imports listUninvoicedGroups from the engine", () => {
-    expect(ROUTE).toMatch(/listUninvoicedGroups,/);
+    // U-07 Phase 21 — the import lives in umrah-invoices.ts now; match it
+    // regardless of position within the named-import list.
+    expect(ROUTE).toMatch(/import\s*\{[^}]*\blistUninvoicedGroups\b[^}]*\}\s*from\s+["']\.\.\/lib\/umrahInvoicingEngine\.js["']/);
   });
 
   it("masks the response via maskFields", () => {

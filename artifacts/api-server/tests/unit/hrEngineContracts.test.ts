@@ -38,20 +38,6 @@ describe("hrEngine GL account resolution patterns", () => {
     expect(section).toContain("settlement_payable");
   });
 
-  it("postLeaveAccrualGL resolves accrual expense + liability pair", () => {
-    const idx = ENGINE_SRC.indexOf("async postLeaveAccrualGL");
-    const section = ENGINE_SRC.slice(idx, idx + 400);
-    expect(section).toContain("leave_accrual_expense");
-    expect(section).toContain("leave_accrual_liability");
-  });
-
-  it("postEOSAccrualGL resolves EOS accrual expense + liability pair", () => {
-    const idx = ENGINE_SRC.indexOf("async postEOSAccrualGL");
-    const section = ENGINE_SRC.slice(idx, idx + 400);
-    expect(section).toContain("eos_accrual_expense");
-    expect(section).toContain("eos_accrual_liability");
-  });
-
   it("postPayrollRunGL (accrual) resolves expense + salary_payable + GOSI/deductions payable", () => {
     const idx = ENGINE_SRC.indexOf("async postPayrollRunGL");
     // Slice to the next async method boundary so the assertion stays
@@ -81,11 +67,19 @@ describe("hrEngine GL account resolution patterns", () => {
 
   it("postMonthlyAccrualsGL resolves 4 accounts: leave + EOS expense/liability", () => {
     const idx = ENGINE_SRC.indexOf("async postMonthlyAccrualsGL");
-    const section = ENGINE_SRC.slice(idx, idx + 1200);
+    const section = ENGINE_SRC.slice(idx, idx + 1400);
     expect(section).toContain("hr_leave_accrual_expense");
-    expect(section).toContain("hr_leave_accrual_liability");
+    // Leave-accrual LIABILITY must honour finance's controllable mapping key
+    // `leave_accrual_liability` (accounting_mappings → 2150, migration 365 /
+    // #2277) with a 2150 fallback — NOT the hr_-prefixed key, which is seeded
+    // nowhere and silently fell back to 2220, bypassing finance's pinned
+    // account. (`leave_accrual_liability` is a substring of the old prefixed
+    // key, so we assert the full 2150 signature + absence of the hr_ key.)
+    expect(section).toContain('"leave_accrual_liability", "credit", "2150"');
+    expect(section).not.toContain("hr_leave_accrual_liability");
     expect(section).toContain("hr_eos_accrual_expense");
-    expect(section).toContain("hr_eos_accrual_liability");
+    // EOS accrual stays on its own long-term-provision account (2220).
+    expect(section).toContain('"hr_eos_accrual_liability", "credit", "2220"');
   });
 });
 
@@ -100,14 +94,6 @@ describe("hrEngine sourceKey conventions", () => {
 
   it("postExitSettlementGL uses hr:exit:{id}", () => {
     expect(ENGINE_SRC).toContain("`hr:exit:${exit.id}`");
-  });
-
-  it("postLeaveAccrualGL uses hr:leave_accrual:{companyId}:{period}", () => {
-    expect(ENGINE_SRC).toContain("`hr:leave_accrual:${ctx.companyId}:${accrual.period}`");
-  });
-
-  it("postEOSAccrualGL uses hr:eos_accrual:{companyId}:{period}", () => {
-    expect(ENGINE_SRC).toContain("`hr:eos_accrual:${ctx.companyId}:${accrual.period}`");
   });
 
   it("postPayrollRunGL uses hr:payroll_run:{runId}", () => {
@@ -133,7 +119,7 @@ describe("hrEngine sourceKey conventions", () => {
       expect(m[1]).toMatch(/^hr:/);
       count++;
     }
-    expect(count).toBe(9);
+    expect(count).toBe(7);
   });
 });
 
@@ -148,14 +134,6 @@ describe("hrEngine ref patterns", () => {
 
   it("exit ref is JE-EXIT-{id}", () => {
     expect(ENGINE_SRC).toContain("JE-EXIT-");
-  });
-
-  it("leave accrual ref is JE-LVAC-{period}", () => {
-    expect(ENGINE_SRC).toContain("JE-LVAC-");
-  });
-
-  it("EOS accrual ref is JE-EOSAC-{period}", () => {
-    expect(ENGINE_SRC).toContain("JE-EOSAC-");
   });
 
   it("payroll run ref is PAYROLL-{period}", () => {
@@ -242,18 +220,6 @@ describe("hrEngine debit/credit structure", () => {
     const idx = ENGINE_SRC.indexOf("async postMonthlyAccrualsGL");
     const section = ENGINE_SRC.slice(idx, idx + 1800);
     expect(section).toContain(".filter(l => l.debit > 0 || l.credit > 0)");
-  });
-
-  it("accrual entries are always balanced (debit expense = credit liability)", () => {
-    const leaveIdx = ENGINE_SRC.indexOf("async postLeaveAccrualGL");
-    const leaveSection = ENGINE_SRC.slice(leaveIdx, leaveIdx + 1500);
-    expect(leaveSection).toContain("debit: accrual.totalAmount, credit: 0");
-    expect(leaveSection).toContain("debit: 0, credit: accrual.totalAmount");
-
-    const eosIdx = ENGINE_SRC.indexOf("async postEOSAccrualGL");
-    const eosSection = ENGINE_SRC.slice(eosIdx, eosIdx + 1500);
-    expect(eosSection).toContain("debit: accrual.totalAmount, credit: 0");
-    expect(eosSection).toContain("debit: 0, credit: accrual.totalAmount");
   });
 });
 

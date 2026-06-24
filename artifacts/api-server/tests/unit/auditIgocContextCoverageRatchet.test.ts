@@ -107,7 +107,7 @@ const SUNSET_DIRECT_CREATE_AUDIT_LOG = new Set<string>([
   "requests.ts", "rules.ts", "scheduled-reports.ts", "settings.ts", "storage.ts", "store.ts",
   "support.ts", "tasks.ts", "training.ts", "transport-billing-candidates.ts",
   "transport-bookings.ts", "transport-integration.ts", "transport-planning.ts",
-  "transport-pricing.ts", "transport-route-patterns.ts", "umrah-entities.ts", "umrah.ts",
+  "transport-pricing.ts", "transport-route-patterns.ts", "umrah.ts",
   "vehicle-profile.ts", "warehouse-advanced.ts", "warehouse-cycle-counts.ts", "warehouse.ts", "workflows.ts",
 ]);
 

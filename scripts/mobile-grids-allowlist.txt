@@ -1,0 +1,15 @@
+# mobile-grids-allowlist.txt
+#
+# Bare `grid-cols-N` (N>=4) occurrences kept on purpose — an intentional
+# dense layout that is NOT a cramped mobile data/stat grid (e.g. a 12-month
+# seasonal heat-strip, a 7-day week overview). The guard fails only on a
+# bare grid-cols>=4 NOT excluded and NOT listed here.
+# An entry may be `path:line` (one spot) or `path` (the whole file).
+# Regenerate with:
+#   node scripts/src/check-mobile-grids.mjs --write-allowlist
+# When a spot is made responsive (grid-cols-2 md:grid-cols-N), prune it.
+#
+# Baseline captured: 3 occurrence(s).
+artifacts/ghayth-erp/src/pages/finance/project-costing.tsx:207   # emulated 7-col table data row; wrapper min-w-[760px]+overflow-x-auto sits >8 lines up (scrolls sideways on mobile)
+artifacts/ghayth-erp/src/pages/fleet/transport-ops-dashboard.tsx:292   # "توزيع الأسبوع" — 7-day week overview; 7 cols is the natural unit (like a calendar)
+artifacts/ghayth-erp/src/pages/insights.tsx:291   # 12-month seasonal heat-strip viz; a 12-wide sparkline is the intended compact visual

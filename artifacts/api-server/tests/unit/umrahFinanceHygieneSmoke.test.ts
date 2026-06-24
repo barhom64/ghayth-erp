@@ -16,7 +16,7 @@ import { join } from "node:path";
  * isClean=true when all four buckets are zero — drives the green card.
  */
 const ROUTE = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-reports.ts"),
   "utf8",
 );
 const CARD = readFileSync(

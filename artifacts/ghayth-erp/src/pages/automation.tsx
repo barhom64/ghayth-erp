@@ -336,9 +336,9 @@ export default function Automation() {
           <CardContent className="p-0">
             <div className="divide-y text-xs">
               {eventLogs.slice(0, 10).map((e: any, i: number) => (
-                <div key={e.id ?? i} className="px-3 py-2 flex items-center justify-between">
-                  <span className="font-mono">{e.eventName ?? e.action ?? "—"}</span>
-                  <span className="text-muted-foreground">{e.createdAt ? new Date(e.createdAt).toLocaleString("ar-SA") : ""}</span>
+                <div key={e.id ?? i} className="px-3 py-2 flex items-center justify-between gap-2">
+                  <span className="font-mono min-w-0 flex-1 truncate">{e.eventName ?? e.action ?? "—"}</span>
+                  <span className="text-muted-foreground shrink-0">{e.createdAt ? new Date(e.createdAt).toLocaleString("ar-SA") : ""}</span>
                 </div>
               ))}
             </div>

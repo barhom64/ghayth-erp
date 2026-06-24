@@ -145,6 +145,24 @@ import umrahRefundsRouter from "./umrah-refunds.js";
 // U-07 Phase 15 — operational calendar split; imported for the wiring-scanner
 // hint below. Mounted via umrah-entities.ts.
 import umrahCalendarRouter from "./umrah-calendar.js";
+// U-07 Phase 18 — settings policies split; imported for the wiring-scanner hint
+// below. Mounted via umrah-entities.ts.
+import umrahSettingsRouter from "./umrah-settings.js";
+// U-07 Phase 19 — nusk invoices split; imported for the wiring-scanner hint
+// below. Mounted via umrah-entities.ts.
+import umrahNuskInvoicesRouter from "./umrah-nusk-invoices.js";
+// U-07 Phase 20 — payments + revenue reclassification split; imported for the
+// wiring-scanner hint below. Mounted via umrah-entities.ts.
+import umrahPaymentsRouter from "./umrah-payments.js";
+// U-07 Phase 21 — sales-invoices split; imported for the wiring-scanner hint
+// below. Mounted via umrah-entities.ts.
+import umrahInvoicesRouter from "./umrah-invoices.js";
+// U-07 Phase 22 — groups CRUD split; imported for the wiring-scanner hint
+// below. Mounted via umrah-entities.ts.
+import umrahGroupsRouter from "./umrah-groups.js";
+// U-07 Phase 23 — group service-contract (transport + cost-breakdown) split;
+// imported for the wiring-scanner hint below. Mounted via umrah-entities.ts.
+import umrahGroupTransportRouter from "./umrah-group-transport.js";
 import operationsCenterRouter from "./operationsCenter.js";
 import {
   warehouseStubsRouter,
@@ -227,6 +245,12 @@ if (__WIRING_SCANNER_HINT__) {
   router.use("/umrah", umrahLettersRouter);
   router.use("/umrah", umrahRefundsRouter);
   router.use("/umrah", umrahCalendarRouter);
+  router.use("/umrah", umrahSettingsRouter);
+  router.use("/umrah", umrahNuskInvoicesRouter);
+  router.use("/umrah", umrahPaymentsRouter);
+  router.use("/umrah", umrahInvoicesRouter);
+  router.use("/umrah", umrahGroupsRouter);
+  router.use("/umrah", umrahGroupTransportRouter);
 }
 
 router.use(healthRouter);

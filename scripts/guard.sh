@@ -196,6 +196,15 @@ run_step "check:responsive-tables" node scripts/src/check-responsive-tables.mjs
 # the detector.
 run_step "check:display-tables:tests" node scripts/src/check-display-tables.test.mjs
 run_step "check:display-tables" node scripts/src/check-display-tables.mjs
+# Mobile grid-cramping: Tailwind is mobile-first, so a BARE grid-cols-N (N>=4)
+# IS the phone layout and shows N cramped columns on a 360px screen. The 2026-06
+# mobile pass collapsed every stat/input/tab grid to grid-cols-2 md:grid-cols-N;
+# this keeps NEW cramped grids out of src/pages/**. OFFLINE source scan with
+# mechanical exclusions (key-value col-span, min-w / overflow-x scroll wrappers,
+# calendar/guide files); intentional dense layouts pinned in
+# scripts/mobile-grids-allowlist.txt. Fixtures guard the detector.
+run_step "check:mobile-grids:tests" node scripts/src/check-mobile-grids.test.mjs
+run_step "check:mobile-grids" node scripts/src/check-mobile-grids.mjs
 # Page action-bar consistency (refresh/print/export): a hand-rolled control —
 # a <Button> pairing the action's icon with its bare Arabic label (RefreshCw+«تحديث»
 # / Printer+«طباعة» / Download+«تصدير») — instead of the unified component
