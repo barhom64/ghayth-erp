@@ -529,12 +529,12 @@ export default function ActivityLogPage() {
           <p className="text-sm font-semibold mb-2">تيار النشاط الحديث ({activityFeed.length})</p>
           <div className="divide-y text-xs max-h-48 overflow-y-auto">
             {activityFeed.slice(0, 20).map((a: any, i: number) => (
-              <div key={a.id ?? i} className="py-1 flex items-center justify-between">
-                <span>
+              <div key={a.id ?? i} className="py-1 flex items-center justify-between gap-2">
+                <span className="min-w-0 flex-1 truncate">
                   <span className="font-mono text-[10px] text-muted-foreground me-1">{a.module ?? "—"}</span>
                   {a.action ?? a.event ?? a.description ?? "—"}
                 </span>
-                <span className="text-muted-foreground text-[10px]">
+                <span className="text-muted-foreground text-[10px] shrink-0">
                   {a.createdAt ? new Date(a.createdAt).toLocaleTimeString("ar-SA") : ""}
                 </span>
               </div>
@@ -549,7 +549,7 @@ export default function ActivityLogPage() {
           <div className="divide-y text-xs max-h-64 overflow-y-auto">
             {adminFeed.map((a: any, i: number) => (
               <div key={a.id ?? i} className="py-1.5 flex items-start justify-between gap-2">
-                <span>
+                <span className="min-w-0 flex-1">
                   <span className="font-medium text-status-neutral-foreground">{a.actor}</span>
                   {" "}{a.actionLabel || a.action}
                   {a.entity && <span className="text-muted-foreground"> · {a.entity}{a.entityId ? ` #${a.entityId}` : ""}</span>}
