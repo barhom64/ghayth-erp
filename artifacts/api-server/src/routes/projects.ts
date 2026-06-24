@@ -27,7 +27,7 @@ import {
   computeVat,
   getCompanyVatRate,
 } from "../lib/businessHelpers.js";
-import { createCostCenterForEntity, syncEntityCostCenterAllocation } from "../lib/costCenterAutoCreate.js";
+import { ensureCostCenterForEntity, syncEntityCostCenterAllocation } from "../lib/costCenterAutoCreate.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
 import { applyTransition, lifecycleErrorResponse, isValidTransition, getStateMachine } from "../lib/lifecycleEngine.js";
@@ -548,9 +548,12 @@ router.post("/", authorize({ feature: "projects.list", action: "create" }), asyn
     //   BR-0007       branch #7 (created by POST /branches)
     //   └── BR-0007-P0042   project #42 (this)
     // → all journal lines carrying costCenterId = THIS row roll up into
-    //   the branch's per-branch P&L automatically. Fire-and-forget so
-    //   a CC hiccup never fails the project create.
-    createCostCenterForEntity(
+    //   the branch's per-branch P&L automatically. Batch 6 — the link is now
+    //   GUARANTEED (awaited) before the 201, not fire-and-forget: the project
+    //   must never reach its first posting with a null cost-centre dimension.
+    //   ensureCostCenterForEntity never throws and stays idempotent, so a CC
+    //   hiccup never fails the project create — it logs a non-silent LINK_GAP.
+    await ensureCostCenterForEntity(
       scope.companyId, "project", insertId, b.name.trim(),
       {
         parentEntityType: scope.branchId ? "branch" : null,
@@ -560,7 +563,7 @@ router.post("/", authorize({ feature: "projects.list", action: "create" }), asyn
         // correctly from day one; budget edits re-sync via PATCH below.
         allocatedAmount: b.budget != null ? Number(b.budget) : null,
       },
-    ).catch((e) => logger.error(e, "project cost-centre auto-create failed"));
+    );
 
     // Register delivery obligation for the project's endDate
     if (b.endDate) {
