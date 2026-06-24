@@ -38,20 +38,6 @@ describe("hrEngine GL account resolution patterns", () => {
     expect(section).toContain("settlement_payable");
   });
 
-  it("postLeaveAccrualGL resolves accrual expense + liability pair", () => {
-    const idx = ENGINE_SRC.indexOf("async postLeaveAccrualGL");
-    const section = ENGINE_SRC.slice(idx, idx + 400);
-    expect(section).toContain("leave_accrual_expense");
-    expect(section).toContain("leave_accrual_liability");
-  });
-
-  it("postEOSAccrualGL resolves EOS accrual expense + liability pair", () => {
-    const idx = ENGINE_SRC.indexOf("async postEOSAccrualGL");
-    const section = ENGINE_SRC.slice(idx, idx + 400);
-    expect(section).toContain("eos_accrual_expense");
-    expect(section).toContain("eos_accrual_liability");
-  });
-
   it("postPayrollRunGL (accrual) resolves expense + salary_payable + GOSI/deductions payable", () => {
     const idx = ENGINE_SRC.indexOf("async postPayrollRunGL");
     // Slice to the next async method boundary so the assertion stays
@@ -110,14 +96,6 @@ describe("hrEngine sourceKey conventions", () => {
     expect(ENGINE_SRC).toContain("`hr:exit:${exit.id}`");
   });
 
-  it("postLeaveAccrualGL uses hr:leave_accrual:{companyId}:{period}", () => {
-    expect(ENGINE_SRC).toContain("`hr:leave_accrual:${ctx.companyId}:${accrual.period}`");
-  });
-
-  it("postEOSAccrualGL uses hr:eos_accrual:{companyId}:{period}", () => {
-    expect(ENGINE_SRC).toContain("`hr:eos_accrual:${ctx.companyId}:${accrual.period}`");
-  });
-
   it("postPayrollRunGL uses hr:payroll_run:{runId}", () => {
     expect(ENGINE_SRC).toContain("`hr:payroll_run:${payroll.runId}`");
   });
@@ -141,7 +119,7 @@ describe("hrEngine sourceKey conventions", () => {
       expect(m[1]).toMatch(/^hr:/);
       count++;
     }
-    expect(count).toBe(9);
+    expect(count).toBe(7);
   });
 });
 
@@ -156,14 +134,6 @@ describe("hrEngine ref patterns", () => {
 
   it("exit ref is JE-EXIT-{id}", () => {
     expect(ENGINE_SRC).toContain("JE-EXIT-");
-  });
-
-  it("leave accrual ref is JE-LVAC-{period}", () => {
-    expect(ENGINE_SRC).toContain("JE-LVAC-");
-  });
-
-  it("EOS accrual ref is JE-EOSAC-{period}", () => {
-    expect(ENGINE_SRC).toContain("JE-EOSAC-");
   });
 
   it("payroll run ref is PAYROLL-{period}", () => {
@@ -250,18 +220,6 @@ describe("hrEngine debit/credit structure", () => {
     const idx = ENGINE_SRC.indexOf("async postMonthlyAccrualsGL");
     const section = ENGINE_SRC.slice(idx, idx + 1800);
     expect(section).toContain(".filter(l => l.debit > 0 || l.credit > 0)");
-  });
-
-  it("accrual entries are always balanced (debit expense = credit liability)", () => {
-    const leaveIdx = ENGINE_SRC.indexOf("async postLeaveAccrualGL");
-    const leaveSection = ENGINE_SRC.slice(leaveIdx, leaveIdx + 1500);
-    expect(leaveSection).toContain("debit: accrual.totalAmount, credit: 0");
-    expect(leaveSection).toContain("debit: 0, credit: accrual.totalAmount");
-
-    const eosIdx = ENGINE_SRC.indexOf("async postEOSAccrualGL");
-    const eosSection = ENGINE_SRC.slice(eosIdx, eosIdx + 1500);
-    expect(eosSection).toContain("debit: accrual.totalAmount, credit: 0");
-    expect(eosSection).toContain("debit: 0, credit: accrual.totalAmount");
   });
 });
 
