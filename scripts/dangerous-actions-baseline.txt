@@ -1,0 +1,41 @@
+# أساس حارس الإجراءات الخطرة — مواضع confirm() الأصلية المجمّدة.
+# لا يُضاف إليه يدويًا. يُحدَّث بـ: node scripts/src/check-dangerous-actions.mjs --write-baseline
+# كل سطر: <المسار>\t<نصّ السطر المُطبَّع>. الهدف: تقليصه لصفر بتحويلها لـ ConfirmDeleteDialog/ConfirmActionDialog.
+artifacts/ghayth-erp/src/pages/admin/attendance-categories.tsx	if (!confirm("حذف هذا الـ override؟ (الفئة ستعود لـ system default)")) return;
+artifacts/ghayth-erp/src/pages/admin/job-titles.tsx	if (!confirm("هل تريد حذف هذا المسمّى الوظيفي؟ (سيُعطَّل ولن يظهر للموظفين الجدد)")) return;
+artifacts/ghayth-erp/src/pages/admin/org-memberships.tsx	if (!confirm("إنهاء تعيين هذا المساهم؟")) return;
+artifacts/ghayth-erp/src/pages/admin/org-memberships.tsx	if (!confirm("إنهاء عضوية هذا العضو اعتبارًا من اليوم؟")) return;
+artifacts/ghayth-erp/src/pages/admin/org-memberships.tsx	if (!confirm("إنهاء عضوية هذا العضو؟")) return;
+artifacts/ghayth-erp/src/pages/admin/org-model.tsx	if (!confirm("إلغاء صلاحية الاعتماد هذه؟ (حذف نهائي)")) return;
+artifacts/ghayth-erp/src/pages/admin/org-model.tsx	if (!confirm("إنهاء خط الإشراف هذا اعتبارًا من اليوم؟")) return;
+artifacts/ghayth-erp/src/pages/admin/org-model.tsx	if (!confirm("تعطيل هذا الفريق؟")) return;
+artifacts/ghayth-erp/src/pages/admin/org-model.tsx	if (!confirm("تعطيل هذا الكيان؟ (حذف ناعم — لن يظهر في القوائم)")) return;
+artifacts/ghayth-erp/src/pages/admin/org-model.tsx	if (!confirm("تعطيل هذا المنصب؟")) return;
+artifacts/ghayth-erp/src/pages/admin/org-model.tsx	if (!confirm("تعطيل هذه اللجنة؟")) return;
+artifacts/ghayth-erp/src/pages/admin/print-diagnostics.tsx	if (!confirm(`إعادة ضبط القالب الافتراضي لـ ${entityType}؟\nسيتم حذف الإسناد الحالي والرجوع إلى القالب الجاهز (universal).`)) return;
+artifacts/ghayth-erp/src/pages/admin/rbac-v2-tab.tsx	if (!confirm(`حذف الدور "${r.label_ar}"؟`)) return;
+artifacts/ghayth-erp/src/pages/admin/scoring-weights.tsx	if (!confirm("حذف هذا الـ override؟ الفئة ستعود لـ defaults")) return;
+artifacts/ghayth-erp/src/pages/create/finance/account-transfer.tsx	const proceed = confirm(`تحذير: الرصيد سيصبح سالباً ${formatCurrency(sourceAfter)}. هل تريد المتابعة؟`);
+artifacts/ghayth-erp/src/pages/details/project-detail.tsx	if (!confirm("إرسال جدول الكميات للفوترة؟")) return;
+artifacts/ghayth-erp/src/pages/details/project-detail.tsx	if (!confirm("حذف هذا البند؟")) return;
+artifacts/ghayth-erp/src/pages/details/project-detail.tsx	if (!confirm("حذف هذه الوحدة؟")) return;
+artifacts/ghayth-erp/src/pages/documents/ocr-review.tsx	<Button size="sm" onClick={() => confirm(ex.id, requireTarget)} disabled={busyId === ex.id}>
+artifacts/ghayth-erp/src/pages/fleet/cargo-detail.tsx	if (!confirm(`حذف البوليصة #${m.manifestNumber}؟`)) return;
+artifacts/ghayth-erp/src/pages/fleet/me-driver-navigation.tsx	if (!confirm("هل أنهيت المهمة؟")) return;
+artifacts/ghayth-erp/src/pages/fleet/rental-detail.tsx	if (!confirm("تأكيد تسوية هذه الدفعة؟")) return;
+artifacts/ghayth-erp/src/pages/fleet/rental-detail.tsx	if (!confirm("تفعيل العقد؟ بعد التفعيل لا يمكن تعديل البنود الأساسية.")) return;
+artifacts/ghayth-erp/src/pages/fleet/tires.tsx	if (!confirm("حذف هذا الإطار؟")) return;
+artifacts/ghayth-erp/src/pages/fleet/transport-integration.tsx	if (!confirm(
+artifacts/ghayth-erp/src/pages/fleet/transport-integration.tsx	if (createdIds.length > 0 && confirm(
+artifacts/ghayth-erp/src/pages/fleet/transport-itinerary-detail.tsx	if (!confirm("حذف البرنامج كله؟ سيتم حذف كل مراحله.")) return;
+artifacts/ghayth-erp/src/pages/fleet/transport-itinerary-detail.tsx	if (!confirm(`حذف المرحلة #${leg.legNumber}؟`)) return;
+artifacts/ghayth-erp/src/pages/fleet/transport-ops-dashboard.tsx	if (!confirm(`تخطيط ${ids.length} حجزاً غير مسند تلقائياً (سيقترح النظام مركبة وسائق لكل حجز)؟`)) return;
+artifacts/ghayth-erp/src/pages/fleet/transport-route-patterns.tsx	if (!confirm(`أرشفة القالب "${r.patternCode}"؟ سيتوقّف توليد الحجوزات منه.`)) return;
+artifacts/ghayth-erp/src/pages/fleet/transport-rules-admin.tsx	if (!confirm(`حذف القاعدة "${r.ruleName}"؟`)) return;
+artifacts/ghayth-erp/src/pages/hr/documents.tsx	if (!confirm("حذف هذه الوثيقة؟")) return;
+artifacts/ghayth-erp/src/pages/hr/documents.tsx	if (!confirm("حذف وثيقة الموظف هذه؟")) return;
+artifacts/ghayth-erp/src/pages/hr/org-tree.tsx	if (!confirm("حذف هذه الإدارة؟")) return;
+artifacts/ghayth-erp/src/pages/hr/wps-run-detail.tsx	if (!confirm("سيتم تعليم الـrun كمُرسَل للبنك. هل أنت متأكد؟")) return;
+artifacts/ghayth-erp/src/pages/mailboxes.tsx	if (confirm("هل أنت متأكد من فصل هذا الصندوق؟")) deleteMut.mutate({ _id: m.id });
+artifacts/ghayth-erp/src/pages/settings/departments-tab.tsx	if (!confirm("حذف هذا القسم؟")) return;
+artifacts/ghayth-erp/src/pages/settings/gov-integrations-tab.tsx	if (!confirm("حذف هذا الربط؟")) return;

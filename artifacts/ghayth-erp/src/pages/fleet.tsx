@@ -162,7 +162,7 @@ function VehiclesTab() {
       header: "الإجراءات",
       render: (v) => (
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          <Button variant="ghost" size="sm" onClick={() => setPreviewItem(v)}><Eye className="h-4 w-4" /></Button>
+          <Button variant="ghost" size="sm" aria-label="معاينة" title="معاينة" onClick={() => setPreviewItem(v)}><Eye className="h-4 w-4" /></Button>
           <RowActions
             canEdit={canManage}
             onEdit={() => startEdit(v.id, { plateNumber: v.plateNumber, make: v.make || "", model: v.model || "", color: v.color || "", status: v.status || "available" })}
