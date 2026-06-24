@@ -200,7 +200,7 @@ export default function OvertimeCreate() {
                   <Calculator className="h-4 w-4 text-purple-600" />
                   <span className="text-sm font-semibold text-purple-700">ملخص التكلفة (الأثر المالي)</span>
                 </div>
-                <div className="grid grid-cols-4 gap-4 text-center">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
                   <div>
                     <p className="text-lg font-bold text-purple-700">{formatCurrency(hourlyRate)}</p>
                     <p className="text-xs text-muted-foreground">سعر الساعة</p>

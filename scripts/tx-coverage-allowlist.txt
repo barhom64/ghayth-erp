@@ -12,4 +12,7 @@ routes/legal.ts:POST /cases
 routes/legal.ts:POST /contracts
 routes/rbacV2.ts:DELETE /users/:userId/roles/:roleId
 routes/transport-planning.ts:POST /transport/dispatch-orders/:id/navigation/ping
-routes/umrah-entities.ts:POST /groups
+# U-07 Phase 22 — groups CRUD carved verbatim out of umrah-entities.ts. The
+# numbering_assignments backfill is a non-blocking `.catch(() => {})` link, not a
+# second business write; the group INSERT is the only durable write. Moved as-is.
+routes/umrah-groups.ts:POST /groups

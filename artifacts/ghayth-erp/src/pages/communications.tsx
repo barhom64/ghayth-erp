@@ -43,7 +43,7 @@ export default function Communications() {
       ]}>
       <StatsCards />
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-3 md:grid-cols-5 h-auto md:h-9">
           <TabsTrigger value="monitor" className="gap-2"><Activity className="h-4 w-4" /> المراقبة</TabsTrigger>
           <TabsTrigger value="log" className="gap-2"><Send className="h-4 w-4" /> سجل الاتصالات</TabsTrigger>
           <TabsTrigger value="whatsapp" className="gap-2"><MessageCircle className="h-4 w-4" /> واتساب</TabsTrigger>

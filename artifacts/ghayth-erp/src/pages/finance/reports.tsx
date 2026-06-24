@@ -243,7 +243,7 @@ function TrialBalance({ dateParams, startDate, endDate }: { dateParams: string; 
       </div>
 
       {Object.keys(byType).length > 0 && (
-        <div className="grid gap-2 grid-cols-5">
+        <div className="grid gap-2 grid-cols-2 md:grid-cols-5">
           {Object.entries(byType).map(([type, vals]: any) => (
             <Card key={type} className="border-dashed">
               <CardContent className="p-3 text-center">

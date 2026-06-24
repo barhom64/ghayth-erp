@@ -133,7 +133,7 @@ export default function CycleCountDetailPage() {
     },
   ], [counted, reasons, header?.status]);
 
-  if (!header) return <PageShell title="جرد دوري"><Card><CardContent className="pt-6">جارٍ التحميل…</CardContent></Card></PageShell>;
+  if (!header) return <PageShell title="جرد دوري"><Card><CardContent className="pt-6">جاري التحميل…</CardContent></Card></PageShell>;
 
   const s = STATUS_LABELS[header.status] ?? { label: header.status, variant: "outline" };
 

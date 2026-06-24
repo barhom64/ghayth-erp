@@ -9,8 +9,10 @@ import { join } from "node:path";
  * sub-agents JOIN with the companyId + deletedAt defence-in-depth
  * pattern (same as PR #1425).
  */
+// U-07 Phase 21 — GET /umrah/invoices (and its hardened JOINs) carved into
+// umrah-invoices.ts; the JOIN/column-shape assertions read it there.
 const ROUTE = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-invoices.ts"),
   "utf8",
 );
 const PAGE = readFileSync(
