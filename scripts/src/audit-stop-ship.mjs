@@ -83,6 +83,7 @@ const ALLOWLIST = new Map([
   ["rbacV2.ts", "every role/sod/grant mutation writes a row to rbac_role_history (parallel audit table) via recordHistory() — RBAC has its own first-class audit surface that compliance reads directly"],
   ["numbering.ts", "numbering scheme writes are CAS-style schema state; the numberingService emits its own *.scheme.created/.updated events on every issue() call — see lib/numberingService.ts"],
   ["import.ts", "every confirmed import writes a row to import_batches (its own audit table) with operator + entity + rowCount + fileName — same pattern as print_jobs and rbac_role_history"],
+  ["umrah-group-transport.ts", "server-seam (U-07 Phase 23): the one write (POST /groups/:id/transport-requests) delegates to lib/umrahTransportContract.ts which emits createAuditLog + emitEvent('umrah.transport.requested') itself; cost-breakdown is read-only — same engine-owns-audit/events pattern as fleet-telematics-webhook"],
 ]);
 
 // Accepted RBAC patterns. The newer RBAC-v2 layer uses authorize();
