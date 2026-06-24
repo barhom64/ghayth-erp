@@ -23,7 +23,7 @@ import { getVehicleStatusImpact } from "../lib/impactPreview.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { registerObligation, markObligationMet, cancelObligation } from "../lib/obligationsEngine.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
-import { createCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
+import { ensureCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
 import { fleetEngine, hrEngine } from "../lib/engines/index.js";
 import {
   computeDriverReputation,
@@ -593,14 +593,19 @@ router.post("/vehicles", authorize({ feature: "fleet.vehicles", action: "create"
     const vehicleLabel = `${b.make} ${b.model} — ${b.plateNumber}`;
     createSubsidiaryAccountsForEntity(scope.companyId, "vehicle", insertId, vehicleLabel, { branchId: scope.branchId, actorUserId: scope.userId })
       .catch((e) => logger.error(e, "vehicle subsidiary auto-create failed"));
-    createCostCenterForEntity(
+    // Batch 6 — cost-centre link is now GUARANTEED (awaited) before the 201,
+    // not fire-and-forget: the vehicle must never reach its first posting with
+    // a null cost-centre dimension. ensureCostCenterForEntity never throws and
+    // stays idempotent, so the vehicle create still succeeds on a CC hiccup —
+    // it just logs a non-silent LINK_GAP marker instead of swallowing it.
+    await ensureCostCenterForEntity(
       scope.companyId, "vehicle", insertId, vehicleLabel,
       {
         parentEntityType: (b.branchId || scope.branchId) ? "branch" : null,
         parentEntityId: b.branchId ?? scope.branchId ?? null,
         actorUserId: scope.userId,
       },
-    ).catch((e) => logger.error(e, "vehicle cost-centre auto-create failed"));
+    );
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "fleet_vehicles", entityId: insertId,
