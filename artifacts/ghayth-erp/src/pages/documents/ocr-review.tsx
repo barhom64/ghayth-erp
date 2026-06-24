@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
-import { FileSearch, Check, X, RefreshCw } from "lucide-react";
+import { Check, X, RefreshCw } from "lucide-react";
 import { RefreshAction } from "@/components/page-actions";
+import { PageShell } from "@workspace/ui-core";
 
 interface Extraction {
   id: number;
@@ -146,15 +147,11 @@ export default function OcrReviewPage() {
   };
 
   return (
-    <div className="p-6 space-y-4" dir="rtl">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <FileSearch className="w-5 h-5" />
-          <h1 className="text-xl font-semibold">مستخلَصات OCR بانتظار المراجعة</h1>
-        </div>
-        <RefreshAction onRefresh={load} disabled={loading} />
-      </div>
-
+    <PageShell
+      title="مستخلَصات OCR بانتظار المراجعة"
+      actions={<RefreshAction onRefresh={load} disabled={loading} />}
+      loading={loading}
+    >
       {loading && <p className="text-sm text-muted-foreground">جاري التحميل…</p>}
       {!loading && items.length === 0 && (
         <Card className="p-8 text-center text-muted-foreground">لا توجد مستخلَصات بانتظار المراجعة.</Card>
@@ -225,6 +222,6 @@ export default function OcrReviewPage() {
           </Card>
         );
       })}
-    </div>
+    </PageShell>
   );
 }
