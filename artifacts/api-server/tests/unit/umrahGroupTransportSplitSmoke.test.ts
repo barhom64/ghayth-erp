@@ -105,9 +105,10 @@ describe("U-07 Phase 23 §D — parent no longer declares the moved routes", () 
     });
   }
 
-  it("parent is now down to employee-assignments only", () => {
-    expect(PARENT).toMatch(/router\.get\("\/employees\/:employeeId\/assignments"/);
-    // No /groups* routes remain in the parent at all.
+  it("parent no longer declares any /groups* route", () => {
+    // (U-07 Phase 24 then moved the last route — employee-assignments — out too,
+    // turning umrah-entities.ts into a pure aggregator; see
+    // umrahEmployeeAssignmentsSplitSmoke.test.ts.)
     expect(PARENT).not.toMatch(/router\.(get|post|patch|delete)\("\/groups/);
   });
 });

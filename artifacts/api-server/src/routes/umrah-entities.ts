@@ -1,28 +1,31 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// umrah-entities.ts — COMMERCIAL/FINANCE entities for the umrah module
+// umrah-entities.ts — UMRAH COMMERCIAL/FINANCE AGGREGATOR
 //
-// Owns: employee-assignments.
-//   (groups CRUD — list/get/create/update/delete — AND group ops (split/merge)
-//    live in umrah-groups.ts — U-07 Phase 22)
-//   (group service-contract — transport-requests + cost-breakdown —
-//    live in umrah-group-transport.ts — U-07 Phase 23)
-//   (nusk-invoices — list/get/create/update/delete + AP journal posting —
-//    live in umrah-nusk-invoices.ts — U-07 Phase 19)
-//   (payments + revenue reclassification — register payment / reclassify —
-//    live in umrah-payments.ts — U-07 Phase 20)
-//   (sales-invoices — list/generate/sales-wizard/patch —
-//    live in umrah-invoices.ts — U-07 Phase 21)
-//   (letters PDF + dispatch live in umrah-letters.ts — U-07 Phase 12)
-//   (operational reports — daily-runsheet, reconciliation, exempt-pilgrims,
-//    group/season portfolio — live in umrah-reports.ts — U-07 Phase 11)
-//   (attachments — polymorphic document storage — live in
-//    umrah-attachments.ts — U-07 Phase 10)
-//   (sub-agent statements JSON + PDF live in umrah-statements.ts — U-07 Phase 9)
-//   (import-batches listing + unlinked-rows recovery live in
-//    umrah-import-batches.ts — U-07 Phase 8)
-//   (pricing CRUD lives in umrah-pricing.ts — U-07 Phase 7)
-//   (sub-agents CRUD + linking live in umrah-sub-agents.ts — U-07 Phase 6)
-//   (commission plans/calculations live in umrah-commission.ts — U-07 Phase 5)
+// Pure aggregator: this file owns NO routes of its own. It mounts the umrah
+// commercial/finance sub-routers so they all resolve under /umrah alongside the
+// CORE-domain routes in the sister file umrah.ts. Every former responsibility
+// was carved into a dedicated sub-router across U-07 Phases 1–24 (the original
+// 5,443-line monolith). Listed below by phase for traceability:
+//   employee-assignments      → umrah-employee-assignments.ts   (Phase 24)
+//   group service-contract     → umrah-group-transport.ts        (Phase 23)
+//   groups CRUD + split/merge   → umrah-groups.ts                 (Phase 22)
+//   sales-invoices              → umrah-invoices.ts               (Phase 21)
+//   payments + reclassify       → umrah-payments.ts               (Phase 20)
+//   nusk-invoices (+ AP JE)     → umrah-nusk-invoices.ts          (Phase 19)
+//   settings policies           → umrah-settings.ts               (Phase 18)
+//   operational calendar        → umrah-calendar.ts               (Phase 15)
+//   refund requests             → umrah-refunds.ts                (Phase 14)
+//   letters PDF + dispatch      → umrah-letters.ts                (Phase 12)
+//   operational reports         → umrah-reports.ts                (Phase 11)
+//   attachments                 → umrah-attachments.ts            (Phase 10)
+//   sub-agent statements        → umrah-statements.ts             (Phase 9)
+//   import-batches              → umrah-import-batches.ts         (Phase 8)
+//   pricing CRUD                → umrah-pricing.ts                (Phase 7)
+//   sub-agents CRUD + linking   → umrah-sub-agents.ts             (Phase 6)
+//   commission plans/calcs      → umrah-commission.ts             (Phase 5)
+//   accommodation               → umrah-accommodation.ts          (Phase 4)
+//   families CRUD               → umrah-families.ts               (Phase 2)
+//   journey + recovery reports  → umrah-journey-reports.ts        (Phase 1)
 //
 // Sister file: umrah.ts — CORE DOMAIN (lifecycle + operational)
 //   Owns: seasons, agents, packages, pilgrims, transport, import,
@@ -31,9 +34,6 @@
 // Both mounted at /umrah with requireModule("operations") + requireGuards("financial").
 // ─────────────────────────────────────────────────────────────────────────────
 import { Router } from "express";
-import { rawQuery } from "../lib/rawdb.js";
-import { authorize, maskFields } from "../lib/rbac/authorize.js";
-import { handleRouteError, parseId } from "../lib/errorHandler.js";
 // U-07 Phase 1 — journey + recovery reports moved to a dedicated
 // sub-router so the parent file shrinks. The API surface is
 // unchanged: the sub-router mounts on `/` here so its paths still
@@ -107,6 +107,9 @@ import groupsRouter from "./umrah-groups.js";
 // moved to a dedicated sub-router. Paths still resolve at
 // /umrah/groups/:id/transport-requests and /umrah/groups/:id/cost-breakdown.
 import groupTransportRouter from "./umrah-group-transport.js";
+// U-07 Phase 24 — employee-assignments (the final carve) moved to a dedicated
+// sub-router. Path still resolves at /umrah/employees/:employeeId/assignments.
+import employeeAssignmentsRouter from "./umrah-employee-assignments.js";
 
 const router = Router();
 router.use(journeyReportsRouter);
@@ -128,24 +131,6 @@ router.use(paymentsRouter);
 router.use(invoicesRouter);
 router.use(groupsRouter);
 router.use(groupTransportRouter);
-
-// ============================================================================
-// EMPLOYEE ASSIGNMENTS (umrah-specific roles / positions)
-// ============================================================================
-
-router.get("/employees/:employeeId/assignments", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const employeeId = parseId(req.params.employeeId, "employeeId");
-    const rows = await rawQuery(
-      `SELECT ea.id, ea."jobTitle" AS title, ea.role, ea."branchId", ea.status
-       FROM employee_assignments ea
-       WHERE ea."employeeId" = $1 AND ea."companyId" = $2 AND ea.status = 'active'
-       ORDER BY ea.id DESC LIMIT 50`,
-      [employeeId, scope.companyId]
-    );
-    res.json(maskFields(req, { data: rows }));
-  } catch (err) { handleRouteError(err, res, "Employee assignments error"); }
-});
+router.use(employeeAssignmentsRouter);
 
 export default router;
