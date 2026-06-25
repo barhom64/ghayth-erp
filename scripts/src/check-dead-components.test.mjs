@@ -2,7 +2,12 @@
 // التشغيل: node scripts/src/check-dead-components.test.mjs
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { extractSpecifiers, resolveSpecifier, relativeJoin, isCandidate, isRouteFile, deadFrom, stripComments } from "./check-dead-components.mjs";
+import { extractSpecifiers, resolveSpecifier, relativeJoin, isCandidate, isRouteFile, deadFrom, stripComments, assertScannedNonEmpty } from "./check-dead-components.mjs";
+
+test("assertScannedNonEmpty يفشل مغلقًا على صفر ملف (ملاحظة Codex)", () => {
+  assert.throws(() => assertScannedNonEmpty(0));
+  assert.doesNotThrow(() => assertScannedNonEmpty(7));
+});
 
 test("extractSpecifiers يلتقط import/export/dynamic", () => {
   const specs = extractSpecifiers([

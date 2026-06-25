@@ -112,15 +112,21 @@ export function deadFrom(filesByRel) {
     .sort();
 }
 
+// لا نبتلع خطأ القراءة: غياب/تعذّر قراءة المصدر يجب أن يفشل الحارس مغلقًا
+// (لا أن يمرّ بمسح صفر/جزئي يجعل كل المكوّنات تبدو «غير ميتة») — ملاحظة Codex.
 async function collect(dir, exts, acc = []) {
-  let ents;
-  try { ents = await readdir(dir, { withFileTypes: true }); } catch { return acc; }
+  const ents = await readdir(dir, { withFileTypes: true });
   for (const e of ents) {
     const p = join(dir, e.name);
     if (e.isDirectory()) await collect(p, exts, acc);
     else if (e.isFile() && exts.some((x) => e.name.endsWith(x))) acc.push(p);
   }
   return acc;
+}
+
+// فشل مغلق: مسح صفر ملف = مصدر مفقود/مكسور. (دالة نقية قابلة للاختبار)
+export function assertScannedNonEmpty(count) {
+  if (count === 0) throw new Error("scanned 0 files — مصدر مفقود أو مسح مكسور (فشل مغلق)");
 }
 
 async function readBaseline() {
@@ -132,6 +138,7 @@ async function readBaseline() {
 
 async function main() {
   const files = await collect(SRC, [".ts", ".tsx"]);
+  assertScannedNonEmpty(files.length);
   const filesByRel = {};
   for (const p of files) {
     const rel = relative(SRC, p).split("\\").join("/");

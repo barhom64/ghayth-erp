@@ -64,16 +64,21 @@ export function freshGroups(groups, baseline) {
   return groups.filter((g) => !baseline.has(groupKey(g)));
 }
 
+// لا نبتلع خطأ القراءة: غياب/تعذّر قراءة المصدر يجب أن يفشل الحارس مغلقًا
+// (لا أن يمرّ بمسح صفر/جزئي) — ملاحظة Codex على #2984.
 async function collectTsx(dir, acc = []) {
-  let ents;
-  try { ents = await readdir(dir, { withFileTypes: true }); }
-  catch { return acc; }
+  const ents = await readdir(dir, { withFileTypes: true });
   for (const e of ents) {
     const p = join(dir, e.name);
     if (e.isDirectory()) await collectTsx(p, acc);
     else if (e.isFile() && e.name.endsWith(".tsx") && !e.name.endsWith(".test.tsx") && !e.name.endsWith(".stories.tsx")) acc.push(p);
   }
   return acc;
+}
+
+// فشل مغلق: مسح صفر ملف = مصدر مفقود/مكسور، لا «نظيف». (دالة نقية قابلة للاختبار)
+export function assertScannedNonEmpty(count) {
+  if (count === 0) throw new Error("scanned 0 .tsx files — مصدر مفقود أو مسح مكسور (فشل مغلق)");
 }
 
 async function readBaseline() {
@@ -86,6 +91,7 @@ async function readBaseline() {
 async function main() {
   const files = [];
   for (const r of ROOTS) await collectTsx(join(REPO_ROOT, r), files);
+  assertScannedNonEmpty(files.length);
   const entries = [];
   for (const p of files) entries.push({ name: relative(REPO_ROOT, p), content: await readFile(p, "utf8") });
 

@@ -2,7 +2,12 @@
 // التشغيل: node scripts/src/check-duplicate-component-content.test.mjs
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalize, duplicateGroups, groupKey, freshGroups, MIN_NORMALIZED_LEN } from "./check-duplicate-component-content.mjs";
+import { normalize, duplicateGroups, groupKey, freshGroups, MIN_NORMALIZED_LEN, assertScannedNonEmpty } from "./check-duplicate-component-content.mjs";
+
+test("assertScannedNonEmpty يفشل مغلقًا على صفر ملف (ملاحظة Codex)", () => {
+  assert.throws(() => assertScannedNonEmpty(0));
+  assert.doesNotThrow(() => assertScannedNonEmpty(3));
+});
 
 test("normalize يُسقط التعليقات والاستيراد ويوحّد الفراغات", () => {
   const a = normalize(`import { X } from "@/a";\n// تعليق\nfunction F(){ return 1; }`);
