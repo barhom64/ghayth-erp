@@ -37,18 +37,37 @@
 --    ) AND "isDefault" = true;
 -- ===========================================================================
 
+-- ── PLATFORM-WIDE default for auth.new_device_login.email ──────────────────
+-- authSession.ts:359 calls sendAuthEmail with companyId: 0, which makes
+-- getEmailTemplate look for ("companyId" = 0 OR "companyId" IS NULL).
+-- Seeding only per-company rows below would miss it entirely — the email
+-- would silently never send. A single companyId IS NULL row covers every
+-- tenant + the system-level send path. Variable names match the call site
+-- vars EXACTLY: userName, ip, device, at (interpolateTemplate is strict).
+INSERT INTO notification_templates
+  ("companyId", "templateKey", channel, language, "titleTemplate", "bodyTemplate", variables, "isActive", "isDefault")
+SELECT NULL::int, t."templateKey", t.channel, t.language, t."titleTemplate", t."bodyTemplate", t.variables::jsonb, true, true
+FROM (VALUES
+  ('auth.new_device_login.email', 'email', 'ar', 'تنبيه أمني: تسجيل دخول من جهاز جديد',
+   '<p>مرحباً {{userName}}،</p><p>تم تسجيل الدخول إلى حسابك من جهاز/متصفح جديد.</p><ul><li><strong>الجهاز:</strong> {{device}}</li><li><strong>عنوان IP:</strong> {{ip}}</li><li><strong>الوقت:</strong> {{at}}</li></ul><p>إن كان هذا الدخول منك، تجاهل الرسالة. إن لم يكن، غيّر كلمة مرورك فوراً وراجع جلساتك النشطة.</p>',
+   '["userName","device","ip","at"]'),
+  ('auth.new_device_login.email', 'email', 'en', 'Security alert: new device login',
+   '<p>Hello {{userName}},</p><p>Your account was just signed in from a new device or browser.</p><ul><li><strong>Device:</strong> {{device}}</li><li><strong>IP:</strong> {{ip}}</li><li><strong>Time:</strong> {{at}}</li></ul><p>If this was you, ignore this message. If not, change your password immediately and review your active sessions.</p>',
+   '["userName","device","ip","at"]')
+) AS t("templateKey", channel, language, "titleTemplate", "bodyTemplate", variables)
+WHERE NOT EXISTS (
+  SELECT 1 FROM notification_templates nt
+   WHERE nt."companyId" IS NULL
+     AND nt."templateKey" = t."templateKey"
+     AND nt.channel = t.channel
+     AND nt.language = t.language
+);
+
 INSERT INTO notification_templates
   ("companyId", "templateKey", channel, language, "titleTemplate", "bodyTemplate", variables, "isActive", "isDefault")
 SELECT c.id, t."templateKey", t.channel, t.language, t."titleTemplate", t."bodyTemplate", t.variables::jsonb, true, true
 FROM companies c
 CROSS JOIN (VALUES
-  -- ── auth.new_device_login.email — security alert when a new device logs in
-  ('auth.new_device_login.email', 'email', 'ar', 'تنبيه أمني: تسجيل دخول من جهاز جديد',
-   '<p>مرحباً {{userName}}،</p><p>تم تسجيل الدخول إلى حسابك من جهاز/متصفح جديد.</p><ul><li><strong>الجهاز:</strong> {{userAgent}}</li><li><strong>عنوان IP:</strong> {{ipAddress}}</li><li><strong>الوقت:</strong> {{timestamp}}</li></ul><p>إن كان هذا الدخول منك، تجاهل الرسالة. إن لم يكن، غيّر كلمة مرورك فوراً وراجع جلساتك النشطة.</p>',
-   '["userName","userAgent","ipAddress","timestamp"]'),
-  ('auth.new_device_login.email', 'email', 'en', 'Security alert: new device login',
-   '<p>Hello {{userName}},</p><p>Your account was just signed in from a new device or browser.</p><ul><li><strong>Device:</strong> {{userAgent}}</li><li><strong>IP:</strong> {{ipAddress}}</li><li><strong>Time:</strong> {{timestamp}}</li></ul><p>If this was you, ignore this message. If not, change your password immediately and review your active sessions.</p>',
-   '["userName","userAgent","ipAddress","timestamp"]'),
 
   -- ── employee.self_onboarding — link sent so a new employee self-completes their profile
   ('employee.self_onboarding', 'email', 'ar', 'أكمل بياناتك الوظيفية في نظام غيث',
