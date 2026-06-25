@@ -2,7 +2,7 @@
 // التشغيل: node scripts/src/check-canonical-component-pairs.test.mjs
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { usesIdentifier, violationsFor, PAIRS } from "./check-canonical-component-pairs.mjs";
+import { usesIdentifier, violationsFor, PAIRS, assertScannedNonEmpty } from "./check-canonical-component-pairs.mjs";
 
 const P = [{ id: "demo", canonical: "Canon", raw: "Raw", reason: "r" }];
 
@@ -27,6 +27,11 @@ test("الأساس يستثني المفتاح id:file", () => {
     new Set(["demo:both.tsx"]),
   );
   assert.deepEqual(v, []);
+});
+
+test("assertScannedNonEmpty يفشل مغلقًا على صفر ملف (ملاحظة Codex)", () => {
+  assert.throws(() => assertScannedNonEmpty(0));
+  assert.doesNotThrow(() => assertScannedNonEmpty(5));
 });
 
 test("السجلّ الفعلي يحوي زوج المرفقات المالية", () => {

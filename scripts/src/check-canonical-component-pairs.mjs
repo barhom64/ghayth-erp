@@ -59,15 +59,21 @@ export function violationsFor(entries, pairs = PAIRS, baseline = new Set()) {
   return out.sort((a, b) => a.key.localeCompare(b.key));
 }
 
+// لا نبتلع خطأ القراءة: لو غاب/تعذّر قراءة المصدر يجب أن يفشل الحارس مغلقًا
+// (لا أن يمرّ بمسح صفر/جزئي) — ملاحظة Codex على #2984.
 async function collectTsx(dir, acc = []) {
-  let ents;
-  try { ents = await readdir(dir, { withFileTypes: true }); } catch { return acc; }
+  const ents = await readdir(dir, { withFileTypes: true });
   for (const e of ents) {
     const p = join(dir, e.name);
     if (e.isDirectory()) await collectTsx(p, acc);
     else if (e.isFile() && e.name.endsWith(".tsx") && !e.name.endsWith(".test.tsx") && !e.name.endsWith(".stories.tsx")) acc.push(p);
   }
   return acc;
+}
+
+// فشل مغلق: مسح صفر ملف = مصدر مفقود/مكسور، لا «نظيف». (دالة نقية قابلة للاختبار)
+export function assertScannedNonEmpty(count) {
+  if (count === 0) throw new Error("scanned 0 .tsx files — مصدر مفقود أو مسح مكسور (فشل مغلق)");
 }
 
 async function readBaseline() {
@@ -79,6 +85,7 @@ async function readBaseline() {
 
 async function main() {
   const files = await collectTsx(SRC);
+  assertScannedNonEmpty(files.length);
   const entries = [];
   for (const p of files) entries.push({ name: relative(REPO_ROOT, p), content: await readFile(p, "utf8") });
 
