@@ -65,7 +65,7 @@
     "check:ledger-immutability": "node scripts/src/check-ledger-immutability.mjs",
     "check:engine-home": "node scripts/src/check-engine-home.mjs",
     "check:entity-picker-unified": "node scripts/src/check-entity-picker-unified.mjs",
-    "check:attachment-workspace-unified": "node scripts/src/check-attachment-workspace-unified.mjs",
+    "check:canonical-component-pairs": "node scripts/src/check-canonical-component-pairs.mjs",
     "check:dangerous-actions": "node scripts/src/check-dangerous-actions.mjs",
     "audit:migrations": "node scripts/src/check-migration-policy.mjs",
     "audit:boundaries": "node scripts/src/audit-domain-boundaries.mjs",
