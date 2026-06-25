@@ -156,21 +156,21 @@ export function LineAllocationPanel({
             allowCreate={false}
           />
 
-          <FormFieldWrapper label="العقار (ID)">
+          <FormFieldWrapper label="العقار">
             <Input
               type="number" dir="ltr"
               value={value.propertyId ?? ""}
               onChange={(e) => set("propertyId", e.target.value)}
-              placeholder="propertyId"
+              placeholder="رقم العقار"
             />
           </FormFieldWrapper>
 
-          <FormFieldWrapper label="الوحدة (ID)">
+          <FormFieldWrapper label="الوحدة">
             <Input
               type="number" dir="ltr"
               value={value.unitId ?? ""}
               onChange={(e) => set("unitId", e.target.value)}
-              placeholder="unitId"
+              placeholder="رقم الوحدة"
             />
           </FormFieldWrapper>
 
@@ -181,21 +181,21 @@ export function LineAllocationPanel({
             allowCreate={false}
           />
 
-          <FormFieldWrapper label="العقد (ID)">
+          <FormFieldWrapper label="العقد">
             <Input
               type="number" dir="ltr"
               value={value.contractId ?? ""}
               onChange={(e) => set("contractId", e.target.value)}
-              placeholder="contractId"
+              placeholder="رقم العقد"
             />
           </FormFieldWrapper>
 
-          <FormFieldWrapper label="الأصل الثابت (ID)">
+          <FormFieldWrapper label="الأصل الثابت">
             <Input
               type="number" dir="ltr"
               value={value.assetId ?? ""}
               onChange={(e) => set("assetId", e.target.value)}
-              placeholder="assetId"
+              placeholder="رقم الأصل الثابت"
             />
           </FormFieldWrapper>
 
@@ -213,21 +213,21 @@ export function LineAllocationPanel({
             allowCreate={false}
           />
 
-          <FormFieldWrapper label="القسم (ID)">
+          <FormFieldWrapper label="القسم">
             <Input
               type="number" dir="ltr"
               value={value.departmentId ?? ""}
               onChange={(e) => set("departmentId", e.target.value)}
-              placeholder="departmentId"
+              placeholder="رقم القسم"
             />
           </FormFieldWrapper>
 
-          <FormFieldWrapper label="المنتج (ID)">
+          <FormFieldWrapper label="المنتج">
             <Input
               type="number" dir="ltr"
               value={value.productId ?? ""}
               onChange={(e) => set("productId", e.target.value)}
-              placeholder="productId"
+              placeholder="رقم المنتج"
             />
           </FormFieldWrapper>
 
@@ -245,21 +245,21 @@ export function LineAllocationPanel({
             allowCreate={false}
           />
 
-          <FormFieldWrapper label="موسم العمرة (ID)">
+          <FormFieldWrapper label="موسم العمرة">
             <Input
               type="number" dir="ltr"
               value={value.umrahSeasonId ?? ""}
               onChange={(e) => set("umrahSeasonId", e.target.value)}
-              placeholder="umrahSeasonId"
+              placeholder="رقم موسم العمرة"
             />
           </FormFieldWrapper>
 
-          <FormFieldWrapper label="وكيل العمرة (ID)">
+          <FormFieldWrapper label="وكيل العمرة">
             <Input
               type="number" dir="ltr"
               value={value.umrahAgentId ?? ""}
               onChange={(e) => set("umrahAgentId", e.target.value)}
-              placeholder="umrahAgentId"
+              placeholder="رقم وكيل العمرة"
             />
           </FormFieldWrapper>
 
