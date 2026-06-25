@@ -80,14 +80,18 @@ export function lineIsCrampedGrid(lines, i, fileExcluded) {
   if (t.startsWith("*") || t.startsWith("//") || t.startsWith("/*")) return false;
   // exclusion: calendar / guide / mock / preview file (dense grids by design)
   if (fileExcluded) return false;
-  // bare grid-cols tokens only (a responsive-prefixed token is not the mobile layout)
-  const tokens = [...line.matchAll(/(?:([a-z0-9]+):)?grid-cols-(\d+)/g)];
-  const bare = tokens.filter((m) => !m[1]).map((m) => Number(m[2]));
+  // BARE grid-cols tokens only. A token is bare (the mobile layout) iff it is
+  // NOT preceded by `:` (any responsive/state variant ends in `:`, including
+  // arbitrary ones like `min-[480px]:` / `data-[open]:` / `2xl:`) and NOT by a
+  // word char or `-` (so `auto-grid-cols-6` / `xgrid-cols-6` sub-tokens don't
+  // match). The lookbehind handles every variant without enumerating its chars.
+  const bare = [...line.matchAll(/(?<![\w:-])grid-cols-(\d+)/g)].map((m) => Number(m[1]));
   if (bare.length === 0 || Math.max(...bare) < MIN_COLS) return false;
   // exclusion: horizontal-scroll content (min-w on the element itself)
   if (/min-w-\[/.test(line)) return false;
-  // exclusion: key-value rows (a col-span value in this element's window)
-  if (/col-span-/.test(lines.slice(i, i + 4).join("\n"))) return false;
+  // exclusion: key-value rows (a col-span value in this element's window).
+  // Looks one line up (value-first markup) and a few down (the spanned child).
+  if (/col-span-/.test(lines.slice(Math.max(0, i - 1), i + 5).join("\n"))) return false;
   // exclusion: inside a horizontal-scroll wrapper (overflow-x-auto a few lines up)
   if (/overflow-(x-)?(auto|scroll)/.test(lines.slice(Math.max(0, i - 8), i + 1).join("\n"))) return false;
   return true;
@@ -157,6 +161,20 @@ async function main() {
 
   const allow = loadAllowlist();
   const fresh = offenders.filter((o) => !isAllowed(o, allow));
+
+  // Stale entries — an allowlisted `path:line` or `path` that no longer matches
+  // any offender (the spot was made responsive / removed). Surfaced as a NOTE
+  // so the allowlist can't silently rot, mirroring check-display-tables.
+  const stale = [...allow]
+    .filter((e) => !offenders.some((o) => o === e || o.replace(/:\d+$/, "") === e))
+    .sort();
+  if (stale.length) {
+    console.log(
+      `[check:mobile-grids] NOTE: ${stale.length} allowlist entr${stale.length === 1 ? "y is" : "ies are"} stale ` +
+        `(made responsive or removed) — prune from ${relative(REPO_ROOT, ALLOWLIST_PATH)}:`,
+    );
+    for (const e of stale) console.log(`    - ${e}`);
+  }
 
   if (fresh.length) {
     console.error(
