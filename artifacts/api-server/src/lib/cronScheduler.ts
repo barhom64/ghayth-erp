@@ -2813,6 +2813,7 @@ async function monthlyHrAccruals(): Promise<string> {
       const periodEnd = new Date(`${period}-28`);
       let totalLeaveAccrual = 0;
       let totalEosAccrual = 0;
+      const breakdown: Array<{ employeeId: number; branchId: number; leaveAccrual: number; eosAccrual: number }> = [];
       for (const emp of employees) {
         const salary = Number(emp.salary) || 0;
         if (salary <= 0) continue;
@@ -2820,8 +2821,11 @@ async function monthlyHrAccruals(): Promise<string> {
         const yearsOfService = (periodEnd.getTime() - startDate.getTime()) / (365.25 * 24 * 3600 * 1000);
         const employeeId = Number(emp.employeeId);
         // مصدر الصيغة الموحّد: profiles المحرّك الدوري (مطابق للمسار اليدوي).
-        totalEosAccrual += eosAccrualProfile.amountFor({ id: employeeId, salary, yearsOfService });
-        totalLeaveAccrual += leaveAccrualProfile.amountFor({ id: employeeId, salary });
+        const eosAccrual = eosAccrualProfile.amountFor({ id: employeeId, salary, yearsOfService });
+        const leaveAccrual = leaveAccrualProfile.amountFor({ id: employeeId, salary });
+        totalEosAccrual += eosAccrual;
+        totalLeaveAccrual += leaveAccrual;
+        breakdown.push({ employeeId, branchId, leaveAccrual, eosAccrual });
       }
       totalLeaveAccrual = roundTo2(totalLeaveAccrual);
       totalEosAccrual = roundTo2(totalEosAccrual);
@@ -2830,7 +2834,7 @@ async function monthlyHrAccruals(): Promise<string> {
       const { hrEngine } = await import("./engines/index.js");
       const { journalId } = await hrEngine.postMonthlyAccrualsGL(
         { companyId: Number(company.id), branchId, createdBy: Number(systemUser.id) },
-        { ref, period, totalLeaveAccrual, totalEosAccrual, employeeCount: employees.length },
+        { ref, period, totalLeaveAccrual, totalEosAccrual, employeeCount: employees.length, breakdown },
       );
 
       await createAuditLog({
