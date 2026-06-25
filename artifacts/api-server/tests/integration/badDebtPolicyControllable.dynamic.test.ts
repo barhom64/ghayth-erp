@@ -112,4 +112,49 @@ d("bad-debt policy — controllable + standard default (live DB, HTTP)", () => {
     expect(res.body.rates.d90plus).toBe(0.8);  // query override wins over company's 1
     expect(res.body.rates.d90).toBe(0.6);      // company value where no override
   });
+
+  // ── control surface: GET/PUT /finance/bad-debt/policy ──────────────────────
+  const policy = () =>
+    request(app).get("/api/finance/bad-debt/policy")
+      .set("Authorization", `Bearer ${ids.ownerToken}`)
+      .set("Cookie", `erp_csrf=${CSRF}`).set("x-csrf-token", CSRF);
+  const putPolicy = (rates: any) =>
+    request(app).put("/api/finance/bad-debt/policy")
+      .set("Authorization", `Bearer ${ids.ownerToken}`)
+      .set("Cookie", `erp_csrf=${CSRF}`).set("x-csrf-token", CSRF)
+      .send({ rates });
+
+  it("GET /bad-debt/policy returns the resolved rates + the standard reference", async () => {
+    const res = await policy();
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body.key).toBe("finance.bad_debt_policy");
+    expect(res.body.standard).toEqual({ current: 0, d30: 0.05, d60: 0.25, d90: 0.5, d90plus: 0.75 });
+    // company override from the earlier test still in effect (d90plus=1, d90=0.6)
+    expect(res.body.rates.d90plus).toBe(1);
+  });
+
+  it("PUT /bad-debt/policy is a partial update — unset buckets stay dynamic on the standard", async () => {
+    // Clear the company row first so we start from pure standard.
+    await rawQuery(`DELETE FROM settings WHERE key='finance.bad_debt_policy' AND scope='company' AND "scopeId"=$1`, [ids.companyId]);
+    const put = await putPolicy({ d90plus: 0.9 });
+    expect(put.status, JSON.stringify(put.body)).toBe(200);
+    expect(put.body.rates.d90plus).toBe(0.9);   // saved
+    expect(put.body.rates.d30).toBe(0.05);      // untouched → standard
+
+    // persisted + applied by preview
+    const prev = await preview();
+    expect(prev.body.rates.d90plus).toBe(0.9);
+    expect(prev.body.rates.d60).toBe(0.25);     // still standard
+
+    // a second partial PUT keeps the first override
+    const put2 = await putPolicy({ d60: 0.4 });
+    expect(put2.body.rates.d60).toBe(0.4);
+    expect(put2.body.rates.d90plus).toBe(0.9);  // earlier override preserved
+  });
+
+  it("PUT rejects an out-of-range rate (> 1)", async () => {
+    const res = await putPolicy({ d90plus: 1.5 });
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(res.status).toBeLessThan(500);
+  });
 });
