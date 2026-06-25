@@ -135,3 +135,96 @@ export function planRecurringPostings<Row extends { id: number }>(
   }
   return planned;
 }
+
+// ── profile استحقاق نهاية الخدمة (EOS) ───────────────────────────────────────
+// يطابق صيغة الاستحقاق الشهري per-employee في hr.ts `/accruals/monthly`
+// (السطر 7651-7669): 1/24 من الراتب لأول 5 سنوات، 1/12 بعدها (نظام العمل م84).
+// مسار hr.ts الحالي يرحّل **إجماليًّا** (مجموع كل الموظفين في قيد واحد)؛ هذا الـ
+// profile per-employee بأبعاد employee/dept/branch — تحسين دفتري يلزمه توسيع عقد
+// أبعاد العمالة + بذور purpose قبل التوصيل الحيّ (المواصفة §5). دوال نقية، **غير
+// موصولة حيًّا** (نفس نهج assetDepreciationProfile أول ما نزل). `id` = معرّف الموظف.
+export interface EosAccrualRow {
+  /** معرّف الموظف — يصير entityId في سجل التتبّع. */
+  id: number;
+  salary: number;
+  /** سنوات الخدمة حتى نهاية الفترة (تُحسب من contractStart مقابل آخر الشهر). */
+  yearsOfService: number;
+  departmentId?: number | null;
+  branchId?: number | null;
+  /** كود مصروف استحقاق نهاية الخدمة (افتراضي 5260). */
+  eosExpenseAccountCode?: string | null;
+  /** كود التزام استحقاق نهاية الخدمة (افتراضي 2220). */
+  eosLiabilityAccountCode?: string | null;
+}
+
+export const eosAccrualProfile: RecurringProfile<EosAccrualRow> = {
+  key: "eos_accrual",
+
+  amountFor(emp) {
+    const salary = Number(emp.salary) || 0;
+    if (salary <= 0) return 0;
+    // > 5 سنوات ⇒ 1/12، وإلا 1/24 (يطابق hr.ts:7662-7669 + معاينة 7771).
+    const monthly = Number(emp.yearsOfService) > 5 ? salary / 12 : salary / 24;
+    return round2(monthly);
+  },
+
+  journalTemplate(emp, amount) {
+    const employeeId = Number(emp.id);
+    const departmentId = emp.departmentId ?? undefined;
+    const branchId = emp.branchId ?? undefined;
+    return [
+      { accountCode: emp.eosExpenseAccountCode ?? "5260", debit: amount, credit: 0, employeeId, departmentId, branchId },
+      { accountCode: emp.eosLiabilityAccountCode ?? "2220", debit: 0, credit: amount, employeeId, departmentId, branchId },
+    ];
+  },
+
+  sourceKey(emp, period) {
+    return `hr:eos_accrual:${emp.id}:${period}`;
+  },
+};
+
+// ── profile استحقاق الإجازات ─────────────────────────────────────────────────
+// يطابق صيغة الإجازة الشهرية per-employee في hr.ts `/accruals/monthly`
+// (السطر 7655-7657): (الراتب/30) × (أيام الإجازة السنوية/12).
+// CR على **2150** (التزام إجازات مستحقة — ثبّتته المالية في هجرة 365)، لا 2220
+// (الخلط بين الإجازات ومخصص نهاية الخدمة خطأ محاسبي). دوال نقية، غير موصولة حيًّا.
+export interface LeaveAccrualRow {
+  /** معرّف الموظف — يصير entityId في سجل التتبّع. */
+  id: number;
+  salary: number;
+  departmentId?: number | null;
+  branchId?: number | null;
+  /** أيام الإجازة السنوية المستحقة (افتراضي 21). */
+  annualLeaveDays?: number | null;
+  /** كود مصروف استحقاق الإجازات (افتراضي 5270). */
+  leaveExpenseAccountCode?: string | null;
+  /** كود التزام الإجازات المستحقة (افتراضي 2150). */
+  leaveLiabilityAccountCode?: string | null;
+}
+
+export const leaveAccrualProfile: RecurringProfile<LeaveAccrualRow> = {
+  key: "leave_accrual",
+
+  amountFor(emp) {
+    const salary = Number(emp.salary) || 0;
+    if (salary <= 0) return 0;
+    const dailyRate = salary / 30;
+    const annualDays = Number(emp.annualLeaveDays ?? 21);
+    const monthlyLeaveDays = annualDays / 12;
+    return round2(dailyRate * monthlyLeaveDays);
+  },
+
+  journalTemplate(emp, amount) {
+    const employeeId = Number(emp.id);
+    const departmentId = emp.departmentId ?? undefined;
+    const branchId = emp.branchId ?? undefined;
+    return [
+      { accountCode: emp.leaveExpenseAccountCode ?? "5270", debit: amount, credit: 0, employeeId, departmentId, branchId },
+      { accountCode: emp.leaveLiabilityAccountCode ?? "2150", debit: 0, credit: amount, employeeId, departmentId, branchId },
+    ];
+  },
+
+  sourceKey(emp, period) {
+    return `hr:leave_accrual:${emp.id}:${period}`;
+  },
+};
