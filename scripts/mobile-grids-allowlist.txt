@@ -4,12 +4,16 @@
 # dense layout that is NOT a cramped mobile data/stat grid (e.g. a 12-month
 # seasonal heat-strip, a 7-day week overview). The guard fails only on a
 # bare grid-cols>=4 NOT excluded and NOT listed here.
-# An entry may be `path:line` (one spot) or `path` (the whole file).
+# An entry may be `path:line` (one spot) or `path` (the WHOLE file). These three
+# are whole-file on purpose: they are intentional-dense visual pages (a scrolled
+# emulated table, a week overview, a seasonal heat-strip), so pinning a line
+# number would break the guard on any unrelated edit that shifts that line
+# (line-drift). Whole-file is the robust granularity for stable dense pages.
 # Regenerate with:
 #   node scripts/src/check-mobile-grids.mjs --write-allowlist
-# When a spot is made responsive (grid-cols-2 md:grid-cols-N), prune it.
+# When a page is made fully responsive, prune its line.
 #
-# Baseline captured: 3 occurrence(s).
-artifacts/ghayth-erp/src/pages/finance/project-costing.tsx:207   # emulated 7-col table data row; wrapper min-w-[760px]+overflow-x-auto sits >8 lines up (scrolls sideways on mobile)
-artifacts/ghayth-erp/src/pages/fleet/transport-ops-dashboard.tsx:292   # "توزيع الأسبوع" — 7-day week overview; 7 cols is the natural unit (like a calendar)
-artifacts/ghayth-erp/src/pages/insights.tsx:291   # 12-month seasonal heat-strip viz; a 12-wide sparkline is the intended compact visual
+# Baseline captured: 3 file(s).
+artifacts/ghayth-erp/src/pages/finance/project-costing.tsx   # emulated 7-col table; min-w-[760px]+overflow-x-auto wrapper scrolls sideways on mobile
+artifacts/ghayth-erp/src/pages/fleet/transport-ops-dashboard.tsx   # "توزيع الأسبوع" — 7-day week overview; 7 cols is the natural unit (like a calendar)
+artifacts/ghayth-erp/src/pages/insights.tsx   # 12-month seasonal heat-strip viz; a 12-wide sparkline is the intended compact visual
