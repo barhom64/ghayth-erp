@@ -14,8 +14,10 @@ describe("resolveTaxSettlementPolicyFrom — standard default", () => {
     expect(resolveTaxSettlementPolicyFrom(undefined, undefined)).toEqual({ ...STANDARD_TAX_SETTLEMENT_POLICY });
   });
 
-  it("standard is Saudi monthly filing, 30-day due", () => {
-    expect(STANDARD_TAX_SETTLEMENT_POLICY).toEqual({ frequency: "monthly", filingDueDays: 30 });
+  it("standard is Saudi monthly filing, 30-day due, settlement on postable 2131", () => {
+    expect(STANDARD_TAX_SETTLEMENT_POLICY).toEqual({
+      frequency: "monthly", filingDueDays: 30, settlementAccountCode: "2131",
+    });
   });
 
   it("ignores junk stored/override shapes → standard", () => {
@@ -26,21 +28,28 @@ describe("resolveTaxSettlementPolicyFrom — standard default", () => {
 
 describe("resolveTaxSettlementPolicyFrom — per-company settings layer", () => {
   it("company settings override the standard, per field", () => {
-    const p = resolveTaxSettlementPolicyFrom({ frequency: "quarterly", filingDueDays: 60 });
+    const p = resolveTaxSettlementPolicyFrom({ frequency: "quarterly", filingDueDays: 60, settlementAccountCode: "2133" });
     expect(p.frequency).toBe("quarterly");
     expect(p.filingDueDays).toBe(60);
+    expect(p.settlementAccountCode).toBe("2133");
   });
 
-  it("a partial company override leaves the other field on standard", () => {
+  it("a partial company override leaves the other fields on standard", () => {
     const p = resolveTaxSettlementPolicyFrom({ frequency: "quarterly" });
     expect(p.frequency).toBe("quarterly");
-    expect(p.filingDueDays).toBe(30); // untouched → standard
+    expect(p.filingDueDays).toBe(30);            // untouched → standard
+    expect(p.settlementAccountCode).toBe("2131"); // untouched → standard
   });
 
   it("invalid company values fall back to standard", () => {
-    const p = resolveTaxSettlementPolicyFrom({ frequency: "yearly", filingDueDays: 999 });
+    const p = resolveTaxSettlementPolicyFrom({ frequency: "yearly", filingDueDays: 999, settlementAccountCode: "   " });
     expect(p.frequency).toBe(STANDARD_TAX_SETTLEMENT_POLICY.frequency);   // bad enum
     expect(p.filingDueDays).toBe(STANDARD_TAX_SETTLEMENT_POLICY.filingDueDays); // out of [1,120]
+    expect(p.settlementAccountCode).toBe(STANDARD_TAX_SETTLEMENT_POLICY.settlementAccountCode); // blank
+  });
+
+  it("trims a custom settlement account code", () => {
+    expect(resolveTaxSettlementPolicyFrom({ settlementAccountCode: "  2199  " }).settlementAccountCode).toBe("2199");
   });
 
   it("rejects a non-integer due-days → standard", () => {

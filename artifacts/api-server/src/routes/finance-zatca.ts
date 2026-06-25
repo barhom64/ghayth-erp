@@ -13,7 +13,8 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
-import { createAuditLog, emitEvent, toDateISO, getCompanyVatRate, computeVat } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent, toDateISO, getCompanyVatRate, computeVat, checkFinancialPeriodOpen, roundTo2, todayISO } from "../lib/businessHelpers.js";
+import { markIdempotencyReplay } from "../lib/requestIdempotency.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { resolveZatcaSettings } from "../lib/zatca/settingsResolver.js";
 import { submitInvoiceToZatca } from "../lib/zatcaClient.js";
@@ -1075,6 +1076,7 @@ zatcaRouter.patch("/zatca/expense/:id", authorize({ feature: "finance.zatca", ac
 const taxSettlementPolicySchema = z.object({
   frequency: z.enum(["monthly", "quarterly"]).optional(),
   filingDueDays: z.coerce.number().int().min(1).max(120).optional(),
+  settlementAccountCode: z.string().trim().min(1).max(32).optional(),
 });
 
 // يجمع المراجع المُحلّة (للقراءة فقط) من مصادرها الأصلية — لا يُخزَّن هنا.
@@ -1115,6 +1117,26 @@ zatcaRouter.put("/tax-settlement/policy", authorize({ feature: "finance.zatca", 
   try {
     const scope = req.scope!;
     const body = zodParse(taxSettlementPolicySchema.safeParse(req.body ?? {}));
+    // حساب التسوية المخصّص يجب أن يكون حسابًا قائمًا في دليل الشركة — وإلا فشل
+    // الترحيل لاحقًا. نتحقق هنا عند الإدخال.
+    if (body.settlementAccountCode) {
+      const [acct] = await rawQuery<{ code: string; allowPosting: boolean }>(
+        `SELECT code, "allowPosting" FROM chart_of_accounts WHERE "companyId" = $1 AND code = $2 LIMIT 1`,
+        [scope.companyId, body.settlementAccountCode],
+      );
+      if (!acct) {
+        throw new ValidationError("حساب التسوية غير موجود في دليل الحسابات", {
+          field: "settlementAccountCode",
+          fix: "اختر كود حساب موجودًا في دليل حسابات الشركة.",
+        });
+      }
+      if (!acct.allowPosting) {
+        throw new ValidationError("حساب التسوية حساب تجميعي لا يقبل الحركة", {
+          field: "settlementAccountCode",
+          fix: "اختر حسابًا فرعيًا يقبل الترحيل (وليس حسابًا رئيسيًا).",
+        });
+      }
+    }
     const storedRaw = await resolveSettings(TAX_SETTLEMENT_POLICY_SETTING_KEY, scope.companyId).catch(() => undefined);
     const base = storedRaw && typeof storedRaw === "object" && !Array.isArray(storedRaw)
       ? (storedRaw as Record<string, unknown>) : {};
@@ -1133,5 +1155,156 @@ zatcaRouter.put("/tax-settlement/policy", authorize({ feature: "finance.zatca", 
     res.json({ key: TAX_SETTLEMENT_POLICY_SETTING_KEY, policy, standard: STANDARD_TAX_SETTLEMENT_POLICY });
   } catch (err) {
     handleRouteError(err, res, "Set tax-settlement policy error:");
+  }
+});
+
+// ── قيد تسوية الضريبة لفترة (يصفّر حركة الفترة على حسابي المخرجات/المدخلات إلى
+//    حساب التسوية «صافي المستحق للهيئة») ─────────────────────────────────────
+// قيد التسوية القياسي:
+//   مدين  حساب المخرجات (2131) بمقدار رصيد الفترة الدائن (يصفّره)
+//   دائن  حساب المدخلات (1180) بمقدار رصيد الفترة المدين (يصفّره)
+//   صافٍ  إلى حساب التسوية (2130): دائن إن كان مستحقًا · مدين إن كان قابلًا للاسترداد
+// متوازن دومًا. الترحيل بيد المستخدم (إجراء تقديم متعمّد، لا cron تلقائي).
+
+/** يحسب حركة الفترة على حسابي المخرجات/المدخلات وبنود قيد التسوية المقترح. */
+async function computeVatSettlement(companyId: number, period: string) {
+  const { financialEngine } = await import("../lib/engines/index.js");
+  const policy = await resolveTaxSettlementPolicy(companyId);
+  const [outputCode, inputCode] = await Promise.all([
+    financialEngine.resolveAccountCode(companyId, "vat_output", "credit", "2131"),
+    financialEngine.resolveAccountCode(companyId, "vat_input", "debit", "1180"),
+  ]);
+  // رصيد الفترة على القيود المرحَّلة فقط (balancesApplied، غير معكوسة/محذوفة)
+  // حسب تاريخ القيد (je.date).
+  const [agg] = await rawQuery<{ output: string | null; input: string | null }>(
+    `SELECT
+       COALESCE(SUM(CASE WHEN jl."accountCode" = $2 THEN jl.credit - jl.debit ELSE 0 END), 0) AS output,
+       COALESCE(SUM(CASE WHEN jl."accountCode" = $3 THEN jl.debit - jl.credit ELSE 0 END), 0) AS input
+     FROM journal_lines jl
+     JOIN journal_entries je ON je.id = jl."journalId"
+    WHERE je."companyId" = $1
+      AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je."reversedById" IS NULL
+      AND to_char(je.date, 'YYYY-MM') = $4
+      AND jl."accountCode" IN ($2, $3)`,
+    [companyId, outputCode, inputCode, period],
+  );
+  const outputVat = roundTo2(Number(agg?.output ?? 0));
+  const inputVat = roundTo2(Number(agg?.input ?? 0));
+  const netVat = roundTo2(outputVat - inputVat);
+  const settlementCode = policy.settlementAccountCode;
+
+  // قيد متوازن: مدين المخرجات (يصفّره) · دائن المدخلات (يصفّره) · الصافي على حساب
+  // التسوية (دائن إن مستحقًا · مدين إن قابلًا للاسترداد). نجمّع حسب الحساب فإن
+  // تطابق حساب التسوية مع المخرجات (الافتراضي) اندمجا في بند واحد نظيف، ونُسقط
+  // البنود الصفرية (postJournalEntry يرفض البنود الصفرية).
+  const signed = new Map<string, number>(); // الحساب → صافي مدين (المدين موجب)
+  const add = (code: string, debit: number) => signed.set(code, roundTo2((signed.get(code) ?? 0) + debit));
+  add(outputCode, outputVat);   // DR المخرجات
+  add(inputCode, -inputVat);    // CR المدخلات
+  add(settlementCode, -netVat); // الصافي: مستحق (net>0) → CR · استرداد (net<0) → DR
+  const lines: Array<{ accountCode: string; debit: number; credit: number }> = [];
+  for (const [code, bal] of signed) {
+    const v = roundTo2(bal);
+    if (v > 0) lines.push({ accountCode: code, debit: v, credit: 0 });
+    else if (v < 0) lines.push({ accountCode: code, debit: 0, credit: -v });
+  }
+
+  return {
+    period,
+    accounts: { output: outputCode, input: inputCode, settlement: settlementCode },
+    outputVat,
+    inputVat,
+    netVat,                       // موجب = مستحقة للهيئة · سالب = قابلة للاسترداد
+    direction: netVat >= 0 ? "payable" : "refundable",
+    lines,
+  };
+}
+
+const settlementPeriodSchema = z.object({
+  period: z.string().regex(/^\d{4}-\d{2}$/, "الفترة بصيغة YYYY-MM"),
+  notes: z.string().trim().max(500).optional(),
+});
+
+// GET: معاينة قيد التسوية المقترح لفترة (قراءة فقط) + هل سبق ترحيله.
+zatcaRouter.get("/tax-settlement/preview", authorize({ feature: "finance.zatca", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rawPeriod = typeof req.query.period === "string" ? req.query.period.trim() : "";
+    const period = /^\d{4}-\d{2}$/.test(rawPeriod) ? rawPeriod : new Date().toISOString().slice(0, 7);
+    const settlement = await computeVatSettlement(scope.companyId, period);
+    const ref = `VAT-SETTLE-${period}`;
+    const [existing] = await rawQuery<{ id: number }>(
+      `SELECT id FROM journal_entries WHERE "companyId" = $1 AND ref = $2 AND "deletedAt" IS NULL LIMIT 1`,
+      [scope.companyId, ref],
+    );
+    res.json({ ...settlement, ref, alreadyPosted: !!existing, postedJournalId: existing?.id ?? null });
+  } catch (err) {
+    handleRouteError(err, res, "Tax-settlement preview error:");
+  }
+});
+
+// POST: يرحّل قيد تسوية الفترة إلى الدفتر (إجراء بشري متعمّد). idempotent عبر
+// المرجع `VAT-SETTLE-{period}` وعبر sourceKey في محرّك القيود.
+zatcaRouter.post("/tax-settlement/post", authorize({ feature: "finance.zatca", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { period, notes } = zodParse(settlementPeriodSchema.safeParse(req.body ?? {}));
+
+    // الترحيل يقع على آخر يوم في الفترة — يجب أن تكون الفترة المحاسبية مفتوحة.
+    const [y, m] = period.split("-").map(Number);
+    const periodEnd = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, periodEnd);
+    if (!periodCheck.open) {
+      throw new ConflictError(`لا يمكن ترحيل التسوية في فترة مُقفلة: ${periodCheck.periodName ?? period}`);
+    }
+
+    const settlement = await computeVatSettlement(scope.companyId, period);
+    if (settlement.lines.length < 2) {
+      throw new ValidationError("لا توجد حركة ضريبية في هذه الفترة للتسوية", { field: "period" });
+    }
+
+    const ref = `VAT-SETTLE-${period}`;
+    const { financialEngine } = await import("../lib/engines/index.js");
+    let journalId: number | null = null;
+    let alreadyExists = false;
+    try {
+      const result = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref,
+        description: `تسوية ضريبة القيمة المضافة ${period}${notes ? ` — ${notes}` : ""}`,
+        sourceType: "vat_settlement",
+        sourceId: 0,
+        sourceKey: `finance:vat_settlement:${scope.companyId}:${period}`,
+        lines: settlement.lines,
+      });
+      journalId = result.journalId;
+      alreadyExists = result.alreadyExists;
+      markIdempotencyReplay(req, res, result.alreadyExists);
+    } catch (je) {
+      // أبرز رسائل التحقق الواضحة (حساب لا يقبل الحركة، فترة مقفلة…) كما هي.
+      if (je instanceof ValidationError || je instanceof ConflictError) throw je;
+      logger.error(je, "VAT settlement JE error:");
+      throw new IntegrationError("فشل ترحيل قيد تسوية الضريبة", {
+        field: "journalEntry",
+        fix: "راجع حسابات الضريبة (المخرجات/المدخلات/التسوية) ثم أعد المحاولة",
+      });
+    }
+
+    if (!alreadyExists) {
+      emitEvent({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "vat_settlement.posted",
+        entity: "journal_entries",
+        entityId: journalId ?? 0,
+        details: JSON.stringify({ period, netVat: settlement.netVat, accounts: settlement.accounts }),
+      }).catch((e) => logger.error(e, "vat-settlement event failed"));
+    }
+
+    res.status(alreadyExists ? 200 : 201).json({ journalId, ref, alreadyPosted: alreadyExists, ...settlement });
+  } catch (err) {
+    handleRouteError(err, res, "Tax-settlement post error:");
   }
 });

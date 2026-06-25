@@ -96,10 +96,15 @@ function exportCSV(rows: VatReconResponse["bySource"], filename: string) {
  * وقابلة للتعديل من الواجهة. تُحفظ في settings عبر PUT /finance/tax-settlement/policy.
  * النسبة وحسابات المخرجات/المدخلات تُعرض للقراءة فقط (مصدرها الأصلي لا يُكرَّر هنا).
  */
+interface SettlementPolicy {
+  frequency: "monthly" | "quarterly";
+  filingDueDays: number;
+  settlementAccountCode: string;
+}
 interface TaxSettlementPolicyResponse {
   key: string;
-  policy: { frequency: "monthly" | "quarterly"; filingDueDays: number };
-  standard: { frequency: "monthly" | "quarterly"; filingDueDays: number };
+  policy: SettlementPolicy;
+  standard: SettlementPolicy;
   refs: { vatRate: number; accounts: { output: string; input: string }; previewEndpoint: string };
 }
 
@@ -110,15 +115,17 @@ function SettlementPolicyCard() {
   );
   const [frequency, setFrequency] = useState<"monthly" | "quarterly">("monthly");
   const [dueDays, setDueDays] = useState<string>("30");
+  const [acct, setAcct] = useState<string>("2131");
 
   useEffect(() => {
     if (data?.policy) {
       setFrequency(data.policy.frequency);
       setDueDays(String(data.policy.filingDueDays));
+      setAcct(data.policy.settlementAccountCode);
     }
-  }, [data?.policy?.frequency, data?.policy?.filingDueDays]);
+  }, [data?.policy?.frequency, data?.policy?.filingDueDays, data?.policy?.settlementAccountCode]);
 
-  const saveMut = useApiMutation<TaxSettlementPolicyResponse, { frequency: string; filingDueDays: number }>(
+  const saveMut = useApiMutation<TaxSettlementPolicyResponse, { frequency: string; filingDueDays: number; settlementAccountCode: string }>(
     "/finance/tax-settlement/policy",
     "PUT",
     [["tax-settlement-policy"]],
@@ -130,10 +137,15 @@ function SettlementPolicyCard() {
 
   const isStandard =
     data.policy.frequency === data.standard.frequency &&
-    data.policy.filingDueDays === data.standard.filingDueDays;
+    data.policy.filingDueDays === data.standard.filingDueDays &&
+    data.policy.settlementAccountCode === data.standard.settlementAccountCode;
   const days = Number(dueDays);
-  const dirty = frequency !== data.policy.frequency || days !== data.policy.filingDueDays;
-  const valid = Number.isInteger(days) && days >= 1 && days <= 120;
+  const acctTrim = acct.trim();
+  const dirty =
+    frequency !== data.policy.frequency ||
+    days !== data.policy.filingDueDays ||
+    acctTrim !== data.policy.settlementAccountCode;
+  const valid = Number.isInteger(days) && days >= 1 && days <= 120 && acctTrim.length > 0;
 
   return (
     <Card className="mt-4">
@@ -179,16 +191,28 @@ function SettlementPolicyCard() {
               onChange={(e) => setDueDays(e.target.value)}
               className="w-32 tabular-nums"
             />
-            {!valid && <p className="text-xs text-destructive mt-1">قيمة بين 1 و120 يومًا</p>}
+            {(!Number.isInteger(days) || days < 1 || days > 120) &&
+              <p className="text-xs text-destructive mt-1">قيمة بين 1 و120 يومًا</p>}
           </div>
 
-          {/* مراجع للقراءة فقط */}
-          <div className="text-xs text-muted-foreground">
-            <p className="mb-1">مراجع (للعرض فقط):</p>
-            <p>نسبة الضريبة: <span className="font-semibold">{(data.refs.vatRate * 100).toFixed(0)}%</span></p>
-            <p>حساب المخرجات: <span className="font-mono">{data.refs.accounts.output}</span></p>
-            <p>حساب المدخلات: <span className="font-mono">{data.refs.accounts.input}</span></p>
+          {/* حساب التسوية — قابل للتخصيص */}
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">حساب التسوية (صافي المستحق)</label>
+            <Input
+              value={acct}
+              onChange={(e) => setAcct(e.target.value)}
+              className="w-32 font-mono"
+              placeholder="2131"
+            />
+            {acctTrim.length === 0 && <p className="text-xs text-destructive mt-1">كود حساب مطلوب</p>}
           </div>
+        </div>
+
+        {/* مراجع للقراءة فقط */}
+        <div className="text-xs text-muted-foreground mt-3 flex flex-wrap gap-x-6 gap-y-1">
+          <span>نسبة الضريبة: <span className="font-semibold">{(data.refs.vatRate * 100).toFixed(0)}%</span></span>
+          <span>حساب المخرجات: <span className="font-mono">{data.refs.accounts.output}</span></span>
+          <span>حساب المدخلات: <span className="font-mono">{data.refs.accounts.input}</span></span>
         </div>
 
         <div className="flex justify-end mt-4">
@@ -196,7 +220,7 @@ function SettlementPolicyCard() {
             perm="finance:update"
             size="sm"
             disabled={!dirty || !valid || saveMut.isPending}
-            onClick={() => saveMut.mutate({ frequency, filingDueDays: days })}
+            onClick={() => saveMut.mutate({ frequency, filingDueDays: days, settlementAccountCode: acctTrim })}
           >
             {saveMut.isPending ? "جاري الحفظ" : "حفظ السياسة"}
           </GuardedButton>

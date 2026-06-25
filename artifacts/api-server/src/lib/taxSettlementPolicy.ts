@@ -7,8 +7,12 @@
 //   • نسبة الضريبة تبقى مصدرها الوحيد `getCompanyVatRate` (system_settings/vat_rate).
 //   • أكواد حسابات المخرجات/المدخلات تبقى مصدرها accounting_mappings عبر
 //     resolveAccountCode("vat_output"/"vat_input").
-//   • معاينة صافي الضريبة لفترة موجودة في GET /finance/reports/vat-reconciliation.
-// هذا الملف يحكم فقط ما لا بيت له: **دورية التسوية ومهلة الاستحقاق**.
+// هذا الملف يحكم: **دورية التسوية ومهلة الاستحقاق وحساب التسوية** (صافي المستحق
+// للهيئة). حساب التسوية الافتراضي العام هو حساب ضريبة المخرجات «2131» (حساب يقبل
+// الحركة) — تُغلق ضريبة المدخلات فيه فيبقى الصافي المستحق عليه، وهي طريقة التسوية
+// القياسية. قابل للتخصيص لأي حساب يقبل الحركة حسب رغبة المستخدم (مثل حساب مستقل
+// «مستحق لهيئة الزكاة والضريبة») — اعتماد إبراهيم 2026-06-25.
+// ملاحظة: الحساب التجميعي «2130» لا يقبل الحركة، لذلك ليس افتراضًا صالحًا للترحيل.
 //
 // الطبقات (الأعلى يفوز): تجاوز الطلب (override) ← تهيئة الشركة (settings) ← القياسي.
 // كل حقل يُتحقَّق منه على حدة؛ القيمة غير الصالحة تسقط للطبقة الأدنى.
@@ -22,15 +26,19 @@ export interface TaxSettlementPolicy {
   frequency: TaxSettlementFrequency;
   /** مهلة الاستحقاق بالأيام بعد نهاية الفترة (هيئة الزكاة والضريبة: نهاية الشهر التالي ≈ 30). */
   filingDueDays: number;
+  /** حساب صافي ضريبة القيمة المضافة المستحقة للهيئة (وجهة قيد التسوية). */
+  settlementAccountCode: string;
 }
 
 /**
  * السياسة القياسية الافتراضية — مطابقة لنظام ضريبة القيمة المضافة السعودي:
- * تسوية شهرية، استحقاق خلال 30 يومًا من نهاية الفترة. تُطبَّق عند غياب تهيئة الشركة.
+ * تسوية شهرية، استحقاق خلال 30 يومًا من نهاية الفترة، صافي المستحق على حساب عام
+ * «2130 ضرائب ورسوم مستحقة». تُطبَّق عند غياب تهيئة الشركة وكلها قابلة للتخصيص.
  */
 export const STANDARD_TAX_SETTLEMENT_POLICY: Readonly<TaxSettlementPolicy> = Object.freeze({
   frequency: "monthly",
   filingDueDays: 30,
+  settlementAccountCode: "2131",
 });
 
 /** مفتاح الإعداد القابل للتحكم لكل شركة (جدول settings). */
@@ -49,6 +57,11 @@ function pickFrequency(v: unknown, fallback: TaxSettlementFrequency): TaxSettlem
 function pickDueDays(v: unknown, fallback: number): number {
   const n = Number(v);
   return Number.isInteger(n) && n >= 1 && n <= 120 ? n : fallback;
+}
+
+/** كود حساب صالح فقط لو نص غير فارغ (بعد إزالة الفراغات)؛ غير ذلك يسقط للبديل. */
+function pickAccountCode(v: unknown, fallback: string): string {
+  return typeof v === "string" && v.trim().length > 0 ? v.trim() : fallback;
 }
 
 function asRecord(v: unknown): Record<string, unknown> {
@@ -73,7 +86,10 @@ export function resolveTaxSettlementPolicyFrom(
   const daysCo = present(s, "filingDueDays") ? pickDueDays(s.filingDueDays, STANDARD_TAX_SETTLEMENT_POLICY.filingDueDays) : STANDARD_TAX_SETTLEMENT_POLICY.filingDueDays;
   const filingDueDays = present(o, "filingDueDays") ? pickDueDays(o.filingDueDays, daysCo) : daysCo;
 
-  return { frequency, filingDueDays };
+  const acctCo = present(s, "settlementAccountCode") ? pickAccountCode(s.settlementAccountCode, STANDARD_TAX_SETTLEMENT_POLICY.settlementAccountCode) : STANDARD_TAX_SETTLEMENT_POLICY.settlementAccountCode;
+  const settlementAccountCode = present(o, "settlementAccountCode") ? pickAccountCode(o.settlementAccountCode, acctCo) : acctCo;
+
+  return { frequency, filingDueDays, settlementAccountCode };
 }
 
 /**
