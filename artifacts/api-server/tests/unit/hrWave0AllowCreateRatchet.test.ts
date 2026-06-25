@@ -6,7 +6,7 @@
  * inline (department, job-title, cost-center, etc.) using the SAME
  * unified create form — not a fragmented "quick add". The contract
  * is implemented by `buildEntitySelect()` which renders both a
- * `<SearchableSelectField>` and a `<QuickCreateDialog>` so the
+ * `<SearchableSelectField>` and an `<AllowCreateDrawer>` so the
  * inline-create flow always runs the real backend route + invalidates
  * the same React Query cache key.
  *
@@ -21,10 +21,10 @@
  *      gated by `allowCreate` — if the gate vanishes, even pickers
  *      that opt out get the create button. If the gate fires when
  *      `allowCreate=false`, opt-outs become noisy.
- *   3. The `QuickCreateDialog` is mounted alongside the picker and
- *      hits the same `createApiPath` + invalidates the same
- *      `queryKey` — proves the inline create runs through the real
- *      backend route (no fake local-only entity).
+ *   3. The `AllowCreateDrawer` is mounted alongside the picker; its
+ *      generic-config path hits the same `createApiPath` + invalidates
+ *      the same `queryKey` — proves the inline create runs through the
+ *      real backend route (no fake local-only entity).
  *   4. The 9 canonical reference selects exist and ride on
  *      `buildEntitySelect` (so they inherit the gates above
  *      automatically).
@@ -56,10 +56,13 @@ describe("HR-Wave-0 / 0.4 — buildEntitySelect defaults + plumbing", () => {
     expect(ENTITY_SELECTS_SRC).toMatch(/onCreateNew=\{allowCreate \? \(\) => setShowCreate\(true\) : undefined\}/);
   });
 
-  it("QuickCreateDialog rides on the same queryKey so the cache invalidates after inline create", () => {
-    expect(ENTITY_SELECTS_SRC).toMatch(/<QuickCreateDialog/);
-    expect(ENTITY_SELECTS_SRC).toMatch(/apiPath=\{config\.apiPath\}|apiPath=\{config\.createApiPath\}/);
-    expect(ENTITY_SELECTS_SRC).toMatch(/invalidateKey=\{config\.queryKey\}/);
+  it("inline-create rides on the same queryKey via the unified drawer so the cache invalidates", () => {
+    // QuickCreateDialog retired — the generic-config path of AllowCreateDrawer
+    // carries the same createApiPath + queryKey (invalidateKey) into the unified
+    // drawer, so inline create still runs the real route + invalidates the cache.
+    expect(ENTITY_SELECTS_SRC).toMatch(/<AllowCreateDrawer/);
+    expect(ENTITY_SELECTS_SRC).toMatch(/apiPath: config\.createApiPath/);
+    expect(ENTITY_SELECTS_SRC).toMatch(/invalidateKey: config\.queryKey/);
   });
 
   it("post-create handler selects the new entity by id and refetches the list", () => {
