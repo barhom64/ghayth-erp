@@ -49,7 +49,7 @@ const rows: Row[] = [
 
 function buildList(primaryAction?: { label: string; onClick: () => void }) {
   return (
-    <ListPage<Row>
+    <ListPage
       title="القائمة"
       queryKey={["test-list"]}
       endpoint="/test/list"
