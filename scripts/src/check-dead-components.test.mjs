@@ -2,7 +2,7 @@
 // التشغيل: node scripts/src/check-dead-components.test.mjs
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { extractSpecifiers, resolveSpecifier, relativeJoin, isCandidate, isRouteFile, deadFrom } from "./check-dead-components.mjs";
+import { extractSpecifiers, resolveSpecifier, relativeJoin, isCandidate, isRouteFile, deadFrom, stripComments } from "./check-dead-components.mjs";
 
 test("extractSpecifiers يلتقط import/export/dynamic", () => {
   const specs = extractSpecifiers([
@@ -15,6 +15,23 @@ test("extractSpecifiers يلتقط import/export/dynamic", () => {
   assert.ok(specs.includes("./b"));
   assert.ok(specs.includes("@/pages/c"));
   assert.ok(specs.includes("@/styles/x.css"));
+});
+
+test("extractSpecifiers يتجاهل المراجع المعلَّقة (ثغرة Codex)", () => {
+  const specs = extractSpecifiers([
+    'import { Real } from "@/components/real";',
+    '// import { X } from "@/components/commented-line";',
+    '/* const Y = lazy(() => import("@/pages/commented-block")); */',
+    '{/* <Foo/> from import("@/components/jsx-commented") */}',
+  ].join("\n"));
+  assert.ok(specs.includes("@/components/real"));
+  assert.ok(!specs.includes("@/components/commented-line"));
+  assert.ok(!specs.includes("@/pages/commented-block"));
+  assert.ok(!specs.includes("@/components/jsx-commented"));
+});
+
+test("stripComments لا يمسّ ://", () => {
+  assert.ok(stripComments('const u = "https://x.test/p";').includes("https://x.test/p"));
 });
 
 test("relativeJoin يحلّ ../ و ./", () => {

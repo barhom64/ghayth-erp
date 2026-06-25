@@ -43,9 +43,21 @@ export function isCandidate(rel) {
   return /(^|\/)(components|pages)\//.test(rel);
 }
 
+// إسقاط التعليقات قبل استخراج المواصفات (دالة نقية) — وإلا فإن مرجعًا معلَّقًا
+// (block أو {/* … */} أو سطر فيه import) يُحسب استيرادًا فيُنجّي مكوّنًا ميتًا
+// (ثغرة رصدتها مراجعة Codex على #2982). لا تمسّ http:// (الشرطة قبلها «:»).
+export function stripComments(src) {
+  let s = src;
+  s = s.replace(/\/\*[\s\S]*?\*\//g, " ");        // تعليقات الكتل (تشمل {/* … */})
+  s = s.replace(/(^|[^:])\/\/[^\n]*/g, "$1");      // تعليقات السطر (لا تمسّ ://)
+  return s;
+}
+
 // استخراج المواصفات المستورَدة من ملف (دالة نقية): import …from "x"،
 // export …from "x"، و dynamic import("x") (يشمل lazy(() => import("x"))).
-export function extractSpecifiers(src) {
+// يُسقط التعليقات أولًا فلا يُحسب مرجع معلَّق استيرادًا.
+export function extractSpecifiers(srcRaw) {
+  const src = stripComments(srcRaw);
   const specs = [];
   const reFrom = /(?:^|\n)\s*(?:import|export)[\s\S]*?from\s+["']([^"']+)["']/g;
   const reSide = /(?:^|\n)\s*import\s+["']([^"']+)["']/g;
