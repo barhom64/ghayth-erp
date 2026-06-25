@@ -6,7 +6,9 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction, pool } from "../lib/rawdb.js";
 import { hashPassword } from "../lib/auth.js";
-import { findSeparationOfDutiesConflict, getActiveRoleKeysForUser } from "../lib/policyEngine.js";
+import { grantUserRole } from "../lib/rbacService.js";
+import { bumpCacheVersion } from "../lib/rbac/authzEngine.js";
+import { invalidateRoleCache } from "../middlewares/roleGuard.js";
 import { issueNumber } from "../lib/numberingService.js";
 import { logger } from "../lib/logger.js";
 import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
@@ -390,6 +392,14 @@ router.patch("/users/:id", authorize({ feature: "admin", action: "update" }), as
         }
       }
     });
+    // A role change must be live immediately, not after the 30s permission-cache
+    // TTL — invalidate the engine grant cache (company-wide version bump, like
+    // the rbac/v2 grant path) + the per-user roleGuard cache. The old inline
+    // DELETE+INSERT here skipped this, so a changed role stayed stale for ~30s.
+    if (role !== undefined) {
+      await bumpCacheVersion(scope.companyId).catch((e) => logger.error(e, "[admin] bumpCacheVersion after role change failed"));
+      invalidateRoleCache(id);
+    }
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "update", entity: "users", entityId: id,
@@ -603,20 +613,14 @@ router.post("/user-roles", authorize({ feature: "admin", action: "update" }), as
     if (!await userBelongsToCompany(userId, scope.companyId)) {
       throw new ForbiddenError("المستخدم لا ينتمي لشركتك");
     }
-    // #1605 — Separation-of-Duties: reject granting a role that conflicts with a
-    // role the user already holds (rbac_user_roles + active employee_assignments).
-    const existingRoles = await getActiveRoleKeysForUser(userId, scope.companyId);
-    const sodConflict = findSeparationOfDutiesConflict(existingRoles, roleKey);
-    if (sodConflict) {
-      throw new ForbiddenError(
-        `فصل المهام (SoD): لا يمكن الجمع بين الدورين "${sodConflict.roleA}" و"${sodConflict.roleB}" لنفس المستخدم — ${sodConflict.reason}`,
-      );
-    }
     // Resolve the v2 role id; seed it from the predefined catalog if this company
-    // doesn't have it yet, so assignment works on a fresh tenant (#1791).
-    // Seed + assignment run atomically: a failed assignment must not leave a
-    // half-applied grant. rawQuery/rawExecute join the ambient transaction
-    // (txStore) automatically, so the statements need no rewrite.
+    // doesn't have it yet, so assignment works on a fresh tenant (#1791). Seed +
+    // grant run atomically (rawQuery/rawExecute join the ambient transaction via
+    // txStore), so a failed grant never leaves a half-applied seed. The actual
+    // grant goes through the central rbacService.grantUserRole — same owner as
+    // employees.ts / onboard — which enforces SoD AND invalidates both permission
+    // caches so the grant is live immediately rather than after the 30s TTL
+    // (the old inline INSERT here skipped cache invalidation entirely).
     const roleRow = await withTransaction(async () => {
       let [row] = await rawQuery<{ id: number; label: string }>(
         `SELECT id, label_ar AS label FROM rbac_roles WHERE "companyId"=$1 AND role_key=$2 LIMIT 1`,
@@ -637,11 +641,19 @@ router.post("/user-roles", authorize({ feature: "admin", action: "update" }), as
         );
       }
       if (!row) { throw new ValidationError("دور غير معروف"); }
-      await rawExecute(
-        `INSERT INTO rbac_user_roles ("userId", "companyId", role_id, is_primary) VALUES ($1,$2,$3,false)
-         ON CONFLICT ("userId","companyId",role_id) DO NOTHING`,
-        [userId, scope.companyId, row.id]
-      );
+      // #1605 — Separation-of-Duties. Unlike the bulk creation paths (soft-skip),
+      // this is an explicit single-role admin action, so an SoD conflict is a
+      // HARD failure (403) rather than a silent skip.
+      const result = await grantUserRole({
+        userId,
+        roleKey,
+        companyId: scope.companyId,
+        assignedBy: scope.userId,
+      });
+      if (!result.ok) {
+        if (result.error === "sod_conflict") throw new ForbiddenError(result.reasonAr ?? "تعارض فصل المهام");
+        throw new ValidationError(result.reasonAr ?? "تعذّر منح الدور");
+      }
       return row;
     });
     createAuditLog({
@@ -2032,14 +2044,41 @@ router.post("/onboard", authorize({ feature: "admin", action: "update" }), async
       );
       const userId = userRes.rows[0].id;
 
-      for (let i = 0; i < resolvedRoles.length; i++) {
-        const rr = resolvedRoles[i];
-        await tx.query(
-          `INSERT INTO rbac_user_roles ("userId","companyId",role_id,"branchId","departmentId",is_primary,"assignedBy","createdAt")
-           VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())
-           ON CONFLICT ("userId","companyId",role_id) DO NOTHING`,
-          [userId, companyId, rr.roleId, rr.branchId, rr.departmentId, i === 0, scope.userId],
-        );
+      const grantedRoleKeys: string[] = [];
+      const skippedRoles: { roleKey: string; reason: string }[] = [];
+      // Bind every wanted role through the central RBAC service so Separation
+      // of Duties is ENFORCED here exactly as it is on the manual grant path —
+      // no more raw INSERT that silently bound a conflicting pair (e.g.
+      // hr_manager + finance_manager) at onboarding. grantUserRole's
+      // rawQuery/rawExecute join THIS transaction via rawdb's ALS executor
+      // binding, so the binds commit/roll back with the rest of the onboard.
+      // Soft-fail per role (mirrors employees.ts Step 8a-bis): a role rejected
+      // by SoD is skipped with a warning and left for the admin — the user is
+      // still onboarded and the non-conflicting roles are still granted. The
+      // first SUCCESSFULLY granted role is is_primary. resolvedRoles[0] always
+      // grants (first role of a brand-new user has nothing to conflict with),
+      // so it stays primary and matches users.role / employee_assignments.role.
+      let primaryClaimed = false;
+      for (const rr of resolvedRoles) {
+        const result = await grantUserRole({
+          userId,
+          roleKey: rr.roleKey,
+          companyId,
+          branchId: rr.branchId,
+          departmentId: rr.departmentId,
+          assignedBy: scope.userId,
+          isPrimary: !primaryClaimed,
+        });
+        if (result.ok) {
+          primaryClaimed = true;
+          grantedRoleKeys.push(rr.roleKey);
+        } else {
+          skippedRoles.push({ roleKey: rr.roleKey, reason: result.reasonAr ?? result.error ?? "غير معروف" });
+          logger.warn(
+            { roleKey: rr.roleKey, companyId, userId, reason: result.error, detail: result.reasonAr },
+            "[onboard] role not granted (soft-skip, SoD/unmapped) — user created, role left for admin",
+          );
+        }
       }
 
       // Job-title-driven custody account (mirrors employees.ts Step 8b). Soft —
@@ -2060,26 +2099,32 @@ router.post("/onboard", authorize({ feature: "admin", action: "update" }), async
           logger.warn({ companyId }, "[onboard] chart_of_accounts 1400 missing — custody sub-account skipped");
         }
       }
-      return { employeeId, userId };
+      return { employeeId, userId, grantedRoleKeys, skippedRoles };
     });
 
-    // RBAC-001: record WHICH role the actor performed this under.
+    // RBAC-001: record WHICH role the actor performed this under, and the
+    // truthful outcome — which roles were actually granted vs SoD-skipped.
     createAuditLog({
       companyId, userId: scope.userId, action: "create", entity: "users", entityId: out.userId,
-      after: { email: d.email, employeeId: out.employeeId, roles: resolvedRoles.map((r) => r.roleKey) },
+      after: { email: d.email, employeeId: out.employeeId, roles: out.grantedRoleKeys, skippedRoles: out.skippedRoles },
       activeRoleKey: scope.selectedRoleKey ?? null,
     }).catch((e) => logger.error(e, "onboard audit failed"));
     emitEvent({
       companyId, userId: scope.userId, action: "admin.user.onboarded", entity: "users", entityId: out.userId,
-      details: JSON.stringify({ email: d.email, employeeId: out.employeeId, roleCount: resolvedRoles.length }),
+      details: JSON.stringify({ email: d.email, employeeId: out.employeeId, roleCount: out.grantedRoleKeys.length, skippedCount: out.skippedRoles.length }),
     }).catch((e) => logger.error(e, "onboard event failed"));
 
     res.status(201).json({
       employeeId: out.employeeId,
       userId: out.userId,
       empNumber: empNum,
-      roles: resolvedRoles.map((r) => r.roleKey),
-      message: "تم إنشاء الموظف والحساب والأدوار بنجاح",
+      roles: out.grantedRoleKeys,
+      // Don't claim roles were assigned when SoD blocked some — surface them so
+      // the admin knows to resolve the conflict manually.
+      skippedRoles: out.skippedRoles,
+      message: out.skippedRoles.length === 0
+        ? "تم إنشاء الموظف والحساب والأدوار بنجاح"
+        : `تم إنشاء الموظف والحساب ومنح ${out.grantedRoleKeys.length} دور؛ تعذّر منح ${out.skippedRoles.length} لتعارض فصل المهام (SoD) — أسنِدها يدويًا بعد حلّ التعارض`,
     });
   } catch (e) { logger.error(e, "onboard error"); handleRouteError(e, res, "فشل إنشاء الموظف والحساب"); }
 });

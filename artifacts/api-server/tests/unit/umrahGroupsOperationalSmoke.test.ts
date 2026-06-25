@@ -19,8 +19,9 @@ import { join } from "node:path";
  * The UI surfaces each enriched column with a compact badge so the row
  * stays scannable.
  */
+// U-07 Phase 22 — GET /umrah/groups (enriched list) carved into umrah-groups.ts.
 const ROUTE = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-groups.ts"),
   "utf8",
 );
 const UI = readFileSync(

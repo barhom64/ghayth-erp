@@ -25,8 +25,9 @@ const ENGINE = readFileSync(
   join(import.meta.dirname!, "../../src/lib/umrahTransportContract.ts"),
   "utf8",
 );
+// U-07 Phase 23 — the transport-requests routes carved into umrah-group-transport.ts.
 const ROUTE = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-group-transport.ts"),
   "utf8",
 );
 

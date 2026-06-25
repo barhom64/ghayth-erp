@@ -1,0 +1,35 @@
+# بوابة قبول تجربة المستخدم — فحص ثابت سريع بلا تبعيات ولا قاعدة بيانات.
+# المسار في المستودع: .github/workflows/ux-gate.yml
+#
+# يشغّل scripts/src/ux-scorecard.mjs للتحقق من سلامة أساس بوابة UX:
+#   - اكتمال وثائق docs/ux/ الأربع.
+#   - وجود اختبار e2e/tests/ux-acceptance-gate.spec.ts ووسمه @ux-gate و @mobile.
+#   - تطابق الرحلات الحرجة بين الاختبار ومصفوفة UX_TEST_MATRIX.md (منع الانجراف).
+#   - أوزان بطاقة القياس تجمع 100.
+#
+# الرحلة المتصفّحية الفعلية (@ux-gate) تعمل ضمن وظيفة `e2e` الحالية لأنها داخل
+# e2e/tests — فلا تُعاد هنا حتى لا نكرّر بناء الحزمة + قاعدة البيانات بلا داعٍ.
+#
+# ترشيح ux-gate كفحص إلزامي على main قرار إعدادات (Branch Protection) بيد إبراهيم.
+name: ux-gate
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master, "claude/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  ux-gate:
+    name: ux-gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: تشغيل بطاقة قياس بوابة UX
+        run: node scripts/src/ux-scorecard.mjs

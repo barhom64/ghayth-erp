@@ -196,6 +196,15 @@ run_step "check:responsive-tables" node scripts/src/check-responsive-tables.mjs
 # the detector.
 run_step "check:display-tables:tests" node scripts/src/check-display-tables.test.mjs
 run_step "check:display-tables" node scripts/src/check-display-tables.mjs
+# Mobile grid-cramping: Tailwind is mobile-first, so a BARE grid-cols-N (N>=4)
+# IS the phone layout and shows N cramped columns on a 360px screen. The 2026-06
+# mobile pass collapsed every stat/input/tab grid to grid-cols-2 md:grid-cols-N;
+# this keeps NEW cramped grids out of src/pages/**. OFFLINE source scan with
+# mechanical exclusions (key-value col-span, min-w / overflow-x scroll wrappers,
+# calendar/guide files); intentional dense layouts pinned in
+# scripts/mobile-grids-allowlist.txt. Fixtures guard the detector.
+run_step "check:mobile-grids:tests" node scripts/src/check-mobile-grids.test.mjs
+run_step "check:mobile-grids" node scripts/src/check-mobile-grids.mjs
 # Page action-bar consistency (refresh/print/export): a hand-rolled control —
 # a <Button> pairing the action's icon with its bare Arabic label (RefreshCw+«تحديث»
 # / Printer+«طباعة» / Download+«تصدير») — instead of the unified component
@@ -395,6 +404,11 @@ run_step "audit:stop-ship"    node scripts/src/audit-stop-ship.mjs
 # fixtures first, then the live spec scan.
 run_step "check:e2e-login:tests" node scripts/src/check-e2e-login-pattern.test.mjs
 run_step "check:e2e-login"    node scripts/src/check-e2e-login-pattern.mjs
+# Dangerous-action UX guard — native browser confirm() (RTL-broken, no
+# impact-preview / blockers / audit) must use the unified ConfirmDeleteDialog /
+# ConfirmActionDialog. Pure-logic fixtures first, then the baseline-frozen scan.
+run_step "check:dangerous-actions:tests" node scripts/src/check-dangerous-actions.test.mjs
+run_step "check:dangerous-actions" node scripts/src/check-dangerous-actions.mjs
 run_step "test"               pnpm -s --filter @workspace/api-server run test
 # Frontend component tests (jsdom + @testing-library/react). Real behavioural
 # verification for sensitive UI (e.g. ProductSelect snap-to-catalog) without a
