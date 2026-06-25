@@ -96,3 +96,42 @@ export const assetDepreciationProfile: RecurringProfile<DepreciationAssetRow> = 
     return `finance:depreciation:${asset.id}:${period}`;
   },
 };
+
+// ── نواة المحرّك: تخطيط الترحيلات الدورية (idempotent، نقي) ──────────────────
+// تأخذ profile + صفوف الفترة + مجموعة المفاتيح المُرحَّلة سابقًا، وتُرجع قائمة
+// الترحيلات الواجب تنفيذها — يتخطّى المُرحَّل سابقًا (idempotency) والمبلغ ≤0.
+// هذه النواة المشتركة التي تستهلكها وظائف الـcron لكل profile؛ بلا DB (المُستدعي
+// يحقن مجموعة المُرحَّل سابقًا من جدول التتبّع، ويتولّى الترحيل عبر financialEngine).
+export interface PlannedRecurringPosting {
+  /** مفتاح idempotency (sourceKey) — يتصادم عند إعادة التشغيل. */
+  sourceKey: string;
+  /** نوع المصدر = مفتاح الـprofile. */
+  sourceType: string;
+  /** معرّف الكيان (الأصل/الموظف/…) لسجل التتبّع. */
+  entityId: number;
+  amount: number;
+  lines: RecurringJournalLine[];
+}
+
+export function planRecurringPostings<Row extends { id: number }>(
+  profile: RecurringProfile<Row>,
+  rows: Row[],
+  period: string,
+  alreadyPosted: ReadonlySet<string>,
+): PlannedRecurringPosting[] {
+  const planned: PlannedRecurringPosting[] = [];
+  for (const row of rows) {
+    const sourceKey = profile.sourceKey(row, period);
+    if (alreadyPosted.has(sourceKey)) continue;   // مُرحَّل سابقًا ⇒ تخطٍّ idempotent
+    const amount = profile.amountFor(row);
+    if (amount <= 0) continue;                     // لا مبلغ ⇒ تخطٍّ
+    planned.push({
+      sourceKey,
+      sourceType: profile.key,
+      entityId: Number(row.id),
+      amount,
+      lines: profile.journalTemplate(row, amount),
+    });
+  }
+  return planned;
+}
