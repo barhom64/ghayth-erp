@@ -26,8 +26,9 @@ const MIGRATION = readFileSync(
   join(import.meta.dirname!, "../../src/migrations/268_umrah_refund_workflow.sql"),
   "utf8",
 );
+// U-07 Phase 14 — refund-request routes carved into umrah-refunds.ts.
 const ROUTES = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-refunds.ts"),
   "utf8",
 );
 

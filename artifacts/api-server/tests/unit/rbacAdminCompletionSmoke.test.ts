@@ -51,12 +51,15 @@ describe("RBAC-002 — POST /admin/onboard (quick create employee + user + roles
 
   it("is atomic — employee + assignment + user + roles inside withTransaction", () => {
     const idx = ADMIN.indexOf('router.post("/onboard"');
-    const section = ADMIN.slice(idx, idx + 6800);
+    const section = ADMIN.slice(idx, idx + 9600);
     expect(section).toContain("withTransaction");
     expect(section).toMatch(/INSERT INTO employees/);
     expect(section).toMatch(/INSERT INTO employee_assignments/);
     expect(section).toMatch(/INSERT INTO users/);
-    expect(section).toMatch(/INSERT INTO rbac_user_roles/);
+    // Roles are bound through the central rbacService.grantUserRole (which
+    // enforces SoD and runs inside THIS withTransaction via rawdb's ALS) —
+    // no more raw `INSERT INTO rbac_user_roles` with no SoD check.
+    expect(section).toMatch(/grantUserRole\(/);
   });
 
   // A picked job title auto-provisions its default RBAC role + custody policy
@@ -65,7 +68,7 @@ describe("RBAC-002 — POST /admin/onboard (quick create employee + user + roles
   // win, and at least one role (manual or job-title-derived) is enforced.
   it("auto-provisions the job title's default role + custody, and still requires a role at runtime", () => {
     const idx = ADMIN.indexOf('router.post("/onboard"');
-    const section = ADMIN.slice(idx, idx + 6800);
+    const section = ADMIN.slice(idx, idx + 9600);
     expect(section).toMatch(/FROM job_titles/);
     expect(section).toMatch(/"defaultRoleKey"/);
     expect(section).toMatch(/"opensCustody"/);
@@ -75,7 +78,7 @@ describe("RBAC-002 — POST /admin/onboard (quick create employee + user + roles
 
   it("resolves every role key up front and rejects an unknown role (no half-onboard)", () => {
     const idx = ADMIN.indexOf('router.post("/onboard"');
-    const section = ADMIN.slice(idx, idx + 6800);
+    const section = ADMIN.slice(idx, idx + 9600);
     expect(section).toMatch(/SELECT id FROM rbac_roles WHERE role_key/);
     expect(section).toMatch(/الدور غير موجود/);
   });
@@ -85,7 +88,7 @@ describe("RBAC-002 — POST /admin/onboard (quick create employee + user + roles
   // orphan employee/user (the whole onboard is atomic).
   it("rolls the whole onboard back when any role key is invalid (atomic ordering)", () => {
     const idx = ADMIN.indexOf('router.post("/onboard"');
-    const section = ADMIN.slice(idx, idx + 6800);
+    const section = ADMIN.slice(idx, idx + 9600);
     const roleCheckIdx = section.indexOf("SELECT id FROM rbac_roles WHERE role_key");
     const txIdx = section.indexOf("withTransaction");
     expect(roleCheckIdx).toBeGreaterThan(-1);
@@ -95,16 +98,41 @@ describe("RBAC-002 — POST /admin/onboard (quick create employee + user + roles
 
   it("records the active role in the audit log (RBAC-001) + emits an event", () => {
     const idx = ADMIN.indexOf('router.post("/onboard"');
-    const section = ADMIN.slice(idx, idx + 6800);
+    const section = ADMIN.slice(idx, idx + 9600);
     expect(section).toMatch(/activeRoleKey:/);
     expect(section).toMatch(/emitEvent\(/);
   });
 
   it("uniqueness guard on email (login key) before the transaction", () => {
     const idx = ADMIN.indexOf('router.post("/onboard"');
-    const section = ADMIN.slice(idx, idx + 6800);
+    const section = ADMIN.slice(idx, idx + 9600);
     expect(section).toMatch(/SELECT id FROM users WHERE email = \$1/);
     expect(section).toMatch(/مستخدم مسبقا/);
+  });
+});
+
+describe("runtime role mutation — central grant + permission-cache invalidation", () => {
+  it("POST /user-roles grants via the central rbacService (SoD + cache) not a raw INSERT", () => {
+    const idx = ADMIN.indexOf('router.post("/user-roles"');
+    const section = ADMIN.slice(idx, idx + 3000);
+    // Routed through grantUserRole (which enforces SoD AND invalidates caches);
+    // an SoD conflict is a HARD 403 here (explicit single-role admin action).
+    expect(section).toMatch(/grantUserRole\(/);
+    expect(section).toMatch(/sod_conflict/);
+    expect(section).toMatch(/ForbiddenError/);
+    // Seed-on-demand (#1791) preserved.
+    expect(section).toMatch(/PREDEFINED_ROLES\.find/);
+    // No more inline rbac_user_roles INSERT in this handler.
+    expect(section).not.toMatch(/INSERT INTO rbac_user_roles/);
+  });
+
+  it("PATCH /users/:id invalidates both permission caches after a role change", () => {
+    // The replace-role branch lives in the PATCH /users/:id handler; the
+    // invalidation runs right after its withTransaction commits.
+    expect(ADMIN).toMatch(/bumpCacheVersion\(scope\.companyId\)/);
+    expect(ADMIN).toMatch(/invalidateRoleCache\(id\)/);
+    expect(ADMIN).toMatch(/import \{ bumpCacheVersion \} from "\.\.\/lib\/rbac\/authzEngine\.js"/);
+    expect(ADMIN).toMatch(/import \{ invalidateRoleCache \} from "\.\.\/middlewares\/roleGuard\.js"/);
   });
 });
 

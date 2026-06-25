@@ -82,6 +82,7 @@ export default function IntercompanyPage() {
       key: "ref",
       header: "المرجع",
       sortable: true,
+      searchable: true,
       render: (row) => <span className="font-mono text-status-info-foreground text-xs">{row.ref}</span>,
     },
     {
@@ -90,15 +91,15 @@ export default function IntercompanyPage() {
       sortable: true,
       render: (row) => <span className="text-muted-foreground text-xs">{row.transactionDate ? formatDate(row.transactionDate) : "-"}</span>,
     },
-    { key: "fromCompanyName", header: "الشركة المُرسِلة", sortable: true },
-    { key: "toCompanyName", header: "الشركة المُستقبِلة", sortable: true },
+    { key: "fromCompanyName", header: "الشركة المُرسِلة", sortable: true, searchable: true },
+    { key: "toCompanyName", header: "الشركة المُستقبِلة", sortable: true, searchable: true },
     {
       key: "amount",
       header: "المبلغ",
       sortable: true,
       render: (row) => <span className="font-semibold">{formatCurrency(row.amount)}</span>,
     },
-    { key: "description", header: "البيان" },
+    { key: "description", header: "البيان", searchable: true },
     {
       key: "status",
       header: "الحالة",
@@ -172,9 +173,9 @@ export default function IntercompanyPage() {
         onSortedDataChange={setPrintRows}
         data={list}
         isLoading={isLoading}
+        searchPlaceholder="بحث بالمرجع أو اسم الشركة أو البيان…"
         emptyMessage="لا توجد معاملات بينية"
         emptyIcon={<ArrowLeftRight className="h-6 w-6 text-slate-400" />}
-        noToolbar
       />
 
       {showCreate && (

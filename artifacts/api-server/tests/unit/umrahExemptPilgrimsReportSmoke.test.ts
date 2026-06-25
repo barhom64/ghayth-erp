@@ -10,8 +10,9 @@ import { join } from "node:path";
  * gap. Read-only by design — un-exempting hits the same PATCH the
  * pilgrim detail page uses so the server contract has a single shape.
  */
+// U-07 Phase 11: the exempt-pilgrims report was carved into umrah-reports.ts.
 const ROUTE = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-reports.ts"),
   "utf8",
 );
 const PAGE = readFileSync(

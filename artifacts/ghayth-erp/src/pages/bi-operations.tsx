@@ -25,6 +25,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { BiTabsNav } from "@/components/shared/bi-tabs-nav";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { logClientPrint } from "@/lib/print-client";
 
 function useChartExport() {
@@ -71,6 +73,7 @@ function SlaDelaysTab({ from, to, departmentId }: { from: string; to: string; de
 
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["bi-sla-delays", from, to, departmentId], `/bi/operations/sla-delays${qs}`);
   const rows = data?.data || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
   const chartRef = useRef<HTMLDivElement>(null);
   const exportChart = useChartExport();
 
@@ -91,9 +94,25 @@ function SlaDelaysTab({ from, to, departmentId }: { from: string; to: string; de
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-orange-500" /> تأخر الطلبات حسب القسم</CardTitle>
-            <GuardedButton perm="bi:export" variant="ghost" size="sm" className="gap-1" onClick={() => exportChart(chartRef.current, "sla-delays.png")}>
-              <Download className="h-4 w-4" />
-            </GuardedButton>
+            <div className="flex items-center gap-2">
+              <PrintButton
+                entityType="report_bi_operations_sla_delays"
+                entityId="list"
+                size="icon"
+                payload={() => ({
+                  entity: { title: "تحليل الأداء التشغيلي — تأخر الطلبات حسب القسم", total: printRows.length },
+                  items: printRows.map((r: any) => ({
+                    "القسم": r.department,
+                    "الإجمالي": r.total,
+                    "المتأخر": r.delayed,
+                    "نسبة التأخر": `${r.delayPct}%`,
+                  })),
+                })}
+              />
+              <GuardedButton perm="bi:export" variant="ghost" size="sm" className="gap-1" onClick={() => exportChart(chartRef.current, "sla-delays.png")}>
+                <Download className="h-4 w-4" />
+              </GuardedButton>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -116,6 +135,7 @@ function SlaDelaysTab({ from, to, departmentId }: { from: string; to: string; de
               <DataTable
                 columns={slaColumns}
                 data={rows}
+                onSortedDataChange={setPrintRows}
                 isLoading={isLoading}
                 isError={isError}
                 error={error}
@@ -508,7 +528,7 @@ export default function BiOperationsPage() {
       <ApprovalTimeliness from={from} to={to} departmentId={departmentId} />
 
       <Tabs defaultValue="sla" dir="rtl">
-        <TabsList className="grid w-full grid-cols-6 print:hidden">
+        <TabsList className="grid w-full grid-cols-3 md:grid-cols-6 h-auto md:h-9 print:hidden">
           <TabsTrigger value="sla">تأخر مستوى الخدمة</TabsTrigger>
           <TabsTrigger value="rejection">نسبة الرفض</TabsTrigger>
           <TabsTrigger value="bottleneck">الاختناقات</TabsTrigger>

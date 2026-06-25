@@ -7,7 +7,7 @@ import { Link } from "wouter";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { PrintButton } from "@/components/shared/print-button";
 import { Button } from "@/components/ui/button";
-import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn, AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";
 import { CheckCircle2, AlertTriangle, Download, FileWarning } from "lucide-react";
 import { formatCurrency, formatNumber, todayLocal } from "@/lib/formatters";
 
@@ -104,10 +104,15 @@ export default function GlIntegrityGapsPage() {
     "/finance/reports/gl-integrity-gaps",
   );
 
+  // Search filters the PRIMARY (first non-empty) section's rows. Hook runs
+  // before the early returns below.
+  const [filters, setFilters] = useFilters();
+
   if (isLoading) return <LoadingSpinner />;
   if (isError || !data) return <ErrorState />;
 
   const { summary, sections } = data;
+  const primarySource = sections.find((s) => s.rows.length > 0)?.source ?? null;
 
   const renderEntityLink = (section: string, entityId: number, ref: string | null) => {
     // Deep-link each entity type to its detail page so the auditor
@@ -127,6 +132,11 @@ export default function GlIntegrityGapsPage() {
   };
 
   const renderSectionTable = (section: { source: string; rows: GapRow[] }) => {
+    const isPrimary = primarySource !== null && section.source === primarySource;
+    // The primary section is searchable; its table renders the filtered set.
+    const tableRows = isPrimary
+      ? applyFilters(section.rows, filters, { searchFields: ["ref", "gap"] })
+      : section.rows;
     const cols: DataTableColumn<GapRow>[] = [
       { key: "entityId", header: "المعرف",
         render: (r) => renderEntityLink(section.source, r.entityId, r.ref) },
@@ -154,9 +164,17 @@ export default function GlIntegrityGapsPage() {
           <p className="text-xs text-muted-foreground bg-status-warning-surface/50 border border-status-warning-surface rounded p-2">
             ⓘ {SECTION_HINT[section.source] ?? ""}
           </p>
+          {isPrimary && (
+            <AdvancedFilters
+              config={{ searchPlaceholder: "بحث بالمرجع أو نوع الفجوة…", showDateRange: false }}
+              values={filters}
+              onChange={setFilters}
+              resultCount={tableRows.length}
+            />
+          )}
           <DataTable
             columns={cols}
-            data={section.rows}
+            data={tableRows}
             emptyMessage="—"
             pageSize={25}
             noToolbar

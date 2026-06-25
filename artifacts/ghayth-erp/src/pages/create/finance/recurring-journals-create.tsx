@@ -14,9 +14,9 @@ import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
-import { Plus, Trash2 } from "lucide-react";
 import { formatCurrency, roundMoney, todayLocal } from "@/lib/formatters";
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+import { LineItemsTable } from "@/components/shared/line-items-table";
 
 interface TemplateLine {
   accountCode: string;
@@ -151,49 +151,63 @@ export default function RecurringJournalsCreatePage() {
 
       <Card className="mb-4">
         <CardContent className="pt-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold">قالب بنود القيد</h3>
-            <Button variant="outline" size="sm" type="button" onClick={addLine}>
-              <Plus className="h-4 w-4 me-1" />
-              إضافة بند
-            </Button>
-          </div>
-          <div className="space-y-2">
-            <div className="grid grid-cols-[1fr_1.5fr_1fr_1fr_40px] gap-2 text-sm font-medium text-muted-foreground">
-              <span>الحساب</span>
-              <span>البيان</span>
-              <span>مدين</span>
-              <span>دائن</span>
-              <span></span>
-            </div>
-            {lines.map((line, idx) => (
-              <div key={idx} className="grid grid-cols-[1fr_1.5fr_1fr_1fr_40px] gap-2">
-                <AccountSelect
-                  value={line.accountCode}
-                  onChange={(v) => updateLine(idx, "accountCode", v)}
-                  label="" allowCreate={false}
-                />
-                <Input value={line.description} onChange={(e) => updateLine(idx, "description", e.target.value)} placeholder="البيان" />
-                <NumberField label="مدين" hideLabel min={0} value={line.debit} onChange={(v) => updateLine(idx, "debit", v)} placeholder="0" />
-                <NumberField label="دائن" hideLabel min={0} value={line.credit} onChange={(v) => updateLine(idx, "credit", v)} placeholder="0" />
-                <Button variant="ghost" size="icon" title="حذف" type="button" onClick={() => removeLine(idx)} disabled={lines.length <= 2}>
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              </div>
-            ))}
-            <div className="grid grid-cols-[1fr_1.5fr_1fr_1fr_40px] gap-2 pt-2 border-t font-semibold text-sm">
-              <span></span>
-              <span className="flex items-center gap-2">
-                الإجمالي
-                <Badge className={isBalanced ? "bg-status-success-surface text-status-success-foreground" : "bg-status-error-surface text-status-error-foreground"}>
-                  {isBalanced ? "متوازن" : "غير متوازن"}
-                </Badge>
-              </span>
-              <span className="text-status-success-foreground">{formatCurrency(totalDebit)}</span>
-              <span className="text-status-error-foreground">{formatCurrency(totalCredit)}</span>
-              <span></span>
-            </div>
-          </div>
+          <h3 className="font-semibold mb-3">قالب بنود القيد</h3>
+          {/* الجدول الموحّد للإدخالات المالية — المكوّن المشترك <LineItemsTable>
+              بدل شبكة CSS يدوية (نفس الأعمدة والسلوك: إضافة/حذف بند، صف الإجمالي
+              مع شارة التوازن). */}
+          <LineItemsTable
+            items={lines}
+            minItems={2}
+            onAdd={addLine}
+            onRemove={removeLine}
+            addLabel="إضافة بند"
+            columns={[
+              {
+                header: "الحساب",
+                render: (line, idx) => (
+                  <AccountSelect
+                    value={line.accountCode}
+                    onChange={(v) => updateLine(idx, "accountCode", v)}
+                    label="" allowCreate={false}
+                  />
+                ),
+              },
+              {
+                header: "البيان",
+                render: (line, idx) => (
+                  <Input value={line.description} onChange={(e) => updateLine(idx, "description", e.target.value)} placeholder="البيان" />
+                ),
+              },
+              {
+                header: "مدين", width: "120px",
+                render: (line, idx) => (
+                  <NumberField label="مدين" hideLabel min={0} value={line.debit} onChange={(v) => updateLine(idx, "debit", v)} placeholder="0" />
+                ),
+              },
+              {
+                header: "دائن", width: "120px",
+                render: (line, idx) => (
+                  <NumberField label="دائن" hideLabel min={0} value={line.credit} onChange={(v) => updateLine(idx, "credit", v)} placeholder="0" />
+                ),
+              },
+            ]}
+            renderTotals={() => (
+              <tr className="bg-surface-subtle font-semibold border-t text-sm">
+                <td className="px-3 py-2">
+                  <span className="flex items-center gap-2">
+                    الإجمالي
+                    <Badge className={isBalanced ? "bg-status-success-surface text-status-success-foreground" : "bg-status-error-surface text-status-error-foreground"}>
+                      {isBalanced ? "متوازن" : "غير متوازن"}
+                    </Badge>
+                  </span>
+                </td>
+                <td></td>
+                <td className="px-3 py-2 text-status-success-foreground">{formatCurrency(totalDebit)}</td>
+                <td className="px-3 py-2 text-status-error-foreground">{formatCurrency(totalCredit)}</td>
+                <td></td>
+              </tr>
+            )}
+          />
         </CardContent>
       </Card>
 

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useApiQuery } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 import { Link, useLocation } from "wouter";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -51,6 +52,7 @@ import { usePrintRows } from "@/hooks/use-print-rows";
 import { EntityTags, useTagFilter, TagFilterSelect } from "@/components/shared/entity-tags";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { AllowCreateDrawer } from "@/components/shared/allow-create-drawer";
 
 type OperationalStatus = {
   status: string;
@@ -74,11 +76,16 @@ function OperationalStatusBadge({ status }: { status: OperationalStatus | undefi
 
 export default function Employees() {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
   const { roleLevel, permissions, scopeQueryString } = useAppContext();
   const canWrite = roleLevel >= 50;
   const canManage = permissions.canManageEmployees;
   const [filters, setFilters] = useFilters();
   const [previewItem, setPreviewItem] = useState<any>(null);
+  // تعميم نمط «درج الإنشاء» (AllowCreateDrawer) — زر «إضافة موظف» يفتح
+  // النموذج الكامل في درج بدل الانتقال لصفحة /create. صفحة الإنشاء الكاملة
+  // تبقى متاحة عبر «فتح الصفحة الكاملة» داخل الدرج وللوصول المباشر.
+  const [createOpen, setCreateOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [page, setPage] = useState(1);
   useEffect(() => { setPage(1); }, [filters.search, filters.status]);
@@ -281,12 +288,10 @@ export default function Employees() {
             })}
           />
           {(canWrite || canManage) ? (
-            <Link href="/employees/create">
-              <GuardedButton perm="hr:create" className="gap-2">
-                <Plus className="h-4 w-4" />
-                إضافة موظف
-              </GuardedButton>
-            </Link>
+            <GuardedButton perm="hr:create" className="gap-2" onClick={() => setCreateOpen(true)}>
+              <Plus className="h-4 w-4" />
+              إضافة موظف
+            </GuardedButton>
           ) : null}
         </div>
       }
@@ -375,6 +380,16 @@ export default function Employees() {
         }}
       />
       <QuickPreviewDialog open={!!previewItem} onOpenChange={() => setPreviewItem(null)} title="معاينة الموظف" data={previewItem} fields={previewFields} />
+
+      <AllowCreateDrawer
+        kind="employee"
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={() => {
+          toast({ title: "تم إنشاء الموظف" });
+          refetch();
+        }}
+      />
     </PageShell>
   );
 }

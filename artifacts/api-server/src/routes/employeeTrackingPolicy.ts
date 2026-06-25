@@ -30,6 +30,7 @@ import {
 } from "../lib/errorHandler.js";
 import { getActiveTrackingPolicy } from "../lib/fieldTrackingService.js";
 import { z } from "zod";
+import { zCoerceBoolean } from "../lib/zodCoerce.js";
 
 const router = Router();
 
@@ -38,7 +39,7 @@ const TRACKING_MODES = ["work_hours", "task", "trip", "live", "checkin_only"] as
 const createPolicySchema = z.object({
   employeeId: z.coerce.number().int().positive(),
   trackingMode: z.enum(TRACKING_MODES).default("work_hours"),
-  trackingEnabled: z.coerce.boolean().optional().default(true),
+  trackingEnabled: zCoerceBoolean().optional().default(true),
   reason: z.string().max(2000).optional(),
   approvedBy: z.coerce.number().int().positive().optional(),
   allowedViewerRoles: z.array(z.string().max(60)).optional().default([]),
@@ -50,7 +51,7 @@ const createPolicySchema = z.object({
 const updatePolicySchema = z
   .object({
     trackingMode: z.enum(TRACKING_MODES).optional(),
-    trackingEnabled: z.coerce.boolean().optional(),
+    trackingEnabled: zCoerceBoolean().optional(),
     reason: z.string().max(2000).nullable().optional(),
     approvedBy: z.coerce.number().int().positive().nullable().optional(),
     allowedViewerRoles: z.array(z.string().max(60)).optional(),

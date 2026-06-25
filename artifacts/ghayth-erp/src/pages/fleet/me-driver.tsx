@@ -10,8 +10,9 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   PageShell,
 } from "@workspace/ui-core";
+import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import {
-  Truck, Package, MapPin, Activity, CheckCircle2, Route as RouteIcon, Weight, Navigation,
+  Truck, Package, MapPin, Activity, CheckCircle2, Route as RouteIcon, Weight, Navigation, Megaphone,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { CargoCheckpointDialog } from "@/components/shared/cargo-checkpoint-dialog";
@@ -156,11 +157,17 @@ export default function MeDriver() {
       title={`مرحباً، ${me.name}`}
       subtitle="لوحة السائق — رحلاتك وبضائعك"
       actions={
-        <Button asChild size="sm" variant="default"><Link href="/me/driver/navigation">
+        <div className="flex gap-2">
+          <Button asChild size="sm" variant="outline"><Link href="/me/driver/reports">
+            <Megaphone className="h-4 w-4 me-1" />البلاغات
+          </Link></Button>
+          <Button asChild size="sm" variant="default"><Link href="/me/driver/navigation">
             <Navigation className="h-4 w-4 me-1" />الملاحة
           </Link></Button>
+        </div>
       }
     >
+      <FleetTabsNav />
       <Card className="mb-4">
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center justify-between">

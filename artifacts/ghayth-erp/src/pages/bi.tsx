@@ -22,7 +22,7 @@ export default function BIPage() {
     <PageShell title="ذكاء الأعمال" breadcrumbs={[{ label: "التحليلات" }]}>
       <BiTabsNav />
       <Tabs defaultValue="ceo" dir="rtl">
-        <TabsList className="grid w-full grid-cols-5 lg:grid-cols-10 gap-1 h-auto flex-wrap">
+        <TabsList className="grid w-full grid-cols-3 sm:grid-cols-5 lg:grid-cols-10 gap-1 h-auto flex-wrap">
           <TabsTrigger value="ceo" className="text-xs">لوحة الرئيس التنفيذي</TabsTrigger>
           <TabsTrigger value="overview" className="text-xs">نظرة عامة</TabsTrigger>
           <TabsTrigger value="branches" className="text-xs">الفروع</TabsTrigger>

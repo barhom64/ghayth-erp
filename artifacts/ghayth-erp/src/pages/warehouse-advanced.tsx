@@ -16,7 +16,7 @@
  */
 
 import { useState } from "react";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable } from "@workspace/ui-core";
 import { WarehouseTabsNav } from "@/components/shared/warehouse-tabs-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -212,46 +212,33 @@ function CycleCountsTab() {
 
                 {/* Per-line counting editor — editable in pending/in_progress;
                     read-only afterwards. variance/JE stamps show post-trail. */}
-                <div className="border rounded overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead className="bg-surface-subtle">
-                      <tr>
-                        <th className="p-2 text-start">الصنف</th>
-                        <th className="p-2">رصيد النظام</th>
-                        <th className="p-2">الكمية المعدودة</th>
-                        <th className="p-2">الفرق</th>
-                        <th className="p-2">قيد التسوية</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {lines.map((l: any) => (
-                        <tr key={l.id} className="border-t">
-                          <td className="p-2">{l.productName}{l.sku ? ` · ${l.sku}` : ""}</td>
-                          <td className="p-2 text-center font-mono">{Number(l.systemQuantity)}</td>
-                          <td className="p-2 text-center">
-                            {["pending", "in_progress"].includes(status) ? (
-                              <Input
-                                type="number"
-                                min={0}
-                                className="h-7 w-24 mx-auto text-center"
-                                value={counts[l.productId] ?? (l.countedQuantity == null ? "" : String(Number(l.countedQuantity)))}
-                                onChange={(e) => setCounts((c) => ({ ...c, [l.productId]: e.target.value }))}
-                              />
-                            ) : (
-                              <span className="font-mono">{l.countedQuantity == null ? "—" : Number(l.countedQuantity)}</span>
-                            )}
-                          </td>
-                          <td className="p-2 text-center font-mono">
-                            {l.countedQuantity == null ? "—" : Number(l.variance)}
-                          </td>
-                          <td className="p-2 text-center font-mono text-[10px]">
-                            {l.adjustmentJournalEntryId ? `JE#${l.adjustmentJournalEntryId}` : "—"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <DataTable<any>
+                  noToolbar
+                  pageSize={0}
+                  data={lines}
+                  rowKey={(l: any) => l.id}
+                  columns={[
+                    { key: "product", header: "الصنف", sortable: false, render: (l: any) => `${l.productName}${l.sku ? ` · ${l.sku}` : ""}` },
+                    { key: "systemQuantity", header: "رصيد النظام", sortable: false, align: "center", className: "font-mono", render: (l: any) => Number(l.systemQuantity) },
+                    {
+                      key: "countedQuantity", header: "الكمية المعدودة", sortable: false, align: "center",
+                      render: (l: any) =>
+                        ["pending", "in_progress"].includes(status) ? (
+                          <Input
+                            type="number"
+                            min={0}
+                            className="h-7 w-24 mx-auto text-center"
+                            value={counts[l.productId] ?? (l.countedQuantity == null ? "" : String(Number(l.countedQuantity)))}
+                            onChange={(e) => setCounts((c) => ({ ...c, [l.productId]: e.target.value }))}
+                          />
+                        ) : (
+                          <span className="font-mono">{l.countedQuantity == null ? "—" : Number(l.countedQuantity)}</span>
+                        ),
+                    },
+                    { key: "variance", header: "الفرق", sortable: false, align: "center", className: "font-mono", render: (l: any) => (l.countedQuantity == null ? "—" : Number(l.variance)) },
+                    { key: "je", header: "قيد التسوية", sortable: false, align: "center", className: "font-mono text-[10px]", render: (l: any) => (l.adjustmentJournalEntryId ? `JE#${l.adjustmentJournalEntryId}` : "—") },
+                  ]}
+                />
 
                 <div className="flex flex-wrap gap-2 pt-2 border-t">
                   {["pending", "in_progress"].includes(status) && (

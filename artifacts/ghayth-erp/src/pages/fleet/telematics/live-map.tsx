@@ -14,6 +14,8 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { FleetTelematicsTabsNav } from "@/components/shared/fleet-telematics-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 interface LiveRow {
   deviceId: number;
@@ -57,6 +59,7 @@ export default function FleetTelematicsLiveMap() {
   const rows = vehicleIdFilter
     ? allRows.filter((r) => String(r.vehicleId) === vehicleIdFilter)
     : allRows;
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<LiveRow>(rows);
 
   const syncPositions = useApiMutation<unknown, Record<string, never>>(
     "/fleet/telematics/sync/positions",
@@ -143,15 +146,34 @@ export default function FleetTelematicsLiveMap() {
         { label: "التتبع المباشر" },
       ]}
       actions={
-        <GuardedButton
-          perm="fleet.telematics.sync:create"
-          size="sm"
-          onClick={() => syncPositions.mutate({})}
-          disabled={syncPositions.isPending}
-        >
-          <RefreshCw className="h-4 w-4 me-1" />
-          مزامنة CMSV6
-        </GuardedButton>
+        <div className="flex items-center gap-2">
+          <GuardedButton
+            perm="fleet.telematics.sync:create"
+            size="sm"
+            onClick={() => syncPositions.mutate({})}
+            disabled={syncPositions.isPending}
+          >
+            <RefreshCw className="h-4 w-4 me-1" />
+            مزامنة CMSV6
+          </GuardedButton>
+          <PrintButton
+            entityType="report_fleet_telematics_live"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "الخريطة المباشرة للأسطول", total: printRows.length },
+              items: printRows.map((r: LiveRow) => ({
+                "الحالة": (STATUS_LABELS[r.status] ?? { label: r.status }).label,
+                "المركبة": r.vehiclePlate || "—",
+                "الجهاز": r.deviceLabel || r.cmsv6DeviceNo,
+                "السرعة": r.speed !== null ? `${Number(r.speed).toFixed(1)} km/h` : "—",
+                "آخر تحديث": r.lastPositionAt
+                  ? new Date(r.lastPositionAt).toLocaleString("ar-SA")
+                  : "—",
+              })),
+            })}
+          />
+        </div>
       }
     >
       <FleetTabsNav />
@@ -181,6 +203,7 @@ export default function FleetTelematicsLiveMap() {
             isLoading={isLoading}
             isError={isError}
             onRetry={refetch}
+            onSortedDataChange={setPrintRows}
             searchPlaceholder="ابحث عن مركبة أو رقم جهاز…"
             emptyMessage="لا توجد أجهزة مرتبطة بعد — اربط أجهزة MDVR من شاشة الأجهزة"
           />

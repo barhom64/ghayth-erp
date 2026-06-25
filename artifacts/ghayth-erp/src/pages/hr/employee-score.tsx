@@ -11,7 +11,7 @@
 // No new engine — the page wraps the existing employeeScoringEngine.
 // «يظهر سبب الدرجة بالكامل» (مطلب المراجع) يتحقق هنا عبر عرض الحقول
 // `rationale` و `rawCounters` و `weightsUsed` كما خزّنها المحرّك.
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
@@ -20,6 +20,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { useToast } from "@/hooks/use-toast";
 import {
   TrendingUp, TrendingDown, Minus, RefreshCw, Shield, Activity,
@@ -86,6 +88,30 @@ export default function EmployeeScorePage() {
     `/employees/${employeeId}/scoring/history?scope=${scope}&limit=24`,
   );
 
+  // Breakdown rows for printing — the 6 scoring dimensions of the latest score,
+  // each with its weight (computed in render) + rationale. Derived before any
+  // early return so hooks run unconditionally.
+  const latestForPrint = histQ.data?.data?.[0];
+  const printDimensions = useMemo(
+    () =>
+      latestForPrint
+        ? DIMENSIONS.map((d) => ({
+            label: d.label,
+            value: Number(latestForPrint[d.field] as string),
+            weight: Number(latestForPrint.weightsUsed?.[d.key] ?? 0),
+            rationale: latestForPrint.rationale?.[d.key] ?? "",
+          }))
+        : [],
+    [latestForPrint],
+  );
+  // No DataTable on this detail page, so only the read side is needed.
+  const { sortedRows: printRows } = usePrintRows<{
+    label: string;
+    value: number;
+    weight: number;
+    rationale: string;
+  }>(printDimensions);
+
   if (empQ.isLoading || histQ.isLoading) return <LoadingSpinner />;
   if (empQ.isError) return <ErrorState />;
 
@@ -127,8 +153,25 @@ export default function EmployeeScorePage() {
           </Button>
           <GuardedButton perm="hr.employees:update" onClick={recompute} disabled={recomputing}>
             <RefreshCw className={`h-4 w-4 me-1 ${recomputing ? "animate-spin" : ""}`} />
-            {recomputing ? "جارٍ الحساب..." : "إعادة الحساب الآن"}
+            {recomputing ? "جاري الحساب..." : "إعادة الحساب الآن"}
           </GuardedButton>
+          <PrintButton
+            entityType="report_hr_employee_score"
+            entityId={String(employeeId)}
+            size="icon"
+            payload={() => ({
+              entity: {
+                title: `درجة التقييم — ${employee?.name ?? `#${employeeId}`}`,
+                total: latest ? Number(latest.compositeScore) : 0,
+              },
+              items: printRows.map((r) => ({
+                "البُعد": r.label,
+                "الدرجة": Number(r.value.toFixed(1)),
+                "الوزن": `${(r.weight * 100).toFixed(0)}%`,
+                "التبرير": r.rationale || "—",
+              })),
+            })}
+          />
         </div>
       }
     >

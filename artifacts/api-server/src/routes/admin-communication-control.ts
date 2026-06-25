@@ -16,7 +16,7 @@
  */
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, assertInsert, withTransaction } from "../lib/rawdb.js";
 import {
   handleRouteError,
   ValidationError,
@@ -315,44 +315,51 @@ router.post("/outbound-queue/bulk-retry", authorize({ feature: "admin", action: 
     }
     params.push(limit);
 
-    const { affectedRows: queueReset } = await rawExecute(
-      `UPDATE outbound_queue
-          SET status = 'pending',
-              attempts = 0,
-              "errorMessage" = NULL,
-              "scheduledAt" = NOW(),
-              "updatedAt" = NOW()
-        WHERE "companyId" = $1
-          AND status = 'failed'
-          AND "createdAt" > NOW() - $2::interval
-          ${channelCond}
-          AND id IN (
-            SELECT id FROM outbound_queue
-             WHERE "companyId" = $1
-               AND status = 'failed'
-               AND "createdAt" > NOW() - $2::interval
-               ${channelCond}
-             ORDER BY "createdAt" DESC
-             LIMIT $${params.length}
-          )`,
-      params,
-    );
+    // Re-queue + its message_log mirror are written atomically so the
+    // inbox UI can never diverge from the queue state (previously the
+    // mirror was a best-effort .catch left to drift until the next worker
+    // tick).
+    const queueReset = await withTransaction(async () => {
+      const { affectedRows } = await rawExecute(
+        `UPDATE outbound_queue
+            SET status = 'pending',
+                attempts = 0,
+                "errorMessage" = NULL,
+                "scheduledAt" = NOW(),
+                "updatedAt" = NOW()
+          WHERE "companyId" = $1
+            AND status = 'failed'
+            AND "createdAt" > NOW() - $2::interval
+            ${channelCond}
+            AND id IN (
+              SELECT id FROM outbound_queue
+               WHERE "companyId" = $1
+                 AND status = 'failed'
+                 AND "createdAt" > NOW() - $2::interval
+                 ${channelCond}
+               ORDER BY "createdAt" DESC
+               LIMIT $${params.length}
+            )`,
+        params,
+      );
 
-    // Mirror message_log so the inbox UI reflects immediately.
-    if (queueReset > 0) {
-      await rawExecute(
-        `UPDATE message_log
-            SET status = 'queued'
-          WHERE id IN (
-            SELECT "messageLogId" FROM outbound_queue
-             WHERE "companyId" = $1
-               AND status = 'pending' AND attempts = 0
-               AND "updatedAt" > NOW() - INTERVAL '10 seconds'
-               AND "messageLogId" IS NOT NULL
-          ) AND "companyId" = $1`,
-        [scope.companyId],
-      ).catch((e) => logger.warn(e, "[bulk-retry] mirror update failed"));
-    }
+      // Mirror message_log so the inbox UI reflects immediately.
+      if (affectedRows > 0) {
+        await rawExecute(
+          `UPDATE message_log
+              SET status = 'queued'
+            WHERE id IN (
+              SELECT "messageLogId" FROM outbound_queue
+               WHERE "companyId" = $1
+                 AND status = 'pending' AND attempts = 0
+                 AND "updatedAt" > NOW() - INTERVAL '10 seconds'
+                 AND "messageLogId" IS NOT NULL
+            ) AND "companyId" = $1`,
+          [scope.companyId],
+        );
+      }
+      return affectedRows;
+    });
 
     void createAuditLog({
       companyId: scope.companyId, userId: scope.userId,

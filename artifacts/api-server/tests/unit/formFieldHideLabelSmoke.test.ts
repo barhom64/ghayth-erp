@@ -62,15 +62,20 @@ describe("journal-family line tables — debit/credit cells suppress the duplica
     const page = readPage(PAGES.journal);
     expect(page).toMatch(/label="مدين" hideLabel/);
     expect(page).toMatch(/label="دائن" hideLabel/);
-    // The column header row still names them (visible label lives there).
-    expect(page).toMatch(/<span>مدين<\/span><span>دائن<\/span>/);
+    // The column header still names them (visible label lives there). Since the
+    // page adopted the shared <LineItemsTable>, the header is a column config
+    // (`header: "مدين"`) that the component renders as <th> — not literal page markup.
+    expect(page).toMatch(/header: "مدين"/);
+    expect(page).toMatch(/header: "دائن"/);
   });
 
   it("journal-manual-create: مدين + دائن NumberFields pass hideLabel", () => {
     const page = readPage(PAGES.journalManual);
     expect(page).toMatch(/label="مدين" hideLabel/);
     expect(page).toMatch(/label="دائن" hideLabel/);
-    expect(page).toMatch(/<th[^>]*>مدين<\/th>/);
+    // Header carried by the shared <LineItemsTable> column config (see above).
+    expect(page).toMatch(/header: "مدين"/);
+    expect(page).toMatch(/header: "دائن"/);
   });
 
   it("recurring-journals-create: مدين + دائن NumberFields pass hideLabel", () => {

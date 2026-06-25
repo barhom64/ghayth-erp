@@ -22,6 +22,8 @@ import {
 import { Link } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -212,6 +214,10 @@ export default function AdminAiGovernance() {
   const prompts = promptsResp?.data ?? [];
   const reviewQueue = overview?.reviewQueue ?? [];
 
+  // Print wiring — the versioned prompt catalog is the primary records-level
+  // list on this page (providers is a smaller registry/config table).
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<PromptRow>(prompts);
+
   const refreshAll = () => {
     void refetchOverview();
     void refetchProviders();
@@ -399,7 +405,7 @@ export default function AdminAiGovernance() {
               <CardContent className="space-y-2">
                 <div className="flex items-center gap-3 flex-wrap">
                   <Button size="sm" variant="outline" onClick={runConnectionTest} disabled={testingConn}>
-                    {testingConn ? "جارٍ الاختبار…" : "اختبار الاتصال"}
+                    {testingConn ? "جاري الاختبار…" : "اختبار الاتصال"}
                   </Button>
                   {connTest && (
                     <span
@@ -530,7 +536,22 @@ export default function AdminAiGovernance() {
 
           {/* ── Prompts ───────────────────────────────────────────── */}
           <TabsContent value="prompts" className="space-y-3">
-            <div className="flex justify-end">
+            <div className="flex justify-end items-center gap-2">
+              <PrintButton
+                entityType="report_admin_ai_governance"
+                entityId="list"
+                size="icon"
+                payload={() => ({
+                  entity: { title: "كتالوج الموجّهات (Prompts) — حوكمة الذكاء الاصطناعي", total: printRows.length },
+                  items: printRows.map((p: PromptRow) => ({
+                    "المعرّف": p.slug,
+                    "الإصدار": p.version,
+                    "العنوان": p.title,
+                    "الحالة": statusLabel(p.status),
+                    "آخر تحديث": p.updatedAt,
+                  })),
+                })}
+              />
               <Button onClick={() => setNewPromptOpen(true)} size="sm" rateLimitAware>
                 <Plus className="w-4 h-4 me-1" />مسوّدة جديدة
               </Button>
@@ -538,7 +559,7 @@ export default function AdminAiGovernance() {
             <Card>
               <CardContent className="p-0">
                 <PageStateWrapper isLoading={pmLoading && prompts.length === 0} compact onRetry={refetchPrompts}>
-                  <DataTable columns={promptColumns} data={prompts} noToolbar pageSize={0} />
+                  <DataTable columns={promptColumns} data={prompts} onSortedDataChange={setPrintRows} noToolbar pageSize={0} />
                 </PageStateWrapper>
               </CardContent>
             </Card>
@@ -1068,7 +1089,7 @@ function SimulatePromptDialog({ promptId, onClose }: {
                 </div>
               ) : (
                 <>
-                  <div className="grid grid-cols-4 gap-2 text-xs">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
                     <div className="bg-surface-subtle p-2 rounded"><span className="text-muted-foreground">المدة</span><br /><span className="font-mono font-semibold">{result.durationMs}ms</span></div>
                     <div className="bg-surface-subtle p-2 rounded"><span className="text-muted-foreground">رموز الموجّه</span><br /><span className="font-mono font-semibold">{result.promptTokens}</span></div>
                     <div className="bg-surface-subtle p-2 rounded"><span className="text-muted-foreground">رموز الإكمال</span><br /><span className="font-mono font-semibold">{result.completionTokens}</span></div>
@@ -1282,11 +1303,11 @@ function NewTestCaseDialog({ open, slug, onClose, onSuccess }: {
           <div><Label>الاسم</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
           <div><Label>الوصف</Label><Textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} /></div>
           <div>
-            <Label>Input (JSON)</Label>
+            <Label>المدخل (JSON)</Label>
             <Textarea rows={4} className="font-mono text-xs" value={inputJson} onChange={(e) => setInputJson(e.target.value)} />
           </div>
           <div>
-            <Label>Expected Contains (اختياري)</Label>
+            <Label>المتوقَّع يحتوي (اختياري)</Label>
             <Input value={expectedContains} onChange={(e) => setExpectedContains(e.target.value)} placeholder="نص يجب أن يحتويه المخرَج" />
           </div>
         </div>

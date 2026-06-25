@@ -131,12 +131,13 @@ describe("POST /settings/branches — auto-creates a top-level cost centre", () 
 
 describe("POST /projects — auto-creates a project CC nested under the branch", () => {
   it("imports the helper in projects.ts", () => {
+    // Batch 6 — projects now uses the GUARANTEED (awaited) variant.
     // Also imports syncEntityCostCenterAllocation (budget → allocatedAmount sync).
-    expect(PROJECTS).toMatch(/import \{ createCostCenterForEntity, syncEntityCostCenterAllocation \} from "\.\.\/lib\/costCenterAutoCreate\.js"/);
+    expect(PROJECTS).toMatch(/import \{ ensureCostCenterForEntity, syncEntityCostCenterAllocation \} from "\.\.\/lib\/costCenterAutoCreate\.js"/);
   });
 
   it("passes parentEntityType='branch' + parentEntityId=scope.branchId for proper nesting", () => {
-    expect(PROJECTS).toMatch(/createCostCenterForEntity\(\s*scope\.companyId,\s*"project",\s*insertId,\s*b\.name\.trim\(\),\s*\{\s*parentEntityType: scope\.branchId \? "branch" : null,\s*parentEntityId: scope\.branchId \?\? null,/);
+    expect(PROJECTS).toMatch(/ensureCostCenterForEntity\(\s*scope\.companyId,\s*"project",\s*insertId,\s*b\.name\.trim\(\),\s*\{\s*parentEntityType: scope\.branchId \? "branch" : null,\s*parentEntityId: scope\.branchId \?\? null,/);
   });
 
   it("orphan projects (no branchId in scope) still get a CC at root level", () => {
@@ -144,10 +145,12 @@ describe("POST /projects — auto-creates a project CC nested under the branch",
     expect(PROJECTS).toMatch(/scope\.branchId \?\? null/);
   });
 
-  it("non-blocking — same fire-and-forget shape as the branch path", () => {
-    // Window widened from 400 → 600: the call now also carries the
-    // allocatedAmount option (budget → cost-centre allocation) + its comment.
-    expect(PROJECTS).toMatch(/createCostCenterForEntity\([\s\S]{1,600}\.catch\(\(e\) => logger\.error\(e, "project cost-centre auto-create failed"\)\)/);
+  it("batch 6 — project CC link is GUARANTEED (awaited), not fire-and-forget", () => {
+    // The CC dimension must land before the 201 so the project never reaches
+    // its first posting with a null cost-centre. ensureCostCenterForEntity
+    // stays idempotent + never throws, so the create still succeeds.
+    expect(PROJECTS).toMatch(/await ensureCostCenterForEntity\(\s*scope\.companyId, "project", insertId, b\.name\.trim\(\),/);
+    expect(PROJECTS).not.toMatch(/project cost-centre auto-create failed/);
   });
 
   it("budget edits re-sync the CC allocation (PATCH /:id)", () => {

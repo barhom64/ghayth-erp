@@ -79,7 +79,8 @@ describe("createSubsidiaryAccountsForEntity — driver + vehicle no-longer-no-op
 
 describe("POST /fleet/vehicles — subsidiary + cost-centre auto-create", () => {
   it("imports the CC helper alongside the existing subsidiary helper", () => {
-    expect(FLEET).toMatch(/import \{ createCostCenterForEntity \} from "\.\.\/lib\/costCenterAutoCreate\.js"/);
+    // Batch 6 — fleet now uses the GUARANTEED (awaited) variant.
+    expect(FLEET).toMatch(/import \{ ensureCostCenterForEntity \} from "\.\.\/lib\/costCenterAutoCreate\.js"/);
   });
 
   it("calls createSubsidiaryAccountsForEntity(... 'vehicle' ...) — previously absent on vehicle create", () => {
@@ -97,9 +98,17 @@ describe("POST /fleet/vehicles — subsidiary + cost-centre auto-create", () => 
     expect(FLEET).toMatch(/parentEntityId: b\.branchId \?\? scope\.branchId \?\? null/);
   });
 
-  it("BOTH auto-creates are fire-and-forget (vehicle create succeeds even if either fails)", () => {
+  it("subsidiary auto-create stays fire-and-forget (vehicle create succeeds even if it fails)", () => {
     expect(FLEET).toMatch(/createSubsidiaryAccountsForEntity\([\s\S]{1,200}\.catch\(\(e\) => logger\.error\(e, "vehicle subsidiary auto-create failed"\)\)/);
-    expect(FLEET).toMatch(/createCostCenterForEntity\([\s\S]{1,400}\.catch\(\(e\) => logger\.error\(e, "vehicle cost-centre auto-create failed"\)\)/);
+  });
+
+  it("batch 6 — vehicle cost-centre link is GUARANTEED (awaited ensureCostCenterForEntity), no longer fire-and-forget", () => {
+    // The CC dimension must land before the 201 so the vehicle never reaches
+    // its first posting with a null cost-centre. ensureCostCenterForEntity
+    // still never throws + is idempotent, so the create still succeeds.
+    expect(FLEET).toMatch(/await ensureCostCenterForEntity\(\s*scope\.companyId, "vehicle", insertId, vehicleLabel,/);
+    // No leftover fire-and-forget .catch on the CC call.
+    expect(FLEET).not.toMatch(/createCostCenterForEntity\([\s\S]{1,400}vehicle cost-centre auto-create failed/);
   });
 });
 

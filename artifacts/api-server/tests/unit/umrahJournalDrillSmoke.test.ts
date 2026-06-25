@@ -15,7 +15,7 @@ import { join } from "node:path";
  * any other type so we never expose a non-umrah table through this path.
  */
 const ROUTE = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-reports.ts"),
   "utf8",
 );
 const CARD = readFileSync(

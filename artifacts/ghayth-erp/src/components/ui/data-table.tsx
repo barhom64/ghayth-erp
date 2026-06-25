@@ -14,7 +14,7 @@
  * BulkCheckbox) into a single API that pages can adopt instead of wiring these
  * pieces by hand.
  */
-import { Fragment, ReactNode, useEffect, useMemo, useState } from "react";
+import { Fragment, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   Table,
   TableBody,
@@ -41,6 +41,7 @@ import { useSortedData } from "@/hooks/use-sorted-data";
 import { useRateLimitCooldown } from "@/hooks/use-rate-limit-cooldown";
 import { BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useOptionalAuth } from "@/lib/auth";
 
 export type Align = "start" | "center" | "end";
 
@@ -66,8 +67,39 @@ export interface DataTableColumn<T> {
   ltr?: boolean;
   /** Extra class name for the cells. */
   className?: string;
+  /**
+   * Per-CELL class name, computed from the row. Merged after `className`.
+   * Use for value-dependent cell styling that a static `className` can't
+   * express — e.g. a budget heatmap where each cell's background encodes its
+   * own ratio, or a conditional danger/success cell tint. Applied to the body
+   * cell (and the mobile value span); never to the header.
+   */
+  cellClassName?: (row: T, index: number) => string | undefined;
+  /**
+   * Per-COLUMN total cell, rendered in a column-aligned footer row at the
+   * bottom of the table (over all filtered+sorted rows). When ANY column sets
+   * `footer`, the table renders one total row with a cell under each column —
+   * the canonical, column-aligned alternative to the single-`colSpan`
+   * `renderGrandTotal`. Use for matrix / financial tables whose totals must sit
+   * directly under their columns. Columns without `footer` render an empty
+   * total cell.
+   */
+  footer?: (rows: T[]) => ReactNode;
+  /**
+   * Per-COLUMN group subtotal cell, rendered in a column-aligned subtotal row
+   * after each group (only when `groupBy` is set). The column-aligned analogue
+   * of `renderGroupSubtotal` (which spans all columns in one cell) — use it for
+   * statement-style tables (P&L / cash-flow) whose section subtotals must sit
+   * under their own columns. Receives that group's rows + value. Columns without
+   * `groupFooter` render an empty subtotal cell.
+   */
+  groupFooter?: (groupRows: T[], groupValue: string) => ReactNode;
   /** Hide the column entirely — used for feature gating without re-declaring. */
   hidden?: boolean;
+  /** Value used when exporting selected rows to CSV. Defaults to `row[key]`.
+   *  Set this when the cell uses `render` and the raw value differs from the
+   *  displayed text. */
+  exportValue?: (row: T) => string | number;
 }
 
 export interface BulkAction {
@@ -81,6 +113,23 @@ export interface BulkAction {
 export interface StatusFilterOption {
   value: string;
   label: string;
+}
+
+/**
+ * A one-click toolbar toggle that narrows the rows to those matching a
+ * predicate the caller owns — e.g. «يحتاج إجراء مني» (rows awaiting the
+ * current user's decision). Unlike a status filter (single field equality),
+ * a quick filter expresses arbitrary row logic the page already knows. Pure
+ * client-side filtering over the rows already in hand — no new fetch, no
+ * cross-path logic.
+ */
+export interface QuickFilter<T> {
+  /** Stable key for toggle state. */
+  key: string;
+  /** Toolbar label (Arabic). */
+  label: string;
+  /** Rows for which this returns true are kept while the toggle is active. */
+  predicate: (row: T) => boolean;
 }
 
 interface DataTableProps<T> {
@@ -116,6 +165,8 @@ interface DataTableProps<T> {
   onSortedDataChange?: (rows: T[]) => void;
   /** Bulk action buttons shown when ≥1 row selected. */
   bulkActions?: BulkAction[];
+  /** Override the built-in "تصدير المحدّد" CSV export of the selected rows. */
+  onExportSelected?: (rows: T[]) => void;
 
   /** Global search input placeholder. Set to null to hide the search input. */
   searchPlaceholder?: string | null;
@@ -123,6 +174,12 @@ interface DataTableProps<T> {
   statusOptions?: StatusFilterOption[];
   /** Key on the row object used by the status filter. Default "status". */
   statusField?: string;
+  /**
+   * One-click toolbar toggles (e.g. «يحتاج إجراء مني») that filter the rows
+   * by an arbitrary predicate. Multiple active toggles combine with AND.
+   * Omit to render none. Ignored when `noToolbar` is set.
+   */
+  quickFilters?: QuickFilter<T>[];
   /** Additional toolbar content (rendered on the start side of the toolbar). */
   toolbarStart?: ReactNode;
   /** Additional toolbar content (rendered on the end side of the toolbar). */
@@ -189,6 +246,53 @@ function alignClass(align?: Align): string {
   return "text-start";
 }
 
+/** Row-count choices for the page-size selector. */
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 200];
+
+/** Structural columns (not backed by sortable data) — never auto-sortable. */
+const NON_DATA_COLUMN_KEY =
+  /^(actions?|_actions?|select|_select|controls?|menu|buttons?|rowactions?|expand|drag|handle)$/i;
+
+/**
+ * Whether a column should be sortable. An explicit `sortable` always wins;
+ * when unset, every data column sorts by DEFAULT — except structural columns
+ * (action/select columns, or columns with no header text).
+ */
+function isSortableColumn<T>(col: DataTableColumn<T>): boolean {
+  if (col.sortable !== undefined) return col.sortable;
+  if (!col.header || !col.header.trim()) return false;
+  if (NON_DATA_COLUMN_KEY.test(col.key)) return false;
+  return true;
+}
+
+/** CSV-escape a single cell value. */
+function csvCell(value: unknown): string {
+  const s = value == null ? "" : String(value);
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+/** Download the given rows as a CSV of the visible columns (selected-rows export). */
+function downloadRowsCsv<T>(columns: DataTableColumn<T>[], rows: T[]): void {
+  const cols = columns.filter((c) => !c.hidden);
+  const header = cols.map((c) => csvCell(c.header)).join(",");
+  const body = rows.map((row) =>
+    cols
+      .map((c) => csvCell(c.exportValue ? c.exportValue(row) : (row as any)[c.key]))
+      .join(","),
+  );
+  // Prepend a BOM so Excel renders the Arabic headers/content correctly.
+  const csv = "﻿" + [header, ...body].join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `selected-${new Date().toISOString().slice(0, 10)}.csv`; // utc-ok: CSV download filename label, not wall-clock business data
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 export function DataTable<T>({
   columns,
   data,
@@ -203,9 +307,11 @@ export function DataTable<T>({
   onSelectionChange,
   onSortedDataChange,
   bulkActions,
+  onExportSelected,
   searchPlaceholder = "بحث...",
   statusOptions,
   statusField = "status",
+  quickFilters,
   toolbarStart,
   toolbarEnd,
   onExportCSV,
@@ -227,9 +333,15 @@ export function DataTable<T>({
 }: DataTableProps<T>) {
   const visibleColumns = useMemo(() => columns.filter((c) => !c.hidden), [columns]);
 
-  // --- Search / status filter (internal when noToolbar is false) ---
+  // Non-throwing — DataTable also renders in tests/storybook without an
+  // AuthProvider, where this is null and persistence simply no-ops.
+  const auth = useOptionalAuth();
+  const persistedPageSize = auth?.user?.tablePrefs?.pageSize;
+
+  // --- Search / status / quick filters (internal when noToolbar is false) ---
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
+  const [activeQuick, setActiveQuick] = useState<Set<string>>(new Set());
   // Task #170 — pause typing while a 429 cooldown is active so we don't
   // fire a fresh request on every keystroke and keep getting throttled.
   const cooldown = useRateLimitCooldown();
@@ -255,8 +367,12 @@ export function DataTable<T>({
     if (!noToolbar && status && statusOptions) {
       out = out.filter((row) => String((row as any)[statusField] ?? "") === status);
     }
+    if (!noToolbar && quickFilters && activeQuick.size > 0) {
+      const active = quickFilters.filter((q) => activeQuick.has(q.key));
+      out = out.filter((row) => active.every((q) => q.predicate(row)));
+    }
     return out;
-  }, [data, search, status, noToolbar, searchableKeys, statusOptions, statusField]);
+  }, [data, search, status, activeQuick, noToolbar, searchableKeys, statusOptions, statusField, quickFilters]);
 
   // --- Sort ---
   const { sortedData, sortState, handleSort } = useSortedData<T>(filteredData ?? []);
@@ -276,12 +392,40 @@ export function DataTable<T>({
     else setLocalPage(p);
   };
 
+  // Effective page size. The caller's `pageSize` is the default (0 disables
+  // pagination entirely — structural, never overridden). For client-side
+  // tables we adopt the user's persisted choice once it loads, unless the
+  // user changed it this session. Server-paginated and grouped tables keep
+  // the caller's size (the server / grouping controls the layout).
+  const [pageSizeState, setPageSizeState] = useState<number>(
+    pageSize === 0 ? 0 : pageSize || 20,
+  );
+  const userTouchedPageSize = useRef(false);
+  useEffect(() => {
+    if (pageSize === 0 || isServerPaginated || groupBy) return;
+    if (userTouchedPageSize.current) return;
+    if (persistedPageSize && PAGE_SIZE_OPTIONS.includes(persistedPageSize)) {
+      setPageSizeState((cur) => (cur === persistedPageSize ? cur : persistedPageSize));
+    }
+  }, [persistedPageSize, pageSize, isServerPaginated, groupBy]);
+
+  const handlePageSizeChange = (size: number) => {
+    userTouchedPageSize.current = true;
+    setPageSizeState(size);
+    setCurrentPage(1);
+    if (auth?.setPreferences && PAGE_SIZE_OPTIONS.includes(size)) {
+      // Persist to the user's account; the local change already applied, so a
+      // failed save is non-fatal (swallow rather than reject).
+      auth.setPreferences({ tablePrefs: { pageSize: size } }).catch(() => {});
+    }
+  };
+
   const pagedData = useMemo(() => {
     if (isServerPaginated || !sortedData) return sortedData;
-    if (!pageSize) return sortedData;
-    const start = (currentPage - 1) * pageSize;
-    return sortedData.slice(start, start + pageSize);
-  }, [sortedData, currentPage, pageSize, isServerPaginated]);
+    if (!pageSizeState) return sortedData;
+    const start = (currentPage - 1) * pageSizeState;
+    return sortedData.slice(start, start + pageSizeState);
+  }, [sortedData, currentPage, pageSizeState, isServerPaginated]);
 
   const effectiveTotal = isServerPaginated ? total! : (sortedData?.length ?? 0);
 
@@ -326,7 +470,41 @@ export function DataTable<T>({
     notifySelection(new Set());
   };
 
+  // Selected rows (resolved from the current filtered+sorted set) for the
+  // built-in "تصدير المحدّد" export.
+  const selectedRows = useMemo(() => {
+    const src = (sortedData ?? (data as T[] | null) ?? []) as T[];
+    return src.filter((r) => selectedIds.has((r as any).id as number));
+  }, [sortedData, data, selectedIds]);
+
+  const downloadSelectedCsv = () => {
+    if (selectedRows.length === 0) return;
+    if (onExportSelected) onExportSelected(selectedRows);
+    else downloadRowsCsv(visibleColumns, selectedRows);
+  };
+
   const colCount = visibleColumns.length + (selectable ? 1 : 0);
+
+  // Column-aligned footer total row — rendered when ANY column declares a
+  // `footer`. Each column gets its own total cell under its own header (unlike
+  // `renderGrandTotal`, which spans all columns in one cell). Computed over the
+  // full filtered+sorted set, so it reflects the user's current filter/sort.
+  const hasFooter = visibleColumns.some((c) => c.footer);
+  const footerRow =
+    hasFooter && sortedData && sortedData.length > 0 ? (
+      <TableRow className="border-t-4 bg-muted font-bold">
+        {selectable && <TableCell className="w-[44px]" />}
+        {visibleColumns.map((col) => (
+          <TableCell
+            key={col.key}
+            className={cn(alignClass(col.align), col.className)}
+            dir={col.ltr ? "ltr" : undefined}
+          >
+            {col.footer ? col.footer(sortedData) : null}
+          </TableCell>
+        ))}
+      </TableRow>
+    ) : null;
 
   // Mobile (<768px): render the common (non-grouped) happy-path list as
   // stacked label:value cards instead of a horizontally-scrolling table, so
@@ -391,13 +569,39 @@ export function DataTable<T>({
                 </SelectContent>
               </Select>
             )}
-            {(search || status) && (
+            {quickFilters && quickFilters.length > 0 && quickFilters.map((q) => {
+              const on = activeQuick.has(q.key);
+              return (
+                <Button
+                  key={q.key}
+                  type="button"
+                  variant={on ? "default" : "outline"}
+                  size="sm"
+                  aria-pressed={on}
+                  onClick={() => {
+                    setActiveQuick((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(q.key)) next.delete(q.key);
+                      else next.add(q.key);
+                      return next;
+                    });
+                    setCurrentPage(1);
+                  }}
+                  className="gap-1"
+                >
+                  <Filter className="h-3.5 w-3.5" />
+                  {q.label}
+                </Button>
+              );
+            })}
+            {(search || status || activeQuick.size > 0) && (
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => {
                   setSearch("");
                   setStatus("");
+                  setActiveQuick(new Set());
                   setCurrentPage(1);
                 }}
                 className="gap-1"
@@ -428,6 +632,15 @@ export function DataTable<T>({
             سجل محدد
           </span>
           <div className="ms-auto flex items-center gap-1.5">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={downloadSelectedCsv}
+              className="gap-1"
+            >
+              <Download className="h-3.5 w-3.5" />
+              تصدير المحدّد
+            </Button>
             {bulkActions?.map((action, i) => (
               <Button
                 key={i}
@@ -482,7 +695,7 @@ export function DataTable<T>({
                       return (
                         <div key={col.key} className="flex items-start justify-between gap-3 text-sm">
                           <span className="text-muted-foreground shrink-0">{col.header}</span>
-                          <span className={cn("min-w-0 break-words text-end", col.className)} dir={col.ltr ? "ltr" : undefined}>
+                          <span className={cn("min-w-0 break-words text-end", col.className, col.cellClassName?.(row, rowIndex))} dir={col.ltr ? "ltr" : undefined}>
                             {content}
                           </span>
                         </div>
@@ -497,6 +710,23 @@ export function DataTable<T>({
                 </div>
               );
             })}
+            {/* Column footers (totals/balances) also belong on mobile — the
+                desktop <tfoot> row has no place in a card list, so mirror it as
+                a final bold card of header:total pairs for the footable columns. */}
+            {hasFooter && sortedData && sortedData.length > 0 && (
+              <div className="p-3 bg-muted font-bold" data-testid="data-table-mobile-footer">
+                <div className="space-y-1.5">
+                  {visibleColumns.filter((col) => col.footer).map((col) => (
+                    <div key={col.key} className="flex items-start justify-between gap-3 text-sm">
+                      <span className="text-muted-foreground shrink-0">{col.header}</span>
+                      <span className={cn("min-w-0 break-words text-end", col.className)} dir={col.ltr ? "ltr" : undefined}>
+                        {col.footer!(sortedData)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
         <Table>
@@ -512,7 +742,7 @@ export function DataTable<T>({
                 </TableHead>
               )}
               {visibleColumns.map((col) =>
-                col.sortable ? (
+                isSortableColumn(col) ? (
                   <SortableTableHead
                     key={col.key}
                     column={col.sortKey ?? col.key}
@@ -520,6 +750,7 @@ export function DataTable<T>({
                     sortState={sortState}
                     onSort={handleSort}
                     className={cn(alignClass(col.align), col.className)}
+                    style={col.width ? { width: col.width } : undefined}
                   />
                 ) : (
                   <TableHead
@@ -586,7 +817,7 @@ export function DataTable<T>({
                                   {visibleColumns.map((col) => {
                                     const content = col.render ? col.render(row, rowIndex) : ((row as any)[col.key] ?? "-");
                                     return (
-                                      <TableCell key={col.key} className={cn(alignClass(col.align), col.className)} dir={col.ltr ? "ltr" : undefined}>
+                                      <TableCell key={col.key} className={cn(alignClass(col.align), col.className, col.cellClassName?.(row, rowIndex))} dir={col.ltr ? "ltr" : undefined}>
                                         {content}
                                       </TableCell>
                                     );
@@ -607,6 +838,20 @@ export function DataTable<T>({
                               </TableCell>
                             </TableRow>
                           )}
+                          {visibleColumns.some((c) => c.groupFooter) && (
+                            <TableRow className="border-t-2 bg-surface-subtle font-medium">
+                              {selectable && <TableCell className="w-[44px]" />}
+                              {visibleColumns.map((col) => (
+                                <TableCell
+                                  key={col.key}
+                                  className={cn(alignClass(col.align), col.className)}
+                                  dir={col.ltr ? "ltr" : undefined}
+                                >
+                                  {col.groupFooter ? col.groupFooter(groupRows, groupValue) : null}
+                                </TableCell>
+                              ))}
+                            </TableRow>
+                          )}
                         </Fragment>
                       ))}
                       {renderGrandTotal && sortedData && sortedData.length > 0 && (
@@ -616,6 +861,7 @@ export function DataTable<T>({
                           </TableCell>
                         </TableRow>
                       )}
+                      {footerRow}
                     </>
                   );
                 })()
@@ -642,7 +888,7 @@ export function DataTable<T>({
                             ? col.render(row, rowIndex)
                             : ((row as any)[col.key] ?? "-");
                           return (
-                            <TableCell key={col.key} className={cn(alignClass(col.align), col.className)} dir={col.ltr ? "ltr" : undefined}>
+                            <TableCell key={col.key} className={cn(alignClass(col.align), col.className, col.cellClassName?.(row, rowIndex))} dir={col.ltr ? "ltr" : undefined}>
                               {content}
                             </TableCell>
                           );
@@ -656,15 +902,25 @@ export function DataTable<T>({
                     </Fragment>
                   );
                 })}
+                {!groupBy && renderGrandTotal && sortedData && sortedData.length > 0 && (
+                  <TableRow className="border-t-4 bg-muted font-bold">
+                    <TableCell colSpan={colCount} className="py-2 px-3">
+                      {renderGrandTotal(sortedData)}
+                    </TableCell>
+                  </TableRow>
+                )}
+                {!groupBy && footerRow}
           </DataTableWrapper>
         </Table>
         )}
-        {pageSize > 0 && (
+        {pageSizeState > 0 && (
           <PaginationBar
             page={currentPage}
-            pageSize={pageSize}
+            pageSize={pageSizeState}
             total={effectiveTotal}
             onPageChange={setCurrentPage}
+            pageSizeOptions={isServerPaginated || groupBy ? undefined : PAGE_SIZE_OPTIONS}
+            onPageSizeChange={isServerPaginated || groupBy ? undefined : handlePageSizeChange}
           />
         )}
       </div>

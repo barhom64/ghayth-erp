@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useApiQuery, useApiMutation, apiFetch, apiUrl } from "@/lib/api";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -90,6 +91,7 @@ export default function InspectionsReview() {
 
   return (
     <PageShell title="مراجعة فحوص المركبات" breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "مراجعة الفحوص" }]}>
+      <FleetTabsNav />
       <div className="mb-3 flex gap-2">
         {(["submitted", "approved", "rejected", "all"] as const).map((s) => (
           <Button key={s} size="sm" variant={status === s ? "default" : "outline"} onClick={() => setStatus(s)}>

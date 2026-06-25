@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useApiQuery, apiFetch, getErrorMessage } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
@@ -10,6 +10,16 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Gauge, Camera, Check, Send } from "lucide-react";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
+
+// حالات الفحص اليومي بالعربية — لا قيم إنجليزية خام تظهر للسائق.
+const INSPECTION_STATUS_LABELS: Record<string, string> = {
+  pending: "قيد المراجعة",
+  submitted: "تم الإرسال",
+  approved: "معتمد",
+  rejected: "مرفوض",
+};
 
 // متابعة النقل بالصور (PR3) — شاشة السائق لوفاء الفحص اليومي: يُدخل قراءة العداد،
 // يلتقط صور العداد والاتجاهات (الكاميرا)، ثم يُرسل. كل صورة تُرفع إلى GCS عبر
@@ -48,6 +58,22 @@ export default function MeInspection() {
   const [submitting, setSubmitting] = useState(false);
 
   const locked = inspection?.status === "approved" || inspection?.status === "rejected";
+
+  // صفوف الطباعة = قائمة تحقّق صور الفحص (كل نوع صورة + حالته + العدد المُلتقط).
+  const photoRows = useMemo(
+    () =>
+      PHOTO_TILES.map((tile) => {
+        const count = counts[tile.type] ?? 0;
+        return {
+          "الصورة": tile.label,
+          "إلزامية": tile.type === "odometer" ? "نعم" : "لا",
+          "الحالة": count > 0 ? "مُلتقطة" : "غير مُلتقطة",
+          "العدد": count,
+        };
+      }),
+    [counts],
+  );
+  const { sortedRows: printRows } = usePrintRows<any>(photoRows);
 
   async function uploadPhoto(photoType: string, file: File) {
     setUploading(photoType);
@@ -101,10 +127,27 @@ export default function MeInspection() {
     <PageShell
       title="الفحص اليومي للمركبة"
       breadcrumbs={[{ href: "/fleet/me", label: "بوابتي" }, { label: "الفحص اليومي" }]}
+      actions={
+        <PrintButton
+          entityType="report_fleet_me_inspection"
+          entityId={String(inspectionId)}
+          size="icon"
+          payload={() => ({
+            entity: {
+              title: `الفحص اليومي — المركبة ${inspection?.plateNumber ?? inspection?.vehicleId ?? ""}`,
+              total: printRows.length,
+              status: INSPECTION_STATUS_LABELS[inspection?.status ?? ""] ?? inspection?.status,
+              odometer: inspection?.odometer,
+              dueDate: inspection?.dueDate,
+            },
+            items: printRows,
+          })}
+        />
+      }
     >
       {!inspection ? (
         <Card><CardContent className="p-6 text-sm text-muted-foreground">
-          {listQ.isLoading ? "جارٍ التحميل…" : "الطلب غير موجود أو لا يخصّك."}
+          {listQ.isLoading ? "جاري التحميل…" : "الطلب غير موجود أو لا يخصّك."}
         </CardContent></Card>
       ) : (
         <div className="space-y-4 max-w-xl">
@@ -148,7 +191,7 @@ export default function MeInspection() {
                           disabled={locked || uploading === tile.type}
                           onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadPhoto(tile.type, f); e.target.value = ""; }}
                         />
-                        {uploading === tile.type && <span className="text-xs text-muted-foreground">جارٍ…</span>}
+                        {uploading === tile.type && <span className="text-xs text-muted-foreground">جاري…</span>}
                       </label>
                     );
                   })}
@@ -162,7 +205,7 @@ export default function MeInspection() {
 
               <Button className="w-full" onClick={submit} disabled={locked || submitting}>
                 <Send className="h-4 w-4 me-1" />
-                {submitting ? "جارٍ الإرسال…" : "إرسال الفحص"}
+                {submitting ? "جاري الإرسال…" : "إرسال الفحص"}
               </Button>
             </CardContent>
           </Card>

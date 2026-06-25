@@ -54,9 +54,14 @@ describe("finance-hardening — fiscal periods v2", () => {
   it("POST /intercompany wraps both legs + parent INSERT in one withTransaction (atomicity)", () => {
     const idx = SRC.indexOf('financeHardeningRouter.post("/intercompany"');
     expect(idx).toBeGreaterThan(-1);
-    const block = SRC.slice(idx, idx + 6500);
-    // Outer withTransaction wraps the whole atomic block.
-    const txnStart = block.indexOf("withTransaction(async ()");
+    // Window widened (#1141 each-leg-its-own-number added a pre-issue
+    // idempotency short-circuit + two issueNumber calls before the txn).
+    const block = SRC.slice(idx, idx + 13000);
+    // Outer withTransaction wraps the whole atomic block. The callback now
+    // takes a `client` arg (used for the parent INSERT + numbering
+    // link-backs), so match `withTransaction(async (` rather than the
+    // zero-arg form.
+    const txnStart = block.indexOf("withTransaction(async (");
     expect(txnStart).toBeGreaterThan(-1);
     // Both engine posts AND the intercompany_transactions INSERT live
     // inside that outer txn. Locate each and assert ordering.

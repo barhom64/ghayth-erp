@@ -56,7 +56,7 @@ const actionSchema = z.object({
   formula: z.string().nullable().optional(),
 });
 
-const ruleBodySchema = z.object({
+export const ruleBodySchema = z.object({
   name: z.string().min(1, "اسم القاعدة مطلوب"),
   description: z.string().nullable().optional(),
   priority: z.coerce.number().int().optional().default(0),
@@ -66,7 +66,15 @@ const ruleBodySchema = z.object({
   logicOp: z.enum(["AND", "OR"]).optional().default("AND"),
   conditions: z.array(conditionSchema).optional().default([]),
   action: actionSchema.nullable().optional(),
-});
+}).refine(
+  (d) => {
+    // فترة صلاحية التسعير: النهاية يجب ألا تسبق البداية (تجاوز عند الغياب/التعذّر).
+    const s = d.validFrom ? Date.parse(d.validFrom) : NaN;
+    const e = d.validTo ? Date.parse(d.validTo) : NaN;
+    return Number.isNaN(s) || Number.isNaN(e) || e >= s;
+  },
+  { path: ["validTo"], message: "تاريخ نهاية الصلاحية يجب ألا يسبق تاريخ بدايتها" },
+);
 
 const resolveSchema = z.object({
   productId: z.coerce.number().int().positive("معرف المنتج مطلوب"),
@@ -144,8 +152,7 @@ pricingRouter.get(
       }));
       res.json({ data, total: data.length });
     } catch (e) {
-      logger.error(e, "[pricing] list failed");
-      res.json({ data: [], total: 0 });
+      handleRouteError(e, res, "[pricing] list failed");
     }
   }
 );

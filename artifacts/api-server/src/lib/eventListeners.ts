@@ -463,6 +463,19 @@ export function registerEventListeners() {
   eventBus.on("fleet.trip.completed", async (payload) => {
     await logEvent("fleet.trip.completed", payload);
     await logAudit("fleet.trip.completed", { ...payload, action: "update" });
+    // سدّ فجوة الدفتر: أي إكمال رحلة (سائق أو مدير) يُرحّل قيد تكلفتها. المسار
+    // الإداري يُرحّل مباشرة فيصبح هذا no-op (idempotent عبر fleet:trip:<id>)؛
+    // إكمال السائق — الذي لا يُرحّل في مساره — يُكلَّف هنا. «الحقيقة التشغيلية
+    // ← المالية تشتق» بصرف النظر عمّن أكمل.
+    if (payload.companyId && payload.entityId) {
+      try {
+        const { fleetEngine } = await import("./engines/index.js");
+        await fleetEngine.computeAndPostTripGL(
+          { companyId: payload.companyId as number, branchId: (payload.branchId as number) ?? 0, createdBy: (payload.userId as number) ?? 0 },
+          payload.entityId as number,
+        );
+      } catch (err) { logger.error(err, "[trip.completed] deferred trip GL post failed"); }
+    }
   });
 
   // Phase C.8 — warehouse product lifecycle listeners
@@ -1787,7 +1800,7 @@ export function registerEventListeners() {
       const arCode = await getAccountCodeFromMapping(payload.companyId, "umrah_agent_receivable", "debit", "1210");
       const revenueCode = await getAccountCodeFromMapping(payload.companyId, "umrah_revenue", "credit", "4130");
       const penaltyCode = await getAccountCodeFromMapping(payload.companyId, "penalty_revenue", "credit", "4930");
-      const commissionCode = await getAccountCodeFromMapping(payload.companyId, "commission_expense", "debit", "5200");
+      const commissionCode = await getAccountCodeFromMapping(payload.companyId, "commission_expense", "debit", "5430");
 
       const lines: Array<{ accountCode: string; debit: number; credit: number; description: string }> = [
         { accountCode: arCode, debit: total, credit: 0, description: `ذمم وكيل — فاتورة ${ref}` },
@@ -1918,7 +1931,7 @@ export function registerEventListeners() {
         logger.warn(`[EventReaction] Commission plan #${planId} missing GL accrual — attempting recovery`);
         try {
           const [expenseCode, payableCode] = await Promise.all([
-            getAccountCodeFromMapping(payload.companyId, "commission_expense", "debit", "6200"),
+            getAccountCodeFromMapping(payload.companyId, "commission_expense", "debit", "5430"),
             getAccountCodeFromMapping(payload.companyId, "commission_payable", "credit", "2155"),
           ]);
           await createGuardedJournalEntry({

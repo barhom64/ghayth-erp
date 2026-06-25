@@ -12,6 +12,12 @@ const read = (p: string) => readFileSync(join(SRC, p), "utf8");
 describe("E2E: Umrah full lifecycle scenario", () => {
   const umrah = read("routes/umrah.ts");
   const entities = read("routes/umrah-entities.ts");
+  // U-07 Phase 22: groups CRUD carved into umrah-groups.ts.
+  const groups = read("routes/umrah-groups.ts");
+  // U-07 Phase 6: sub-agent CRUD + linking routes live here.
+  const subAgents = read("routes/umrah-sub-agents.ts");
+  // U-07 Phase 9: sub-agent statement routes (JSON + PDF) live here.
+  const statements = read("routes/umrah-statements.ts");
   const importEngine = read("lib/umrahImportEngine.ts");
   const invoiceEngine = read("lib/umrahInvoicingEngine.ts");
 
@@ -26,9 +32,10 @@ describe("E2E: Umrah full lifecycle scenario", () => {
   });
 
   it("3. Sub-agent CRUD exists", () => {
-    expect(entities).toContain('router.post("/sub-agents"');
-    expect(entities).toContain('router.patch("/sub-agents/:id"');
-    expect(entities).toContain('"/sub-agents/:id/link"');
+    // routes moved to umrah-sub-agents.ts (U-07 Phase 6)
+    expect(subAgents).toContain('router.post("/sub-agents"');
+    expect(subAgents).toContain('router.patch("/sub-agents/:id"');
+    expect(subAgents).toContain('"/sub-agents/:id/link"');
   });
 
   it("4. Package CRUD exists", () => {
@@ -72,7 +79,7 @@ describe("E2E: Umrah full lifecycle scenario", () => {
   });
 
   it("12. Statement generation exists", () => {
-    expect(entities).toContain('"/statements/');
+    expect(statements).toContain('"/statements/');
     expect(invoiceEngine).toContain("generateStatement");
   });
 
@@ -86,11 +93,11 @@ describe("E2E: Umrah full lifecycle scenario", () => {
   });
 
   it("15. Groups CRUD is complete", () => {
-    expect(entities).toContain('router.get("/groups"');
-    expect(entities).toContain('router.get("/groups/:id"');
-    expect(entities).toContain('router.post("/groups"');
-    expect(entities).toContain('router.patch("/groups/:id"');
-    expect(entities).toContain('router.delete("/groups/:id"');
+    expect(groups).toContain('router.get("/groups"');
+    expect(groups).toContain('router.get("/groups/:id"');
+    expect(groups).toContain('router.post("/groups"');
+    expect(groups).toContain('router.patch("/groups/:id"');
+    expect(groups).toContain('router.delete("/groups/:id"');
   });
 });
 
@@ -246,7 +253,9 @@ describe("E2E: Property golden path", () => {
 // ─── E2E Scenario: Season Locking ──────────────────────────────────────────
 describe("E2E: Season locking enforcement", () => {
   const umrah = read("routes/umrah.ts");
-  const entities = read("routes/umrah-entities.ts");
+  // U-07 Phase 22 — groups CRUD (+ the requireOpenSeason helper) carved into
+  // umrah-groups.ts; the group season-lock assertions read it there.
+  const groups = read("routes/umrah-groups.ts");
 
   it("requireOpenSeason helper exists in umrah.ts", () => {
     expect(umrah).toContain("async function requireOpenSeason");
@@ -254,8 +263,8 @@ describe("E2E: Season locking enforcement", () => {
     expect(umrah).toContain("الموسم مغلق");
   });
 
-  it("requireOpenSeason helper exists in umrah-entities.ts", () => {
-    expect(entities).toContain("async function requireOpenSeason");
+  it("requireOpenSeason helper exists in umrah-groups.ts", () => {
+    expect(groups).toContain("async function requireOpenSeason");
   });
 
   it("pilgrim creation checks season status", () => {
@@ -288,7 +297,7 @@ describe("E2E: Season locking enforcement", () => {
   });
 
   it("group creation checks season status", () => {
-    const groupSection = entities.split('router.post("/groups"')[1] || "";
+    const groupSection = groups.split('router.post("/groups"')[1] || "";
     expect(groupSection).toContain("requireOpenSeason");
   });
 
@@ -300,7 +309,8 @@ describe("E2E: Season locking enforcement", () => {
 
 // ─── E2E Scenario: Nusk Invoice CRUD ───────────────────────────────────────
 describe("E2E: Nusk invoice CRUD", () => {
-  const entities = read("routes/umrah-entities.ts");
+  // U-07 Phase 19 — nusk-invoices routes carved into umrah-nusk-invoices.ts.
+  const entities = read("routes/umrah-nusk-invoices.ts");
   const catalog = read("lib/eventCatalog.ts");
 
   it("GET /nusk-invoices list exists", () => {
@@ -346,6 +356,12 @@ describe("E2E: Nusk invoice CRUD", () => {
 describe("E2E: Full umrah lifecycle flow verification", () => {
   const umrah = read("routes/umrah.ts");
   const entities = read("routes/umrah-entities.ts");
+  // U-07 Phase 22: groups CRUD (+ requireOpenSeason) carved into umrah-groups.ts.
+  const groups = read("routes/umrah-groups.ts");
+  // U-07 Phase 19: nusk-invoice CRUD + createNuskInvoiceSchema live here.
+  const nuskInvoices = read("routes/umrah-nusk-invoices.ts");
+  // U-07 Phase 9: sub-agent statement routes (JSON + PDF) live here.
+  const statements = read("routes/umrah-statements.ts");
   const importEngine = read("lib/umrahImportEngine.ts");
   const invoiceEngine = read("lib/umrahInvoicingEngine.ts");
   const catalog = read("lib/eventCatalog.ts");
@@ -380,14 +396,14 @@ describe("E2E: Full umrah lifecycle flow verification", () => {
   });
 
   it("Step 6: Group is created with season lock", () => {
-    expect(entities).toContain('router.post("/groups"');
-    const groupSection = entities.split('router.post("/groups"')[1]?.split('router.')[0] || "";
+    expect(groups).toContain('router.post("/groups"');
+    const groupSection = groups.split('router.post("/groups"')[1]?.split('router.')[0] || "";
     expect(groupSection).toContain("requireOpenSeason");
   });
 
   it("Step 7: Nusk invoice is created with duplicate check", () => {
-    expect(entities).toContain('router.post("/nusk-invoices"');
-    expect(entities).toContain("createNuskInvoiceSchema");
+    expect(nuskInvoices).toContain('router.post("/nusk-invoices"');
+    expect(nuskInvoices).toContain("createNuskInvoiceSchema");
   });
 
   it("Step 8: Sales invoice is generated (prevents duplicates)", () => {
@@ -402,7 +418,7 @@ describe("E2E: Full umrah lifecycle flow verification", () => {
 
   it("Step 10: Statement is generated per sub-agent", () => {
     expect(invoiceEngine).toContain("generateStatement");
-    expect(entities).toContain('"/statements/');
+    expect(statements).toContain('"/statements/');
   });
 
   it("Step 11: Journal entries are guarded", () => {

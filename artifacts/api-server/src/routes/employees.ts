@@ -10,8 +10,7 @@ import {
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
-import { bumpCacheVersion } from "../lib/rbac/authzEngine.js";
-import { invalidateRoleCache } from "../middlewares/roleGuard.js";
+import { grantUserRole } from "../lib/rbacService.js";
 import { issueNumber } from "../lib/numberingService.js";
 import {
   createNotification,
@@ -103,7 +102,7 @@ const createEmployeeSchema = z.object({
   dateOfBirth: z.string().optional().nullable(),
   jobTitle: z.string().optional(),
   role: z.string().optional(),
-  salary: z.coerce.number().optional(),
+  salary: z.coerce.number().nonnegative().optional(),
   branchId: z.coerce.number().optional().nullable(),
   companyId: z.coerce.number().optional().nullable(),
   departmentId: z.coerce.number().optional().nullable(),
@@ -207,6 +206,14 @@ const createEmployeeSchema = z.object({
   //                    that the wizard correctly stays out of.
   positionId: z.coerce.number().int().positive().optional().nullable(),
   categoryKey: z.string().trim().min(1).max(40).optional().nullable(),
+  // RBAC multi-role — the operator picks one OR MORE roles for the new
+  // employee's login user (HR only SELECTS; the actual grant + SoD gate live
+  // in the central rbacService, owned by the RBAC path). When present, each
+  // key is resolved + bound via grantUserRole inside the create transaction;
+  // the FIRST successfully granted role becomes is_primary. When absent, the
+  // legacy single-role derivation (job-title defaultRoleKey / `role`) applies
+  // unchanged — no regression for importers or the bootstrap employee.
+  selectedRoleKeys: z.array(z.string().trim().min(1)).max(20, "عدد الأدوار المختارة يتجاوز الحدّ المسموح (20)").optional().nullable(),
   teamId: z.coerce.number().int().positive().optional().nullable(),
   projectId: z.coerce.number().int().positive().optional().nullable(),
   costCenterId: z.coerce.number().int().positive().optional().nullable(),
@@ -219,7 +226,7 @@ const createEmployeeSchema = z.object({
     capacity: z.string().trim().max(80).optional().nullable(),
     allocationPercent: z.coerce.number().positive().max(100),
     costCenterId: z.coerce.number().int().positive().optional().nullable(),
-  })).optional().nullable(),
+  })).max(50, "عدد تخصيصات الفروع يتجاوز الحدّ المسموح (50)").optional().nullable(),
 });
 
 const patchEmployeeSchema = z.object({
@@ -229,7 +236,7 @@ const patchEmployeeSchema = z.object({
   jobTitle: z.string().optional().nullable(),
   jobTitleId: z.coerce.number().optional().nullable(),
   role: z.string().optional().nullable(),
-  salary: z.coerce.number().optional().nullable(),
+  salary: z.coerce.number().nonnegative().optional().nullable(),
   branchId: z.coerce.number().optional().nullable(),
   departmentId: z.coerce.number().optional().nullable(),
   status: z.string().optional().nullable(),
@@ -302,6 +309,26 @@ async function registerEmployeeExpiryObligations(
   }
 }
 
+// عقد قائد/خادم (#2839): تطبيق بيانات الاستكمال الذاتي على سجل الموظف. مسار
+// البيانات العامة (publicData، خادم بواجهة عامة) يستقبل النموذج عبر رابط token
+// مُتحقَّق، لكن **الكتابة** في جدول HR المملوك (employees) تبقى هنا في المسار
+// القائد (HR): تُكتب حقول الـstaging فقط (selfSubmittedData/At + حالة
+// 'self_submitted') بانتظار اعتماد HR — لا تغيير لأي حقل تشغيلي آخر.
+export async function applySelfOnboardingSubmission(
+  employeeId: number,
+  companyId: number,
+  data: unknown,
+): Promise<{ name: string } | undefined> {
+  const updated = await rawQuery<{ name: string }>(
+    `UPDATE employees
+        SET "selfSubmittedData" = $1::jsonb, "selfSubmittedAt" = NOW(), "activationStatus" = 'self_submitted'
+      WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL
+      RETURNING name`,
+    [JSON.stringify(data), employeeId, companyId],
+  );
+  return updated[0];
+}
+
 const router = Router();
 
 // RBAC v2: list with scope-aware response. maskFields applied so any
@@ -310,7 +337,8 @@ router.get("/", authorize({ feature: "hr.employees", action: "list" }), async (r
   try {
     const scope = req.scope!;
     const { search = "", status, page = "1", limit: lim = "20" } = req.query as Record<string, string | undefined>;
-    const offset = (Math.max(Number(page) || 1, 1) - 1) * (Number(lim) || 20);
+    const safeLim = Math.min(Math.max(Number(lim) || 20, 1), 500);
+    const offset = (Math.max(Number(page) || 1, 1) - 1) * safeLim;
 
     const filters = parseScopeFilters(req);
     if (search) filters.search = String(search);
@@ -344,7 +372,7 @@ router.get("/", authorize({ feature: "hr.employees", action: "list" }), async (r
       paramIdx++;
     }
 
-    params.push(Math.min(Number(lim) || 20, 500));
+    params.push(safeLim);
     const limitIdx = paramIdx++;
     params.push(offset);
     const offsetIdx = paramIdx++;
@@ -397,7 +425,7 @@ router.get("/", authorize({ feature: "hr.employees", action: "list" }), async (r
       countParams
     );
 
-    res.json(maskFields(req, { data: employees, total: Number(countRow?.total ?? 0), page: Number(page), pageSize: Number(lim) }));
+    res.json(maskFields(req, { data: employees, total: Number(countRow?.total ?? 0), page: Number(page), pageSize: safeLim }));
   } catch (err) {
     handleRouteError(err, res, "List employees error:");
   }
@@ -870,6 +898,8 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       sourceApplicationId,
       // PR-1 institutional binding (#2077).
       positionId, categoryKey, teamId, projectId, costCenterId, committeeId,
+      // RBAC multi-role — operator-selected role keys (optional).
+      selectedRoleKeys,
       // الدفعة 3 — توزيع الفروع الاختياري.
       branchAllocations,
       // as-any-reason: justified-pragmatic - zodParse inferred type is widened so subsequent destructure does not require explicit per-field generics; behavior unchanged
@@ -1574,36 +1604,73 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       // (only the self-service floor) — "موظف جديد بلا صلاحيات". RBAC is
       // user-scoped, so when there is no userId there is nothing to bind.
       if (userId) {
-        const effectiveRoleKey =
-          (defaultRoleKeyFromJob && (!role || role === "employee"))
-            ? defaultRoleKeyFromJob
-            : (role || "employee");
-        const roleRow = await client.query<{ id: number }>(
-          `SELECT id FROM rbac_roles
-            WHERE role_key = $1 AND ("companyId" = $2 OR "companyId" IS NULL)
-            ORDER BY "companyId" NULLS LAST LIMIT 1`,
-          [effectiveRoleKey, effectiveCompanyId]
-        ).then(r => r.rows as Array<{ id: number }>);
-        if (roleRow.length > 0) {
-          await client.query(
-            `INSERT INTO rbac_user_roles ("userId","companyId",role_id,"branchId","departmentId",is_primary,"assignedBy","createdAt")
-             VALUES ($1,$2,$3,$4,$5,true,$6,NOW())
-             ON CONFLICT ("userId","companyId",role_id) DO NOTHING`,
-            [userId, effectiveCompanyId, roleRow[0].id, targetBranchId, resolvedDepartmentId, scope.userId]
-          );
-          // Drop stale permission caches so the new grant is effective on
-          // the employee's very first request instead of after the 30s TTL.
-          // Both layers: the engine's grant cache (rbac_cache_version) and
-          // roleGuard's separate module cache. Best-effort, post-commit
-          // semantics don't matter here — a redundant bump is harmless.
-          bumpCacheVersion(effectiveCompanyId).catch((e) =>
-            logger.warn(e, "[employees] bumpCacheVersion after role bind failed"));
-          invalidateRoleCache(userId);
+        // Two modes, one central authority (rbacService.grantUserRole, owned by
+        // the RBAC path — HR only chooses which roles, never how they're bound
+        // or how SoD is enforced). grantUserRole's rawQuery/rawExecute join THIS
+        // transaction via rawdb's AsyncLocalStorage executor binding, so every
+        // bind commits/rolls back with the rest of the employee creation.
+        const pickedRoleKeys = Array.isArray(selectedRoleKeys)
+          ? (selectedRoleKeys as string[]).map((k) => String(k).trim()).filter(Boolean)
+          : [];
+
+        if (pickedRoleKeys.length > 0) {
+          // ── Multi-role mode ── grant EACH selected role; soft-fail per role.
+          // A role rejected by SoD (or unmapped) is skipped with a warning and
+          // left for the admin to assign — the employee is still created and the
+          // other roles are still granted. De-dupe so the same key can't claim
+          // primary twice. The first SUCCESSFULLY granted role is is_primary.
+          const seen = new Set<string>();
+          let primaryClaimed = false;
+          for (const key of pickedRoleKeys) {
+            if (seen.has(key)) continue;
+            seen.add(key);
+            const result = await grantUserRole({
+              userId,
+              roleKey: key,
+              companyId: effectiveCompanyId,
+              branchId: targetBranchId,
+              departmentId: resolvedDepartmentId,
+              assignedBy: scope.userId,
+              isPrimary: !primaryClaimed,
+            });
+            if (result.ok) {
+              primaryClaimed = true;
+            } else {
+              logger.warn(
+                { roleKey: key, companyId: effectiveCompanyId, userId, reason: result.error, detail: result.reasonAr },
+                "[employees] selected role not granted (soft-skip) — employee created, role left for admin"
+              );
+            }
+          }
+          if (!primaryClaimed) {
+            logger.warn(
+              { selectedRoleKeys: pickedRoleKeys, companyId: effectiveCompanyId, userId },
+              "[employees] none of the selected roles could be granted — employee has only the self-service floor; assign manually via /admin/users"
+            );
+          }
         } else {
-          logger.warn(
-            { roleKey: effectiveRoleKey, companyId: effectiveCompanyId, userId },
-            "[employees] no rbac_roles row for effective role key — RBAC role not auto-granted; assign manually via /admin/users"
-          );
+          // ── Legacy single-role mode (unchanged behaviour) ── derive one
+          // effective role key (job-title defaultRoleKey wins when the body
+          // didn't override) and bind it through the same central service.
+          const effectiveRoleKey =
+            (defaultRoleKeyFromJob && (!role || role === "employee"))
+              ? defaultRoleKeyFromJob
+              : (role || "employee");
+          const result = await grantUserRole({
+            userId,
+            roleKey: effectiveRoleKey,
+            companyId: effectiveCompanyId,
+            branchId: targetBranchId,
+            departmentId: resolvedDepartmentId,
+            assignedBy: scope.userId,
+            isPrimary: true,
+          });
+          if (!result.ok) {
+            logger.warn(
+              { roleKey: effectiveRoleKey, companyId: effectiveCompanyId, userId, reason: result.error, detail: result.reasonAr },
+              "[employees] effective role not auto-granted (soft-skip); assign manually via /admin/users"
+            );
+          }
         }
       }
 
@@ -1964,7 +2031,7 @@ router.get("/onboarding-tasks", authorize({ feature: "hr.employees", action: "li
       params
     );
     res.json({ data: rows, total: rows.length });
-  } catch (err) { logger.error(err, "Onboarding tasks error:"); res.json({ data: [], total: 0 }); }
+  } catch (err) { handleRouteError(err, res, "Onboarding tasks error:"); }
 });
 
 router.patch("/onboarding-tasks/:id", authorize({ feature: "hr.employees", action: "update" }), async (req, res) => {
@@ -2179,7 +2246,7 @@ router.get("/job-titles", authorize({ feature: "hr.employees", action: "list" })
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (err) { logger.error(err, "job-titles query failed"); res.json({ data: [], total: 0 }); }
+  } catch (err) { handleRouteError(err, res, "job-titles query failed"); }
 });
 
 // Migration 248 — create / update job_titles so admins can wire the

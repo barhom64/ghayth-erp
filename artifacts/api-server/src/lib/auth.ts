@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
-import { randomBytes } from "node:crypto";
+import { randomBytes, createHash } from "node:crypto";
 import { config } from "./config.js";
 
 const _jwtSecret = config.jwtSecret;
@@ -58,6 +58,32 @@ export function signRefreshToken(): string {
 
 export function verifyToken(token: string): JWTPayload {
   return jwt.verify(token, SECRET!, { algorithms: ["HS256"] }) as unknown as JWTPayload;
+}
+
+// ── المصادقة الثنائية: الرمز المؤقّت (نصف-مُصادَق، بين كلمة المرور وخطوة 2FA) ──
+// يُوقَّع بمفتاح مشتق مختلف عن SECRET، فـverifyToken (ومن ثَمّ authMiddleware)
+// يرفضه تلقائيًا 401 — لا يمكن إعادة استخدامه كرمز جلسة (إغلاق ثغرة تجاوز 2FA،
+// إذ إن الوسيط يمرّر أي scope غير field_tracking كجلسة كاملة). عمره 5د يكفي
+// لإدخال الرمز فقط، ولا يحمل أي صلاحية وصول.
+const PENDING_2FA_SECRET = createHash("sha256").update("2fa-pending:" + SECRET).digest("hex");
+
+export interface Pending2faPayload {
+  userId: number;
+  employeeId: number;
+  assignmentId: number;
+  role: string;
+  /** علامة تمييز قاطعة أنّ هذا رمز مؤقّت لا جلسة. */
+  p2fa: true;
+}
+
+export function signPending2faToken(p: Omit<Pending2faPayload, "p2fa">): string {
+  return jwt.sign({ ...p, p2fa: true }, PENDING_2FA_SECRET, { expiresIn: "5m" });
+}
+
+export function verifyPending2faToken(token: string): Pending2faPayload {
+  const decoded = jwt.verify(token, PENDING_2FA_SECRET, { algorithms: ["HS256"] }) as unknown as Pending2faPayload;
+  if (decoded?.p2fa !== true) throw new Error("ليس رمز مصادقة ثنائية مؤقّتًا");
+  return decoded;
 }
 
 export async function hashPassword(plain: string): Promise<string> {

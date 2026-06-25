@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRoute, useLocation, Link } from "wouter";
 import { useApiQuery, useApiMutation, apiFetch, getErrorMessage } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,6 +24,8 @@ import {
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { GuardedButton, usePermission } from "@/components/shared/permission-gate";
 import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 // #1733 Comment 9 — booking detail page. Single-screen view of the
 // booking + its lines + the dispatch orders that came out of it.
@@ -168,6 +170,16 @@ const ALL_STATUS_LABELS: Record<string, string> = {
   rejected:         "مرفوضة",
 };
 
+// حالات سطر الحجز (transport_booking_lines.status) بالعربية — للطباعة
+// والعرض. الـenum الخادم: open | dispatched | in_progress | completed | cancelled.
+const LINE_STATUS_LABELS: Record<string, string> = {
+  open:        "مفتوح",
+  dispatched:  "موزّع",
+  in_progress: "قيد التنفيذ",
+  completed:   "مكتمل",
+  cancelled:   "ملغى",
+};
+
 // States the operator is NOT allowed to set manually — they cascade
 // from driver actions on the dispatch order.
 const AUTO_CASCADED_STATES = new Set(["dispatched", "in_progress", "completed"]);
@@ -216,6 +228,35 @@ export default function TransportBookingDetail() {
     !!id,
   );
   const b = data?.data;
+
+  // صفوف الطباعة = سطور الحجز (تفصيل المركبات المطلوبة). تُحسب قبل أي return مبكر
+  // (قواعد الـHooks). القيم المُشتقّة في render الجدول (المتطلبات، الموعد) تُعاد بناؤها هنا.
+  const lineRows = useMemo(
+    () =>
+      (b?.lines ?? []).map((l) => {
+        const req = [
+          l.requiredVehicleType && `النوع: ${l.requiredVehicleType}`,
+          l.requiredCapacityKg && `الحمولة: ${l.requiredCapacityKg} كغم`,
+          l.requiredSeatCount && `المقاعد: ${l.requiredSeatCount}`,
+          l.requiredLicenseClass && `الرخصة: ${l.requiredLicenseClass}`,
+        ]
+          .filter(Boolean)
+          .join(" · ");
+        return {
+          "#": l.lineNumber,
+          "الوصف": l.lineDescription || "—",
+          "متطلبات المركبة": req || "—",
+          "الموعد المجدول": l.scheduledPickupAt
+            ? new Date(l.scheduledPickupAt).toLocaleString("ar")
+            : "—",
+          "الحالة": LINE_STATUS_LABELS[l.status] ?? l.status,
+        };
+      }),
+    [b?.lines],
+  );
+  // ملاحظة: الجدول يعرض كائنات BookingLine الخام (بمفاتيح مختلفة عن صفوف الطباعة
+  // المُعرّبة)، لذا لا نربط onSortedDataChange — صفوف الطباعة تتبع ترتيب lineNumber الطبيعي.
+  const { sortedRows: printRows } = usePrintRows<any>(lineRows);
 
   const statusMut = useApiMutation<unknown, { status: string }>(
     () => `/transport/bookings/${id}`,
@@ -317,6 +358,22 @@ export default function TransportBookingDetail() {
       ]}
       actions={
         <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_fleet_transport_booking"
+            entityId={String(b.id)}
+            size="icon"
+            payload={() => ({
+              entity: {
+                title: `حجز نقل #${b.bookingNumber}`,
+                total: printRows.length,
+                status: ALL_STATUS_LABELS[b.status] ?? b.status,
+                serviceType: SERVICE_TYPE_LABEL[b.transportServiceType] ?? b.transportServiceType,
+                customer: b.linkedCustomerName || b.customerName || "بدون عميل",
+                source: SOURCE_LABEL[b.bookingSource] ?? b.bookingSource,
+              },
+              items: printRows,
+            })}
+          />
           <Button
             variant="outline"
             size="sm"

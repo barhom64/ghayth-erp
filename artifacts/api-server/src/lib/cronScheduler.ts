@@ -53,6 +53,7 @@ import { decryptSecret } from "./secrets.js";
 import { processDueRecurringJournals } from "./recurringJournalProcessor.js";
 import { processDueAmortizations } from "./engines/prepaidAmortizationEngine.js";
 import { processDueRecognitions } from "./engines/deferredRevenueEngine.js";
+import { assetDepreciationProfile, type DepreciationAssetRow } from "./engines/recurringPostingEngine.js";
 import {
   fleetTelematicsRetention,
   fleetTelematicsHeartbeat,
@@ -2655,25 +2656,15 @@ async function monthlyAutoDepreciation(): Promise<string> {
     const createdBy = systemUser.id;
 
     for (const asset of assets) {
-      const purchaseCost = Number(asset.purchaseCost);
-      const salvageValue = Number(asset.salvageValue);
-      const usefulLife = Number(asset.usefulLifeYears);
-      const currentBookValue = Number(asset.currentBookValue ?? asset.purchaseCost);
-      let depAmount = 0;
-
-      if (!usefulLife || usefulLife <= 0) continue;
-
-      if (asset.depreciationMethod === "declining_balance") {
-        depAmount = Math.max(0, roundTo2(currentBookValue * (2 / usefulLife / 12)));
-      } else {
-        depAmount = Math.max(0, roundTo2((purchaseCost - salvageValue) / (usefulLife * 12)));
-      }
-
-      if (currentBookValue - depAmount < salvageValue) {
-        depAmount = Math.max(0, currentBookValue - salvageValue);
-      }
+      // الإهلاك يأتي الآن من profile المحرّك الدوري (assetDepreciationProfile) —
+      // مصدر واحد للصيغة. السلوك مطابق للحساب السابق المُضمّن (مُثبَت بالتكافؤ في
+      // recurringPostingEngineDepreciation.test.ts)؛ ومسك الأصل (depreciation_entries
+      // + fixed_assets) يبقى هنا لأنها جداول المجال.
+      const depAmount = assetDepreciationProfile.amountFor(asset as unknown as DepreciationAssetRow);
       if (depAmount <= 0) continue;
 
+      const purchaseCost = Number(asset.purchaseCost);
+      const salvageValue = Number(asset.salvageValue);
       const newAccumulated = Number(asset.accumulatedDepreciation) + depAmount;
       const newBookValue = Math.max(purchaseCost - newAccumulated, salvageValue);
 
@@ -2693,21 +2684,8 @@ async function monthlyAutoDepreciation(): Promise<string> {
           type: "depreciation",
           sourceType: "fixed_asset_depreciation",
           sourceId: Number(asset.id),
-          sourceKey: `finance:depreciation:${asset.id}:${period}`,
-          lines: [
-            {
-              accountCode: (asset.depreciationAccountCode as string | undefined) ?? "6100",
-              debit: depAmount,
-              credit: 0,
-              assetId: Number(asset.id),
-            },
-            {
-              accountCode: (asset.accDepreciationAccountCode as string | undefined) ?? "1590",
-              debit: 0,
-              credit: depAmount,
-              assetId: Number(asset.id),
-            },
-          ],
+          sourceKey: assetDepreciationProfile.sourceKey(asset as unknown as DepreciationAssetRow, period),
+          lines: assetDepreciationProfile.journalTemplate(asset as unknown as DepreciationAssetRow, depAmount),
           status: "posted",
         });
 

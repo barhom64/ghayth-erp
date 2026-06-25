@@ -20,8 +20,9 @@ import { join } from "node:path";
  *   - Sub-agent detail page surfaces the statement card with the
  *     same UX as the agent detail page (PR #1438).
  */
+// U-07 Phase 6: sub-agent routes live in the dedicated sub-router.
 const ROUTE = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-sub-agents.ts"),
   "utf8",
 );
 const PAGE = readFileSync(

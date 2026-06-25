@@ -67,7 +67,7 @@ const createProgramSchema = z.object({
   endDate: z.string().optional(),
   location: z.string().optional(),
   trainer: z.string().optional(),
-  capacity: z.coerce.number().optional(),
+  capacity: z.coerce.number().int("السعة يجب أن تكون عددًا صحيحًا").nonnegative("السعة يجب ألا تكون سالبة").optional(),
   status: z.string().optional(),
   type: z.string().optional(),
   provider: z.string().optional(),
@@ -87,7 +87,7 @@ const patchProgramSchema = z.object({
   endDate: z.string().nullable().optional(),
   location: z.string().optional(),
   trainer: z.string().optional(),
-  capacity: z.coerce.number().optional(),
+  capacity: z.coerce.number().int("السعة يجب أن تكون عددًا صحيحًا").nonnegative("السعة يجب ألا تكون سالبة").optional(),
   status: z.string().optional(),
 });
 
@@ -168,12 +168,21 @@ router.patch("/programs/:id", authorize({ feature: "hr.training", action: "updat
     const b = zodParse(patchProgramSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<{ id: number; status: string }>(`SELECT id, status FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [existing] = await rawQuery<{ id: number; status: string; startDate: string | null; endDate: string | null }>(`SELECT id, status, "startDate", "endDate" FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("البرنامج التدريبي غير موجود");
     if (b.status && b.status !== existing.status) {
       const allowed = VALID_PROGRAM_TRANSITIONS[existing.status];
       if (allowed && !allowed.includes(b.status)) {
         throw new ConflictError(`لا يمكن نقل البرنامج من "${existing.status}" إلى "${b.status}"`);
+      }
+    }
+    // كمرآة لتحقّق POST: لا يجوز أن يصبح الانتهاء قبل البداية بعد التعديل الجزئي.
+    // نحسب القيمة الفعّالة (الواردة أو المخزَّنة) قبل بناء التحديث.
+    if (b.startDate !== undefined || b.endDate !== undefined) {
+      const sd = b.startDate ?? existing.startDate;
+      const ed = b.endDate ?? existing.endDate;
+      if (sd && ed && new Date(ed) < new Date(sd)) {
+        throw new ValidationError("تاريخ الانتهاء قبل تاريخ البداية", { field: "endDate", fix: "اختر تاريخ انتهاء بعد تاريخ البداية" });
       }
     }
     const sets: string[] = [];

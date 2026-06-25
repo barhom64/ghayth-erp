@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -47,6 +49,7 @@ export default function CycleCountDetailPage() {
   const { data, refetch } = useApiQuery<any>(["cycle-count", String(cycleId)], `/warehouse/cycle-counts/${cycleId}`);
   const header: Header | undefined = data?.data?.header;
   const lines: Line[] = data?.data?.lines ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(lines);
 
   const [counted, setCounted] = useState<Record<number, string>>({});
   const [reasons, setReasons] = useState<Record<number, string>>({});
@@ -130,12 +133,36 @@ export default function CycleCountDetailPage() {
     },
   ], [counted, reasons, header?.status]);
 
-  if (!header) return <PageShell title="جرد دوري"><Card><CardContent className="pt-6">جارٍ التحميل…</CardContent></Card></PageShell>;
+  if (!header) return <PageShell title="جرد دوري"><Card><CardContent className="pt-6">جاري التحميل…</CardContent></Card></PageShell>;
 
   const s = STATUS_LABELS[header.status] ?? { label: header.status, variant: "outline" };
 
   return (
-    <PageShell title={`جرد #${header.id} — ${header.warehouseName ?? `مخزن #${header.warehouseId}`}`}>
+    <PageShell title={`جرد #${header.id} — ${header.warehouseName ?? `مخزن #${header.warehouseId}`}`}
+      actions={
+        <PrintButton
+          entityType="report_warehouse_cycle_count_detail"
+          entityId={String(header.id)}
+          size="icon"
+          payload={() => ({
+            entity: { title: `جرد #${header.id} — ${header.warehouseName ?? `مخزن #${header.warehouseId}`}`, total: printRows.length },
+            items: printRows.map((r: any) => {
+              const c = counted[r.id];
+              const countedVal = (c === "" || c == null) ? (r.countedQuantity ?? "") : c;
+              const v = (c === "" || c == null) ? Number(r.variance ?? 0) : Number(c) - Number(r.systemQuantity);
+              return {
+                "المنتج": r.productName ?? `#${r.productId}`,
+                "دفعة": r.lotId ? `#${r.lotId}` : "—",
+                "الكمية بالنظام": formatNumber(Number(r.systemQuantity)),
+                "الكمية الفعلية": countedVal !== "" && countedVal != null ? formatNumber(Number(countedVal)) : "—",
+                "الفرق": formatNumber(v),
+                "سبب الفرق": reasons[r.id] ?? r.reason ?? "—",
+              };
+            }),
+          })}
+        />
+      }
+    >
       <Card className="mb-4">
         <CardContent className="pt-6 flex flex-wrap gap-4 items-center">
           <div>التاريخ: <strong>{formatDateAr(header.scheduledDate)}</strong></div>
@@ -158,7 +185,7 @@ export default function CycleCountDetailPage() {
       </Card>
 
       <Card><CardContent className="pt-6">
-        <DataTable data={lines} columns={columns} emptyMessage="لا توجد أسطر بعد" />
+        <DataTable data={lines} columns={columns} onSortedDataChange={setPrintRows} emptyMessage="لا توجد أسطر بعد" />
       </CardContent></Card>
     </PageShell>
   );

@@ -61,8 +61,11 @@ const ROUTE_UMRAH = readFileSync(
   join(REPO_ROOT, "artifacts/api-server/src/routes/umrah.ts"),
   "utf8",
 );
+// U-07 Phase 23 — the umrah→transport service-contract routes carved into
+// umrah-group-transport.ts; the boundary assertions (delegation + zero direct
+// transport-table writes) now read the file that actually owns those routes.
 const ROUTE_UMRAH_ENT = readFileSync(
-  join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-entities.ts"),
+  join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-group-transport.ts"),
   "utf8",
 );
 

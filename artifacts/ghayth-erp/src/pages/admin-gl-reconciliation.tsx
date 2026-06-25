@@ -2,6 +2,9 @@ import {
   PageShell,
   DataTable,
   type DataTableColumn,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
 } from "@workspace/ui-core";
 import { useApiQuery } from "@/lib/api";
 import { PageStateWrapper } from "@/components/shared/page-state";
@@ -27,6 +30,11 @@ export default function AdminGlReconciliation() {
   const healthy = data?.healthy ?? true;
   const driftCount = data?.driftCount ?? 0;
   const mismatches = data?.mismatches ?? [];
+
+  const [filters, setFilters] = useFilters();
+  const filteredMismatches = applyFilters(mismatches, filters, {
+    searchFields: ["code", "name"],
+  });
 
   const mismatchColumns: DataTableColumn<any>[] = [
     { key: "code", header: "الكود", searchable: true, render: (r: any) => <span className="font-mono text-xs">{r.code}</span> },
@@ -110,9 +118,17 @@ export default function AdminGlReconciliation() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
+                <div className="p-4 pb-0">
+                  <AdvancedFilters
+                    config={{ searchPlaceholder: "بحث بالكود أو اسم الحساب…", showDateRange: false }}
+                    values={filters}
+                    onChange={setFilters}
+                    resultCount={filteredMismatches.length}
+                  />
+                </div>
                 <DataTable
                   columns={mismatchColumns}
-                  data={mismatches}
+                  data={filteredMismatches}
                   noToolbar
                   pageSize={0}
                 />

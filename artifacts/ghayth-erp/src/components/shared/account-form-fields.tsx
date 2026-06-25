@@ -111,7 +111,7 @@ export function AccountFormFields({ form, setForm, mode, accounts, branches = []
         <TextField label="الرمز" required dir="ltr" value={form.code} onChange={(v) => set({ code: v })} placeholder="1100" error={fieldErrors.code} />
       )}
       <TextField label="الاسم" required value={form.name} onChange={(v) => set({ name: v })} error={fieldErrors.name} />
-      <TextField label="الاسم بالإنجليزية" dir="ltr" value={form.nameEn} onChange={(v) => set({ nameEn: v })} placeholder="Account Name" />
+      <TextField label="الاسم بالإنجليزية" dir="ltr" value={form.nameEn} onChange={(v) => set({ nameEn: v })} placeholder="مثال: Current Assets" />
 
       <FormFieldWrapper label="النوع">
         <Select value={form.type} onValueChange={(v) => set({ type: v })}>

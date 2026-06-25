@@ -56,6 +56,11 @@ const UMRAH_ENTITIES_ROUTE = readFileSync(
   join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-entities.ts"),
   "utf8",
 );
+// U-07 Phase 6: sub-agents routes now live in the dedicated sub-router.
+const UMRAH_SUB_AGENTS_ROUTE = readFileSync(
+  join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-sub-agents.ts"),
+  "utf8",
+);
 const SUB_AGENTS_MIGRATION = readFileSync(
   join(
     REPO_ROOT,
@@ -237,14 +242,15 @@ describe("U-11 §C — schema asymmetry (agent has no clientId; sub-agent has nu
 // §D — Explicit linker is the sole bridge to clients
 // ─────────────────────────────────────────────────────────────────────────────
 describe("U-11 §D — PUT /sub-agents/:id/link is the only sub-agent → clients bridge", () => {
-  it("explicit link route is declared in routes/umrah-entities.ts", () => {
-    expect(UMRAH_ENTITIES_ROUTE).toMatch(
+  // U-07 Phase 6: sub-agents routes now live in umrah-sub-agents.ts.
+  it("explicit link route is declared in routes/umrah-sub-agents.ts", () => {
+    expect(UMRAH_SUB_AGENTS_ROUTE).toMatch(
       /router\.put\(\s*"\/sub-agents\/:id\/link"/,
     );
   });
 
   it("`unlinked` discovery route exists (GET /sub-agents/unlinked)", () => {
-    expect(UMRAH_ENTITIES_ROUTE).toMatch(
+    expect(UMRAH_SUB_AGENTS_ROUTE).toMatch(
       /router\.get\(\s*"\/sub-agents\/unlinked"/,
     );
   });
@@ -254,7 +260,7 @@ describe("U-11 §D — PUT /sub-agents/:id/link is the only sub-agent → client
     // CANONICAL place where a sub-agent-driven client gets created.
     // If a future refactor moves the INSERT elsewhere (e.g., into
     // resolveSubAgent), §B will fail too — surfacing the migration.
-    const linkBlock = UMRAH_ENTITIES_ROUTE.match(
+    const linkBlock = UMRAH_SUB_AGENTS_ROUTE.match(
       /router\.put\(\s*"\/sub-agents\/:id\/link"[\s\S]{0,4000}?(?=\n\}\);|\nrouter\.)/,
     );
     expect(linkBlock).not.toBeNull();
@@ -344,13 +350,15 @@ describe("U-11 §F — silent-linkage + silent-invoicing guards", () => {
   it("explicit linker (PUT /sub-agents/:id/link) still emits umrah.agent.linked event + audit log", () => {
     // Audit + Event on link were observed at audit time; this guards
     // against a silent regression that strips either of them.
-    const linkBlock = UMRAH_ENTITIES_ROUTE.match(
+    // U-07 Phase 6: route now lives in umrah-sub-agents.ts; audit
+    // converted to auditFromRequest per the IGOC ratchet.
+    const linkBlock = UMRAH_SUB_AGENTS_ROUTE.match(
       /router\.put\(\s*"\/sub-agents\/:id\/link"[\s\S]{0,6000}?(?=\nrouter\.|\n\}\);)/,
     );
     expect(linkBlock).not.toBeNull();
     expect(linkBlock![0]).toMatch(
       /emitEvent\(\s*\{[\s\S]*?"umrah\.agent\.linked"/,
     );
-    expect(linkBlock![0]).toMatch(/createAuditLog\(/);
+    expect(linkBlock![0]).toMatch(/auditFromRequest\(/);
   });
 });

@@ -1,0 +1,134 @@
+import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+/**
+ * U-07 Phase 8 — umrah-entities.ts split smoke.
+ *
+ * Scope:
+ *   - Carves the import-batches listing + unlinked-rows recovery routes (4)
+ *     into a dedicated sub-router:
+ *       artifacts/api-server/src/routes/umrah-import-batches.ts
+ *   - The parent `umrah-entities.ts` mounts the sub-router via
+ *     `router.use(importBatchesRouter)` so the API surface stays identical
+ *     (all paths still resolve under /umrah/import/batches...).
+ *
+ * Non-goals (Permanent Hard Rails):
+ *   - No engine touch.
+ *   - No route body change — pure code move + mount.
+ *   - No API surface change.
+ *   - No ledger touch — these routes do not post journal entries.
+ *
+ * Failure modes pinned:
+ *   - The new file disappears → §A fails.
+ *   - The parent stops mounting it → §B fails.
+ *   - One of the 4 routes is missing in the new file → §C fails.
+ *   - One of the 4 routes accidentally remains in the parent → §D fails.
+ *   - Parent file didn't shrink → §E fails.
+ */
+
+const REPO_ROOT = join(import.meta.dirname!, "../../../..");
+
+const PARENT = readFileSync(
+  join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-entities.ts"),
+  "utf8",
+);
+const CHILD = readFileSync(
+  join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-import-batches.ts"),
+  "utf8",
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// §A — Child file exists + exports a Router as default
+// ─────────────────────────────────────────────────────────────────────────────
+describe("U-07 Phase 8 §A — umrah-import-batches.ts is a valid sub-router file", () => {
+  it("file is non-empty + imports Router from express", () => {
+    expect(CHILD.length).toBeGreaterThan(1000);
+    expect(CHILD).toMatch(/import\s*\{\s*Router\s*\}\s+from\s+["']express["']/);
+  });
+
+  it("creates a Router + exports it as default", () => {
+    expect(CHILD).toMatch(/const\s+router\s*=\s*Router\(\)/);
+    expect(CHILD).toMatch(/^export\s+default\s+router;?\s*$/m);
+  });
+
+  it("imports the same helpers the parent uses (rawdb + authorize + errorHandler)", () => {
+    expect(CHILD).toMatch(/from\s+["']\.\.\/lib\/rawdb\.js["']/);
+    expect(CHILD).toMatch(/from\s+["']\.\.\/lib\/rbac\/authorize\.js["']/);
+    expect(CHILD).toMatch(/from\s+["']\.\.\/lib\/errorHandler\.js["']/);
+  });
+
+  it("uses auditFromRequest (IGOC ratchet) — not the legacy createAuditLog directly", () => {
+    expect(CHILD).toMatch(/auditFromRequest/);
+    expect(CHILD).not.toMatch(/import\s*\{[^}]*createAuditLog[^}]*\}\s*from/);
+  });
+
+  it("posts NO journal entries (ledger-free carve)", () => {
+    expect(CHILD).not.toMatch(/postNuskJournalEntries|reclassifyRevenueForInvoices/);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// §B — Parent imports + mounts the sub-router
+// ─────────────────────────────────────────────────────────────────────────────
+describe("U-07 Phase 8 §B — parent mounts the sub-router", () => {
+  it("parent imports the new module as a default import", () => {
+    expect(PARENT).toMatch(
+      /import\s+importBatchesRouter\s+from\s+["']\.\/umrah-import-batches\.js["']/,
+    );
+  });
+
+  it("parent mounts the sub-router with router.use(importBatchesRouter)", () => {
+    expect(PARENT).toMatch(/router\.use\(\s*importBatchesRouter\s*\)/);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// §C — All 4 routes live in the child file
+// ─────────────────────────────────────────────────────────────────────────────
+describe("U-07 Phase 8 §C — all 4 moved routes are present in the child", () => {
+  const routes: [string, string][] = [
+    ["get", "/import/batches"],
+    ["get", "/import/batches/:id/changes"],
+    ["get", "/import/batches/:id/unlinked"],
+    ["post", "/import/batches/:id/unlinked/link"],
+  ];
+  for (const [method, route] of routes) {
+    it(`child declares router.${method}("${route}", ...)`, () => {
+      const re = new RegExp(
+        `router\\.${method}\\(\\s*["']${route.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["']`,
+      );
+      expect(CHILD).toMatch(re);
+    });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// §D — The same 4 routes are GONE from the parent (no double mount)
+// ─────────────────────────────────────────────────────────────────────────────
+describe("U-07 Phase 8 §D — parent no longer declares the moved routes", () => {
+  const routes: [string, string][] = [
+    ["get", "/import/batches"],
+    ["get", "/import/batches/:id/changes"],
+    ["get", "/import/batches/:id/unlinked"],
+    ["post", "/import/batches/:id/unlinked/link"],
+  ];
+  for (const [method, route] of routes) {
+    it(`parent does NOT declare router.${method}("${route}", ...)`, () => {
+      const re = new RegExp(
+        `router\\.${method}\\(\\s*["']${route.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["']`,
+      );
+      expect(PARENT).not.toMatch(re);
+    });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// §E — Parent file shrunk (regression-prevent floor)
+// ─────────────────────────────────────────────────────────────────────────────
+describe("U-07 Phase 8 §E — parent shrunk below the pre-split line count", () => {
+  it("parent file has fewer than 4710 lines (started ~4899 before this carve, ~4663 after)", () => {
+    const lineCount = PARENT.split("\n").length;
+    expect(lineCount).toBeLessThan(4710);
+  });
+});

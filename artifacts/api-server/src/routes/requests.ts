@@ -101,11 +101,11 @@ const createWorkflowSchema = z.object({
   steps: z.any().optional(),
 });
 
-const updateRequestSchema = z.object({
+export const updateRequestSchema = z.object({
   title: z.string().optional(),
   description: z.string().optional(),
   status: z.string().optional(),
-  priority: z.string().optional(),
+  priority: z.enum(["low", "medium", "high", "critical"], { invalid_type_error: "أولوية غير صالحة" }).optional(),
   currentApprover: z.any().optional(),
   attachments: z.any().optional(),
   notes: z.string().optional(),

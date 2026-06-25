@@ -22,6 +22,7 @@ import {
 } from "@/components/shared/detail-edit-delete-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { ActionHistory } from "@workspace/workflow-kit";
 import { FinancialDecisionPanel } from "@/components/shared/financial-decision-panel";
 import {
@@ -97,6 +98,59 @@ const expenseEditSchema = z.object({
   description: z.string().min(1, "الوصف مطلوب"),
 });
 type ExpenseEditForm = z.infer<typeof expenseEditSchema>;
+
+// Read-only journal-line columns for the linked-journal trace table. The
+// cell renderers reproduce the prior raw-<table> markup byte-for-byte (mono
+// account code + name, dimensions joined with " · ", and the exact
+// `Number(l?.debit||0) ? formatCurrency(...) : "-"` amount formatting) so the
+// GL display is unchanged — only the table shell is now the canonical DataTable.
+const JOURNAL_LINE_COLUMNS: DataTableColumn<any>[] = [
+  {
+    key: "account",
+    header: "الحساب",
+    sortable: false,
+    render: (l: any) => (
+      <>
+        <span className="font-mono text-muted-foreground">{l?.accountCode ?? "-"}</span>{" "}
+        <span className="text-status-neutral-foreground">{l?.accountName ?? ""}</span>
+      </>
+    ),
+    footer: () => "الإجمالي",
+  },
+  {
+    key: "dims",
+    header: "الأبعاد",
+    sortable: false,
+    className: "text-muted-foreground",
+    render: (l: any) => {
+      const dims = [
+        l?.vehicleId ? `مركبة #${l.vehicleId}` : null,
+        l?.costCenter ? `مركز: ${l.costCenter}` : null,
+        l?.projectId ? `مشروع #${l.projectId}` : null,
+        l?.project ? `مشروع: ${l.project}` : null,
+      ].filter(Boolean);
+      return dims.length ? dims.join(" · ") : "-";
+    },
+  },
+  {
+    key: "debit",
+    header: "مدين",
+    sortable: false,
+    align: "end",
+    className: "tabular-nums",
+    render: (l: any) => (Number(l?.debit || 0) ? formatCurrency(Number(l.debit)) : "-"),
+    footer: (rows: any[]) => formatCurrency(rows.reduce((s, l) => s + Number(l?.debit || 0), 0)),
+  },
+  {
+    key: "credit",
+    header: "دائن",
+    sortable: false,
+    align: "end",
+    className: "tabular-nums",
+    render: (l: any) => (Number(l?.credit || 0) ? formatCurrency(Number(l.credit)) : "-"),
+    footer: (rows: any[]) => formatCurrency(rows.reduce((s, l) => s + Number(l?.credit || 0), 0)),
+  },
+];
 
 export default function ExpenseDetail() {
   const [, params] = useRoute("/finance/expenses/:id");
@@ -192,7 +246,49 @@ export default function ExpenseDetail() {
         }),
       }),
   });
-  const journalPreview = previewData?.journalPreview ?? null;
+  // preview-unify: for a SAVED expense the STORED journal IS the truth that
+  // will post — show it, don't re-derive. The journal_entries row doesn't carry
+  // the expense's routing context (operationType / relatedEntity), so
+  // impact-preview falls to a GENERIC fallback and both DIVERGES from the real
+  // posted lines AND falsely blocks approval («الحساب غير قابل للترحيل») even
+  // though the stored lines are valid. Build the review preview from the stored
+  // journal; fall back to the re-computed preview only when no journal exists.
+  const journalPreview = useMemo(() => {
+    if (Array.isArray(expense?.lines) && expense.lines.length > 0) {
+      const mapped = lines.map((l: any, i: number) => {
+        const debit = Number(l.debit) || 0;
+        const credit = Number(l.credit) || 0;
+        return {
+          lineNo: i + 1,
+          accountCode: l.accountCode ?? "",
+          accountName: l.accountName ?? null,
+          debit, credit,
+          role: debit > 0 ? "debit" : "credit",
+          dimensions: {},
+          derivationReason: "القيد المخزَّن",
+          accountSource: "selected" as const,
+          status: "ok" as const,
+        };
+      });
+      const totals = mapped.reduce(
+        (a, l) => ({ debit: a.debit + l.debit, credit: a.credit + l.credit }),
+        { debit: 0, credit: 0 },
+      );
+      return {
+        ready: true,
+        lines: mapped,
+        totals,
+        balanced: Math.abs(totals.debit - totals.credit) < 0.01,
+        blockers: [],
+        warnings: [],
+        sourceContext: { paymentMethod: expense?.paymentMethod ?? null, sourceAccountCode: null, sourceAccountName: null },
+        suggestedDocumentStatus: "draft",
+        suggestedPaymentStatus: "paid",
+        suggestedPostingStatus: "unposted",
+      };
+    }
+    return previewData?.journalPreview ?? null;
+  }, [expense, lines, previewData]);
 
   // Governance/causedBy effects derived from the record: a vehicle-linked or
   // fuel/maintenance expense emits an OPERATIONAL event on approval — surfaced
@@ -659,50 +755,15 @@ export default function ExpenseDetail() {
               {lines.length === 0 ? (
                 <p className="text-xs text-muted-foreground">لا توجد بنود للقيد.</p>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs" data-testid="lines-table">
-                    <thead>
-                      <tr className="border-b text-muted-foreground text-right">
-                        <th className="py-1.5 pe-2 font-medium">الحساب</th>
-                        <th className="py-1.5 px-2 font-medium">الأبعاد</th>
-                        <th className="py-1.5 px-2 font-medium text-left">مدين</th>
-                        <th className="py-1.5 ps-2 font-medium text-left">دائن</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {lines.map((l: any, i: number) => {
-                        const dims = [
-                          l?.vehicleId ? `مركبة #${l.vehicleId}` : null,
-                          l?.costCenter ? `مركز: ${l.costCenter}` : null,
-                          l?.projectId ? `مشروع #${l.projectId}` : null,
-                          l?.project ? `مشروع: ${l.project}` : null,
-                        ].filter(Boolean);
-                        return (
-                          <tr key={l?.id ?? i} className="border-b last:border-0">
-                            <td className="py-1.5 pe-2">
-                              <span className="font-mono text-muted-foreground">{l?.accountCode ?? "-"}</span>{" "}
-                              <span className="text-status-neutral-foreground">{l?.accountName ?? ""}</span>
-                            </td>
-                            <td className="py-1.5 px-2 text-muted-foreground">
-                              {dims.length ? dims.join(" · ") : "-"}
-                            </td>
-                            <td className="py-1.5 px-2 text-left tabular-nums">
-                              {Number(l?.debit || 0) ? formatCurrency(Number(l.debit)) : "-"}
-                            </td>
-                            <td className="py-1.5 ps-2 text-left tabular-nums">
-                              {Number(l?.credit || 0) ? formatCurrency(Number(l.credit)) : "-"}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                      <tr className="font-semibold">
-                        <td className="py-1.5 pe-2">الإجمالي</td>
-                        <td className="py-1.5 px-2" />
-                        <td className="py-1.5 px-2 text-left tabular-nums">{formatCurrency(totalDebit)}</td>
-                        <td className="py-1.5 ps-2 text-left tabular-nums">{formatCurrency(totalCredit)}</td>
-                      </tr>
-                    </tbody>
-                  </table>
+                <div className="overflow-x-auto" data-testid="lines-table">
+                  <DataTable
+                    columns={JOURNAL_LINE_COLUMNS}
+                    data={lines}
+                    rowKey={(l, i) => l?.id ?? i}
+                    noToolbar
+                    pageSize={0}
+                    className="text-xs"
+                  />
                 </div>
               )}
             </CardContent>

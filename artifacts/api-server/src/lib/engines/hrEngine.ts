@@ -206,62 +206,6 @@ class HREngineImpl implements DomainEngine {
     });
   }
 
-  async postLeaveAccrualGL(
-    ctx: HRGLContext,
-    accrual: { period: string; totalAmount: number; employeeCount: number }
-  ) {
-    const [debitCode, creditCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "leave_accrual_expense", "debit", "5270"),
-      financialEngine.resolveAccountCode(ctx.companyId, "leave_accrual_liability", "credit", "2150"),
-    ]);
-
-    return financialEngine.postJournalEntry({
-      companyId: ctx.companyId,
-      branchId: ctx.branchId,
-      createdBy: ctx.createdBy,
-      ref: `JE-LVAC-${accrual.period}`,
-      description: `استحقاق إجازات — ${accrual.period} (${accrual.employeeCount} موظف)`,
-      type: "accrual",
-      sourceType: "hr_leave_accruals",
-      sourceId: 0,
-      sourceKey: `hr:leave_accrual:${ctx.companyId}:${accrual.period}`,
-      guardTable: "payroll_runs",
-      guardId: 0,
-      lines: [
-        { accountCode: debitCode, debit: accrual.totalAmount, credit: 0, description: `مصروف استحقاق إجازات — ${accrual.period}` },
-        { accountCode: creditCode, debit: 0, credit: accrual.totalAmount, description: `التزام إجازات مستحقة — ${accrual.period}` },
-      ],
-    });
-  }
-
-  async postEOSAccrualGL(
-    ctx: HRGLContext,
-    accrual: { period: string; totalAmount: number; employeeCount: number }
-  ) {
-    const [debitCode, creditCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "eos_accrual_expense", "debit", "5260"),
-      financialEngine.resolveAccountCode(ctx.companyId, "eos_accrual_liability", "credit", "2220"),
-    ]);
-
-    return financialEngine.postJournalEntry({
-      companyId: ctx.companyId,
-      branchId: ctx.branchId,
-      createdBy: ctx.createdBy,
-      ref: `JE-EOSAC-${accrual.period}`,
-      description: `استحقاق مكافأة نهاية خدمة — ${accrual.period} (${accrual.employeeCount} موظف)`,
-      type: "accrual",
-      sourceType: "hr_eos_accruals",
-      sourceId: 0,
-      sourceKey: `hr:eos_accrual:${ctx.companyId}:${accrual.period}`,
-      guardTable: "payroll_runs",
-      guardId: 0,
-      lines: [
-        { accountCode: debitCode, debit: accrual.totalAmount, credit: 0, description: `مصروف استحقاق نهاية خدمة — ${accrual.period}` },
-        { accountCode: creditCode, debit: 0, credit: accrual.totalAmount, description: `التزام نهاية خدمة — ${accrual.period}` },
-      ],
-    });
-  }
-
   async postPayrollRunGL(
     ctx: HRGLContext,
     payroll: {
@@ -833,7 +777,13 @@ class HREngineImpl implements DomainEngine {
   ) {
     const [leaveExpenseCode, leaveLiabilityCode, eosExpenseCode, eosLiabilityCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "hr_leave_accrual_expense", "debit", "5270"),
-      financialEngine.resolveAccountCode(ctx.companyId, "hr_leave_accrual_liability", "credit", "2220"),
+      // التزام استحقاق الإجازات يستخدم مفتاح المالية القابل للتحرير
+      // `leave_accrual_liability` (accounting_mappings → 2150 «مصروفات مستحقة
+      // الدفع»، مثبَّت بهجرة 365 / #2277)، لا مفتاحًا ببادئة hr_. المفتاح المبدوء
+      // بـhr_ غير مزروع، فكان هذا الترحيل يسقط بصمت إلى 2220 ويتجاوز خريطة المالية
+      // القابلة للتحرير؛ والافتراضي الآن 2150 ليطابقها. نهاية الخدمة تبقى على
+      // حساب مخصصها طويل الأجل (2220).
+      financialEngine.resolveAccountCode(ctx.companyId, "leave_accrual_liability", "credit", "2150"),
       financialEngine.resolveAccountCode(ctx.companyId, "hr_eos_accrual_expense", "debit", "5260"),
       financialEngine.resolveAccountCode(ctx.companyId, "hr_eos_accrual_liability", "credit", "2220"),
     ]);

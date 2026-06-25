@@ -30,7 +30,7 @@ import {
   todayISO,
   checkFinancialPeriodOpen,
 } from "../lib/businessHelpers.js";
-import { requestIdempotencyToken, markIdempotencyReplay, isDryRun } from "../lib/requestIdempotency.js";
+import { requestIdempotencyToken, boundedIdempotencyToken, markIdempotencyReplay, isDryRun } from "../lib/requestIdempotency.js";
 
 import { pushToDLQ } from "../lib/eventBus.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -93,7 +93,8 @@ const createBankGuaranteeSchema = z.object({
   ref: z.string().optional(),
   bank: z.string().min(1),
   beneficiary: z.string().min(1),
-  amount: z.coerce.number(),
+  // F9-B3b: قيمة الضمان البنكي موجبة قطعًا (لا صفر/سالب، ولا حالة عكس).
+  amount: z.coerce.number().positive("قيمة الضمان يجب أن تكون موجبة"),
   issueDate: z.string().min(1),
   expiryDate: z.string().min(1),
   guaranteeType: z.string().optional(),
@@ -131,13 +132,14 @@ const createIntercompanySchema = z.object({
   // where it may not even exist as a valid branch row. Branch
   // isolation queries on the destination company side then break.
   toBranchId: z.coerce.number().optional(),
-  amount: z.coerce.number(),
+  // F9-B3b: مبلغ التحويل بين الشركات موجب قطعًا (العكس تحويل مستقل بالاتجاه المعاكس).
+  amount: z.coerce.number().positive("مبلغ التحويل يجب أن يكون موجبًا"),
   description: z.string().optional(),
   transactionDate: z.string().optional(),
-  arAccountCode: z.string().default("1200"),
-  apAccountCode: z.string().default("2100"),
-  revenueAccountCode: z.string().default("4000"),
-  expenseAccountCode: z.string().default("5000"),
+  arAccountCode: z.string().default("1131"),
+  apAccountCode: z.string().default("2111"),
+  revenueAccountCode: z.string().default("4130"),
+  expenseAccountCode: z.string().default("5399"),
 });
 
 const createProjectSchema = z.object({
@@ -1277,9 +1279,22 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
       }
     }
 
+    // Idempotency separation (#1141, mirrors the vendor-AP fix in
+    // routes/finance-purchase.ts): the user-facing numbers come ONLY from
+    // the central numbering authority and are INDEPENDENT of the
+    // idempotency key (neither derives from the other). The idempotency
+    // token is kept ONLY as the cross-company correlation that ties the
+    // two legs together (it is non-displayed) and as the stable component
+    // of the retry tuple stored on intercompany_transactions.sourceKey.
     const idempotencyToken = requestIdempotencyToken(req);
-    const ref = `IC-${idempotencyToken}`;
     const txDate = transactionDate ?? todayISO();
+    // Stable retry tuple — backs the partial UNIQUE (fromCompanyId,
+    // sourceKey) index added in migration 417 so concurrent races collide
+    // on the index, while a sequential retry is short-circuited below
+    // BEFORE any number is issued. Kept stable across retries (the token
+    // comes from the Idempotency-Key header) so a retry returns the same
+    // pair.
+    const icSourceKey = `finance:intercompany:${scope.companyId}:${Number(toCompanyId)}:${txDate}:${Number(amount)}:${boundedIdempotencyToken(idempotencyToken)}`;
 
     const fromLines = [
       { accountCode: arAccountCode, debit: Number(amount), credit: 0, description: "ذمم مدينة شركة شقيقة" },
@@ -1293,7 +1308,8 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
     if (isDryRun(req)) {
       res.json({
         dryRun: true,
-        ref,
+        // Dry-run does NOT consume a counter — preview only. The real
+        // numbers are issued (one per company) on the live POST below.
         transactionDate: txDate,
         from: { companyId: scope.companyId, lines: fromLines },
         to: { companyId: Number(toCompanyId), lines: toLines },
@@ -1301,6 +1317,65 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
       });
       return;
     }
+
+    // Idempotency: short-circuit a sequential retry BEFORE issuing, so no
+    // fresh numbers are burned and no duplicate document/JE pair is
+    // created. The parent row is keyed by (fromCompanyId, sourceKey).
+    const [existingIc] = await rawQuery<{
+      ref: string; fromJournalId: number | null; toJournalId: number | null; amount: string;
+    }>(
+      `SELECT ref, "fromJournalId", "toJournalId", amount::text AS amount
+         FROM intercompany_transactions
+        WHERE "fromCompanyId" = $1 AND "sourceKey" = $2 AND "deletedAt" IS NULL
+        LIMIT 1`,
+      [scope.companyId, icSourceKey]
+    ).catch(() => [] as { ref: string; fromJournalId: number | null; toJournalId: number | null; amount: string }[]);
+    if (existingIc) {
+      markIdempotencyReplay(req, res, true);
+      res.status(200).json({
+        ref: existingIc.ref,
+        fromJournalId: existingIc.fromJournalId,
+        toJournalId: existingIc.toJournalId,
+        amount: Number(existingIc.amount),
+        idempotentReplay: true,
+        message: `المعاملة البينية ${existingIc.ref} مسجلة مسبقًا`,
+      });
+      return;
+    }
+
+    // #1141 — "each leg its own number". Issue TWO center numbers, one per
+    // company scope, from the shared scheme finance.intercompany (seeded
+    // per company by migration 417). The from-leg JE ref + the parent
+    // intercompany_transactions.ref use the FROM company's number; the
+    // to-leg JE ref uses the TO company's number. The two refs DIFFER and
+    // each is sourced from its own company's IC counter. issueNumber runs
+    // its OWN counter transaction; we call both BEFORE the outer
+    // withTransaction (same ordering as the vendor-AP route), then link
+    // the assignment rows to the parent inside the transaction.
+    const issuedFrom = await issueNumber({
+      companyId: scope.companyId,
+      branchId: scope.branchId ?? null,
+      moduleKey: "finance",
+      entityKey: "intercompany",
+      entityTable: "intercompany_transactions",
+      actorId: scope.userId,
+      metadata: { side: "from", toCompanyId: Number(toCompanyId), correlation: idempotencyToken },
+      expectedTiming: "on_draft",
+    });
+    const issuedTo = await issueNumber({
+      companyId: Number(toCompanyId),
+      branchId: toBranchId ?? null,
+      moduleKey: "finance",
+      entityKey: "intercompany",
+      entityTable: "intercompany_transactions",
+      actorId: scope.userId,
+      metadata: { side: "to", fromCompanyId: scope.companyId, correlation: idempotencyToken },
+      expectedTiming: "on_draft",
+    });
+    const fromRef = issuedFrom.number; // FROM company's IC number
+    const toRef = issuedTo.number;     // TO company's IC number
+    // The parent row + the from-leg JE carry the FROM company's number.
+    const ref = fromRef;
 
     const { financialEngine } = await import("../lib/engines/index.js");
 
@@ -1320,13 +1395,14 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
     // single transaction because Postgres doesn't gate transactions on
     // the companyId column; the companyId scoping is purely a data
     // attribute.
-    const { fromResult, toResult } = await withTransaction(async () => {
+    const { fromResult, toResult } = await withTransaction(async (client) => {
       const fromResult = await financialEngine.postJournalEntry({
         companyId: scope.companyId,
         branchId: scope.branchId,
         createdBy: scope.activeAssignmentId,
-        ref,
-        description: description ?? `معاملة بين الشركات ${ref}`,
+        // FROM-leg JE carries the FROM company's center-issued number.
+        ref: fromRef,
+        description: description ?? `معاملة بين الشركات ${fromRef}`,
         type: "intercompany",
         sourceType: "intercompany",
         sourceId: 0,
@@ -1344,8 +1420,11 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
         // branch id into the DESTINATION company.
         branchId: toBranchId ?? 0,
         createdBy: scope.activeAssignmentId,
-        ref,
-        description: description ?? `معاملة بين الشركات ${ref}`,
+        // TO-leg JE carries the TO company's OWN center-issued number —
+        // a DIFFERENT number from the from-leg, sourced from the TO
+        // company's IC counter.
+        ref: toRef,
+        description: description ?? `معاملة بين الشركات ${toRef}`,
         type: "intercompany",
         sourceType: "intercompany",
         sourceId: 0,
@@ -1354,10 +1433,31 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
         lines: toLines,
       });
 
-      await rawExecute(
-        `INSERT INTO intercompany_transactions (ref,"fromCompanyId","toCompanyId",amount,description,"transactionDate",status,"fromJournalId","toJournalId","createdBy")
-         VALUES ($1,$2,$3,$4,$5,$6,'posted',$7,$8,$9)`,
-        [ref, scope.companyId, Number(toCompanyId), Number(amount), description ?? null, txDate, fromResult.journalId, toResult.journalId, scope.activeAssignmentId]
+      // Parent row: ref = FROM company's number; sourceKey = the stable
+      // retry tuple (backs the UNIQUE index + the short-circuit above).
+      const ins = await client.query(
+        `INSERT INTO intercompany_transactions (ref,"fromCompanyId","toCompanyId",amount,description,"transactionDate",status,"fromJournalId","toJournalId","createdBy","sourceKey")
+         VALUES ($1,$2,$3,$4,$5,$6,'posted',$7,$8,$9,$10) RETURNING id`,
+        [fromRef, scope.companyId, Number(toCompanyId), Number(amount), description ?? null, txDate, fromResult.journalId, toResult.journalId, scope.activeAssignmentId, icSourceKey]
+      );
+      const parentId = ins.rows[0].id as number;
+
+      // Numbering link-back (documented exception to the bypass guard).
+      // BOTH per-leg numbering_assignments rows point at the single
+      // durable entity for this document — the parent
+      // intercompany_transactions row (id=parentId). The two assignments
+      // remain distinguishable by their companyId scope (the from-leg
+      // assignment is in scope.companyId, the to-leg in toCompanyId), and
+      // each carries its side in metadata. There is no separate per-leg
+      // table to point at, so the parent row is the correct anchor for
+      // both — this keeps every issued number traceable to a real row.
+      await client.query(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [parentId, issuedFrom.assignmentId],
+      );
+      await client.query(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [parentId, issuedTo.assignmentId],
       );
 
       return { fromResult, toResult };
@@ -1373,7 +1473,7 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
       action: "intercompany.created",
       entity: "intercompany_transactions",
       entityId: fromJournalId, // primary fromCompany journal id is the canonical reference
-      details: JSON.stringify({ ref, toCompanyId: Number(toCompanyId), amount: Number(amount), fromJournalId, toJournalId }),
+      details: JSON.stringify({ ref, fromRef, toRef, correlation: idempotencyToken, toCompanyId: Number(toCompanyId), amount: Number(amount), fromJournalId, toJournalId }),
     }).catch((err) => pushToDLQ("event", { action: "intercompany.created", entityId: fromJournalId }, err, scope.companyId));
 
     createAuditLog({
@@ -1497,12 +1597,15 @@ financeHardeningRouter.post("/projects", authorize({ feature: "finance.hardening
         });
         projectRef = issuedProj.number;
       }
-      const { insertId } = await rawExecute(
-        `INSERT INTO projects ("companyId",ref,name,description,budget,"startDate","endDate","managerId")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-        [scope.companyId, projectRef, name, description ?? null, Number(budget ?? 0), startDate ?? null, endDate ?? null, scope.activeAssignmentId]
-      );
-      assertInsert(insertId, "projects");
+      // حدود المسارات (#2839): الكتابة في جدول المشاريع المملوك تتمّ عبر عقد
+      // المسار القائد (المشاريع) لا مباشرةً من المالية.
+      const { insertProjectRecord } = await import("./projects.js");
+      const insertId = await insertProjectRecord({
+        companyId: scope.companyId, ref: projectRef, name,
+        description: description ?? null, budget: Number(budget ?? 0),
+        startDate: startDate ?? null, endDate: endDate ?? null,
+        managerId: scope.activeAssignmentId,
+      });
       return { insertId, issuedProj };
     });
     if (issuedProj) {

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { PageShell, DataTable, type DataTableColumn, PageStatusBadge } from "@workspace/ui-core";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,6 +47,7 @@ export default function JobTitlesPage() {
 
   const { data, isLoading, isError, refetch } = useApiQuery<any>(["admin-job-titles"], "/employees/job-titles");
   const titles = asList(data?.data || data) as JobTitle[];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(titles);
 
   const { data: rolesData } = useApiQuery<{ data: RbacRole[] }>(["rbac-roles"], "/rbac/v2/roles");
   const roles = rolesData?.data ?? [];
@@ -143,13 +146,30 @@ export default function JobTitlesPage() {
       subtitle="اربط كل مسمّى وظيفي بدوره الافتراضي وسياسة العهدة — ليُفعَّل الموظف الجديد تلقائيًا"
       breadcrumbs={[{ href: "/dashboard", label: "لوحة التحكم" }, { href: "/admin", label: "الإدارة" }, { label: "قوالب المسميات" }]}
       actions={
-        !showForm ? (
-          <GuardedButton perm="hr.employees:create" onClick={() => open()}>
-            <Plus className="h-4 w-4 me-1" /> مسمّى جديد
-          </GuardedButton>
-        ) : (
-          <Button variant="outline" onClick={close}><X className="h-4 w-4 me-1" /> إلغاء</Button>
-        )
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_admin_job_titles"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "قوالب المسميات الوظيفية", total: printRows.length },
+              items: printRows.map((r: any) => ({
+                "المسمّى الوظيفي": r.name,
+                "الفئة": r.category || "—",
+                "الدور الافتراضي": roleLabel(r.defaultRoleKey) || "—",
+                "حساب عهدة": r.opensCustody ? "نعم" : "—",
+                "الحالة": r.isActive !== false ? "نشط" : "غير نشط",
+              })),
+            })}
+          />
+          {!showForm ? (
+            <GuardedButton perm="hr.employees:create" onClick={() => open()}>
+              <Plus className="h-4 w-4 me-1" /> مسمّى جديد
+            </GuardedButton>
+          ) : (
+            <Button variant="outline" onClick={close}><X className="h-4 w-4 me-1" /> إلغاء</Button>
+          )}
+        </div>
       }
     >
       {showForm && (
@@ -194,7 +214,7 @@ export default function JobTitlesPage() {
         </Card>
       )}
 
-      <DataTable columns={columns} data={titles} emptyMessage="لا توجد مسميات وظيفية بعد — أضف أول مسمّى لربطه بدور افتراضي" />
+      <DataTable columns={columns} data={titles} onSortedDataChange={setPrintRows} emptyMessage="لا توجد مسميات وظيفية بعد — أضف أول مسمّى لربطه بدور افتراضي" />
     </PageShell>
   );
 }

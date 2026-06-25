@@ -25,10 +25,30 @@ import { join, relative } from "node:path";
 const SRC = "artifacts/api-server/src";
 const BOOTSTRAP = join(SRC, "lib/companyBootstrap.ts");
 
-// Baselined known offenders. Key = `<relpath-from-SRC>:<purpose>:<fallbackCode>`.
-// Empty — the original 6 were repointed to postable leaves in this PR, so the
-// guard now enforces a clean baseline (any reappearance fails CI).
-const ALLOWLIST = new Set([]);
+// Baselined known offenders. Key = `<relpath-from-SRC>:<fallbackCode>`.
+// Legacy fallbacks (other in-flight tracks / old chart numbering) that resolve
+// to a non-postable parent OR a code absent from the default chart. Tracked +
+// fixed per docs/side-issues/finance-phantom-account-fallbacks.md; delete each
+// line as its owning flow repoints it to a postable leaf. Do NOT add NEW entries
+// — repoint to a postable leaf instead.
+// Repointed to POSTABLE leaves (removed from this list):
+//   commission_expense → 5430 «العمولات والوساطة» (كان 5200 رواتب-أب / 6200 وهمي)
+//   CIP account → 1270 «أعمال تحت التنفيذ» (كان 1530 وهمي)
+//   capitalized-asset target → 1280 «أصول ثابتة أخرى» (كان 1500 وهمي؛ ورقة
+//     جديدة + backfill migration 414).
+//
+// PERMANENT exception (NOT a phantom fallback): datafixInventory's 1130/1140/2110
+// are CONTROL-PARENT codes by design — customer/employee-advance/supplier
+// subsidiary ledgers are CREATED UNDER these control accounts (the subsidiaries
+// are the postable leaves; the parent is allowPosting:false on purpose). They
+// MIRROR the live provisioner createSubsidiaryAccountsForEntity in
+// routes/accounting-engine.ts (cross-checked by datafixInventory.test.ts «mirrors
+// the live specs»). Repointing them to leaves would break subsidiary creation.
+// Keep allowlisted. راجع docs/side-issues/finance-phantom-account-fallbacks.md.
+const ALLOWLIST = new Set([
+  "lib/finance/datafixInventory.ts:1130", "lib/finance/datafixInventory.ts:1140",
+  "lib/finance/datafixInventory.ts:2110",
+]);
 
 function walk(dir) {
   const out = [];
@@ -41,45 +61,65 @@ function walk(dir) {
   return out;
 }
 
-const reCall =
-  /resolveAccountCode\(\s*[^,]+,\s*"([a-z_]+)"\s*,\s*"(?:debit|credit)"\s*,\s*"(\d{3,4})"/g;
+// Every way code injects a DEFAULT account code (4-digit account range [1-6]xxx
+// — excludes ZATCA invoice types «388» and thresholds «45000»). #2325 originally
+// covered only the resolveAccountCode 4th arg, which let `|| / ?? / default() /
+// fallbackCode: / getAccountCodeFromMapping` slip through; this widens the net.
+const FALLBACK_PATTERNS = [
+  /resolveAccountCode\([^)]*?,\s*"([1-6]\d{3})"\s*\)/g,
+  /getAccountCodeFromMapping\([^)]*?,\s*"([1-6]\d{3})"\s*\)/g,
+  /fallbackCode:\s*"([1-6]\d{3})"/g,
+  /\|\|\s*"([1-6]\d{3})"/g,
+  /\?\?\s*"([1-6]\d{3})"/g,
+  /default\("([1-6]\d{3})"\)/g,
+];
 
 function main() {
-  // Non-postable account codes from the default chart of accounts.
+  // Postable leaves vs non-postable parents from the default chart of accounts.
   const boot = readFileSync(BOOTSTRAP, "utf8");
-  const nonPostable = new Set();
-  const reChart = /code:\s*"(\d{3,4})"[^}\n]*?allowPosting:\s*false/g;
-  for (let m; (m = reChart.exec(boot)); ) nonPostable.add(m[1]);
+  const postable = new Map(); // code → true(leaf) | false(parent)
+  for (const line of boot.split("\n")) {
+    const m = line.match(/code:\s*"(\d{3,5})"/);
+    if (!m || !/name:/.test(line)) continue;
+    postable.set(m[1], !/allowPosting:\s*false/.test(line));
+  }
 
   const offenders = [];
   const baselined = [];
   for (const file of walk(SRC)) {
     const text = readFileSync(file, "utf8");
-    const lines = text.split("\n");
-    reCall.lastIndex = 0;
-    for (let m; (m = reCall.exec(text)); ) {
-      const [, purpose, code] = m;
-      if (!nonPostable.has(code)) continue;
-      const lineNo = text.slice(0, m.index).split("\n").length;
-      const key = `${relative(SRC, file)}:${purpose}:${code}`;
-      const rec = { file: `${file}:${lineNo}`, purpose, code, line: lines[lineNo - 1]?.trim() };
-      (ALLOWLIST.has(key) ? baselined : offenders).push(rec);
+    const rel = relative(SRC, file);
+    const seen = new Set();
+    for (const re of FALLBACK_PATTERNS) {
+      re.lastIndex = 0;
+      for (let m; (m = re.exec(text)); ) {
+        const code = m[1];
+        const p = postable.get(code);
+        const verdict = p === false ? "non-postable parent" : p === undefined ? "absent from chart" : null;
+        if (!verdict) continue;
+        const key = `${rel}:${code}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const lineNo = text.slice(0, m.index).split("\n").length;
+        const rec = { file: `${file}:${lineNo}`, code, verdict, line: text.split("\n")[lineNo - 1]?.trim() };
+        (ALLOWLIST.has(key) ? baselined : offenders).push(rec);
+      }
     }
   }
 
   if (baselined.length) {
-    console.warn(`⚠️  check-postable-fallbacks: ${baselined.length} baselined offender(s) (#2325 — fix in owning track):`);
-    for (const o of baselined) console.warn(`    ${o.file}  ${o.purpose} → ${o.code} (non-postable parent)`);
+    console.warn(`⚠️  check-postable-fallbacks: ${baselined.length} baselined offender(s) (tracked — docs/side-issues/finance-phantom-account-fallbacks.md):`);
+    for (const o of baselined) console.warn(`    ${o.file}  → ${o.code} (${o.verdict})`);
   }
 
   if (offenders.length) {
-    console.error(`\n✗ check-postable-fallbacks: ${offenders.length} NEW fallback(s) point at a non-postable parent account.`);
-    console.error(`  A fallback must be a postable leaf (the chart marks these allowPosting:false).`);
-    for (const o of offenders) console.error(`    ${o.file}\n      ${o.line}\n      → ${o.purpose} falls back to non-postable ${o.code}`);
+    console.error(`\n✗ check-postable-fallbacks: ${offenders.length} NEW account fallback(s) point at a non-postable parent or a code absent from the chart.`);
+    console.error(`  A fallback must be a POSTABLE leaf (else the journal can't post → user blocked).`);
+    for (const o of offenders) console.error(`    ${o.file}\n      ${o.line}\n      → fallback ${o.code} (${o.verdict})`);
     process.exit(1);
   }
 
-  console.log(`✓ check-postable-fallbacks: clean — no new non-postable fallbacks (${baselined.length} baselined).`);
+  console.log(`✓ check-postable-fallbacks: clean — no new non-postable/phantom fallbacks (${baselined.length} baselined).`);
 }
 
 const isDirectRun =

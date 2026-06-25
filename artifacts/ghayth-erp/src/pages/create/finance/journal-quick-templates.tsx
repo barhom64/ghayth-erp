@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { AccountSelect } from "@/components/shared/entity-selects";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import {
   Layers, FileSignature, ChevronRight, CheckCircle2, AlertTriangle,
   Building2, TrendingDown, TrendingUp, Banknote, Calendar, Users,
@@ -359,31 +360,33 @@ export default function JournalQuickTemplatesPage() {
                     <CardTitle className="text-base">معاينة القيد</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="overflow-x-auto"><table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b text-xs text-muted-foreground">
-                          <th className="text-start py-2 px-2">الحساب</th>
-                          <th className="text-end py-2 px-2">مدين</th>
-                          <th className="text-end py-2 px-2">دائن</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr className="border-b">
-                          <td className="py-2 px-2 font-mono">{debitAccount}</td>
-                          <td className="py-2 px-2 text-end tabular-nums font-semibold text-status-success-foreground">
-                            {formatCurrency(numAmount)}
-                          </td>
-                          <td className="py-2 px-2 text-end tabular-nums">—</td>
-                        </tr>
-                        <tr>
-                          <td className="py-2 px-2 font-mono">{creditAccount}</td>
-                          <td className="py-2 px-2 text-end tabular-nums">—</td>
-                          <td className="py-2 px-2 text-end tabular-nums font-semibold text-status-danger-foreground">
-                            {formatCurrency(numAmount)}
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table></div>
+                    <DataTable<{ id: number; account: string; debit: number; credit: number }>
+                      noToolbar
+                      pageSize={0}
+                      className="text-sm"
+                      data={[
+                        { id: 1, account: debitAccount, debit: numAmount, credit: 0 },
+                        { id: 2, account: creditAccount, debit: 0, credit: numAmount },
+                      ]}
+                      columns={[
+                        {
+                          key: "account", header: "الحساب",
+                          render: (r) => <span className="font-mono">{r.account}</span>,
+                        },
+                        {
+                          key: "debit", header: "مدين", align: "end",
+                          render: (r) => r.debit > 0
+                            ? <span className="tabular-nums font-semibold text-status-success-foreground">{formatCurrency(r.debit)}</span>
+                            : <span className="tabular-nums">—</span>,
+                        },
+                        {
+                          key: "credit", header: "دائن", align: "end",
+                          render: (r) => r.credit > 0
+                            ? <span className="tabular-nums font-semibold text-status-danger-foreground">{formatCurrency(r.credit)}</span>
+                            : <span className="tabular-nums">—</span>,
+                        },
+                      ] satisfies DataTableColumn<{ id: number; account: string; debit: number; credit: number }>[]}
+                    />
                   </CardContent>
                 </Card>
               )}

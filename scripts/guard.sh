@@ -102,6 +102,9 @@ run_step "check:ghost-rows:tests" node scripts/src/check-ghost-rows.test.mjs
 # Pure-logic fixtures for the ambiguous-column scanner — no DB needed, so
 # this runs in every environment to guard the guard itself.
 run_step "check:sql-ambiguity:tests" node scripts/src/check-sql-ambiguity.test.mjs
+# Pure-logic fixtures for the negative-journal-lines diagnostic (formatter +
+# psql-row parser) — no DB needed; guards the report tool's logic.
+run_step "report:negative-journal-lines:tests" node scripts/src/report-negative-journal-lines.test.mjs
 if [ -n "${DATABASE_URL:-}" ]; then
   run_step "check:schema-drift" node scripts/src/check-schema-drift.mjs
   run_step "check:ghost-rows"   node scripts/src/check-ghost-rows.mjs
@@ -184,6 +187,24 @@ run_step "check:jsx-generic-component" node scripts/src/check-jsx-generic-compon
 # Pure-logic fixtures guard the detector.
 run_step "check:responsive-tables:tests" node scripts/src/check-responsive-tables.test.mjs
 run_step "check:responsive-tables" node scripts/src/check-responsive-tables.mjs
+# Display-table canonicalization: a page-level list/display table must use the
+# shared <DataTable> (sort, per-user page-size, mobile cards, column footers,
+# CSV export), not a hand-rolled raw <table>. The 2026-06 table-unification
+# pass converted them all; this keeps NEW raw tables out of src/pages/**.
+# OFFLINE source scan; baseline of verified-bespoke pages (forms / statements /
+# tree / info-blocks) in scripts/display-tables-allowlist.txt. Fixtures guard
+# the detector.
+run_step "check:display-tables:tests" node scripts/src/check-display-tables.test.mjs
+run_step "check:display-tables" node scripts/src/check-display-tables.mjs
+# Mobile grid-cramping: Tailwind is mobile-first, so a BARE grid-cols-N (N>=4)
+# IS the phone layout and shows N cramped columns on a 360px screen. The 2026-06
+# mobile pass collapsed every stat/input/tab grid to grid-cols-2 md:grid-cols-N;
+# this keeps NEW cramped grids out of src/pages/**. OFFLINE source scan with
+# mechanical exclusions (key-value col-span, min-w / overflow-x scroll wrappers,
+# calendar/guide files); intentional dense layouts pinned in
+# scripts/mobile-grids-allowlist.txt. Fixtures guard the detector.
+run_step "check:mobile-grids:tests" node scripts/src/check-mobile-grids.test.mjs
+run_step "check:mobile-grids" node scripts/src/check-mobile-grids.mjs
 # Page action-bar consistency (refresh/print/export): a hand-rolled control —
 # a <Button> pairing the action's icon with its bare Arabic label (RefreshCw+«تحديث»
 # / Printer+«طباعة» / Download+«تصدير») — instead of the unified component
@@ -296,6 +317,28 @@ run_step "check:redirect-targets" node scripts/src/check-redirect-targets.mjs
 # redirect-target nav guards). Pure-logic fixtures first, then the live scan.
 run_step "check:tabs-coverage:tests" node scripts/src/check-tabs-coverage.test.mjs
 run_step "check:tabs-coverage" node scripts/src/check-tabs-coverage.mjs --strict
+# MODULE-STRIP COVERAGE: the INVERSE of tabs-coverage — every routed MAIN page
+# (list/dashboard/report/tool) that lives inside a module must RENDER that
+# module's top strip (<XxxTabsNav/>), so the horizontal nav never disappears as
+# the user moves between pages of the same module. Generalises the 5-page HR
+# contract (hrNavStabilitySmoke) to all 12 strip-bearing modules. Detail/create
+# forms + focused/standalone layouts are exempt by design. Pure helpers first.
+run_step "check:module-strip-coverage:tests" node scripts/src/check-module-strip-coverage.test.mjs
+run_step "check:module-strip-coverage" node scripts/src/check-module-strip-coverage.mjs --strict
+# FILTER-BAR INVENTORY (جرد): report-only census of every list page's filter/
+# search bar — canonical (<AdvancedFilters>/DataTable toolbar) vs hand-rolled
+# (client = safe to migrate onto the canonical bar; server = keep server-side
+# filtering, only the LAYOUT should be normalised). Report-only by design:
+# server-side filtering is a legitimate pattern and must NOT fail the build. The
+# pure classifiers are gated by the :tests sibling.
+run_step "check:filter-bar-coverage:tests" node scripts/src/check-filter-bar-coverage.test.mjs
+run_step "check:filter-bar-coverage" node scripts/src/check-filter-bar-coverage.mjs
+# OPERABILITY CENSUS (جرد العمليّة): report-only per-page inventory of the
+# operational elements — back / print / sort / search — across every routed
+# page, classified by page type so every gap (or n/a) carries a reason. The
+# accounting tool behind the «back/print/search/sort» standardisation campaign.
+run_step "check:page-operability:tests" node scripts/src/check-page-operability.test.mjs
+run_step "check:page-operability" node scripts/src/check-page-operability.mjs
 # SIDEBAR COVERAGE: every mounted route must be reachable from the left sidebar
 # (navigation.registry.ts) or be legitimately off-sidebar (detail / create /
 # redirect-stub / allowlisted); and no nav entry may be a dead link or a
@@ -352,6 +395,20 @@ run_step "check:gl-swallow" node scripts/src/check-gl-swallow.mjs
 # global auditMiddleware provides baseline coverage) and don't fail the
 # build. Route-level exemptions live in scripts/src/audit-stop-ship.mjs.
 run_step "audit:stop-ship"    node scripts/src/audit-stop-ship.mjs
+# E2E login-entry guard (#flaky-test): a Playwright spec that opens the app
+# at the bare root `page.goto("/")` before driving the login form races the
+# SPA's unauthenticated "/" → "/login" redirect against the field fills,
+# producing a non-deterministic empty-email login that bounces to /login.
+# The product is healthy — the failure is the test. Use the race-free
+# e2e/tests/_helpers/login.ts (goto "/login" directly) instead. Pure-logic
+# fixtures first, then the live spec scan.
+run_step "check:e2e-login:tests" node scripts/src/check-e2e-login-pattern.test.mjs
+run_step "check:e2e-login"    node scripts/src/check-e2e-login-pattern.mjs
+# Dangerous-action UX guard — native browser confirm() (RTL-broken, no
+# impact-preview / blockers / audit) must use the unified ConfirmDeleteDialog /
+# ConfirmActionDialog. Pure-logic fixtures first, then the baseline-frozen scan.
+run_step "check:dangerous-actions:tests" node scripts/src/check-dangerous-actions.test.mjs
+run_step "check:dangerous-actions" node scripts/src/check-dangerous-actions.mjs
 run_step "test"               pnpm -s --filter @workspace/api-server run test
 # Frontend component tests (jsdom + @testing-library/react). Real behavioural
 # verification for sensitive UI (e.g. ProductSelect snap-to-catalog) without a

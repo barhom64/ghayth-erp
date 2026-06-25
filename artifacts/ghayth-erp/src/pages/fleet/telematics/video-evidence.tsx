@@ -17,6 +17,8 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { FleetTelematicsTabsNav } from "@/components/shared/fleet-telematics-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 interface VideoSessionRow {
   id: number;
@@ -58,6 +60,7 @@ export default function FleetTelematicsVideoEvidence() {
     "/fleet/telematics/video/sessions",
   );
   const rows = asList(data) as VideoSessionRow[];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   const { data: accessLogs } = useApiQuery<{ data: AccessLogRow[] }>(
     ["fleet-telematics-video-access-logs", String(logsForSessionId ?? 0)],
@@ -174,6 +177,24 @@ export default function FleetTelematicsVideoEvidence() {
         { href: "/fleet/telematics/live-map", label: "التتبع المباشر" },
         { label: "أدلة الفيديو" },
       ]}
+      actions={
+        <PrintButton
+          entityType="report_fleet_video_sessions"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "أدلة الفيديو والبث المباشر", total: printRows.length },
+            items: printRows.map((s: any) => ({
+              "الحالة": (STATUS_LABEL[s.status] ?? { label: s.status }).label,
+              "المركبة": s.vehiclePlate || s.deviceLabel || "—",
+              "القناة": `CH ${s.channelNo}`,
+              "النوع": String(s.streamType).toUpperCase(),
+              "بدأ في": new Date(s.startedAt).toLocaleString("ar-SA"),
+              "السبب": s.reason || "—",
+            })),
+          })}
+        />
+      }
     >
       <FleetTabsNav />
       <FleetTelematicsTabsNav />
@@ -195,6 +216,7 @@ export default function FleetTelematicsVideoEvidence() {
           <DataTable
             columns={columns}
             data={rows}
+            onSortedDataChange={setPrintRows}
             isLoading={isLoading}
             isError={isError}
             onRetry={refetch}

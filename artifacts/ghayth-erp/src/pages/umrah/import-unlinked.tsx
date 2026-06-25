@@ -32,6 +32,8 @@ import { PageShell } from "@workspace/ui-core";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { useToast } from "@/hooks/use-toast";
 import { AlertTriangle, Link2, Plus, ArrowRight } from "lucide-react";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 type Dimension = "agent" | "group" | "subAgent";
 
@@ -135,6 +137,7 @@ function UnlinkedTab({ batchId, dimension }: { batchId: number; dimension: Dimen
     `/umrah/import/batches/${batchId}/unlinked?dimension=${dimension}`,
   );
   const rows = useMemo(() => asList<UnlinkedRow>(rowsQ.data), [rowsQ.data]);
+  const { sortedRows: printRows } = usePrintRows<UnlinkedRow>(rows);
 
   // Existing-entity dropdown depends on dimension.
   const agentsQ = useApiQuery<any>(["umrah-agents"], "/umrah/agents",
@@ -233,9 +236,30 @@ function UnlinkedTab({ batchId, dimension }: { batchId: number; dimension: Dimen
     <>
       <Card className="mb-4">
         <CardHeader>
-          <CardTitle className="text-base">
-            {DIMENSION_TITLE[dimension]} ({rows.length})
-          </CardTitle>
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle className="text-base">
+              {DIMENSION_TITLE[dimension]} ({rows.length})
+            </CardTitle>
+            {rows.length > 0 && (
+              <PrintButton
+                entityType="report_umrah_import_unlinked"
+                entityId={String(batchId)}
+                size="icon"
+                payload={() => ({
+                  entity: {
+                    title: `${DIMENSION_TITLE[dimension]} — الدفعة #${batchId}`,
+                    total: printRows.length,
+                  },
+                  items: printRows.map((r: UnlinkedRow) => ({
+                    "رقم نسك": r.nuskNumber ?? "—",
+                    "الاسم": r.fullName,
+                    "الجنسية": r.nationality ?? "—",
+                    "الحالة": r.status ?? "—",
+                  })),
+                })}
+              />
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {rows.length === 0 ? (

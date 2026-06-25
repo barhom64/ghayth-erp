@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ArrowRight, Clock, FileText, Activity, CheckSquare, Link2,
-  User, Calendar, Hash, Briefcase, Printer, Eye, MessageCircle, ShieldCheck
+  User, Calendar, Hash, Briefcase, Printer, Eye, MessageCircle, ShieldCheck, ClipboardCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
@@ -17,6 +17,7 @@ import { EntityComments } from "./entity-comments";
 import { LinkedTasks } from "./linked-tasks";
 import { AuditTrailPanel } from "./audit-trail-panel";
 import { PageStatusBadge } from "@/components/page-status-badge";
+import { useAppContextOptional } from "@/contexts/app-context";
 
 /**
  * DetailPageLayout — the single source of truth for "how a detail page
@@ -136,6 +137,23 @@ export interface DetailPageLayoutProps {
   /** Action buttons in the header top-right. */
   actions?: ReactNode;
 
+  /**
+   * Perspective the page is viewed in. Affects only presentation: a small
+   * mode badge by the title and (for "reviewer") defaulting to the review
+   * tab. It does NOT gate actions — callers still permission-gate their own
+   * action buttons. Defaults to "submitter" (no badge).
+   */
+  mode?: "submitter" | "reviewer" | "readonly";
+
+  /**
+   * Review panel content — a «المراجعة» tab the owning path fills with its
+   * EXISTING decision actions (approve/reject/return), completeness checklist
+   * and expected-effect preview. This is a layout slot only: the layout adds
+   * NO approval logic of its own. When provided, a «المراجعة» tab appears
+   * first; with mode="reviewer" it is the default tab.
+   */
+  reviewPanel?: ReactNode;
+
   /** Show a Print action button in header, calls onPrint when clicked. */
   printable?: boolean;
   onPrint?: () => void;
@@ -181,6 +199,8 @@ export function DetailPageLayout(props: DetailPageLayoutProps) {
     extraTabs = [],
     defaultTab = "overview",
     actions,
+    mode = "submitter",
+    reviewPanel,
     printable,
     onPrint,
     hideTabs = [],
@@ -190,8 +210,25 @@ export function DetailPageLayout(props: DetailPageLayoutProps) {
     headerExtra,
   } = props;
 
+  // Reviewers land on the review panel first; everyone else on the caller's
+  // default tab (or overview).
+  const initialTab = reviewPanel && mode === "reviewer" ? "review" : defaultTab;
+  const [activeTab, setActiveTab] = useState<string>(initialTab);
 
-  const [activeTab, setActiveTab] = useState<string>(defaultTab);
+  // Activate attachment-review affordances for users who can actually decide:
+  // explicit reviewer mode, OR a manager+ with the documents permission (matches
+  // the server's documents:update + approver gate). Provider-safe: returns false
+  // outside the app shell (e.g. isolated tests). The server enforces the real
+  // permission regardless — this only surfaces the controls.
+  const appCtx = useAppContextOptional();
+  const canReviewDocuments =
+    mode === "reviewer" || (!!appCtx && appCtx.can("documents:update") && appCtx.roleLevel >= 50);
+
+  const MODE_BADGE: Partial<Record<NonNullable<DetailPageLayoutProps["mode"]>, { label: string; cls: string }>> = {
+    reviewer: { label: "وضع المراجعة", cls: "bg-blue-100 text-status-info-foreground border-status-info-surface" },
+    readonly: { label: "اطّلاع فقط", cls: "bg-surface-subtle text-muted-foreground border-border" },
+  };
+  const modeBadge = MODE_BADGE[mode];
 
   // --- Header strip (always visible, even during loading) -----------------
   const header = (
@@ -226,6 +263,15 @@ export function DetailPageLayout(props: DetailPageLayoutProps) {
 
   // --- Build list of tabs ---------------------------------------------------
   const STANDARD_TABS: ExtraTab[] = [];
+  // Review panel (owner-supplied decision surface) leads the tabs when present.
+  if (reviewPanel) {
+    STANDARD_TABS.push({
+      key: "review",
+      label: "المراجعة",
+      icon: ClipboardCheck,
+      content: reviewPanel,
+    });
+  }
   STANDARD_TABS.push({
     key: "overview",
     label: "نظرة عامة",
@@ -237,7 +283,7 @@ export function DetailPageLayout(props: DetailPageLayoutProps) {
       key: "documents",
       label: "المرفقات",
       icon: FileText,
-      content: () => <EntityDocuments entityType={entityType} entityId={entityId} />,
+      content: () => <EntityDocuments entityType={entityType} entityId={entityId} canReview={canReviewDocuments} />,
     });
   }
   if (!hideTabs.includes("timeline")) {
@@ -300,6 +346,11 @@ export function DetailPageLayout(props: DetailPageLayoutProps) {
                 {typeLabel && (
                   <Badge variant="secondary" className="text-xs font-normal">
                     {typeLabel}
+                  </Badge>
+                )}
+                {modeBadge && (
+                  <Badge className={cn("text-xs font-normal border", modeBadge.cls)} variant="outline">
+                    {modeBadge.label}
                   </Badge>
                 )}
               </div>

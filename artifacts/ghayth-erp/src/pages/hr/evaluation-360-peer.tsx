@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRoute, useLocation, Link } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -13,6 +13,8 @@ import { cn } from "@/lib/utils";
 import { PageShell } from "@workspace/ui-core";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 const EVAL_CRITERIA = [
   { key: "technical_skills", label: "المهارات التقنية والمهنية" },
   { key: "communication", label: "التواصل والتعاون" },
@@ -74,6 +76,14 @@ export default function Evaluation360PeerPage() {
 
   const avgScore = Math.round(Object.values(scores).reduce((a, b) => a + b, 0) / Object.values(scores).length);
 
+  // Print rows = each performance criterion with its current score (live from
+  // the sliders). Derived before any early return so hooks run unconditionally.
+  const criteriaRows = useMemo(
+    () => EVAL_CRITERIA.map((c) => ({ label: c.label, score: scores[c.key] ?? 0 })),
+    [scores],
+  );
+  const { sortedRows: printRows } = usePrintRows<{ label: string; score: number }>(criteriaRows);
+
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
@@ -90,7 +100,24 @@ export default function Evaluation360PeerPage() {
       subtitle={cycle ? `الموظف: ${cycle.employeeName} · ${cycle.period}` : undefined}
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { href: "/hr/evaluation-360", label: "التقييم 360°" }, { label: "تقييم الزملاء" }]}
       actions={
-        <Button asChild variant="ghost" size="sm"><Link href={`/hr/evaluation-360/${cycleId}`}><ArrowRight className="w-4 h-4 me-1" />عودة</Link></Button>
+        <div className="flex items-center gap-2">
+          <Button asChild variant="ghost" size="sm"><Link href={`/hr/evaluation-360/${cycleId}`}><ArrowRight className="w-4 h-4 me-1" />عودة</Link></Button>
+          <PrintButton
+            entityType="report_hr_evaluation_360_peer"
+            entityId={String(cycleId)}
+            size="icon"
+            payload={() => ({
+              entity: {
+                title: cycle ? `تقييم الزملاء — ${cycle.employeeName}` : "تقييم المدير / الزملاء",
+                total: avgScore,
+              },
+              items: printRows.map((r) => ({
+                "المعيار": r.label,
+                "التقييم": r.score,
+              })),
+            })}
+          />
+        </div>
       }
     >
       <HrTabsNav />
@@ -114,7 +141,7 @@ export default function Evaluation360PeerPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-5 gap-2">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
               {[
                 { label: "الحضور", score: systemEval.attendanceScore, icon: CheckCircle },
                 { label: "المهام", score: systemEval.taskCompletionScore, icon: Target },

@@ -26,6 +26,8 @@ import { useSettings } from "@/contexts/settings-context";
 import { useToast } from "@/hooks/use-toast";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { useAppContext } from "@/contexts/app-context";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { GovIntegrationsTab } from "./settings/gov-integrations-tab";
 import { ZatcaSettingsTab } from "./settings/zatca-settings-tab";
 import { CommunicationChannelsTab } from "./settings/communication-channels-tab";
@@ -38,6 +40,7 @@ import { SystemControlsTab } from "./settings/system-controls-tab";
 import { ApprovalWorkflowsTab } from "./settings/approval-workflows-tab";
 import { WorkflowDefinitionsTab } from "./settings/workflow-definitions-tab";
 import { NumberingTab } from "./settings/numbering-tab";
+import { CustomFieldsTab } from "./settings/custom-fields-tab";
 
 // GeneralSettings — 11-field edit form. The server stores values as
 // {key, value} rows; mapping happens in the hydration block below.
@@ -327,6 +330,7 @@ const SETTINGS_PATH_TAB: Record<string, string> = {
   "/settings/resolved": "resolved",
   "/settings/zatca": "zatca",
   "/settings/gov": "gov",
+  "/settings/custom-fields": "custom-fields",
 };
 
 export default function SettingsPage() {
@@ -359,6 +363,7 @@ export default function SettingsPage() {
           <TabsTrigger value="channels">قنوات الاتصال</TabsTrigger>
           <TabsTrigger value="audit">التدقيق</TabsTrigger>
           <TabsTrigger value="resolved">الوراثة</TabsTrigger>
+          <TabsTrigger value="custom-fields">الحقول المخصّصة</TabsTrigger>
         </TabsList>
         <TabsContent value="general"><GeneralSettings /></TabsContent>
         <TabsContent value="companies"><CompaniesTab /></TabsContent>
@@ -375,6 +380,7 @@ export default function SettingsPage() {
         <TabsContent value="channels"><CommunicationChannelsTab /></TabsContent>
         <TabsContent value="audit"><AuditLogTab /></TabsContent>
         <TabsContent value="resolved"><ResolvedSettingsTab /></TabsContent>
+        <TabsContent value="custom-fields"><CustomFieldsTab /></TabsContent>
       </Tabs>
     </PageShell>
   );
@@ -389,6 +395,9 @@ const SOURCE_LABELS: Record<string, { label: string; color: string; bg: string }
 function ResolvedSettingsTab() {
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["settings-resolved"], "/settings/resolved");
   const items = data?.data || [];
+  // Print the effective-settings inheritance list (key / value / source). Hook
+  // runs before the early returns below.
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
 
   // GET /settings — raw key/value rows scoped to the current company.
   // GET /settings/resolve?key=... — probe a single key with full
@@ -423,14 +432,32 @@ function ResolvedSettingsTab() {
   const rawSettings: any[] = rawSettingsQ.data?.data ?? rawSettingsQ.data ?? [];
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-semibold flex items-center gap-2">
-        <GitBranch className="w-5 h-5 text-status-info" />
-        وراثة الإعدادات (نظام ← شركة ← فرع)
-      </h3>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-lg font-semibold flex items-center gap-2">
+          <GitBranch className="w-5 h-5 text-status-info" />
+          وراثة الإعدادات (نظام ← شركة ← فرع)
+        </h3>
+        {items.length > 0 && (
+          <PrintButton
+            entityType="report_settings_resolved"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "وراثة الإعدادات الفعلية", total: printRows.length },
+              items: printRows.map((s: any) => ({
+                "المفتاح": s.key,
+                "القيمة": typeof s.value === "object" ? JSON.stringify(s.value) : String(s.value ?? "—"),
+                "المصدر": (SOURCE_LABELS[s.source] || SOURCE_LABELS.system).label,
+              })),
+            })}
+          />
+        )}
+      </div>
       <p className="text-sm text-muted-foreground">يعرض القيمة الفعلية لكل إعداد ومصدرها — القيم الأقرب (فرع) تتغلب على القيم الأعلى (شركة/نظام)</p>
       <DataTable
         data={items as any[]}
         rowKey={(row) => String(row.key)}
+        onSortedDataChange={setPrintRows}
         columns={[
           { key: "key", header: "المفتاح", render: (s) => <span className="font-mono text-xs">{s.key}</span> },
           { key: "value", header: "القيمة", render: (s) => <span className="text-muted-foreground truncate max-w-xs block">{typeof s.value === "object" ? JSON.stringify(s.value) : String(s.value ?? "-")}</span> },

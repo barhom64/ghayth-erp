@@ -6,6 +6,8 @@ import {
   type DataTableColumn,
 } from "@workspace/ui-core";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { useAppContext } from "@/contexts/app-context";
 import { formatDateAr } from "@/lib/formatters";
 import {
@@ -89,12 +91,14 @@ export default function ManagerBoard() {
   );
   const approvalMut = { mutate: (body: ApprovalBody) => (getApprovalMethod(body._type) === "POST" ? postMut : patchMut).mutate(body) };
 
-  if (actionLoading) return <LoadingSpinner />;
-  if (actionError) return <ErrorState />;
-
   const pending = actionData || {};
   const workflows = pending.pendingWorkflows || [];
   const allPending = buildAllPending(pending);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(allPending);
+
+  if (actionLoading) return <LoadingSpinner />;
+  if (actionError) return <ErrorState />;
+
   const urgentPending = allPending.filter((r: any) => r.priority === "high" || r.priority === "urgent");
   const todayPending = allPending.filter((r: any) => {
     const created = new Date(r.createdAt);
@@ -199,9 +203,25 @@ export default function ManagerBoard() {
       ]}
       subtitle="إشراف على الفريق والطلبات المعلقة واتخاذ قرارات سريعة"
       actions={
-        <Button asChild variant="outline" size="sm" className="gap-1"><Link href="/action-center">
-            مركز القرارات الكامل <ArrowUpRight className="w-3 h-3" />
-          </Link></Button>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_manager_pending_approvals"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "لوحة المدير — الطلبات المعلقة", total: printRows.length },
+              items: printRows.map((item: any) => ({
+                "النوع": item._label,
+                "الموظف": item.employeeName || item.requestedBy || "—",
+                "التفاصيل": item.reason || item.leaveTypeName || item.description || "—",
+                "وقت الطلب": item.createdAt ? formatTimeAgo(item.createdAt) : "—",
+              })),
+            })}
+          />
+          <Button asChild variant="outline" size="sm" className="gap-1"><Link href="/action-center">
+              مركز القرارات الكامل <ArrowUpRight className="w-3 h-3" />
+            </Link></Button>
+        </div>
       }
     >
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -279,7 +299,7 @@ export default function ManagerBoard() {
               <p className="text-sm text-muted-foreground text-center py-4">جاري التحميل...</p>
             ) : (
               <>
-                <div className="grid grid-cols-4 gap-2 mb-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
                   {[
                     { label: "حاضر", value: presentCount, color: "bg-status-success-surface text-status-success-foreground" },
                     { label: "غائب", value: absentCount, color: "bg-status-error-surface text-status-error-foreground" },
@@ -384,6 +404,7 @@ export default function ManagerBoard() {
           <DataTable
             columns={pendingColumns}
             data={allPending}
+            onSortedDataChange={setPrintRows}
             rowKey={(item) => `${item._type}-${item.id}`}
             isLoading={actionLoading}
             emptyMessage="لا توجد طلبات معلقة"

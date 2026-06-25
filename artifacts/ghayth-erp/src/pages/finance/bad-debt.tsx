@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { formatCurrency, formatNumber, todayLocal } from "@/lib/formatters";
 import { AlertTriangle, Calculator, BookOpen } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -76,6 +77,20 @@ export default function BadDebtPage() {
   };
 
   const periodFromAsOf = asOf.slice(0, 7); // YYYY-MM
+
+  // One row per aging bucket for the detail DataTable.
+  const bucketKeys = ["current", "d30", "d60", "d90", "d90plus"] as const;
+  const totalOpen =
+    data.buckets.current + data.buckets.d30 + data.buckets.d60
+    + data.buckets.d90 + data.buckets.d90plus;
+  const bucketRows = bucketKeys.map((k) => ({
+    key: k,
+    label: bucketLabel[k],
+    tone: bucketTone[k],
+    balance: data.buckets[k],
+    rate: rates[k],
+    provision: data.provision[k],
+  }));
 
   const handlePost = async () => {
     try {
@@ -154,7 +169,7 @@ export default function BadDebtPage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-5 gap-2">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
             {(["current", "d30", "d60", "d90", "d90plus"] as const).map((k) => (
               <div key={k}>
                 <Label className="text-xs">{bucketLabel[k]} %</Label>
@@ -209,47 +224,35 @@ export default function BadDebtPage() {
           <CardTitle className="text-sm">تفصيل المخصص حسب شرائح العمر</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-xs text-muted-foreground bg-muted/50">
-                <tr>
-                  <th className="text-start p-2 font-medium">الشريحة</th>
-                  <th className="text-end p-2 font-medium">الرصيد المفتوح</th>
-                  <th className="text-end p-2 font-medium">النسبة</th>
-                  <th className="text-end p-2 font-medium">المخصص</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(["current", "d30", "d60", "d90", "d90plus"] as const).map((k) => (
-                  <tr key={k} className="border-t">
-                    <td className="p-2">
-                      <Badge className={`text-xs ${bucketTone[k]}`}>{bucketLabel[k]}</Badge>
-                    </td>
-                    <td className="p-2 text-end font-mono">{formatCurrency(data.buckets[k])}</td>
-                    <td className="p-2 text-end text-muted-foreground">
-                      {(rates[k] * 100).toFixed(1)}%
-                    </td>
-                    <td className="p-2 text-end font-mono font-bold text-status-error-foreground">
-                      {formatCurrency(data.provision[k])}
-                    </td>
-                  </tr>
-                ))}
-                <tr className="border-t bg-muted/30 font-bold">
-                  <td className="p-2">الإجمالي</td>
-                  <td className="p-2 text-end font-mono">
-                    {formatCurrency(
-                      data.buckets.current + data.buckets.d30 + data.buckets.d60
-                      + data.buckets.d90 + data.buckets.d90plus,
-                    )}
-                  </td>
-                  <td />
-                  <td className="p-2 text-end font-mono text-status-error-foreground">
-                    {formatCurrency(data.totalProvision)}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            noToolbar
+            pageSize={0}
+            data={bucketRows}
+            rowKey={(r) => r.key}
+            columns={[
+              {
+                key: "label", header: "الشريحة",
+                render: (r) => <Badge className={`text-xs ${r.tone}`}>{r.label}</Badge>,
+                exportValue: (r) => r.label,
+                footer: () => "الإجمالي",
+              },
+              {
+                key: "balance", header: "الرصيد المفتوح", align: "end", className: "font-mono",
+                render: (r) => formatCurrency(r.balance),
+                footer: () => formatCurrency(totalOpen),
+              },
+              {
+                key: "rate", header: "النسبة", align: "end", className: "text-muted-foreground",
+                render: (r) => `${(r.rate * 100).toFixed(1)}%`,
+              },
+              {
+                key: "provision", header: "المخصص", align: "end",
+                className: "font-mono font-bold text-status-error-foreground",
+                render: (r) => formatCurrency(r.provision),
+                footer: () => formatCurrency(data.totalProvision),
+              },
+            ] satisfies DataTableColumn<(typeof bucketRows)[number]>[]}
+          />
         </CardContent>
       </Card>
 

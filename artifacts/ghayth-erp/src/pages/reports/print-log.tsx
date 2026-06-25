@@ -13,8 +13,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Download, Repeat, Printer, AlertTriangle, FileDown, ChevronLeft, ChevronRight } from "lucide-react";
-import { PageShell } from "@workspace/ui-core";
+import { Download, Repeat, Printer, AlertTriangle, FileDown } from "lucide-react";
+import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { PrintButton } from "@/components/shared/print-button";
 
 interface JobRow {
@@ -76,7 +76,6 @@ export default function PrintLogPage() {
   );
 
   const total = data?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   // Reset to page 0 whenever a filter changes — otherwise users land on an
   // empty page when the new filter result has fewer rows than the offset.
@@ -117,6 +116,106 @@ export default function PrintLogPage() {
     }
     window.open(`/api/print/jobs/${j.jobId}/download`, "_blank");
   }
+
+  // Columns mirror the original raw table exactly — same order, same headers,
+  // same per-cell rendering (date locale, mono document cell, copy-number
+  // warning, status color, action buttons). Sorting is client-side over the
+  // current server page only; server-side pagination stays the source of truth.
+  const jobColumns: DataTableColumn<JobRow>[] = [
+    {
+      key: "createdAt",
+      header: "التاريخ",
+      className: "whitespace-nowrap",
+      render: (j) => new Date(j.createdAt).toLocaleString("ar-SA"),
+    },
+    {
+      key: "user",
+      header: "المستخدم",
+      sortable: false,
+      render: (j) => j.userName ?? j.userEmail ?? `#${j.userId ?? "—"}`,
+    },
+    {
+      key: "branchName",
+      header: "الفرع",
+      render: (j) => j.branchName ?? "—",
+    },
+    {
+      key: "entityType",
+      header: "الوثيقة",
+      className: "font-mono text-xs",
+      render: (j) => (
+        <>
+          {j.entityType} <span className="text-muted-foreground">#{j.entityId}</span>
+        </>
+      ),
+    },
+    { key: "format", header: "الصيغة" },
+    {
+      key: "copyNumber",
+      header: "النسخة",
+      render: (j) =>
+        j.copyNumber > 1 ? (
+          <span className="inline-flex items-center gap-1 text-status-error-foreground">
+            <AlertTriangle className="h-3 w-3" /> {j.copyNumber}
+          </span>
+        ) : (
+          j.copyNumber
+        ),
+    },
+    {
+      key: "status",
+      header: "الحالة",
+      render: (j) => (
+        <span
+          className={
+            j.status === "done"
+              ? "text-status-success-foreground"
+              : j.status === "failed"
+                ? "text-status-error-foreground"
+                : "text-muted-foreground"
+          }
+        >
+          {j.status}
+        </span>
+      ),
+    },
+    {
+      key: "actions",
+      header: "",
+      align: "end",
+      className: "whitespace-nowrap",
+      render: (j) => (
+        <>
+          {j.pdfStorageKey ? (
+            // Direct anchor — GET /api/print/jobs/:jobId/download
+            // streams the stored PDF. Anchor (not window.open)
+            // keeps the URL visible to the wiring audit.
+            <a
+              href={`/api/print/jobs/${j.jobId}/download`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center h-8 w-8 rounded hover:bg-accent"
+              title="إعادة عرض"
+            >
+              <Download className="h-3 w-3" />
+            </a>
+          ) : (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => download(j)}
+              title="إعادة عرض"
+            >
+              <Download className="h-3 w-3" />
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" onClick={() => reprint(j)} title="طلب إعادة طباعة">
+            <Repeat className="h-3 w-3" />
+          </Button>
+        </>
+      ),
+    },
+  ];
 
   return (
     <PageShell
@@ -226,118 +325,17 @@ export default function PrintLogPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
-            <div className="text-sm text-muted-foreground p-4 text-center">جاري التحميل…</div>
-          ) : !data?.items?.length ? (
-            <div className="text-sm text-muted-foreground p-4 text-center">لا توجد مطبوعات تطابق الفلاتر.</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50">
-                  <tr>
-                    <th className="text-right p-2">التاريخ</th>
-                    <th className="text-right p-2">المستخدم</th>
-                    <th className="text-right p-2">الفرع</th>
-                    <th className="text-right p-2">الوثيقة</th>
-                    <th className="text-right p-2">الصيغة</th>
-                    <th className="text-right p-2">النسخة</th>
-                    <th className="text-right p-2">الحالة</th>
-                    <th className="text-right p-2"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.items.map((j) => (
-                    <tr key={j.id} className="border-t hover:bg-muted/30">
-                      <td className="p-2 whitespace-nowrap">
-                        {new Date(j.createdAt).toLocaleString("ar-SA")}
-                      </td>
-                      <td className="p-2">{j.userName ?? j.userEmail ?? `#${j.userId ?? "—"}`}</td>
-                      <td className="p-2">{j.branchName ?? "—"}</td>
-                      <td className="p-2 font-mono text-xs">
-                        {j.entityType} <span className="text-muted-foreground">#{j.entityId}</span>
-                      </td>
-                      <td className="p-2">{j.format}</td>
-                      <td className="p-2">
-                        {j.copyNumber > 1 ? (
-                          <span className="inline-flex items-center gap-1 text-status-error-foreground">
-                            <AlertTriangle className="h-3 w-3" /> {j.copyNumber}
-                          </span>
-                        ) : (
-                          j.copyNumber
-                        )}
-                      </td>
-                      <td className="p-2">
-                        <span
-                          className={
-                            j.status === "done"
-                              ? "text-status-success-foreground"
-                              : j.status === "failed"
-                                ? "text-status-error-foreground"
-                                : "text-muted-foreground"
-                          }
-                        >
-                          {j.status}
-                        </span>
-                      </td>
-                      <td className="p-2 text-left whitespace-nowrap">
-                        {j.pdfStorageKey ? (
-                          // Direct anchor — GET /api/print/jobs/:jobId/download
-                          // streams the stored PDF. Anchor (not window.open)
-                          // keeps the URL visible to the wiring audit.
-                          <a
-                            href={`/api/print/jobs/${j.jobId}/download`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center justify-center h-8 w-8 rounded hover:bg-accent"
-                            title="إعادة عرض"
-                          >
-                            <Download className="h-3 w-3" />
-                          </a>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => download(j)}
-                            title="إعادة عرض"
-                          >
-                            <Download className="h-3 w-3" />
-                          </Button>
-                        )}
-                        <Button size="sm" variant="ghost" onClick={() => reprint(j)} title="طلب إعادة طباعة">
-                          <Repeat className="h-3 w-3" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          {total > pageSize && (
-            <div className="flex items-center justify-between mt-3 text-sm">
-              <span className="text-muted-foreground">
-                صفحة {(page + 1).toLocaleString("en-US")} من {totalPages.toLocaleString("en-US")}
-              </span>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setPage((p) => Math.max(0, p - 1))}
-                  disabled={page === 0 || isLoading}
-                >
-                  <ChevronRight className="h-3 w-3" /> السابقة
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-                  disabled={page >= totalPages - 1 || isLoading}
-                >
-                  التالية <ChevronLeft className="h-3 w-3" />
-                </Button>
-              </div>
-            </div>
-          )}
+          <DataTable
+            columns={jobColumns}
+            data={data?.items ?? []}
+            isLoading={isLoading}
+            noToolbar
+            pageSize={pageSize}
+            total={total}
+            page={page + 1}
+            onPageChange={(p) => setPage(p - 1)}
+            emptyMessage="لا توجد مطبوعات تطابق الفلاتر."
+          />
         </CardContent>
       </Card>
     </PageShell>

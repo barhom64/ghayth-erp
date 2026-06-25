@@ -9,21 +9,22 @@
 # As real gaps get audit wired in, prune their line here — the covered %
 # climbs monotonically and can never silently regress.
 #
-# Baseline captured: 107 unaudited write endpoint(s).
-DELETE /admin/pricing/rules/:id
+# Baseline captured: 88 unaudited write endpoint(s).
+#
+# POST /finance/intercompany — audit IS present (emitEvent + createAuditLog in
+# finance-hardening.ts, ~L1470/L1479) but ~237 lines into the handler, beyond the
+# check's 120-line handler window. Not a real gap — both legs' JE creation is
+# audited + event-emitted on commit.
+POST /finance/intercompany
 DELETE /admin/saudi/wps/credentials/:bankCode
-DELETE /documents/pricing/rules/:id
 DELETE /documents/saudi/wps/credentials/:bankCode
-DELETE /finance/pricing/rules/:id
 DELETE /finance/saudi/wps/credentials/:bankCode
-DELETE /hr/pricing/rules/:id
 DELETE /hr/saudi/wps/credentials/:bankCode
 DELETE /inbox/drafts/:id
 DELETE /inbox/signatures/:id
 DELETE /inbox/threads/:channel/:address/snooze
 DELETE /umrah/hotels/:id
 DELETE /umrah/import/presets/:id
-DELETE /warehouse/pricing/rules/:id
 DELETE /warehouse/saudi/wps/credentials/:bankCode
 PATCH /admin/zatca/missing-tax-numbers/:id
 PATCH /documents/zatca/missing-tax-numbers/:id
@@ -51,15 +52,11 @@ POST /admin/pbx-control/setup/generate-secret
 POST /admin/pbx-control/setup/test-signature
 POST /admin/pbx-control/transcripts/run-next
 POST /admin/permissions/explain
-POST /admin/pricing/resolve
-POST /admin/pricing/rules
 POST /admin/vendor-settings/:slug/test
 POST /admin/vendor-settings/company/smtp/test
 POST /documents/:id/ocr/rerun
 POST /documents/ocr/extractions/:id/confirm
 POST /documents/ocr/extractions/:id/reject
-POST /documents/pricing/resolve
-POST /documents/pricing/rules
 POST /events/outbox/drain
 POST /finance/:id/ocr/rerun
 POST /finance/bank-guarantees/:id/cancel
@@ -72,16 +69,12 @@ POST /finance/journal/:id/reverse
 POST /finance/ocr/extractions/:id/confirm
 POST /finance/ocr/extractions/:id/reject
 POST /finance/payment-run/execute
-POST /finance/pricing/resolve
-POST /finance/pricing/rules
 POST /finance/vendor-invoices/impact-preview
 POST /finance/zatca/test-connection
 POST /hr/:id/ocr/rerun
 POST /hr/attendance/field-ping
 POST /hr/ocr/extractions/:id/confirm
 POST /hr/ocr/extractions/:id/reject
-POST /hr/pricing/resolve
-POST /hr/pricing/rules
 POST /impact-preview
 POST /inbox/conversations/:id/messages
 POST /inbox/drafts
@@ -105,15 +98,8 @@ POST /umrah/reclassify-revenue
 POST /warehouse/:id/ocr/rerun
 POST /warehouse/ocr/extractions/:id/confirm
 POST /warehouse/ocr/extractions/:id/reject
-POST /warehouse/pricing/resolve
-POST /warehouse/pricing/rules
-PUT /admin/pricing/rules/:id
 PUT /admin/saudi/wps/credentials/:bankCode
-PUT /documents/pricing/rules/:id
 PUT /documents/saudi/wps/credentials/:bankCode
-PUT /finance/pricing/rules/:id
 PUT /finance/saudi/wps/credentials/:bankCode
-PUT /hr/pricing/rules/:id
 PUT /hr/saudi/wps/credentials/:bankCode
-PUT /warehouse/pricing/rules/:id
 PUT /warehouse/saudi/wps/credentials/:bankCode

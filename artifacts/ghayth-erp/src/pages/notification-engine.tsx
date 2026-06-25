@@ -23,6 +23,8 @@ import {
   BarChart3, Clock, Shield, Webhook, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 const CHANNEL_LABELS: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
   in_app: { label: "داخلي", icon: <Bell className="h-4 w-4" />, color: "bg-status-info-surface text-status-info-foreground" },
@@ -34,6 +36,16 @@ const CHANNEL_LABELS: Record<string, { label: string; icon: React.ReactNode; col
 };
 
 const ALL_CHANNELS = ["in_app", "email", "sms", "whatsapp", "push", "webhook"];
+
+// Arabic labels for delivery-log statuses — single source for both the
+// table chip and the print payload (no raw English to the operator).
+const DELIVERY_STATUS_LABEL: Record<string, string> = {
+  delivered: "وصل",
+  sent: "أُرسل",
+  failed: "فشل",
+  queued: "انتظار",
+  fallback_triggered: "تصعيد",
+};
 
 function ChannelBadge({ channel }: { channel: string }) {
   const info = CHANNEL_LABELS[channel];
@@ -782,6 +794,8 @@ function DeliveryStatsTab() {
   const [days, setDays] = useState(30);
   const { data: statsData, isLoading: loadingStats, isError: errorStats } = useApiQuery(["notif-delivery-stats", String(days)], `/notification-engine/delivery-stats?days=${days}`);
   const { data: logData, isLoading: loadingLog, isError: errorLog } = useApiQuery(["notif-delivery-log"], "/notification-engine/delivery-log?limit=20");
+  const logs = logData?.data as Array<Record<string, unknown>> | undefined;
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<Record<string, unknown>>(logs ?? []);
 
   if (loadingStats || loadingLog) return <LoadingSpinner />;
   if (errorStats || errorLog) return <ErrorState />;
@@ -792,8 +806,6 @@ function DeliveryStatsTab() {
     deliveryRate?: number;
     totalSent?: number;
   } | undefined;
-
-  const logs = logData?.data as Array<Record<string, unknown>> | undefined;
 
   const deliveryLogColumns: DataTableColumn<Record<string, unknown>>[] = [
     {
@@ -846,15 +858,32 @@ function DeliveryStatsTab() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">تتبع التوصيل والإحصائيات</h3>
-        <Select value={String(days)} onValueChange={(v) => setDays(Number(v))}>
-          <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="7">آخر 7 أيام</SelectItem>
-            <SelectItem value="14">آخر 14 يوم</SelectItem>
-            <SelectItem value="30">آخر 30 يوم</SelectItem>
-            <SelectItem value="90">آخر 90 يوم</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_notification_delivery_log"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "محرك الإشعارات — آخر عمليات التوصيل", total: printRows.length },
+              items: printRows.map((log: any) => ({
+                "القناة": CHANNEL_LABELS[log.channel as string]?.label ?? (log.channel as string),
+                "المستلم": (log.recipient as string) ?? "—",
+                "الحالة": DELIVERY_STATUS_LABEL[log.status as string] ?? (log.status as string),
+                "القالب": (log.templateKey as string) ?? "—",
+                "الوقت": log.createdAt as string,
+              })),
+            })}
+          />
+          <Select value={String(days)} onValueChange={(v) => setDays(Number(v))}>
+            <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="7">آخر 7 أيام</SelectItem>
+              <SelectItem value="14">آخر 14 يوم</SelectItem>
+              <SelectItem value="30">آخر 30 يوم</SelectItem>
+              <SelectItem value="90">آخر 90 يوم</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -914,6 +943,7 @@ function DeliveryStatsTab() {
             <DataTable
               columns={deliveryLogColumns}
               data={logs}
+              onSortedDataChange={setPrintRows}
               searchPlaceholder={null}
               noToolbar
               pageSize={0}
@@ -1055,7 +1085,7 @@ export default function NotificationEnginePage() {
       breadcrumbs={[{ href: "/settings", label: "الإعدادات" }, { label: "محرك الإشعارات" }]}
     >
       <Tabs defaultValue="routing" dir="rtl">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-3 md:grid-cols-5 h-auto md:h-9">
           <TabsTrigger value="routing" className="gap-1">
             <Route className="h-4 w-4" /> التوجيه
           </TabsTrigger>

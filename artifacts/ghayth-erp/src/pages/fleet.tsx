@@ -6,6 +6,7 @@
  * (not duplicates) /module-dashboards?tab=fleet.
  */
 import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,6 +33,7 @@ import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { withListFilters } from "@/lib/list-query";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
+import { AllowCreateDrawer } from "@/components/shared/allow-create-drawer";
 
 export default function Fleet() {
   const [tab, setTab] = useState("vehicles");
@@ -43,7 +45,7 @@ export default function Fleet() {
     >
       <FleetTabsNav />
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-3 md:grid-cols-5 h-auto md:h-9">
           <TabsTrigger value="vehicles" className="gap-2"><Car className="h-4 w-4" /> المركبات</TabsTrigger>
           <TabsTrigger value="drivers" className="gap-2"><Users className="h-4 w-4" /> السائقون</TabsTrigger>
           <TabsTrigger value="trips" className="gap-2"><MapPin className="h-4 w-4" /> الرحلات</TabsTrigger>
@@ -63,9 +65,14 @@ export default function Fleet() {
 function VehiclesTab() {
   const [, navigate] = useLocation();
   const { permissions } = useAppContext();
+  const queryClient = useQueryClient();
   // Scope (companyIds/branchIds) + scope-aware queryKey are injected
   // automatically by useApiQuery → injectScope.
   const { data: stats } = useApiQuery<any>(["fleet-stats"], `/fleet/stats`);
+  // تعميم نمط «درج الإنشاء» (AllowCreateDrawer) — زر «إضافة مركبة» يفتح
+  // النموذج الكامل في درج بدل الانتقال لصفحة /create. الصفحة الكاملة تبقى
+  // متاحة عبر «فتح الصفحة الكاملة» داخل الدرج وللوصول المباشر.
+  const [createOpen, setCreateOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [previewItem, setPreviewItem] = useState<any>(null);
   const [filters, setFilters] = useFilters();
@@ -155,7 +162,7 @@ function VehiclesTab() {
       header: "الإجراءات",
       render: (v) => (
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          <Button variant="ghost" size="sm" onClick={() => setPreviewItem(v)}><Eye className="h-4 w-4" /></Button>
+          <Button variant="ghost" size="sm" aria-label="معاينة" title="معاينة" onClick={() => setPreviewItem(v)}><Eye className="h-4 w-4" /></Button>
           <RowActions
             canEdit={canManage}
             onEdit={() => startEdit(v.id, { plateNumber: v.plateNumber, make: v.make || "", model: v.model || "", color: v.color || "", status: v.status || "available" })}
@@ -220,8 +227,18 @@ function VehiclesTab() {
             })),
           })}
         />
-        {canManage && <Link href="/fleet/vehicles/create"><GuardedButton perm="fleet:create" className="gap-2"><Plus className="h-4 w-4" /> إضافة مركبة</GuardedButton></Link>}
+        {canManage && <GuardedButton perm="fleet:create" className="gap-2" onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" /> إضافة مركبة</GuardedButton>}
       </div>
+
+      <AllowCreateDrawer
+        kind="vehicle"
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={() => {
+          refetch();
+          queryClient.invalidateQueries({ queryKey: ["fleet-stats"] });
+        }}
+      />
 
       <Card>
         <CardHeader><CardTitle>المركبات</CardTitle></CardHeader>

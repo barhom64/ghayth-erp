@@ -126,7 +126,7 @@ export default function CustomerAdvanceCreate() {
             إلغاء
           </Button>
           <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>
-            {createMut.isPending ? "جارٍ الحفظ..." : "حفظ"}
+            {createMut.isPending ? "جاري الحفظ..." : "حفظ"}
           </Button>
         </div>
       </div>

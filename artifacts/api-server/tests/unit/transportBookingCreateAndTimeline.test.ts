@@ -41,8 +41,11 @@ describe("#1733 — booking create form", () => {
   it("offers the 7 umrah route types (from the shared ROUTE_TYPES source)", () => {
     // UX-05 (TA-T18-UX-AUDIT-01) — ROUTE_TYPES وُحِّد في مصدر مشترك؛ النموذج
     // يستورده بدل تعريفه محليًا، فينتقل ضمان القيم السبع إلى المصدر المشترك.
-    expect(CREATE_PAGE).toMatch(/import \{ ROUTE_TYPES \} from "@\/lib\/transport-constants"/);
-    expect(CREATE_PAGE).toMatch(/ROUTE_TYPES\.map\(/);
+    // routeType select is rendered via UmrahContextQuestionnaire (UX-05 dedup —
+    // #1812 audit fix removed the duplicate inline select). Check there instead.
+    const QUESTIONNAIRE = read("components/shared/umrah-context-questionnaire.tsx");
+    expect(QUESTIONNAIRE).toMatch(/import \{ ROUTE_TYPES \} from "@\/lib\/transport-constants"/);
+    expect(QUESTIONNAIRE).toMatch(/ROUTE_TYPES\.map\(/);
     const ROUTE_SRC = read("lib/transport-constants.ts");
     for (const v of [
       "airport_to_makkah", "makkah_to_madinah", "madinah_to_airport",
@@ -59,9 +62,11 @@ describe("#1733 — booking create form", () => {
     expect(CREATE_PAGE).toMatch(/isPassenger\s*=\s*transportServiceType\.startsWith\("passenger_"\)/);
     // Cargo block guarded by isCargo (JSX block; window covers card header + input).
     expect(CREATE_PAGE).toMatch(/\{isCargo &&[\s\S]{0,1500}cargoDescription/);
-    // Umrah-only fields (flightNumber, hotelName, supervisorName, routeType)
-    // appear inside an isUmrah block nested inside isPassenger.
-    expect(CREATE_PAGE).toMatch(/\{isUmrah &&[\s\S]{0,4000}flightNumber/);
+    // #1812 audit fix — Umrah fields were moved out of an inline {isUmrah && ...}
+    // block on booking-create into the canonical UmrahContextQuestionnaire
+    // component (rendered conditionally on isUmrah). The duplicate inline
+    // form is gone; the questionnaire is wired with active={isUmrah}.
+    expect(CREATE_PAGE).toMatch(/<UmrahContextQuestionnaire[\s\S]{0,400}active=\{isUmrah\}/);
   });
 
   it("POSTs to /transport/bookings + navigates to detail on success", () => {

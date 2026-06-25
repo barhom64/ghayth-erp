@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { apiFetch, useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -44,7 +44,17 @@ export default function AssistantAsk() {
     }
   };
 
-  const columns = result?.rows?.length ? Object.keys(result.rows[0]) : [];
+  // Columns are derived dynamically from the first result row's keys — the
+  // assistant returns an arbitrary intent-shaped row set, so the schema isn't
+  // known ahead of time. Header text keeps the original "_"→space transform;
+  // cells stay read-only (String(value ?? "—")), matching the prior raw table.
+  const columns: DataTableColumn<Record<string, unknown>>[] = result?.rows?.length
+    ? Object.keys(result.rows[0]).map((c) => ({
+        key: c,
+        header: c.replace(/_/g, " "),
+        render: (row) => String(row[c] ?? "—"),
+      }))
+    : [];
 
   return (
     <PageShell
@@ -98,26 +108,13 @@ export default function AssistantAsk() {
             </CardHeader>
             <CardContent>
               {result.matched && result.rows && result.rows.length > 0 ? (
-                <div className="overflow-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b text-muted-foreground">
-                        {columns.map((c) => (
-                          <th key={c} className="text-start py-2 px-2 font-medium">{c.replace(/_/g, " ")}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {result.rows.map((row, i) => (
-                        <tr key={i} className="border-b">
-                          {columns.map((c) => (
-                            <td key={c} className="py-2 px-2">{String(row[c] ?? "—")}</td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <DataTable
+                  columns={columns}
+                  data={result.rows}
+                  rowKey={(_, i) => i}
+                  noToolbar
+                  pageSize={0}
+                />
               ) : !result.matched && result.suggestions ? (
                 <div className="flex flex-wrap gap-2">
                   {result.suggestions.map((s) => (

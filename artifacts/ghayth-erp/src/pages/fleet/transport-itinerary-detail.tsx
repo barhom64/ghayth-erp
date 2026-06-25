@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useRoute, useLocation } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { statusLabel, statusDict } from "@/lib/transport-status-labels";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -114,6 +116,16 @@ const EMPTY_LEG: LegFormState = {
   notes: "",
 };
 
+// حالات البرنامج (transport_itineraries.status) بالعربية — للطباعة.
+// الـenum الخادم: draft | scheduled | in_progress | completed | cancelled.
+const ITINERARY_STATUS_LABELS: Record<string, string> = {
+  draft:       "مسوّدة",
+  scheduled:   "مجدول",
+  in_progress: "قيد التنفيذ",
+  completed:   "مكتمل",
+  cancelled:   "ملغى",
+};
+
 function legTypeLabel(v: string): string {
   return LEG_TYPES.find((t) => t.value === v)?.label ?? v;
 }
@@ -137,6 +149,28 @@ export default function TransportItineraryDetail() {
     ["transport-itinerary", id || ""],
     id ? `/transport/itineraries/${id}` : null,
   );
+
+  // صفوف الطباعة = مراحل البرنامج بالترتيب. تُحسب قبل أي return مبكر (قواعد الـHooks).
+  // القيم المُشتقّة (نوع المرحلة، الحالة بالعربية، المسار، الموعد، الإسناد) تُعاد بناؤها هنا.
+  const legRows = useMemo(
+    () =>
+      [...(data?.data?.legs ?? [])]
+        .sort((a, b) => a.legNumber - b.legNumber)
+        .map((leg) => ({
+          "#": leg.legNumber,
+          "النوع": legTypeLabel(leg.legType),
+          "المسار": `${leg.originText ?? "—"} ← ${leg.destinationText ?? "—"}`,
+          "الموعد المجدول": leg.scheduledStart
+            ? new Date(leg.scheduledStart).toLocaleString("ar")
+            : "—",
+          "الإسناد": leg.assignedVehicleId
+            ? `مركبة #${leg.assignedVehicleId}${leg.assignedDriverId ? ` · سائق #${leg.assignedDriverId}` : ""}`
+            : "غير مُسندة",
+          "الحالة": legStatusLabel(leg.status),
+        })),
+    [data?.data?.legs],
+  );
+  const { sortedRows: printRows } = usePrintRows<any>(legRows);
 
   if (isLoading) return <LoadingSpinner />;
   if (isError || !data?.data) return <ErrorState />;
@@ -260,6 +294,21 @@ export default function TransportItineraryDetail() {
       ]}
       actions={
         <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_fleet_transport_itinerary"
+            entityId={String(it.id)}
+            size="icon"
+            payload={() => ({
+              entity: {
+                title: it.itineraryName,
+                total: printRows.length,
+                status: ITINERARY_STATUS_LABELS[it.status] ?? it.status,
+                legs: it.legs.length,
+                startsAt: it.startsAt,
+              },
+              items: printRows,
+            })}
+          />
           <Button variant="outline" size="sm" onClick={() => refetch()}>تحديث</Button>
           <Button variant="outline" size="sm" onClick={removeItinerary} className="text-rose-600">
             <Trash2 className="h-4 w-4 me-1" />حذف البرنامج

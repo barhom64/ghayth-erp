@@ -72,6 +72,9 @@ const EXECUTIVE_TABLES = new Set([
   "hr_employee_loans",
   "hr_overtime_requests",
   "hr_exit_requests",
+  "vendor_advances",            // ref — AP mirror of customer_advances (#1141)
+  "vendor_credit_memos",        // ref — AP twin of credit_memos (#1141)
+  "intercompany_transactions",  // ref — each leg its own center-issued IC number (#1141)
 ]);
 
 // Files we don't expect to issue numbers — admin / read-only / engine
@@ -131,6 +134,15 @@ const ENGINE_FORWARD_NOTES = new Map([
   ["finance-recurring.ts",   "engine-driven; inherits issueNumber from the JV it generates"],
   ["finance-collection.ts",  "engine-driven collection follow-ups"],
   ["finance-vendor-contracts.ts", "vendor contracts use ref from numberingService via finance-purchase"],
+  // U-07 Phase 8: the unlinked-rows recovery link route (POST
+  // /import/batches/:id/unlinked/link) creates a dimension group on the fly and
+  // stamps a deliberate internalTechRef("UGRP") PLACEHOLDER in nuskGroupNumber
+  // (an EXTERNAL Nusk-portal id, not an internal issued number — the real value
+  // is set later when the operator links the Nusk group). This is NOT an
+  // executive-number issuance; it was carved verbatim out of umrah-entities.ts,
+  // where POST /groups' issueNumber masked it at the per-file level. The real
+  // group-number issuance still lives in umrah-entities.ts POST /groups.
+  ["umrah-import-batches.ts", "recovery auto-group uses an internalTechRef placeholder for the external Nusk id; real issuance stays in umrah-entities.ts POST /groups"],
 ]);
 
 // Per-(file, table) exemptions for the stronger coverage check.

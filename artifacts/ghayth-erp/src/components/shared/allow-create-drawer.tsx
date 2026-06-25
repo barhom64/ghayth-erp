@@ -1,6 +1,10 @@
 import { lazy, Suspense, type ComponentType, type LazyExoticComponent } from "react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { useLocation } from "wouter";
+import { ExternalLink } from "lucide-react";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
+import { useToast } from "@/hooks/use-toast";
 
 /**
  * The contract every embedded create form fulfils so it can be hosted inside
@@ -27,6 +31,13 @@ interface RegistryEntry {
   title: string;
   /** The full create-form body, lazy-loaded only when its drawer opens. */
   Form: LazyExoticComponent<ComponentType<EmbeddedCreateFormProps>>;
+  /**
+   * Verified route of the standalone full create page, if one exists. When set,
+   * the drawer offers «فتح الصفحة الكاملة» for operators who want the wider
+   * surface. Omitted for entities managed inside a tab/list (no create route),
+   * so the link is never dead.
+   */
+  fullPagePath?: string;
 }
 
 /**
@@ -53,6 +64,7 @@ const ENTITY_CREATE_FORMS: Record<EntityKind, RegistryEntry> = {
   },
   project: {
     title: "مشروع جديد",
+    fullPagePath: "/projects/create",
     Form: lazy(() =>
       import("@/pages/create/project-create-form").then((m) => ({
         default: m.ProjectCreateForm as ComponentType<EmbeddedCreateFormProps>,
@@ -61,6 +73,7 @@ const ENTITY_CREATE_FORMS: Record<EntityKind, RegistryEntry> = {
   },
   client: {
     title: "إضافة عميل جديد",
+    fullPagePath: "/clients/create",
     Form: lazy(() =>
       import("@/pages/create/client-create-form").then((m) => ({
         default: m.ClientCreateForm as ComponentType<EmbeddedCreateFormProps>,
@@ -69,6 +82,7 @@ const ENTITY_CREATE_FORMS: Record<EntityKind, RegistryEntry> = {
   },
   driver: {
     title: "إضافة سائق جديد",
+    fullPagePath: "/fleet/drivers/create",
     Form: lazy(() =>
       import("@/pages/create/fleet/driver-create-form").then((m) => ({
         default: m.DriverCreateForm as ComponentType<EmbeddedCreateFormProps>,
@@ -77,6 +91,7 @@ const ENTITY_CREATE_FORMS: Record<EntityKind, RegistryEntry> = {
   },
   vehicle: {
     title: "إضافة مركبة جديدة",
+    fullPagePath: "/fleet/vehicles/create",
     Form: lazy(() =>
       import("@/pages/create/fleet/vehicle-create-form").then((m) => ({
         default: m.VehicleCreateForm as ComponentType<EmbeddedCreateFormProps>,
@@ -85,6 +100,7 @@ const ENTITY_CREATE_FORMS: Record<EntityKind, RegistryEntry> = {
   },
   account: {
     title: "إضافة حساب جديد",
+    fullPagePath: "/finance/accounts/create",
     Form: lazy(() =>
       import("@/pages/create/finance/account-create-form").then((m) => ({
         default: m.AccountCreateForm as ComponentType<EmbeddedCreateFormProps>,
@@ -93,6 +109,7 @@ const ENTITY_CREATE_FORMS: Record<EntityKind, RegistryEntry> = {
   },
   vendor: {
     title: "إضافة مورد جديد",
+    fullPagePath: "/finance/vendors/create",
     Form: lazy(() =>
       import("@/pages/create/finance/vendor-create-form").then((m) => ({
         default: m.VendorCreateForm as ComponentType<EmbeddedCreateFormProps>,
@@ -109,6 +126,7 @@ const ENTITY_CREATE_FORMS: Record<EntityKind, RegistryEntry> = {
   },
   employee: {
     title: "إضافة موظف جديد",
+    fullPagePath: "/employees/create",
     Form: lazy(() =>
       import("@/pages/create/employee-create-form").then((m) => ({
         default: m.EmployeeCreateDrawerForm as ComponentType<EmbeddedCreateFormProps>,
@@ -124,6 +142,11 @@ export interface AllowCreateDrawerProps {
   onOpenChange: (open: boolean) => void;
   /** Bubbles the created row up; the drawer closes itself afterwards. */
   onCreated: (created: any) => void;
+  /**
+   * Optional context line under the header (e.g. «لاستخدامه في الفاتورة
+   * الحالية») so the operator knows why they are creating this entity now.
+   */
+  contextLabel?: string;
 }
 
 /**
@@ -133,20 +156,43 @@ export interface AllowCreateDrawerProps {
  * it) and closes. Replaces the truncated `QuickCreateDialog` selector by
  * selector — see docs/finance/FINANCE_PRODUCTSELECT_AND_ALLOWCREATE_DRAWER_PLAN.md.
  */
-export function AllowCreateDrawer({ kind, open, onOpenChange, onCreated }: AllowCreateDrawerProps) {
+export function AllowCreateDrawer({ kind, open, onOpenChange, onCreated, contextLabel }: AllowCreateDrawerProps) {
   const entry = ENTITY_CREATE_FORMS[kind];
+  const [, navigate] = useLocation();
+  const { toast } = useToast();
   if (!entry) return null;
-  const { title, Form } = entry;
+  const { title, Form, fullPagePath } = entry;
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="left" className="w-full sm:max-w-2xl overflow-y-auto">
         <SheetHeader className="mb-4">
-          <SheetTitle>{title}</SheetTitle>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <SheetTitle>{title}</SheetTitle>
+              {contextLabel && <SheetDescription className="mt-1">{contextLabel}</SheetDescription>}
+            </div>
+            {fullPagePath && (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="shrink-0 gap-1 text-xs"
+                onClick={() => {
+                  onOpenChange(false);
+                  navigate(fullPagePath);
+                }}
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                فتح الصفحة الكاملة
+              </Button>
+            )}
+          </div>
         </SheetHeader>
         {open && (
           <Suspense fallback={<LoadingSpinner />}>
             <Form
               onCreated={(created) => {
+                toast({ title: "تم الإنشاء", description: "تم إنشاء السجل وتحديده في الحقل." });
                 onCreated(created);
                 onOpenChange(false);
               }}

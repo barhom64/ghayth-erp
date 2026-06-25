@@ -19,6 +19,8 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { FleetTelematicsTabsNav } from "@/components/shared/fleet-telematics-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 interface VehicleOption {
   id: number;
@@ -67,6 +69,7 @@ export default function FleetTelematicsSensors() {
     { enabled: Boolean(vehicleId) },
   );
   const rows = (vehicleId ? (asList(data) as SensorReadingRow[]) : []);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   const kpi = {
     total: rows.length,
@@ -126,6 +129,22 @@ export default function FleetTelematicsSensors() {
         { href: "/fleet/telematics/live-map", label: "التتبع المباشر" },
         { label: "قراءات الحساسات" },
       ]}
+      actions={
+        <PrintButton
+          entityType="report_fleet_sensor_readings"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "قراءات الحساسات", total: printRows.length },
+            items: printRows.map((r: any) => ({
+              "النوع": (SENSOR_LABELS[r.sensorType] ?? SENSOR_LABELS.custom).label,
+              "القيمة": r.readingValue !== null ? `${Number(r.readingValue).toFixed(2)} ${r.unit ?? ""}`.trim() : (r.readingState || "—"),
+              "القناة": r.sensorChannel || "—",
+              "الوقت": new Date(r.occurredAt).toLocaleString("ar-SA"),
+            })),
+          })}
+        />
+      }
     >
       <FleetTabsNav />
       <FleetTelematicsTabsNav />
@@ -168,6 +187,7 @@ export default function FleetTelematicsSensors() {
                 <DataTable
                   columns={columns}
                   data={rows}
+                  onSortedDataChange={setPrintRows}
                   onRetry={refetch}
                   searchPlaceholder="ابحث في القراءات…"
                   emptyMessage="لا توجد قراءات لهذه المركبة بعد"

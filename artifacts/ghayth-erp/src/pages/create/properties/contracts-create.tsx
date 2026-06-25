@@ -21,6 +21,7 @@ import { PropertyUnitContextCard } from "@/components/shared/property-unit-conte
 import { PropertyOwnerSelect } from "@/components/shared/entity-selects";
 import { fieldErrorClass, TextField, NumberField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { ImpactPreviewButton } from "@/components/shared/impact-preview";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 
 export default function ContractsCreate() {
   const [, setLocation] = useLocation();
@@ -474,30 +475,29 @@ export default function ContractsCreate() {
             </CardHeader>
             <CardContent>
               <div className="max-h-64 overflow-y-auto">
-                <div className="overflow-x-auto"><table className="w-full text-sm">
-                  <thead className="bg-surface-subtle sticky top-0">
-                    <tr>
-                      <th className="text-start p-2">#</th>
-                      <th className="text-start p-2">تاريخ الاستحقاق</th>
-                      <th className="text-start p-2">المبلغ</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {schedulePreview.map(item => (
-                      <tr key={item.num} className="border-t">
-                        <td className="p-2 font-mono">{item.num}</td>
-                        <td className="p-2">{formatDateAr(item.date)}</td>
-                        <td className="p-2 font-bold text-emerald-600">{formatCurrency(item.amount)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot className="bg-surface-subtle font-bold border-t-2">
-                    <tr>
-                      <td className="p-2" colSpan={2}>الإجمالي</td>
-                      <td className="p-2 text-emerald-600">{formatCurrency(schedulePreview.reduce((s, i) => s + i.amount, 0))}</td>
-                    </tr>
-                  </tfoot>
-                </table></div>
+                <DataTable<{ num: number; date: string; amount: number }>
+                  noToolbar
+                  pageSize={0}
+                  className="text-sm"
+                  data={schedulePreview}
+                  rowKey={(item) => item.num}
+                  columns={[
+                    {
+                      key: "num", header: "#",
+                      render: (item) => <span className="font-mono">{item.num}</span>,
+                      footer: () => "الإجمالي",
+                    },
+                    {
+                      key: "date", header: "تاريخ الاستحقاق",
+                      render: (item) => formatDateAr(item.date),
+                    },
+                    {
+                      key: "amount", header: "المبلغ",
+                      render: (item) => <span className="font-bold text-emerald-600">{formatCurrency(item.amount)}</span>,
+                      footer: () => <span className="text-emerald-600">{formatCurrency(schedulePreview.reduce((s, i) => s + i.amount, 0))}</span>,
+                    },
+                  ] satisfies DataTableColumn<{ num: number; date: string; amount: number }>[]}
+                />
               </div>
             </CardContent>
           </Card>

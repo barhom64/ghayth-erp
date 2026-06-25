@@ -24,7 +24,8 @@ import {
 } from "@workspace/ui-core";
 import { EntityComments } from "@workspace/entity-kit";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import { useApiQuery, useApiMutation, apiFetch, asList } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 import { SupportTabsNav } from "@/components/shared/support-tabs-nav";
 import { z } from "zod";
 import { Headphones, Plus, Eye, ChevronDown, ChevronUp, AlertTriangle, BookOpen, Star, ThumbsUp, CheckCircle, Clock, ExternalLink } from "lucide-react";
@@ -53,9 +54,12 @@ function Support() {
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
   const { tagsList, selectedTag, setSelectedTag, filteredIds: tagFilteredIds } = useTagFilter("ticket");
   const pageSize = 20;
+  // #2713 (تعميم) — سلة المحذوفات للتذاكر.
+  const [showDeleted, setShowDeleted] = useState(false);
+  const { toast } = useToast();
   const { data: ticketsResp, isLoading, isError, error, refetch } = useApiQuery<any>(
-    ["support-tickets", String(page)],
-    `/support/tickets?page=${page}&limit=${pageSize}`
+    ["support-tickets", String(page), showDeleted ? "deleted" : "active"],
+    `/support/tickets?page=${page}&limit=${pageSize}${showDeleted ? "&deleted=true" : ""}`
   );
   const tickets = asList(ticketsResp);
   const total = ticketsResp?.total || tickets.length;
@@ -73,6 +77,16 @@ function Support() {
     queryKeys: [["support-tickets", String(page)], ["support-stats"]],
     onSuccess: () => refetch(),
   });
+
+  async function handleRestoreTicket(id: number) {
+    try {
+      await apiFetch(`/support/tickets/${id}/restore`, { method: "POST" });
+      toast({ title: "تم استرجاع التذكرة" });
+      refetch();
+    } catch (e: any) {
+      toast({ variant: "destructive", title: e?.message || "تعذّر الاسترجاع" });
+    }
+  }
 
   const editFields = [
     { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "open", label: "مفتوح" }, { value: "in_progress", label: "قيد المعالجة" }, { value: "resolved", label: "محلول" }, { value: "closed", label: "مغلق" }] },
@@ -129,16 +143,22 @@ function Support() {
       key: "actions", header: "الإجراءات",
       render: (t) => (
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" onClick={() => setPreviewItem(t)}><Eye className="h-4 w-4" /></Button>
-          <RowActions
-            canEdit={canManage}
-            onEdit={() => startEdit(t.id, { status: t.status || "open", priority: t.priority || "medium", title: t.title || "" })}
-            onDelete={() => startDelete(t.id)}
-            deletePerm="support:delete"
-          />
-          <button onClick={() => setExpandedId(expandedId === t.id ? null : t.id)} className="text-muted-foreground hover:text-muted-foreground p-1">
-            {expandedId === t.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          </button>
+          {showDeleted ? (
+            <Button variant="outline" size="sm" onClick={() => handleRestoreTicket(t.id)}>استرجاع</Button>
+          ) : (
+            <>
+              <Button variant="ghost" size="sm" onClick={() => setPreviewItem(t)}><Eye className="h-4 w-4" /></Button>
+              <RowActions
+                canEdit={canManage}
+                onEdit={() => startEdit(t.id, { status: t.status || "open", priority: t.priority || "medium", title: t.title || "" })}
+                onDelete={() => startDelete(t.id)}
+                deletePerm="support:delete"
+              />
+              <button onClick={() => setExpandedId(expandedId === t.id ? null : t.id)} className="text-muted-foreground hover:text-muted-foreground p-1">
+                {expandedId === t.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </button>
+            </>
+          )}
         </div>
       ),
     },
@@ -244,7 +264,12 @@ function Support() {
       />
 
       <Card>
-        <CardHeader><CardTitle className="gap-2 flex items-center"><Headphones className="h-5 w-5" /> تذاكر الدعم</CardTitle></CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="gap-2 flex items-center"><Headphones className="h-5 w-5" /> {showDeleted ? "التذاكر المحذوفة" : "تذاكر الدعم"}</CardTitle>
+          <Button variant={showDeleted ? "default" : "outline"} size="sm" onClick={() => { setShowDeleted((v) => !v); setPage(1); }}>
+            {showDeleted ? "التذاكر النشطة" : "سلة المحذوفات"}
+          </Button>
+        </CardHeader>
         <CardContent>
           <DataTable
             columns={columns}

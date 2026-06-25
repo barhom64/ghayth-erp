@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useApiQuery } from "@/lib/api";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -417,48 +417,41 @@ export default function RevenueMixAnalyzerPage() {
               <CardTitle className="text-base">كامل قائمة الحسابات الإيرادية</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-xs text-muted-foreground">
-                      <th className="text-start py-2 px-2 w-12">#</th>
-                      <th className="text-start py-2 px-2 w-24">الرمز</th>
-                      <th className="text-start py-2 px-2">الاسم</th>
-                      <th className="text-end py-2 px-2">المبلغ</th>
-                      <th className="text-end py-2 px-2 w-20">%</th>
-                      <th className="text-end py-2 px-2 w-20">قيود</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(ra.data?.byAccount ?? []).map((r, idx) => {
-                      const value = Number(r.amount);
-                      const pct = totalRevenue > 0 ? (value / totalRevenue) * 100 : 0;
-                      return (
-                        <tr key={r.code} className="border-b hover:bg-muted/30">
-                          <td className="py-1.5 px-2 text-muted-foreground">{idx + 1}</td>
-                          <td className="py-1.5 px-2 font-mono text-xs">{r.code}</td>
-                          <td className="py-1.5 px-2">{r.name}</td>
-                          <td className="py-1.5 px-2 text-end tabular-nums font-semibold">
-                            {formatCurrency(value)}
-                          </td>
-                          <td className="py-1.5 px-2 text-end tabular-nums text-muted-foreground">
-                            {pct.toFixed(1)}%
-                          </td>
-                          <td className="py-1.5 px-2 text-end tabular-nums">{String(r.entryCount)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                  <tfoot>
-                    <tr className="font-semibold bg-muted/40">
-                      <td colSpan={3} className="py-2 px-2">الإجمالي</td>
-                      <td className="py-2 px-2 text-end tabular-nums">{formatCurrency(totalRevenue)}</td>
-                      <td className="py-2 px-2 text-end">100%</td>
-                      <td></td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
+              <DataTable
+                data={ra.data?.byAccount ?? []}
+                rowKey={(r) => r.code}
+                columns={[
+                  {
+                    key: "_idx", header: "#", width: "3rem", sortable: false,
+                    render: (_r, idx) => <span className="text-muted-foreground">{idx + 1}</span>,
+                    footer: () => "الإجمالي",
+                  },
+                  {
+                    key: "code", header: "الرمز", width: "6rem", searchable: true, ltr: true,
+                    render: (r) => <span className="font-mono text-xs">{r.code}</span>,
+                  },
+                  { key: "name", header: "الاسم", searchable: true },
+                  {
+                    key: "amount", header: "المبلغ", align: "end",
+                    render: (r) => (
+                      <span className="tabular-nums font-semibold">{formatCurrency(Number(r.amount))}</span>
+                    ),
+                    footer: () => <span className="tabular-nums">{formatCurrency(totalRevenue)}</span>,
+                  },
+                  {
+                    key: "_pct", header: "%", align: "end", width: "5rem", sortable: false,
+                    render: (r) => {
+                      const pct = totalRevenue > 0 ? (Number(r.amount) / totalRevenue) * 100 : 0;
+                      return <span className="tabular-nums text-muted-foreground">{pct.toFixed(1)}%</span>;
+                    },
+                    footer: () => "100%",
+                  },
+                  {
+                    key: "entryCount", header: "قيود", align: "end", width: "5rem",
+                    render: (r) => <span className="tabular-nums">{String(r.entryCount)}</span>,
+                  },
+                ] satisfies DataTableColumn<ByAccountRow>[]}
+              />
             </CardContent>
           </Card>
         </>

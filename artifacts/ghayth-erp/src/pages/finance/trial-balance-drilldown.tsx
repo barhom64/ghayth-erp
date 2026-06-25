@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import {
   ScaleIcon, ChevronRight, Search, Download, ChevronDown,
   TrendingUp, TrendingDown, X, ExternalLink, Filter,
@@ -323,70 +324,70 @@ export default function TrialBalanceDrilldownPage() {
                   </div>
                 </CardHeader>
                 <CardContent className="pt-0">
-                  <div className="overflow-x-auto"><table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b text-xs text-muted-foreground">
-                        <th className="text-start py-2 px-2 w-6"></th>
-                        <th className="text-start py-2 px-2 w-24">الرمز</th>
-                        <th className="text-start py-2 px-2">الاسم</th>
-                        <th className="text-end py-2 px-2 w-32">مدين</th>
-                        <th className="text-end py-2 px-2 w-32">دائن</th>
-                        <th className="text-end py-2 px-2 w-32">الرصيد</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.map(r => {
-                        const isOpen = expanded === r.code;
-                        const bal = Number(r.balance);
-                        return (
-                          <>
-                            <tr
-                              key={r.code}
-                              className={`border-b cursor-pointer ${isOpen ? "bg-status-info-surface" : "hover:bg-muted/30"}`}
-                              onClick={() => setExpanded(isOpen ? null : r.code)}
-                            >
-                              <td className="py-2 px-2">
-                                {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                              </td>
-                              <td className="py-2 px-2 font-mono text-xs">{r.code}</td>
-                              <td className="py-2 px-2">{r.name}</td>
-                              <td className="py-2 px-2 text-end tabular-nums">
-                                {Number(r.totalDebit) > 0 ? formatCurrency(Number(r.totalDebit)) : "—"}
-                              </td>
-                              <td className="py-2 px-2 text-end tabular-nums">
-                                {Number(r.totalCredit) > 0 ? formatCurrency(Number(r.totalCredit)) : "—"}
-                              </td>
-                              <td className="py-2 px-2 text-end tabular-nums font-semibold">
-                                {bal >= 0 ? formatCurrency(bal) : (
-                                  <span className="text-status-danger-foreground">({formatCurrency(Math.abs(bal))})</span>
-                                )}
-                              </td>
-                            </tr>
-                            {isOpen && (
-                              <tr>
-                                <td colSpan={6} className="bg-muted/10 p-3 border-b">
-                                  <AccountDrillDown
-                                    code={r.code}
-                                    name={r.name}
-                                    ledger={ledger}
-                                    isLoading={ledgerLoading}
-                                  />
-                                </td>
-                              </tr>
-                            )}
-                          </>
-                        );
-                      })}
-                    </tbody>
-                    <tfoot>
-                      <tr className="font-semibold bg-muted/40">
-                        <td colSpan={3} className="py-2 px-2">إجمالي {meta.label}</td>
-                        <td className="py-2 px-2 text-end tabular-nums">{formatCurrency(typeTotalDebit)}</td>
-                        <td className="py-2 px-2 text-end tabular-nums">{formatCurrency(typeTotalCredit)}</td>
-                        <td className="py-2 px-2 text-end tabular-nums">{formatCurrency(typeBalance)}</td>
-                      </tr>
-                    </tfoot>
-                  </table></div>
+                  <DataTable
+                    noToolbar
+                    pageSize={0}
+                    className="text-sm"
+                    data={rows}
+                    rowKey={(r) => r.code}
+                    onRowClick={(r) => setExpanded(expanded === r.code ? null : r.code)}
+                    rowClassName={(r) =>
+                      expanded === r.code ? "bg-status-info-surface" : "hover:bg-muted/30"
+                    }
+                    columns={[
+                      {
+                        key: "_expand", header: "", width: "1.5rem", sortable: false,
+                        render: (r) => (
+                          expanded === r.code ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />
+                        ),
+                      },
+                      {
+                        key: "code", header: "الرمز", width: "6rem", className: "font-mono text-xs",
+                        render: (r) => r.code,
+                      },
+                      {
+                        key: "name", header: "الاسم",
+                        render: (r) => r.name,
+                        footer: () => `إجمالي ${meta.label}`,
+                      },
+                      {
+                        key: "totalDebit", header: "مدين", align: "end", width: "8rem", className: "tabular-nums",
+                        render: (r) => (Number(r.totalDebit) > 0 ? formatCurrency(Number(r.totalDebit)) : "—"),
+                        exportValue: (r) => Number(r.totalDebit),
+                        footer: () => formatCurrency(typeTotalDebit),
+                      },
+                      {
+                        key: "totalCredit", header: "دائن", align: "end", width: "8rem", className: "tabular-nums",
+                        render: (r) => (Number(r.totalCredit) > 0 ? formatCurrency(Number(r.totalCredit)) : "—"),
+                        exportValue: (r) => Number(r.totalCredit),
+                        footer: () => formatCurrency(typeTotalCredit),
+                      },
+                      {
+                        key: "balance", header: "الرصيد", align: "end", width: "8rem",
+                        className: "tabular-nums font-semibold",
+                        render: (r) => {
+                          const bal = Number(r.balance);
+                          return bal >= 0 ? formatCurrency(bal) : (
+                            <span className="text-status-danger-foreground">({formatCurrency(Math.abs(bal))})</span>
+                          );
+                        },
+                        exportValue: (r) => Number(r.balance),
+                        footer: () => formatCurrency(typeBalance),
+                      },
+                    ] satisfies DataTableColumn<TbRow>[]}
+                    renderRowExtras={(r) => (
+                      expanded === r.code ? (
+                        <div className="bg-muted/10 p-3 border-b">
+                          <AccountDrillDown
+                            code={r.code}
+                            name={r.name}
+                            ledger={ledger}
+                            isLoading={ledgerLoading}
+                          />
+                        </div>
+                      ) : null
+                    )}
+                  />
                 </CardContent>
               </Card>
             );
@@ -438,47 +439,59 @@ function AccountDrillDown({
             </Link></Button>
         </div>
       </div>
-      <div className="border rounded max-h-80 overflow-y-auto">
-        <div className="overflow-x-auto"><table className="w-full text-xs">
-          <thead className="sticky top-0 bg-background border-b">
-            <tr className="text-muted-foreground">
-              <th className="text-start py-1.5 px-2">التاريخ</th>
-              <th className="text-start py-1.5 px-2">المرجع</th>
-              <th className="text-start py-1.5 px-2">الوصف</th>
-              <th className="text-end py-1.5 px-2">مدين</th>
-              <th className="text-end py-1.5 px-2">دائن</th>
-              <th className="text-end py-1.5 px-2">الرصيد التراكمي</th>
-              <th className="w-8"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {entries.map(e => (
-              <tr key={e.id} className="border-b last:border-b-0 hover:bg-muted/30">
-                <td className="py-1.5 px-2 whitespace-nowrap tabular-nums">
-                  {formatDateAr(e.date.split("T")[0])}
-                </td>
-                <td className="py-1.5 px-2 font-mono">{e.ref}</td>
-                <td className="py-1.5 px-2 max-w-xs truncate" title={e.description}>{e.description}</td>
-                <td className="py-1.5 px-2 text-end tabular-nums">
-                  {Number(e.debit) > 0 ? (
-                    <span className="text-status-success-foreground">{formatCurrency(Number(e.debit))}</span>
-                  ) : "—"}
-                </td>
-                <td className="py-1.5 px-2 text-end tabular-nums">
-                  {Number(e.credit) > 0 ? (
-                    <span className="text-status-danger-foreground">{formatCurrency(Number(e.credit))}</span>
-                  ) : "—"}
-                </td>
-                <td className="py-1.5 px-2 text-end tabular-nums font-semibold">
-                  {formatCurrency(e.runningBalance)}
-                </td>
-                <td className="py-1.5 px-2">
-                  <Button asChild variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-6 w-6"><Link href={`/finance/journal/${e.id}`}><ExternalLink className="w-3 h-3" /></Link></Button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table></div>
+      <div className="max-h-80 overflow-y-auto">
+        <DataTable
+          noToolbar
+          pageSize={0}
+          className="text-xs"
+          data={entries}
+          rowKey={(e) => e.id}
+          columns={[
+            {
+              key: "date", header: "التاريخ", className: "whitespace-nowrap tabular-nums",
+              render: (e) => formatDateAr(e.date.split("T")[0]),
+              exportValue: (e) => e.date.split("T")[0],
+            },
+            {
+              key: "ref", header: "المرجع", className: "font-mono",
+              render: (e) => e.ref,
+            },
+            {
+              key: "description", header: "الوصف", className: "max-w-xs truncate",
+              render: (e) => <span title={e.description}>{e.description}</span>,
+              exportValue: (e) => e.description,
+            },
+            {
+              key: "debit", header: "مدين", align: "end", className: "tabular-nums",
+              render: (e) => (
+                Number(e.debit) > 0 ? (
+                  <span className="text-status-success-foreground">{formatCurrency(Number(e.debit))}</span>
+                ) : "—"
+              ),
+              exportValue: (e) => Number(e.debit),
+            },
+            {
+              key: "credit", header: "دائن", align: "end", className: "tabular-nums",
+              render: (e) => (
+                Number(e.credit) > 0 ? (
+                  <span className="text-status-danger-foreground">{formatCurrency(Number(e.credit))}</span>
+                ) : "—"
+              ),
+              exportValue: (e) => Number(e.credit),
+            },
+            {
+              key: "runningBalance", header: "الرصيد التراكمي", align: "end",
+              className: "tabular-nums font-semibold",
+              render: (e) => formatCurrency(e.runningBalance),
+            },
+            {
+              key: "_actions", header: "", width: "2rem", sortable: false,
+              render: (e) => (
+                <Button asChild variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-6 w-6"><Link href={`/finance/journal/${e.id}`}><ExternalLink className="w-3 h-3" /></Link></Button>
+              ),
+            },
+          ] satisfies DataTableColumn<NonNullable<LedgerResp["entries"]>[number]>[]}
+        />
       </div>
     </div>
   );
