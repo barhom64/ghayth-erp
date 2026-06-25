@@ -180,6 +180,13 @@ run_step "check:button-nesting" node scripts/src/check-button-nesting.mjs
 # fails only on a NEW offender. Pure-logic fixtures guard the detector.
 run_step "check:jsx-generic-component:tests" node scripts/src/check-jsx-generic-component.test.mjs
 run_step "check:jsx-generic-component" node scripts/src/check-jsx-generic-component.mjs
+# Unified financial-attachment workspace: a page must not render BOTH the
+# unified FinancialAttachmentViewer (#2237) AND a raw FileDropZone for the same
+# document — that is two upload entries for one attachment (the #2975 duplicate
+# the user flagged). OFFLINE source scan; empty baseline — fails on any file
+# combining both. `type Attachment` import alone is allowed. Pure-logic tests.
+run_step "check:attachment-workspace-unified:tests" node scripts/src/check-attachment-workspace-unified.test.mjs
+run_step "check:attachment-workspace-unified" node scripts/src/check-attachment-workspace-unified.mjs
 # Responsive tables: a raw <table> not inside an overflow scroll container
 # clips/breaks the layout on phone widths (the 2026-06 mobile pass wrapped
 # every offender). OFFLINE source scan; empty baseline in
