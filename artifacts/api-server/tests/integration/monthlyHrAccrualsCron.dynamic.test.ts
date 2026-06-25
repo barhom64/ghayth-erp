@@ -108,10 +108,13 @@ d("monthly HR accruals cron (bundled handler, live DB)", () => {
     expect(entries.length, "exactly one accrual journal for the period").toBe(1);
     const journalId = entries[0].id;
 
-    const lines = await rawQuery<{ accountCode: string; debit: string; credit: string }>(
-      `SELECT "accountCode", debit::text, credit::text FROM journal_lines WHERE "journalId"=$1`,
+    const lines = await rawQuery<{ accountCode: string; debit: string; credit: string; employeeId: number | null }>(
+      `SELECT "accountCode", debit::text, credit::text, "employeeId" FROM journal_lines WHERE "journalId"=$1`,
       [journalId],
     );
+    // per-employee detail: every accrual line carries the employee dimension.
+    expect(lines.length).toBeGreaterThan(0);
+    expect(lines.every((l) => Number(l.employeeId) === ids.employeeId)).toBe(true);
     const debitOf = (code: string) => lines.filter((l) => l.accountCode === code).reduce((s, l) => s + Number(l.debit), 0);
     const creditOf = (code: string) => lines.filter((l) => l.accountCode === code).reduce((s, l) => s + Number(l.credit), 0);
 
