@@ -39,6 +39,7 @@ import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { markIdempotencyReplay, requestIdempotencyToken } from "../lib/requestIdempotency.js";
 import { resolveTransactionBranch, assertDocumentBranchAccess } from "../lib/branchResolution.js";
+import { resolveBadDebtPolicy } from "../lib/badDebtPolicy.js";
 import { z } from "zod";
 
 // ── Zod schemas for POST route validation ──────────────────────────────────
@@ -3900,23 +3901,27 @@ invoicesRouter.get("/invoices/:id/memos", authorize({ feature: "finance.invoices
 // ─────────────────────────────────────────────────────────────────────────────
 // BAD DEBT PROVISIONING
 // Posts an allowance-for-doubtful-accounts entry based on aging buckets:
-//   DR 6200 Bad debt expense
-//   CR 1210 Allowance for doubtful accounts (contra-AR)
-// Rates default to: 0-30=0%, 31-60=5%, 61-90=25%, 90+=50% and are overridable
-// per request. Idempotent per period via ref `BAD-DEBT-{period}`.
+//   DR 5820 Bad debt expense
+//   CR 1135 Allowance for doubtful accounts (contra-AR)
+// Rates are the per-company controllable bad-debt policy (settings key
+// `finance.bad_debt_policy`) — STANDARD default current=0% / 1-30=5% /
+// 31-60=25% / 61-90=50% / 90+=75% — with an optional per-request override on
+// top (see lib/badDebtPolicy.ts). Idempotent per period via ref `BAD-DEBT-{period}`.
 // ─────────────────────────────────────────────────────────────────────────────
 
 invoicesRouter.get("/bad-debt/preview", authorize({ feature: "finance.collection", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const asOf = (req.query.asOf as string) || todayISO();
-    const rates = {
-      current: Number.isFinite(Number(req.query.rateCurrent)) ? Number(req.query.rateCurrent) : 0,
-      d30: Number.isFinite(Number(req.query.rate30)) ? Number(req.query.rate30) : 0.05,
-      d60: Number.isFinite(Number(req.query.rate60)) ? Number(req.query.rate60) : 0.25,
-      d90: Number.isFinite(Number(req.query.rate90)) ? Number(req.query.rate90) : 0.5,
-      d90plus: Number.isFinite(Number(req.query.rate90plus)) ? Number(req.query.rate90plus) : 0.75,
+    // النِسَب: القياسي ← تهيئة الشركة (settings) ← تجاوز الطلب (query). مصدر واحد.
+    const override = {
+      current: Number.isFinite(Number(req.query.rateCurrent)) ? Number(req.query.rateCurrent) : undefined,
+      d30: Number.isFinite(Number(req.query.rate30)) ? Number(req.query.rate30) : undefined,
+      d60: Number.isFinite(Number(req.query.rate60)) ? Number(req.query.rate60) : undefined,
+      d90: Number.isFinite(Number(req.query.rate90)) ? Number(req.query.rate90) : undefined,
+      d90plus: Number.isFinite(Number(req.query.rate90plus)) ? Number(req.query.rate90plus) : undefined,
     };
+    const rates = await resolveBadDebtPolicy(scope.companyId, override);
 
     const invoices = await rawQuery<Record<string, unknown>>(
       `SELECT id, ref, "clientId", "createdAt", "dueDate", total, "paidAmount",
@@ -3986,13 +3991,8 @@ invoicesRouter.post("/bad-debt/post", authorize({ feature: "finance.collection",
       );
     }
 
-    const r = {
-      current: Number(rates?.current ?? 0),
-      d30: Number(rates?.d30 ?? 0.05),
-      d60: Number(rates?.d60 ?? 0.25),
-      d90: Number(rates?.d90 ?? 0.5),
-      d90plus: Number(rates?.d90plus ?? 0.75),
-    };
+    // النِسَب: القياسي ← تهيئة الشركة (settings) ← تجاوز الطلب (body.rates).
+    const r = await resolveBadDebtPolicy(scope.companyId, rates ?? undefined);
 
     // Exclude draft + cancelled + paid invoices. Drafts haven't posted a GL
     // AR DR yet — accruing an allowance for them would credit allowance for
