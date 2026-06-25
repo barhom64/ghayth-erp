@@ -39,7 +39,8 @@ import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { markIdempotencyReplay, requestIdempotencyToken } from "../lib/requestIdempotency.js";
 import { resolveTransactionBranch, assertDocumentBranchAccess } from "../lib/branchResolution.js";
-import { resolveBadDebtPolicy } from "../lib/badDebtPolicy.js";
+import { resolveBadDebtPolicy, STANDARD_BAD_DEBT_RATES, BAD_DEBT_POLICY_SETTING_KEY } from "../lib/badDebtPolicy.js";
+import { resolveSettings, upsertSetting } from "../lib/settings.js";
 import { z } from "zod";
 
 // ── Zod schemas for POST route validation ──────────────────────────────────
@@ -3908,6 +3909,52 @@ invoicesRouter.get("/invoices/:id/memos", authorize({ feature: "finance.invoices
 // 31-60=25% / 61-90=50% / 90+=75% — with an optional per-request override on
 // top (see lib/badDebtPolicy.ts). Idempotent per period via ref `BAD-DEBT-{period}`.
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ── سطح التحكم بسياسة مخصّص الديون (قابلة للتحكم لكل شركة + قياسي) ─────────────
+// GET: النِسَب المُحلّة لشركة المُستدعي (القياسي ← تهيئة الشركة) + القياسي للمرجع.
+invoicesRouter.get("/bad-debt/policy", authorize({ feature: "finance.collection", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rates = await resolveBadDebtPolicy(scope.companyId);
+    res.json({ key: BAD_DEBT_POLICY_SETTING_KEY, rates, standard: STANDARD_BAD_DEBT_RATES });
+  } catch (err) { handleRouteError(err, res, "Get bad-debt policy error:"); }
+});
+
+// PUT: يضبط نِسَب الشركة (تحديث جزئي — يُبقي الحقول غير المُرسَلة). كل نسبة ∈ [0,1].
+// يخزّن تجاوزات الشركة فقط فوق القياسي (لا يُجمّد القياسي للحقول غير المضبوطة).
+const badDebtPolicySchema = z.object({
+  rates: z.object({
+    current: z.coerce.number().min(0).max(1).optional(),
+    d30: z.coerce.number().min(0).max(1).optional(),
+    d60: z.coerce.number().min(0).max(1).optional(),
+    d90: z.coerce.number().min(0).max(1).optional(),
+    d90plus: z.coerce.number().min(0).max(1).optional(),
+  }),
+});
+invoicesRouter.put("/bad-debt/policy", authorize({ feature: "finance.collection", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const body = zodParse(badDebtPolicySchema.safeParse(req.body ?? {}));
+    // ادمج فوق تجاوزات الشركة الخام (لا المُحلّ) حتى تبقى الحقول غير المضبوطة
+    // ديناميكية على القياسي.
+    const storedRaw = await resolveSettings(BAD_DEBT_POLICY_SETTING_KEY, scope.companyId).catch(() => undefined);
+    const base = storedRaw && typeof storedRaw === "object" && !Array.isArray(storedRaw)
+      ? (storedRaw as Record<string, unknown>) : {};
+    const incoming = Object.fromEntries(
+      Object.entries(body.rates).filter(([, v]) => v !== undefined),
+    );
+    const merged = { ...base, ...incoming };
+    await upsertSetting("company", scope.companyId, BAD_DEBT_POLICY_SETTING_KEY, merged);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "settings", entityId: 0,
+      after: { key: BAD_DEBT_POLICY_SETTING_KEY, rates: merged },
+    }).catch((e) => logger.error(e, "bad-debt policy audit failed"));
+    // أعد النِسَب المُحلّة بعد الحفظ (شفافية: ما الذي سيُطبَّق فعلًا).
+    const rates = await resolveBadDebtPolicy(scope.companyId);
+    res.json({ key: BAD_DEBT_POLICY_SETTING_KEY, rates, standard: STANDARD_BAD_DEBT_RATES });
+  } catch (err) { handleRouteError(err, res, "Set bad-debt policy error:"); }
+});
 
 invoicesRouter.get("/bad-debt/preview", authorize({ feature: "finance.collection", action: "list" }), async (req, res) => {
   try {
