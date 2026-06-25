@@ -24,6 +24,7 @@ import {
   currentPeriod,
   roundTo2,
   currentDateInTz,
+  checkFinancialPeriodOpen,
 } from "./businessHelpers.js";
 import { broadcastAlert, sendNotification } from "./notificationService.js";
 import { notifyBusinessEvent } from "./notifyBusinessEvent.js";
@@ -53,7 +54,10 @@ import { decryptSecret } from "./secrets.js";
 import { processDueRecurringJournals } from "./recurringJournalProcessor.js";
 import { processDueAmortizations } from "./engines/prepaidAmortizationEngine.js";
 import { processDueRecognitions } from "./engines/deferredRevenueEngine.js";
-import { assetDepreciationProfile, type DepreciationAssetRow } from "./engines/recurringPostingEngine.js";
+import {
+  assetDepreciationProfile, type DepreciationAssetRow,
+  eosAccrualProfile, leaveAccrualProfile,
+} from "./engines/recurringPostingEngine.js";
 import {
   fleetTelematicsRetention,
   fleetTelematicsHeartbeat,
@@ -2738,6 +2742,115 @@ async function monthlyAutoDepreciation(): Promise<string> {
   return `Monthly depreciation: ${processed} assets processed, total = ${totalDepreciated.toFixed(2)}`;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// monthlyHrAccruals — أتمتة استحقاقات الموارد البشرية الشهرية (إجازات + نهاية الخدمة).
+// يحلّ فجوة المواصفة «الدفتر يعتمد على بشر يتذكّرون»: مسار hr.ts `/accruals/monthly`
+// يدويّ. هذا الـcron يشغّله تلقائيًّا لكل شركة بنفس بنية monthlyAutoDepreciation
+// (لقطة فترة + مستخدم نظام + بوابة فترة مفتوحة).
+//
+// السلامة الدفترية:
+//   • idempotency **مشترك** مع المسار اليدوي عبر نفس المرجع `HR-ACCRUAL-{period}`
+//     — أيّهما رحّل الفترة أولًا يحجب الآخر، فلا ازدواج استحقاق (لا قيد مكرّر).
+//   • بوابة الفترة (checkFinancialPeriodOpen) — لا ترحيل في فترة مُقفلة.
+//   • المبالغ من profiles المحرّك الدوري (eos/leaveAccrualProfile) — مصدر صيغة واحد
+//     مطابق للمسار اليدوي (assertion في recurringPostingEngineHrAccruals.test.ts).
+//   • الترحيل عبر hrEngine.postMonthlyAccrualsGL (نفس عقد الحدود + حلّ الحسابات
+//     2150/2220/5270/5260)، فالحبيبة والحسابات مطابقة للمسار اليدوي تمامًا.
+// ─────────────────────────────────────────────────────────────────────────────
+async function monthlyHrAccruals(): Promise<string> {
+  const period = currentPeriod();
+  const accrualDate = `${period}-01`;
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
+  let processed = 0;
+  let skipped = 0;
+
+  for (const company of companies) {
+    try {
+      // بوابة الفترة — لا استحقاق في فترة مُقفلة.
+      const periodCheck = await checkFinancialPeriodOpen(Number(company.id), accrualDate);
+      if (!periodCheck.open) { skipped++; continue; }
+
+      // idempotency مشترك مع المسار اليدوي — مرجع واحد للفترة.
+      const ref = `HR-ACCRUAL-${period}`;
+      const [existing] = await rawQuery<{ id: number }>(
+        `SELECT id FROM journal_entries WHERE "companyId"=$1 AND ref=$2 AND "deletedAt" IS NULL LIMIT 1`,
+        [company.id, ref],
+      );
+      if (existing) { skipped++; continue; }
+
+      const [systemUser] = await rawQuery<Record<string, unknown>>(
+        `SELECT ea.id FROM employee_assignments ea WHERE ea."companyId" = $1 AND ea.role IN ('finance_manager','general_manager','owner') AND ea.status='active' ORDER BY ea.role='owner' DESC LIMIT 1`,
+        [company.id],
+      );
+      if (!systemUser) {
+        logger.warn(`[CRON] monthlyHrAccruals: no finance/owner user for company ${company.id}, skipping`);
+        skipped++;
+        continue;
+      }
+      const [systemBranch] = await rawQuery<Record<string, unknown>>(
+        `SELECT id FROM branches WHERE "companyId" = $1 LIMIT 1`,
+        [company.id],
+      );
+      if (!systemBranch?.id) {
+        logger.warn(`[CRON] monthlyHrAccruals: no branch for company ${company.id}, skipping`);
+        skipped++;
+        continue;
+      }
+      const branchId = Number(systemBranch.id);
+
+      // نفس استعلام المسار اليدوي (hr.ts /accruals/monthly): نشطون برواتب موجبة + بداية العقد.
+      const employees = await rawQuery<Record<string, unknown>>(
+        `SELECT ea."employeeId", ea.salary, ea."hireDate",
+                COALESCE(ec."startDate", ea."hireDate") AS "contractStart"
+         FROM employee_assignments ea
+         LEFT JOIN employee_contracts ec ON ec."employeeId"=ea."employeeId"
+                                        AND ec."companyId"=$1 AND ec.status='active'
+         WHERE ea."companyId"=$1 AND ea.status='active' AND ea.salary > 0`,
+        [company.id],
+      );
+      if (employees.length === 0) { skipped++; continue; }
+
+      const periodEnd = new Date(`${period}-28`);
+      let totalLeaveAccrual = 0;
+      let totalEosAccrual = 0;
+      for (const emp of employees) {
+        const salary = Number(emp.salary) || 0;
+        if (salary <= 0) continue;
+        const startDate = new Date((emp.contractStart || emp.hireDate) as string | Date);
+        const yearsOfService = (periodEnd.getTime() - startDate.getTime()) / (365.25 * 24 * 3600 * 1000);
+        const employeeId = Number(emp.employeeId);
+        // مصدر الصيغة الموحّد: profiles المحرّك الدوري (مطابق للمسار اليدوي).
+        totalEosAccrual += eosAccrualProfile.amountFor({ id: employeeId, salary, yearsOfService });
+        totalLeaveAccrual += leaveAccrualProfile.amountFor({ id: employeeId, salary });
+      }
+      totalLeaveAccrual = roundTo2(totalLeaveAccrual);
+      totalEosAccrual = roundTo2(totalEosAccrual);
+      if (totalLeaveAccrual <= 0 && totalEosAccrual <= 0) { skipped++; continue; }
+
+      const { hrEngine } = await import("./engines/index.js");
+      const { journalId } = await hrEngine.postMonthlyAccrualsGL(
+        { companyId: Number(company.id), branchId, createdBy: Number(systemUser.id) },
+        { ref, period, totalLeaveAccrual, totalEosAccrual, employeeCount: employees.length },
+      );
+
+      await createAuditLog({
+        companyId: Number(company.id),
+        branchId,
+        userId: Number(systemUser.id),
+        action: "hr.accruals.cron",
+        entity: "journal_entries",
+        entityId: Number(journalId ?? 0),
+        after: { period, totalLeaveAccrual, totalEosAccrual, employeeCount: employees.length, ref, source: "cron" },
+      }).catch((e) => logger.error(e, "[CRON] HR accruals audit log failed"));
+
+      processed++;
+    } catch (err) {
+      logger.error(err, `[CRON] monthlyHrAccruals failed for company ${company.id}:`);
+    }
+  }
+  return `Monthly HR accruals: ${processed} company(ies) posted, ${skipped} skipped`;
+}
+
 async function runScheduledReports(): Promise<string> {
   const tz = await getSystemTimezone();
   const now = new Date();
@@ -4881,6 +4994,7 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "monthly_employee_scoring", description: "حساب درجات الموظف الشهرية + إشاراتها", schedule: "0 4 1 * *", handler: monthlyEmployeeScoring },
   { name: "monthly_inventory_audit", description: "جرد المخزون الشهري", schedule: "0 6 1 * *", handler: monthlyInventoryAudit },
   { name: "monthly_auto_depreciation", description: "إهلاك الأصول الثابتة التلقائي", schedule: "0 6 2 * *", handler: monthlyAutoDepreciation },
+  { name: "monthly_hr_accruals", description: "استحقاقات الموارد البشرية الشهرية التلقائية (إجازات + نهاية الخدمة) — idempotent عبر مرجع الفترة المشترك", schedule: "0 6 3 * *", handler: monthlyHrAccruals },
   { name: "yearly_leave_balance_renewal", description: "تجديد أرصدة الإجازات 1 يناير", schedule: "0 0 1 1 *", handler: yearlyLeaveBalanceRenewal },
   { name: "daily_kpi_snapshot", description: "لقطة KPI اليومية", schedule: "0 2 * * *", handler: dailyKpiSnapshot },
   { name: "daily_smart_alert_scan", description: "فحص التنبيهات الذكية", schedule: "0 8 * * *", handler: dailySmartAlertScan },

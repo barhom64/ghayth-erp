@@ -53,6 +53,7 @@ pnpm monorepo: `api-server` (Node.js/Express + PostgreSQL + Drizzle ORM) — `gh
 - معمارية الاشتراك/الاستحقاق لكل وحدة: `subscriptionGate.ts` على مستوى الشركة فقط؛ الاستقلال لكل وحدة ~25–30% متحقق.
 - الجوال: إكمال PWA أولًا (manifest، أيقونات، caching) ثم Capacitor (سائق الأسطول، الموافقات، الحضور الميداني).
 - ZATCA Phase 2 وتعدد العملات: مؤجلة.
+- 🟢 **`FIN-RECURRING-POSTING-ENGINE` (المحرّك الدوري الموحّد) — قيد البناء التدرّجي** (المواصفة `plans/fin-recurring-posting-engine-spec-2026-06-24.md`، اعتماد إبراهيم «نعم»). على main: عقد `RecurringProfile` + `assetDepreciationProfile` (موصول حيًّا بـcron الإهلاك، مُثبَت بالتكافؤ) + runner `planRecurringPostings` + **profilا `eosAccrualProfile`/`leaveAccrualProfile`** (#2970 — دوال نقية per-employee، EOS 1/24→1/12 · الإجازات (راتب/30)×(أيام/12)، DR5260/CR2220 و DR5270/CR**2150**، assertion 15/15). ✅ **توصيل استحقاقات HR حيًّا**: cron `monthly_hr_accruals` (يوم 3 شهريًّا) يؤتمت `hr.ts /accruals/monthly` اليدوي — يحسب المبالغ من الـprofiles ويُرحّل عبر `hrEngine.postMonthlyAccrualsGL`، **بلا migration**، idempotent عبر مرجع `HR-ACCRUAL-{period}` **المشترك** مع المسار اليدوي (لا ازدواج)، بوابة فترة، assertion على سطور القيد الحيّة (متوازن + الحسابات + idempotency). **المتبقّي (محجوز لقرار إبراهيم — migration):** التفصيل per-employee على القيد (يلزمه بذور purpose + توسيع عقد أبعاد العمالة؛ الحساب 2150 مشترك فلا يُفرض عليه بُعد موظف بأمان) + profiles bad_debt/tax (#2280). FX **لا يناسب** عقد الـprofile (تجميع per-period) — يبقى على تدفّقه المخصّص.
 
 ## مبادئ متراكمة (إضافة للدستور)
 
