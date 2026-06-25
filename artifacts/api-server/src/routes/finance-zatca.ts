@@ -17,6 +17,12 @@ import { createAuditLog, emitEvent, toDateISO, getCompanyVatRate, computeVat } f
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { resolveZatcaSettings } from "../lib/zatca/settingsResolver.js";
 import { submitInvoiceToZatca } from "../lib/zatcaClient.js";
+import { resolveSettings, upsertSetting } from "../lib/settings.js";
+import {
+  resolveTaxSettlementPolicy,
+  STANDARD_TAX_SETTLEMENT_POLICY,
+  TAX_SETTLEMENT_POLICY_SETTING_KEY,
+} from "../lib/taxSettlementPolicy.js";
 import crypto from "node:crypto";
 import QRCode from "qrcode";
 import { logger } from "../lib/logger.js";
@@ -1051,5 +1057,81 @@ zatcaRouter.patch("/zatca/expense/:id", authorize({ feature: "finance.zatca", ac
     res.json(row);
   } catch (err) {
     handleRouteError(err, res, "ZATCA expense patch error:");
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// سياسة تسوية ضريبة القيمة المضافة (VAT settlement policy) — قياسي + قابل للتحكم
+// ─────────────────────────────────────────────────────────────────────────────
+// **دورية** التسوية ومهلة الاستحقاق قابلتان للتحكم لكل شركة عبر مفتاح الإعدادات
+// `finance.tax_settlement_policy`، مع افتراضي قياسي سعودي (شهري، استحقاق 30 يومًا).
+// راجع lib/taxSettlementPolicy.ts.
+//
+// نطاق ضيّق بلا تكرار: النسبة مصدرها getCompanyVatRate، وأكواد المخرجات/المدخلات
+// مصدرها accounting_mappings (resolveAccountCode)، ومعاينة صافي الضريبة موجودة في
+// GET /finance/reports/vat-reconciliation. هذا السطح يحكم الدورية والاستحقاق فقط،
+// ويعرض البقية للقراءة فقط ليُظهر للواجهة الصورة الكاملة دون تكرار مصدرها.
+
+const taxSettlementPolicySchema = z.object({
+  frequency: z.enum(["monthly", "quarterly"]).optional(),
+  filingDueDays: z.coerce.number().int().min(1).max(120).optional(),
+});
+
+// يجمع المراجع المُحلّة (للقراءة فقط) من مصادرها الأصلية — لا يُخزَّن هنا.
+async function resolveTaxSettlementRefs(companyId: number) {
+  const { financialEngine } = await import("../lib/engines/index.js");
+  const [vatRate, outputAccountCode, inputAccountCode] = await Promise.all([
+    getCompanyVatRate(companyId),
+    financialEngine.resolveAccountCode(companyId, "vat_output", "credit", "2131"),
+    financialEngine.resolveAccountCode(companyId, "vat_input", "debit", "1180"),
+  ]);
+  // المرجع: النسبة من system_settings/vat_rate · الحسابات من accounting_mappings ·
+  // المعاينة من /finance/reports/vat-reconciliation.
+  return {
+    vatRate,
+    accounts: { output: outputAccountCode, input: inputAccountCode },
+    previewEndpoint: "/finance/reports/vat-reconciliation",
+  };
+}
+
+// GET: السياسة المُحلّة لشركة المُستدعي (القياسي ← تهيئة الشركة) + القياسي للمرجع
+// + النسبة/الحسابات المُحلّة من مصادرها الأصلية (قراءة فقط — لتعرضها الواجهة).
+zatcaRouter.get("/tax-settlement/policy", authorize({ feature: "finance.zatca", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const [policy, refs] = await Promise.all([
+      resolveTaxSettlementPolicy(scope.companyId),
+      resolveTaxSettlementRefs(scope.companyId),
+    ]);
+    res.json({ key: TAX_SETTLEMENT_POLICY_SETTING_KEY, policy, standard: STANDARD_TAX_SETTLEMENT_POLICY, refs });
+  } catch (err) {
+    handleRouteError(err, res, "Get tax-settlement policy error:");
+  }
+});
+
+// PUT: يضبط دورية الشركة (تحديث جزئي — يُبقي الحقول غير المُرسَلة ديناميكية على
+// القياسي). يخزّن تجاوزات الشركة فقط فوق القياسي (لا يُجمّد القياسي).
+zatcaRouter.put("/tax-settlement/policy", authorize({ feature: "finance.zatca", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const body = zodParse(taxSettlementPolicySchema.safeParse(req.body ?? {}));
+    const storedRaw = await resolveSettings(TAX_SETTLEMENT_POLICY_SETTING_KEY, scope.companyId).catch(() => undefined);
+    const base = storedRaw && typeof storedRaw === "object" && !Array.isArray(storedRaw)
+      ? (storedRaw as Record<string, unknown>) : {};
+    const incoming = Object.fromEntries(
+      Object.entries(body).filter(([, v]) => v !== undefined),
+    );
+    const merged = { ...base, ...incoming };
+    await upsertSetting("company", scope.companyId, TAX_SETTLEMENT_POLICY_SETTING_KEY, merged);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "settings", entityId: 0,
+      after: { key: TAX_SETTLEMENT_POLICY_SETTING_KEY, policy: merged },
+    }).catch((e) => logger.error(e, "tax-settlement policy audit failed"));
+    // أعد السياسة المُحلّة بعد الحفظ (شفافية: ما الذي سيُطبَّق فعلًا).
+    const policy = await resolveTaxSettlementPolicy(scope.companyId);
+    res.json({ key: TAX_SETTLEMENT_POLICY_SETTING_KEY, policy, standard: STANDARD_TAX_SETTLEMENT_POLICY });
+  } catch (err) {
+    handleRouteError(err, res, "Set tax-settlement policy error:");
   }
 });
