@@ -7690,7 +7690,17 @@ router.post("/accruals/monthly", authorize({ feature: "hr.payroll", action: "upd
       const { hrEngine } = await import("../lib/engines/index.js");
       const glResult = await hrEngine.postMonthlyAccrualsGL(
         { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId },
-        { ref, period: targetPeriod, totalLeaveAccrual, totalEosAccrual, employeeCount: employees.length }
+        {
+          ref, period: targetPeriod, totalLeaveAccrual, totalEosAccrual, employeeCount: employees.length,
+          // تفصيل per-employee — القيد يحمل سطورًا لكل موظف ببُعد employeeId (تنقيب
+          // الالتزام/المصروف لكل موظف)؛ الإجماليات والحسابات مطابقة تمامًا.
+          breakdown: breakdown.map((b: any) => ({
+            employeeId: Number(b.employeeId),
+            branchId: scope.branchId ?? null,
+            leaveAccrual: Number(b.leaveAccrual) || 0,
+            eosAccrual: Number(b.eosAccrual) || 0,
+          })),
+        }
       );
       journalId = glResult.journalId;
     } catch (journalErr) {

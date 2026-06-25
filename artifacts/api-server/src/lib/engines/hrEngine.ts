@@ -773,6 +773,12 @@ class HREngineImpl implements DomainEngine {
       totalLeaveAccrual: number;
       totalEosAccrual: number;
       employeeCount: number;
+      // اختياري: تفصيل per-employee. عند توفّره تُبنى سطور القيد لكل موظف بأبعاد
+      // employeeId/branchId (تنقيب الالتزام/المصروف لكل موظف) بدل سطر إجمالي واحد
+      // لكل حساب — الإجماليات والحسابات مطابقة تمامًا. عند غيابه: السلوك الإجمالي
+      // كما كان (توافق خلفي). 2150 حساب مشترك فلا بُعد موظف مفروض عليه في العقد —
+      // البُعد مُسجَّل للتقارير فقط، لا إنفاذ.
+      breakdown?: Array<{ employeeId: number; branchId?: number | null; leaveAccrual: number; eosAccrual: number }>;
     }
   ) {
     const [leaveExpenseCode, leaveLiabilityCode, eosExpenseCode, eosLiabilityCode] = await Promise.all([
@@ -788,12 +794,32 @@ class HREngineImpl implements DomainEngine {
       financialEngine.resolveAccountCode(ctx.companyId, "hr_eos_accrual_liability", "credit", "2220"),
     ]);
 
-    const lines = [
-      { accountCode: leaveExpenseCode, debit: accruals.totalLeaveAccrual, credit: 0 },
-      { accountCode: eosExpenseCode, debit: accruals.totalEosAccrual, credit: 0 },
-      { accountCode: leaveLiabilityCode, debit: 0, credit: accruals.totalLeaveAccrual },
-      { accountCode: eosLiabilityCode, debit: 0, credit: accruals.totalEosAccrual },
-    ].filter(l => l.debit > 0 || l.credit > 0);
+    const rows = accruals.breakdown?.filter((r) => Number(r.leaveAccrual) > 0 || Number(r.eosAccrual) > 0) ?? [];
+    const lines = rows.length > 0
+      // per-employee: سطرا إجازة + سطرا نهاية خدمة لكل موظف، بأبعاد employeeId/branchId.
+      ? rows.flatMap((r) => {
+          const employeeId = Number(r.employeeId);
+          const branchId = r.branchId != null ? Number(r.branchId) : undefined;
+          const leave = Number(r.leaveAccrual) || 0;
+          const eos = Number(r.eosAccrual) || 0;
+          const ls: Array<{ accountCode: string; debit: number; credit: number; employeeId?: number; branchId?: number }> = [];
+          if (leave > 0) {
+            ls.push({ accountCode: leaveExpenseCode, debit: leave, credit: 0, employeeId, branchId });
+            ls.push({ accountCode: leaveLiabilityCode, debit: 0, credit: leave, employeeId, branchId });
+          }
+          if (eos > 0) {
+            ls.push({ accountCode: eosExpenseCode, debit: eos, credit: 0, employeeId, branchId });
+            ls.push({ accountCode: eosLiabilityCode, debit: 0, credit: eos, employeeId, branchId });
+          }
+          return ls;
+        })
+      // إجمالي (توافق خلفي عند غياب التفصيل): سطر واحد لكل حساب.
+      : [
+          { accountCode: leaveExpenseCode, debit: accruals.totalLeaveAccrual, credit: 0 },
+          { accountCode: eosExpenseCode, debit: accruals.totalEosAccrual, credit: 0 },
+          { accountCode: leaveLiabilityCode, debit: 0, credit: accruals.totalLeaveAccrual },
+          { accountCode: eosLiabilityCode, debit: 0, credit: accruals.totalEosAccrual },
+        ].filter(l => l.debit > 0 || l.credit > 0);
 
     return financialEngine.postJournalEntry({
       companyId: ctx.companyId,
