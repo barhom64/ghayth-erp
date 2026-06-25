@@ -3321,8 +3321,9 @@ async function monthlyFxRevaluationReminder(): Promise<string> {
         assignmentId: cfoId,
         type: "fx_revaluation_reminder",
         title: "تذكير: إعادة تقييم العملات الأجنبية",
-        body: `يوجد ${fxExposure.n} فاتورة بعملة أجنبية مفتوحة — يرجى ترحيل إعادة التقييم الشهرية عبر /finance/fx/revaluation/post`,
+        body: `يوجد ${fxExposure.n} فاتورة بعملة أجنبية مفتوحة — يرجى ترحيل إعادة التقييم الشهرية من صفحة «إعادة تقييم العملات».`,
         priority: "medium",
+        actionUrl: "/finance/fx-revaluation",
       });
       notified++;
     } catch (err) {
