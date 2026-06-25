@@ -1,0 +1,153 @@
+#!/usr/bin/env node
+//
+// scripts/src/check-dead-components.mjs
+//
+// حارس «المكوّنات الميتة/غير المستخدمة» — الدستور المادة 5 (لا مكوّن جديد بلا
+// أصل/استخدام) + هدف «علم وجود مكوّنات ليست ذات علاقة». يكشف ملف مكوّن
+// (.tsx تحت components/ أو pages/) لا يستورده أي ملف آخر في الواجهة — يتيم/ميت.
+//
+// بناء الكشف:
+//   • نبني رسم الاستيراد لكل ملفات .ts/.tsx تحت src (بما فيها الاختبارات
+//     ومسجّلات المسارات وملفات index، فأي استيراد — ولو من اختبار أو barrel أو
+//     lazy(() => import("@/pages/X")) — يُحسب «استخدامًا»، تحفّظًا ضد الإيجابيات
+//     الكاذبة).
+//   • المرشّحون = ملفات components/**.tsx و pages/**.tsx (عدا الاختبارات).
+//   • الميت = مرشّح لا يرد في مجموعة المستورَدة، وليس نقطة دخول (App/main) أو
+//     ملف مسارات.
+//
+// نمط baseline: الأيتام الحاليون مجمّدون في scripts/dead-components-allowlist.txt
+// (تقرير «العلم»)؛ يفشل الحارس فقط على يتيم **جديد** — فيبدأ أخضر ويمنع تراكم
+// مكوّنات ميتة جديدة. ملاحظة: الاستيراد عبر مسار نصّي مُركَّب (نادر) قد يُظهر
+// إيجابًا كاذبًا — يُضاف للأساس بسطر معلَّل.
+//
+import { readdir, readFile } from "node:fs/promises";
+import { join, relative, dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
+const SRC = join(REPO_ROOT, "artifacts/ghayth-erp/src");
+const ALLOWLIST = join(REPO_ROOT, "scripts/dead-components-allowlist.txt");
+
+// نقاط دخول لا تُحسب مرشّحات (جذور الرسم) ولا تُفحص.
+export const ENTRY_FILES = new Set(["App.tsx", "main.tsx"]);
+// أدلّة المسارات: ملفاتها مُسجّلات تُستورد ضمنيًا من App (جذور).
+export function isRouteFile(rel) {
+  return /(^|\/)routes\//.test(rel) || /routes?\.tsx?$/.test(rel);
+}
+// مرشّح للفحص؟ (.tsx تحت components أو pages، عدا الاختبارات/نقاط الدخول)
+export function isCandidate(rel) {
+  if (!rel.endsWith(".tsx")) return false;
+  if (rel.endsWith(".test.tsx") || rel.endsWith(".stories.tsx")) return false;
+  if (ENTRY_FILES.has(rel.split("/").pop())) return false;
+  if (isRouteFile(rel)) return false;
+  return /(^|\/)(components|pages)\//.test(rel);
+}
+
+// استخراج المواصفات المستورَدة من ملف (دالة نقية): import …from "x"،
+// export …from "x"، و dynamic import("x") (يشمل lazy(() => import("x"))).
+export function extractSpecifiers(src) {
+  const specs = [];
+  const reFrom = /(?:^|\n)\s*(?:import|export)[\s\S]*?from\s+["']([^"']+)["']/g;
+  const reSide = /(?:^|\n)\s*import\s+["']([^"']+)["']/g;
+  const reDyn = /\bimport\(\s*["']([^"']+)["']\s*\)/g;
+  let m;
+  while ((m = reFrom.exec(src))) specs.push(m[1]);
+  while ((m = reSide.exec(src))) specs.push(m[1]);
+  while ((m = reDyn.exec(src))) specs.push(m[1]);
+  return specs;
+}
+
+// حلّ مواصفة استيراد إلى مسار نسبي من SRC (أو null لو خارجية/غير محلولة).
+// candidatesByPath: Set بأشكال المسار الممكنة (بلا/مع امتداد، وindex).
+export function resolveSpecifier(spec, fromRel, knownRelSet) {
+  let base;
+  if (spec.startsWith("@/")) base = spec.slice(2);
+  else if (spec.startsWith("./") || spec.startsWith("../")) {
+    base = relativeJoin(dirname(fromRel), spec);
+  } else return null; // حزمة خارجية
+  const cands = [
+    base + ".tsx", base + ".ts",
+    base + "/index.tsx", base + "/index.ts",
+    base, // قد يكون أُدرج بامتداده
+  ];
+  for (const c of cands) if (knownRelSet.has(c)) return c;
+  return null;
+}
+// ضمّ مسار نسبي بنمط POSIX داخل الرسم (دالة نقية مساعدة).
+export function relativeJoin(dir, spec) {
+  const parts = (dir === "." ? [] : dir.split("/")).concat(spec.split("/"));
+  const out = [];
+  for (const p of parts) {
+    if (p === "" || p === ".") continue;
+    if (p === "..") out.pop();
+    else out.push(p);
+  }
+  return out.join("/");
+}
+
+// يحسب الأيتام من خريطة { rel -> content }. (دالة نقية، قابلة للاختبار)
+export function deadFrom(filesByRel) {
+  const knownRel = new Set(Object.keys(filesByRel));
+  const imported = new Set();
+  for (const [rel, content] of Object.entries(filesByRel)) {
+    for (const spec of extractSpecifiers(content)) {
+      const r = resolveSpecifier(spec, rel, knownRel);
+      if (r) imported.add(r);
+    }
+  }
+  return Object.keys(filesByRel)
+    .filter((rel) => isCandidate(rel) && !imported.has(rel))
+    .sort();
+}
+
+async function collect(dir, exts, acc = []) {
+  let ents;
+  try { ents = await readdir(dir, { withFileTypes: true }); } catch { return acc; }
+  for (const e of ents) {
+    const p = join(dir, e.name);
+    if (e.isDirectory()) await collect(p, exts, acc);
+    else if (e.isFile() && exts.some((x) => e.name.endsWith(x))) acc.push(p);
+  }
+  return acc;
+}
+
+async function readBaseline() {
+  try {
+    const txt = await readFile(ALLOWLIST, "utf8");
+    return new Set(txt.split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("#")));
+  } catch { return new Set(); }
+}
+
+async function main() {
+  const files = await collect(SRC, [".ts", ".tsx"]);
+  const filesByRel = {};
+  for (const p of files) {
+    const rel = relative(SRC, p).split("\\").join("/");
+    filesByRel[rel] = await readFile(p, "utf8");
+  }
+
+  const dead = deadFrom(filesByRel);
+  const baseline = await readBaseline();
+  const fresh = dead.filter((d) => !baseline.has(d));
+  const stale = [...baseline].filter((b) => !dead.includes(b)).sort();
+
+  if (stale.length) {
+    console.log(`[check:dead-components] ملاحظة: ${stale.length} مدخل أساس لم يعد يتيمًا (رُبط/حُذف) — احذفه من الأساس:`);
+    for (const s of stale) console.log(`    - ${s}`);
+  }
+
+  if (fresh.length) {
+    console.error(`\n✗ check:dead-components — ${fresh.length} مكوّن يتيم جديد لا يستورده أي ملف (ميت — دستور 5):\n`);
+    for (const d of fresh) console.error(`  • ${d}`);
+    console.error(`\n  اربط المكوّن بمكانه الصحيح (مسار/قائمة)، أو احذفه إن كان ميتًا فعلًا (PR مستقل بشرح السبب).`);
+    console.error(`  إن كان يُستورد عبر مسار نصّي مُركَّب (نادر)، أضِفه لـ scripts/dead-components-allowlist.txt بسطر معلَّل.\n`);
+    process.exit(1);
+  }
+
+  const candidates = Object.keys(filesByRel).filter(isCandidate).length;
+  console.log(`✓ check:dead-components — ${candidates} مكوّن مفحوص · ${baseline.size} يتيم في الأساس · 0 يتيم جديد.`);
+}
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main().catch((e) => { console.error(e); process.exit(1); });
+}
