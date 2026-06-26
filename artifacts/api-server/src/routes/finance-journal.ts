@@ -229,7 +229,7 @@ journalRouter.post("/documents", authorize({ feature: "finance.journal", action:
 // قوالب الاستيراد الجاهزة (قوالب أمثلة) — لاختيار التعيين + تنزيل قالب CSV.
 journalRouter.get("/documents/import/templates", authorize({ feature: "finance.journal", action: "create" }), async (_req, res) => {
   try {
-    const { FINANCE_IMPORT_TEMPLATES, templateToCsv } = await import("../lib/financeImportParse.js");
+    const { FINANCE_IMPORT_TEMPLATES, FINANCE_IMPORT_FIELDS, templateToCsv } = await import("../lib/financeImportParse.js");
     res.json({
       templates: FINANCE_IMPORT_TEMPLATES.map((t) => ({
         key: t.key,
@@ -240,6 +240,8 @@ journalRouter.get("/documents/import/templates", authorize({ feature: "finance.j
         sampleHeaders: t.sampleHeaders,
         sampleCsv: templateToCsv(t),
       })),
+      // كتالوج الحقول لمحرّر التعيين (م٢-ب) — مصدر واحد للواجهة.
+      fields: FINANCE_IMPORT_FIELDS,
     });
   } catch (err) {
     handleRouteError(err, res, "خطأ في جلب قوالب الاستيراد");
@@ -251,12 +253,15 @@ const importAnalyzeSchema = z.object({
   templateKey: z.string().min(1),
   // CSV: نص الملف مباشرةً؛ Excel: محتوى الملف بترميز base64.
   content: z.string().min(1),
+  // م٢-ب — تعيين يدوي/محفوظ يَجُبّ الكشف التلقائي (sourceHeader → field؛ "" = تجاهل).
+  mapping: z.record(z.string(), z.string()).optional(),
 });
 
 journalRouter.post("/documents/import/analyze", authorize({ feature: "finance.journal", action: "create" }), async (req, res) => {
   try {
     const b = zodParse(importAnalyzeSchema.safeParse(req.body ?? {}));
-    const { parseCsvTable, aoaToTable, mapTableToDocument, findTemplate } = await import("../lib/financeImportParse.js");
+    const { parseCsvTable, aoaToTable, mapTableToDocument, detectMapping, sanitizeMapping, findTemplate } =
+      await import("../lib/financeImportParse.js");
     const template = findTemplate(b.templateKey);
     if (!template) throw new ValidationError("قالب استيراد غير معروف", { field: "templateKey" });
 
@@ -272,7 +277,11 @@ journalRouter.post("/documents/import/analyze", authorize({ feature: "finance.jo
     }
     if (table.headers.length === 0) throw new ValidationError("الملف فارغ أو بلا ترويسة");
 
-    const result = mapTableToDocument(table, template);
+    // التعيين الفعّال: المحفوظ/اليدوي (مُنقّى) يَجُبّ الكشف التلقائي من القالب.
+    const override = b.mapping ? sanitizeMapping(b.mapping) : undefined;
+    const result = mapTableToDocument(table, template, override);
+    // الكشف الافتراضي لكل ترويسة — يملأ محرّر التعيين في الواجهة.
+    const detectedMapping = detectMapping(table, template);
     // جسم جاهز لـ POST /finance/documents (نفس المحرّك للمعاينة بـ dryRun ثم للحفظ).
     const documentBody = {
       direction: result.direction,
@@ -295,9 +304,96 @@ journalRouter.post("/documents/import/analyze", authorize({ feature: "finance.jo
       warnings: result.warnings,
       stats: result.stats,
       documentBody,
+      // الترويسات الخام + الكشف الافتراضي + التعيين المُطبَّق — لمحرّر التعيين (م٢-ب).
+      headers: table.headers,
+      detectedMapping,
+      appliedMapping: override ?? null,
     });
   } catch (err) {
     handleRouteError(err, res, "خطأ في تحليل ملف الاستيراد");
+  }
+});
+
+// م٢-ب — التعيينات المحفوظة (financial_import_mapping_presets). قراءة/حفظ/حذف
+// تعيين «ترويسة المصدر → حقل» لكل (شركة، مستخدم، قالب) ليُطبَّق تلقائيًا لاحقًا.
+// نمط مطابق لـ umrah/import/presets (هجرة 234) لكن مملوك للمالية (قاعدة ٨). هذه
+// كتابات إعداد (لا دفتر/تشغيل) — مُدرجة في allowlist تدقيق التغطية كنظيرتها بالعمرة.
+const importPresetSchema = z.object({
+  name: z.string().min(1).max(120),
+  templateKey: z.string().min(1).max(40),
+  mapping: z.record(z.string(), z.string()).default({}),
+  isDefault: z.boolean().optional().default(false),
+});
+
+journalRouter.get("/documents/import/presets", authorize({ feature: "finance.journal", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { templateKey } = req.query as Record<string, string | undefined>;
+    const params: unknown[] = [scope.companyId, scope.userId];
+    let extraWhere = "";
+    if (templateKey) {
+      params.push(templateKey);
+      extraWhere = ` AND "templateKey" = $${params.length}`;
+    }
+    const rows = await rawQuery(
+      `SELECT id, name, "templateKey", mapping, "isDefault", "createdAt", "updatedAt"
+         FROM financial_import_mapping_presets
+        WHERE "companyId" = $1 AND "userId" = $2 AND "deletedAt" IS NULL${extraWhere}
+        ORDER BY "isDefault" DESC, "updatedAt" DESC
+        LIMIT 200`,
+      params,
+    );
+    res.json(maskFields(req, { data: rows }));
+  } catch (err) {
+    handleRouteError(err, res, "خطأ في جلب تعيينات الاستيراد");
+  }
+});
+
+journalRouter.post("/documents/import/presets", authorize({ feature: "finance.journal", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(importPresetSchema.safeParse(req.body ?? {}));
+    const { sanitizeMapping, findTemplate } = await import("../lib/financeImportParse.js");
+    if (!findTemplate(b.templateKey)) throw new ValidationError("قالب استيراد غير معروف", { field: "templateKey" });
+    const cleanMapping = sanitizeMapping(b.mapping);
+    await withTransaction(async (client) => {
+      if (b.isDefault) {
+        await client.query(
+          `UPDATE financial_import_mapping_presets
+              SET "isDefault" = false, "updatedAt" = NOW()
+            WHERE "companyId" = $1 AND "userId" = $2 AND "templateKey" = $3
+              AND "deletedAt" IS NULL AND "isDefault" = true`,
+          [scope.companyId, scope.userId, b.templateKey],
+        );
+      }
+      await client.query(
+        `INSERT INTO financial_import_mapping_presets
+           ("companyId", "branchId", "userId", name, "templateKey", mapping, "isDefault")
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)
+         ON CONFLICT ("companyId", "userId", "templateKey", name) WHERE "deletedAt" IS NULL
+         DO UPDATE SET mapping = EXCLUDED.mapping, "isDefault" = EXCLUDED."isDefault", "updatedAt" = NOW()`,
+        [scope.companyId, scope.branchId ?? null, scope.userId, b.name, b.templateKey, JSON.stringify(cleanMapping), b.isDefault],
+      );
+    });
+    res.status(201).json({ ok: true });
+  } catch (err) {
+    handleRouteError(err, res, "خطأ في حفظ تعيين الاستيراد");
+  }
+});
+
+journalRouter.delete("/documents/import/presets/:id", authorize({ feature: "finance.journal", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    await rawExecute(
+      `UPDATE financial_import_mapping_presets
+          SET "deletedAt" = NOW(), "updatedAt" = NOW()
+        WHERE id = $1 AND "companyId" = $2 AND "userId" = $3 AND "deletedAt" IS NULL`,
+      [id, scope.companyId, scope.userId],
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    handleRouteError(err, res, "خطأ في حذف تعيين الاستيراد");
   }
 });
 

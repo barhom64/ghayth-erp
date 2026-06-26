@@ -1,9 +1,11 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { CreatePageLayout } from "@workspace/ui-core";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
@@ -11,15 +13,16 @@ import { formatCurrency, roundMoney, todayLocal } from "@/lib/formatters";
 import { isMoneyAccount } from "@/lib/finance-account-usage";
 import { BranchSelect, AccountSelect } from "@/components/shared/entity-selects";
 import { FormFieldWrapper } from "@/components/shared/form-field-wrapper";
-import { Upload, Download, FileSpreadsheet, AlertTriangle, Info } from "lucide-react";
+import { Upload, Download, FileSpreadsheet, AlertTriangle, Info, Wand2, Save, Trash2 } from "lucide-react";
 
 /**
- * بوابة الاستيراد المالي — م٢-أ (الطبقة الحتمية: Excel / CSV). docs/25 §٧ م٢ + §١١.٣.
+ * بوابة الاستيراد المالي — م٢-أ (Excel/CSV حتمي) + م٢-ب (تعيين يدوي + قوالب محفوظة).
+ * docs/25 §٧ م٢ + §١١.٣.
  *
- * المبدأ الحاكم: «المستورد يمرّ على نفس محرّك الاشتقاق». لذلك هذه الصفحة لا تشتقّ
- * قيدًا: ترفع الملف → POST /finance/documents/import/analyze (تحليل + تعيين فقط)
- * → تعرض جدول مراجعة + تحذيرات → ثم تستخدم **نفس** POST /finance/documents
- * (dryRun للمعاينة، ثم الحفظ) — هو من يشتقّ القيد ويكتب الأثر. لا ازدواج منطق.
+ * المبدأ الحاكم: «المستورد يمرّ على نفس محرّك الاشتقاق». الصفحة لا تشتقّ قيدًا:
+ * ترفع الملف → POST .../import/analyze (تحليل + تعيين فقط) → جدول مراجعة + محرّر
+ * تعيين (م٢-ب) → ثم **نفس** POST /finance/documents (dryRun للمعاينة، ثم الحفظ)
+ * هو من يشتقّ القيد ويكتب الأثر. لا ازدواج منطق.
  */
 
 type ImportedLine = {
@@ -48,7 +51,11 @@ type AnalyzeResponse = {
   warnings: ImportWarning[];
   stats: ImportStats;
   documentBody: { direction: string; documentKind: string; lines: unknown[] };
+  headers: string[];
+  detectedMapping: Record<string, string>;
+  appliedMapping: Record<string, string> | null;
 };
+type ImportField = { key: string; label: string };
 type TemplateMeta = {
   key: string;
   title: string;
@@ -58,6 +65,7 @@ type TemplateMeta = {
   sampleHeaders: string[];
   sampleCsv: string;
 };
+type Preset = { id: number; name: string; templateKey: string; mapping: Record<string, string>; isDefault: boolean };
 type PreviewLeg = { accountCode: string; debit: number; credit: number };
 
 const lineNet = (l: ImportedLine) => roundMoney((Number(l.quantity) || 0) * (Number(l.unitPrice) || 0));
@@ -82,19 +90,42 @@ export default function FinancialImportGateway() {
   const [analysis, setAnalysis] = useState<AnalyzeResponse | null>(null);
   const [preview, setPreview] = useState<PreviewLeg[] | null>(null);
 
-  // سياق الحفظ (يختاره المستخدم بعد التحليل): التاريخ + الفرع + الخزنة/البنك.
+  // المصدر المُخزَّن لإعادة التحليل بتعيين معدّل دون إعادة رفع الملف (م٢-ب).
+  const [lastUpload, setLastUpload] = useState<{ source: "csv" | "excel"; content: string } | null>(null);
+  // التعيين القابل للتحرير: ترويسة المصدر → حقل ("" = تجاهل).
+  const [mapping, setMapping] = useState<Record<string, string>>({});
+  const [showMapEditor, setShowMapEditor] = useState(false);
+  const [presetName, setPresetName] = useState("");
+  const [presetDefault, setPresetDefault] = useState(false);
+
+  // سياق الحفظ (يختاره المستخدم بعد التحليل).
   const [date, setDate] = useState(todayLocal());
   const [branchId, setBranchId] = useState("");
   const [cashAccountCode, setCashAccountCode] = useState("");
 
-  const templatesQ = useApiQuery<{ templates: TemplateMeta[] }>(
+  const templatesQ = useApiQuery<{ templates: TemplateMeta[]; fields: ImportField[] }>(
     ["finance-import-templates"],
     "/finance/documents/import/templates",
   );
   const templates = templatesQ.data?.templates ?? [];
-  const selectedTemplate = useMemo(() => templates.find((t) => t.key === templateKey), [templates, templateKey]);
+  const fields = templatesQ.data?.fields ?? [];
+  const selectedTemplate = templates.find((t) => t.key === templateKey);
+
+  const presetsQ = useApiQuery<{ data: Preset[] }>(
+    ["finance-import-presets", templateKey],
+    templateKey ? `/finance/documents/import/presets?templateKey=${encodeURIComponent(templateKey)}` : null,
+  );
+  const presets = presetsQ.data?.data ?? [];
 
   const analyzeMut = useApiMutation<AnalyzeResponse, any>("/finance/documents/import/analyze", "POST", []);
+  const savePresetMut = useApiMutation<{ ok: true }, any>("/finance/documents/import/presets", "POST", [["finance-import-presets"]], {
+    successMessage: "تم حفظ التعيين كقالب",
+  });
+  const deletePresetMut = useApiMutation<{ ok: true }, { id: number }>(
+    (body) => `/finance/documents/import/presets/${body.id}`,
+    "DELETE",
+    [["finance-import-presets"]],
+  );
   const previewMut = useApiMutation<{ lines: PreviewLeg[] }, any>("/finance/documents", "POST", []);
   const saveMut = useApiMutation<{ journalId: number }, any>("/finance/documents", "POST", [["vouchers"], ["journal-manual"]], {
     successMessage: "تم حفظ المستند المُستورَد",
@@ -104,11 +135,7 @@ export default function FinancialImportGateway() {
   const isReceipt = analysis?.direction === "receipt";
 
   function downloadTemplate() {
-    if (!selectedTemplate) {
-      toast({ variant: "destructive", title: "اختر قالبًا أولًا" });
-      return;
-    }
-    // BOM لإظهار العربية صحيحة في Excel عند فتح CSV.
+    if (!selectedTemplate) { toast({ variant: "destructive", title: "اختر قالبًا أولًا" }); return; }
     const blob = new Blob(["﻿" + selectedTemplate.sampleCsv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -118,33 +145,68 @@ export default function FinancialImportGateway() {
     URL.revokeObjectURL(url);
   }
 
+  async function runAnalyze(payload: { source: "csv" | "excel"; content: string }, overrideMapping?: Record<string, string>) {
+    const body: Record<string, unknown> = { ...payload, templateKey };
+    if (overrideMapping && Object.keys(overrideMapping).length > 0) body.mapping = overrideMapping;
+    const res = await analyzeMut.mutateAsync(body);
+    setAnalysis(res);
+    // التعيين الحالي = المُطبَّق إن وُجد، وإلا الكشف التلقائي.
+    setMapping(res.appliedMapping ?? res.detectedMapping ?? {});
+    return res;
+  }
+
   async function handleFile(file: File) {
-    if (!templateKey) {
-      toast({ variant: "destructive", title: "اختر قالب الاستيراد أولًا" });
-      return;
-    }
+    if (!templateKey) { toast({ variant: "destructive", title: "اختر قالب الاستيراد أولًا" }); return; }
     setFileName(file.name);
     setAnalysis(null);
     setPreview(null);
+    setShowMapEditor(false);
     const isExcel = /\.(xlsx|xls)$/i.test(file.name) || /sheet|excel/i.test(file.type);
     try {
-      let payload: { source: "csv" | "excel"; templateKey: string; content: string };
+      let payload: { source: "csv" | "excel"; content: string };
       if (isExcel) {
         const dataUrl = await readFile(file, "dataURL");
         const base64 = dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl;
-        payload = { source: "excel", templateKey, content: base64 };
+        payload = { source: "excel", content: base64 };
       } else {
         const text = await readFile(file, "text");
-        payload = { source: "csv", templateKey, content: text };
+        payload = { source: "csv", content: text };
       }
-      const res = await analyzeMut.mutateAsync(payload);
-      setAnalysis(res);
+      setLastUpload(payload);
+      // طبّق التعيين الافتراضي للقالب (إن وُجد) عند أول تحليل.
+      const def = presets.find((p) => p.isDefault);
+      const res = await runAnalyze(payload, def?.mapping);
       if (res.lines.length === 0) {
-        toast({ variant: "destructive", title: "لم يُستخرج أي بند صالح — راجع الأعمدة أو نزّل القالب" });
+        toast({ variant: "destructive", title: "لم يُستخرج أي بند صالح — راجع تعيين الأعمدة أو نزّل القالب" });
+        setShowMapEditor(true);
       }
     } catch (e: any) {
       toast({ variant: "destructive", title: "تعذّر تحليل الملف", description: e?.fix ?? e?.message ?? "" });
     }
+  }
+
+  async function reanalyzeWithMapping(nextMapping?: Record<string, string>) {
+    if (!lastUpload) return;
+    try {
+      await runAnalyze(lastUpload, nextMapping ?? mapping);
+      setPreview(null);
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "تعذّرت إعادة التحليل", description: e?.fix ?? e?.message ?? "" });
+    }
+  }
+
+  function applyPreset(preset: Preset) {
+    setMapping(preset.mapping ?? {});
+    setShowMapEditor(true);
+    reanalyzeWithMapping(preset.mapping ?? {});
+  }
+
+  function handleSavePreset() {
+    if (!presetName.trim()) { toast({ variant: "destructive", title: "أدخل اسمًا للقالب" }); return; }
+    if (!templateKey) return;
+    savePresetMut.mutate({ name: presetName.trim(), templateKey, mapping, isDefault: presetDefault });
+    setPresetName("");
+    setPresetDefault(false);
   }
 
   function buildDocumentPayload(extra?: Record<string, unknown>) {
@@ -205,19 +267,17 @@ export default function FinancialImportGateway() {
       backPath="/finance/vouchers"
     >
       <div dir="rtl" className="space-y-5">
-        {/* الخطوة ١: اختيار القالب + تنزيله + رفع الملف */}
+        {/* الخطوة ١: القالب + التنزيل + الرفع */}
         <div className="border rounded-lg p-4 space-y-4 bg-surface-subtle">
           <div className="flex items-center gap-2 text-sm font-semibold">
             <FileSpreadsheet className="w-4 h-4" /> ١) اختر القالب وارفع الملف
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <FormFieldWrapper label="قالب الاستيراد" required>
-              <Select value={templateKey} onValueChange={(v) => { setTemplateKey(v); setAnalysis(null); setPreview(null); }}>
+              <Select value={templateKey} onValueChange={(v) => { setTemplateKey(v); setAnalysis(null); setPreview(null); setShowMapEditor(false); }}>
                 <SelectTrigger><SelectValue placeholder="اختر القالب..." /></SelectTrigger>
                 <SelectContent>
-                  {templates.map((t) => (
-                    <SelectItem key={t.key} value={t.key}>{t.title}</SelectItem>
-                  ))}
+                  {templates.map((t) => (<SelectItem key={t.key} value={t.key}>{t.title}</SelectItem>))}
                 </SelectContent>
               </Select>
             </FormFieldWrapper>
@@ -234,12 +294,8 @@ export default function FinancialImportGateway() {
                   className="hidden"
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.currentTarget.value = ""; }}
                 />
-                <Button
-                  type="button"
-                  className="w-full"
-                  disabled={!templateKey || analyzeMut.isPending}
-                  onClick={(e) => { (e.currentTarget.previousElementSibling as HTMLInputElement)?.click(); }}
-                >
+                <Button type="button" className="w-full" disabled={!templateKey || analyzeMut.isPending}
+                  onClick={(e) => { (e.currentTarget.previousElementSibling as HTMLInputElement)?.click(); }}>
                   <Upload className="w-4 h-4 ml-1" />
                   {analyzeMut.isPending ? "جاري التحليل..." : "رفع وتحليل ملف"}
                 </Button>
@@ -254,30 +310,83 @@ export default function FinancialImportGateway() {
           {fileName && <p className="text-xs text-muted-foreground">الملف: {fileName}</p>}
         </div>
 
-        {/* الخطوة ٢: مراجعة البنود المُستخرَجة + التحذيرات */}
+        {/* الخطوة ٢: مراجعة البنود + محرّر التعيين (م٢-ب) */}
         {analysis && (
           <div className="border rounded-lg p-4 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="text-sm font-semibold">
                 ٢) مراجعة البنود — {analysis.direction === "receipt" ? "قبض (مال داخل)" : "صرف (مال خارج)"}
               </div>
-              <div className="text-xs text-muted-foreground">
-                صفوف الملف: {analysis.stats.totalRows} · بنود صالحة: {analysis.stats.mappedRows}
-                {analysis.stats.skippedRows > 0 && <> · متخطّاة: {analysis.stats.skippedRows}</>}
+              <div className="flex items-center gap-3">
+                <div className="text-xs text-muted-foreground">
+                  صفوف: {analysis.stats.totalRows} · بنود صالحة: {analysis.stats.mappedRows}
+                  {analysis.stats.skippedRows > 0 && <> · متخطّاة: {analysis.stats.skippedRows}</>}
+                </div>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setShowMapEditor((s) => !s)}>
+                  <Wand2 className="w-4 h-4 ml-1" /> {showMapEditor ? "إخفاء التعيين" : "تعيين الأعمدة"}
+                </Button>
               </div>
             </div>
+
+            {/* محرّر التعيين + القوالب المحفوظة (م٢-ب) */}
+            {showMapEditor && (
+              <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
+                {presets.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className="text-muted-foreground">قوالب محفوظة:</span>
+                    {presets.map((p) => (
+                      <span key={p.id} className="inline-flex items-center gap-1 rounded border bg-background px-2 py-1">
+                        <button type="button" className="hover:underline" onClick={() => applyPreset(p)}>
+                          {p.name}{p.isDefault ? " ★" : ""}
+                        </button>
+                        <button type="button" className="text-muted-foreground hover:text-destructive"
+                          onClick={() => deletePresetMut.mutate({ id: p.id })} aria-label="حذف القالب">
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {analysis.headers.map((h) => (
+                    <div key={h} className="flex items-center gap-2 text-sm">
+                      <span className="flex-1 truncate text-muted-foreground" title={h}>{h}</span>
+                      <span className="text-muted-foreground">→</span>
+                      <Select value={mapping[h] ?? ""} onValueChange={(v) => setMapping((m) => ({ ...m, [h]: v === "__ignore" ? "" : v }))}>
+                        <SelectTrigger className="w-40 h-8"><SelectValue placeholder="تجاهل" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__ignore">— تجاهل —</SelectItem>
+                          {fields.map((f) => (<SelectItem key={f.key} value={f.key}>{f.label}</SelectItem>))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                  <Button type="button" variant="outline" size="sm" onClick={() => reanalyzeWithMapping()} disabled={analyzeMut.isPending}>
+                    <Wand2 className="w-4 h-4 ml-1" /> {analyzeMut.isPending ? "جاري التحليل..." : "إعادة التحليل بالتعيين"}
+                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Input className="w-44 h-8" value={presetName} onChange={(e) => setPresetName(e.target.value)} placeholder="اسم القالب لحفظه" />
+                    <label className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                      <Checkbox checked={presetDefault} onCheckedChange={(v) => setPresetDefault(v === true)} /> افتراضي
+                    </label>
+                    <Button type="button" variant="outline" size="sm" onClick={handleSavePreset} disabled={savePresetMut.isPending}>
+                      <Save className="w-4 h-4 ml-1" /> حفظ كقالب
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {analysis.warnings.length > 0 && (
               <div className="space-y-1">
                 {analysis.warnings.map((w, i) => (
-                  <div
-                    key={i}
-                    className={`text-xs flex items-start gap-1.5 rounded px-2 py-1 ${
-                      w.severity === "skip" || w.severity === "warn"
-                        ? "bg-status-warning-surface text-status-warning-foreground"
-                        : "bg-muted/40 text-muted-foreground"
-                    }`}
-                  >
+                  <div key={i} className={`text-xs flex items-start gap-1.5 rounded px-2 py-1 ${
+                    w.severity === "info" ? "bg-muted/40 text-muted-foreground" : "bg-status-warning-surface text-status-warning-foreground"
+                  }`}>
                     {w.severity === "info" ? <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" /> : <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />}
                     {w.message}
                   </div>

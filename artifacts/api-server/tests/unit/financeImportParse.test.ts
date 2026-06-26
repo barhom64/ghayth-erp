@@ -5,6 +5,9 @@ import {
   mapTableToDocument,
   templateToCsv,
   findTemplate,
+  detectMapping,
+  sanitizeMapping,
+  isFinanceImportField,
   FINANCE_IMPORT_TEMPLATES,
 } from "../../src/lib/financeImportParse.js";
 
@@ -154,5 +157,46 @@ describe("templateToCsv + templates registry", () => {
       expect(Object.keys(t.headerMap).length).toBeGreaterThan(0);
       expect(t.sampleHeaders.length).toBe(t.sampleRow.length);
     }
+  });
+});
+
+describe("م٢-ب: detectMapping + override mapping + sanitize", () => {
+  const detailed = findTemplate("expense-detailed")!;
+  const paySimple = findTemplate("payment-simple")!;
+
+  it("detectMapping returns the auto-detected field per header ('' when unknown)", () => {
+    const table = parseCsvTable("الوصف,قيمة غريبة,سعر الوحدة\nأ,ب,3\n");
+    const det = detectMapping(table, detailed);
+    expect(det["الوصف"]).toBe("description");
+    expect(det["سعر الوحدة"]).toBe("unitPrice");
+    expect(det["قيمة غريبة"]).toBe("");
+  });
+
+  it("override mapping rescues an unrecognised header → maps a custom partner column", () => {
+    // ملف شريك: العمود اسمه «المبلغ الكلي» لا يطابق أي قالب.
+    const table = parseCsvTable("البند,المبلغ الكلي\nاستشارة,900\n");
+    const without = mapTableToDocument(table, paySimple);
+    expect(without.lines).toHaveLength(0); // «المبلغ الكلي» غير معروف → لا مبلغ
+
+    const res = mapTableToDocument(table, paySimple, { "المبلغ الكلي": "amount", "البند": "description" });
+    expect(res.lines).toHaveLength(1);
+    expect(res.lines[0]).toMatchObject({ description: "استشارة", quantity: 1, unitPrice: 900 });
+  });
+
+  it("override '' explicitly ignores an otherwise-recognised column", () => {
+    const table = parseCsvTable("البيان,المبلغ\nأ,100\n");
+    const res = mapTableToDocument(table, paySimple, { "المبلغ": "" });
+    expect(res.lines).toHaveLength(0); // المبلغ مُتجاهَل صراحةً → لا قيمة
+  });
+
+  it("sanitizeMapping keeps known fields + '', drops unknown values", () => {
+    const clean = sanitizeMapping({ a: "amount", b: "", c: "not_a_field", d: 42 });
+    expect(clean).toEqual({ a: "amount", b: "" });
+  });
+
+  it("isFinanceImportField guards the field union", () => {
+    expect(isFinanceImportField("unitPrice")).toBe(true);
+    expect(isFinanceImportField("bogus")).toBe(false);
+    expect(isFinanceImportField(undefined)).toBe(false);
   });
 });

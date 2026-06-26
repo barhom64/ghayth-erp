@@ -193,16 +193,29 @@ export function aoaToTable(aoa: unknown[][]): ParsedTable {
 export function mapTableToDocument(
   table: ParsedTable,
   template: FinanceImportTemplate,
+  /**
+   * تعيين محفوظ/يدوي يَجُبّ الكشف التلقائي لكل عمود (م٢-ب). المفتاح اسم عمود
+   * المصدر (يُطبَّع)، والقيمة الحقل الهدف؛ القيمة الفارغة = «تجاهل هذا العمود».
+   * عمود لا يظهر في التعيين يعود للكشف التلقائي من القالب.
+   */
+  overrideMapping?: Record<string, FinanceImportFieldKey | "">,
 ): FinanceImportResult {
   // بناء lookup: اسم العمود المُطبَّع → حقل، من خريطة القالب.
   const headerLookup = new Map<string, FinanceImportFieldKey>();
   for (const [aliases, field] of Object.entries(template.headerMap)) {
     for (const alias of aliases.split("|")) headerLookup.set(normalizeHeader(alias), field);
   }
+  // تعيين يدوي/محفوظ يَجُبّ الكشف التلقائي (يُطبَّع المفتاح). "" = تجاهل صريح.
+  const overrideLookup = new Map<string, FinanceImportFieldKey | "">();
+  if (overrideMapping) {
+    for (const [h, f] of Object.entries(overrideMapping)) overrideLookup.set(normalizeHeader(h), f);
+  }
 
-  const colField: (FinanceImportFieldKey | null)[] = table.headers.map(
-    (h) => headerLookup.get(normalizeHeader(h)) ?? null,
-  );
+  const colField: (FinanceImportFieldKey | null)[] = table.headers.map((h) => {
+    const nh = normalizeHeader(h);
+    if (overrideLookup.has(nh)) return overrideLookup.get(nh) || null; // "" → تجاهل
+    return headerLookup.get(nh) ?? null;
+  });
   const recognizedColumns: string[] = [];
   const unrecognizedColumns: string[] = [];
   table.headers.forEach((h, i) => {
@@ -362,4 +375,57 @@ export const FINANCE_IMPORT_TEMPLATES: FinanceImportTemplate[] = [
 
 export function findTemplate(key: string): FinanceImportTemplate | undefined {
   return FINANCE_IMPORT_TEMPLATES.find((t) => t.key === key);
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// م٢-ب — التعيين اليدوي/المحفوظ: كتالوج الحقول + كشف التعيين الافتراضي للمحرّر.
+// ───────────────────────────────────────────────────────────────────────────
+
+/** الحقول التي يمكن للمستخدم ربط أعمدة ملفه بها (لمنسدلة محرّر التعيين). */
+export const FINANCE_IMPORT_FIELDS: { key: FinanceImportFieldKey; label: string }[] = [
+  { key: "itemName", label: "الصنف / الخدمة" },
+  { key: "description", label: "الوصف / البيان" },
+  { key: "quantity", label: "الكمية" },
+  { key: "unit", label: "الوحدة" },
+  { key: "unitPrice", label: "سعر الوحدة" },
+  { key: "amount", label: "المبلغ (كمية ١)" },
+  { key: "taxRatePercent", label: "نسبة الضريبة %" },
+  { key: "accountCode", label: "الحساب" },
+  { key: "costCenter", label: "مركز التكلفة" },
+];
+
+const FINANCE_IMPORT_FIELD_KEYS = new Set<string>(FINANCE_IMPORT_FIELDS.map((f) => f.key));
+
+/** هل القيمة حقل استيراد معروف؟ (تنقية تعيين قادم من الواجهة/التخزين). */
+export function isFinanceImportField(v: unknown): v is FinanceImportFieldKey {
+  return typeof v === "string" && FINANCE_IMPORT_FIELD_KEYS.has(v);
+}
+
+/**
+ * الكشف الافتراضي: لكل ترويسة في الملف، الحقل المُكتشَف من القالب ("" إن لم
+ * يُعرَف). يملأ محرّر التعيين في الواجهة ليُظهر للمستخدم ما فهمه النظام ويعدّله.
+ */
+export function detectMapping(
+  table: ParsedTable,
+  template: FinanceImportTemplate,
+): Record<string, FinanceImportFieldKey | ""> {
+  const headerLookup = new Map<string, FinanceImportFieldKey>();
+  for (const [aliases, field] of Object.entries(template.headerMap)) {
+    for (const alias of aliases.split("|")) headerLookup.set(normalizeHeader(alias), field);
+  }
+  const out: Record<string, FinanceImportFieldKey | ""> = {};
+  for (const h of table.headers) out[h] = headerLookup.get(normalizeHeader(h)) ?? "";
+  return out;
+}
+
+/** تنقية تعيين قادم من الخارج: يُسقِط القيم غير المعروفة، يُبقي "" (تجاهل). */
+export function sanitizeMapping(raw: unknown): Record<string, FinanceImportFieldKey | ""> {
+  const out: Record<string, FinanceImportFieldKey | ""> = {};
+  if (raw && typeof raw === "object") {
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      if (v === "" || v == null) out[k] = "";
+      else if (isFinanceImportField(v)) out[k] = v;
+    }
+  }
+  return out;
 }
