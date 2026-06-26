@@ -522,8 +522,9 @@ journalRouter.post("/documents/collect", authorize({ feature: "finance.journal",
         action: "finance.payment.received",
         entity: "journal_entries",
         entityId: result.journalId,
-        after: { clientId, amount },
-        details: JSON.stringify({ clientId, amount, applied: result.applied.length, leftover: result.leftover }),
+        // voucherId مطلوب في كتالوج الحدث (eventPayloadContract) — نفس انبعاث سند القبض.
+        after: { voucherId: result.journalId, clientId, amount },
+        details: JSON.stringify({ voucherId: result.journalId, clientId, amount, applied: result.applied.length, leftover: result.leftover }),
       }).catch((e) => logger.error(e, "finance collect event failed"));
     }
 
