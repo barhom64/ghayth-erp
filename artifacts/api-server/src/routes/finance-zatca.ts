@@ -13,7 +13,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
-import { createAuditLog, emitEvent, toDateISO, getCompanyVatRate, computeVat, checkFinancialPeriodOpen, roundTo2, todayISO } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent, toDateISO, getCompanyVatRate, computeVat, checkFinancialPeriodOpen, roundTo2, currentPeriod } from "../lib/businessHelpers.js";
 import { markIdempotencyReplay } from "../lib/requestIdempotency.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { resolveZatcaSettings } from "../lib/zatca/settingsResolver.js";
@@ -1121,7 +1121,7 @@ zatcaRouter.put("/tax-settlement/policy", authorize({ feature: "finance.zatca", 
     // الترحيل لاحقًا. نتحقق هنا عند الإدخال.
     if (body.settlementAccountCode) {
       const [acct] = await rawQuery<{ code: string; allowPosting: boolean }>(
-        `SELECT code, "allowPosting" FROM chart_of_accounts WHERE "companyId" = $1 AND code = $2 LIMIT 1`,
+        `SELECT code, "allowPosting" FROM chart_of_accounts WHERE "companyId" = $1 AND code = $2 AND "deletedAt" IS NULL LIMIT 1`,
         [scope.companyId, body.settlementAccountCode],
       );
       if (!acct) {
@@ -1184,6 +1184,7 @@ async function computeVatSettlement(companyId: number, period: string) {
      JOIN journal_entries je ON je.id = jl."journalId"
     WHERE je."companyId" = $1
       AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je."reversedById" IS NULL
+      AND jl."deletedAt" IS NULL
       AND to_char(je.date, 'YYYY-MM') = $4
       AND jl."accountCode" IN ($2, $3)`,
     [companyId, outputCode, inputCode, period],
@@ -1230,7 +1231,7 @@ zatcaRouter.get("/tax-settlement/preview", authorize({ feature: "finance.zatca",
   try {
     const scope = req.scope!;
     const rawPeriod = typeof req.query.period === "string" ? req.query.period.trim() : "";
-    const period = /^\d{4}-\d{2}$/.test(rawPeriod) ? rawPeriod : new Date().toISOString().slice(0, 7);
+    const period = /^\d{4}-\d{2}$/.test(rawPeriod) ? rawPeriod : currentPeriod();
     const settlement = await computeVatSettlement(scope.companyId, period);
     const ref = `VAT-SETTLE-${period}`;
     const [existing] = await rawQuery<{ id: number }>(

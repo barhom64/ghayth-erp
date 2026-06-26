@@ -3405,6 +3405,7 @@ async function monthlyVatSettlementReminder(): Promise<string> {
          JOIN journal_entries je ON je.id = jl."journalId"
         WHERE je."companyId"=$1
           AND je."deletedAt" IS NULL AND je."balancesApplied"=true AND je."reversedById" IS NULL
+          AND jl."deletedAt" IS NULL
           AND to_char(je.date,'YYYY-MM')=$4
           AND jl."accountCode" IN ($2,$3)`,
         [c.id, outputCode, inputCode, period]
