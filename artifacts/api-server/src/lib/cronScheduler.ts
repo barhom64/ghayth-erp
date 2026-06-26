@@ -54,6 +54,7 @@ import { decryptSecret } from "./secrets.js";
 import { processDueRecurringJournals } from "./recurringJournalProcessor.js";
 import { processDueAmortizations } from "./engines/prepaidAmortizationEngine.js";
 import { processDueRecognitions } from "./engines/deferredRevenueEngine.js";
+import { overstayPenaltyAmount } from "./umrahPenaltyMath.js";
 import {
   assetDepreciationProfile, type DepreciationAssetRow,
   eosAccrualProfile, leaveAccrualProfile,
@@ -3677,17 +3678,16 @@ async function umrahDailyOverstayScan(): Promise<string> {
     for (const row of penaltySettings) {
       penaltyByKey[row.key] = Number(row.value ?? 0);
     }
-    const perDay = penaltyByKey["umrah.overstay_daily_penalty"] ?? 0;
-    const tierDays = penaltyByKey["umrah.overstay_tier_days"] ?? 0;
-    const tierAmount = penaltyByKey["umrah.overstay_tier_amount"] ?? 0;
-    const useTiered = tierDays > 0 && tierAmount > 0;
+    const overstayCfg = {
+      perDay: penaltyByKey["umrah.overstay_daily_penalty"] ?? 0,
+      tierDays: penaltyByKey["umrah.overstay_tier_days"] ?? 0,
+      tierAmount: penaltyByKey["umrah.overstay_tier_amount"] ?? 0,
+    };
     for (const o of overstayed) {
-      const overDays = Math.max(0, Number(o.overDays) || 0);
-      // Tiered: ceil(overDays / tierDays) × tierAmount. Per-day fallback
-      // matches the pre-PR behaviour exactly.
-      const penalty = useTiered
-        ? Math.ceil(overDays / tierDays) * tierAmount
-        : overDays * perDay;
+      // ceil(overDays / tierDays) × tierAmount when tiered, else overDays ×
+      // perDay. Shared with the mutamers import (umrahPenaltyMath) so both
+      // billing paths compute the IDENTICAL invoiced penalty.
+      const penalty = overstayPenaltyAmount(o.overDays, overstayCfg);
       await rawExecute(
         `INSERT INTO umrah_violations ("companyId","branchId",type,"referenceType","referenceNumber",
           "mutamerId","groupId","subAgentId","penaltyAmount",status,description,"createdAt","updatedAt")

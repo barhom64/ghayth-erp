@@ -21,8 +21,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { Save, User, Calendar, AlertTriangle, Trash2, Edit, UserCog, ShieldOff } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { DetailPageLayout } from "@workspace/entity-kit";
-import { UmrahAttachmentsPanel } from "@/components/shared/umrah-attachments-panel";
+import { DetailPageLayout, EntityDocuments, UMRAH_ATTACHMENT_CATEGORIES } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { PrintButton } from "@/components/shared/print-button";
 import {
@@ -419,7 +418,15 @@ export default function PilgrimDetail() {
       )}
 
       {data?.id && (
-        <UmrahAttachmentsPanel entityType="mutamer" entityId={data.id} />
+        <EntityDocuments
+          entityType="umrah_mutamer"
+          entityId={Number(data.id)}
+          title="المرفقات"
+          categories={UMRAH_ATTACHMENT_CATEGORIES}
+          quickUpload
+          canDelete
+          viewMode="grid"
+        />
       )}
     </div>
   );
