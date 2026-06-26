@@ -26,7 +26,22 @@ import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const SRC = join(REPO_ROOT, "artifacts/ghayth-erp/src");
+const LIB = join(REPO_ROOT, "lib");
 const ALLOWLIST = join(REPO_ROOT, "scripts/dead-components-allowlist.txt");
+// علامة المسار من خارج SRC (kit facades في lib/* تُعيد تصدير مكوّنات التطبيق
+// عبر "../../../artifacts/ghayth-erp/src/...").
+const SRC_MARKER = "artifacts/ghayth-erp/src/";
+
+// من محتوى ملف خارجي (lib/*) يرجع مسارات SRC-relative المُعاد تصديرها (دالة نقية).
+// تُحسب «استيرادًا» فلا يُصنّف المكوّن الحيّ خلف الـkit يتيمًا (خلل رصده تنظيف #3007).
+export function externalSrcTargets(content) {
+  const out = [];
+  for (const spec of extractSpecifiers(content)) {
+    const i = spec.indexOf(SRC_MARKER);
+    if (i >= 0) out.push(spec.slice(i + SRC_MARKER.length));
+  }
+  return out;
+}
 
 // نقاط دخول لا تُحسب مرشّحات (جذور الرسم) ولا تُفحص.
 export const ENTRY_FILES = new Set(["App.tsx", "main.tsx"]);
@@ -98,13 +113,21 @@ export function relativeJoin(dir, spec) {
 }
 
 // يحسب الأيتام من خريطة { rel -> content }. (دالة نقية، قابلة للاختبار)
-export function deadFrom(filesByRel) {
+// externalTargets: مسارات SRC-relative مُعاد تصديرها من خارج SRC (kit facades في
+// lib/*) — تُحسب «مستوردة» فلا تُصنّف يتيمة. resolved مسبقًا (بلا/مع امتداد).
+export function deadFrom(filesByRel, externalTargets = []) {
   const knownRel = new Set(Object.keys(filesByRel));
   const imported = new Set();
   for (const [rel, content] of Object.entries(filesByRel)) {
     for (const spec of extractSpecifiers(content)) {
       const r = resolveSpecifier(spec, rel, knownRel);
       if (r) imported.add(r);
+    }
+  }
+  // إعادة التصدير من lib/* (المسار بصيغة SRC-relative؛ نحلّه لأقرب ملف معروف).
+  for (const t of externalTargets) {
+    for (const c of [t, t + ".tsx", t + ".ts", t + "/index.tsx", t + "/index.ts"]) {
+      if (knownRel.has(c)) { imported.add(c); break; }
     }
   }
   return Object.keys(filesByRel)
@@ -145,7 +168,14 @@ async function main() {
     filesByRel[rel] = await readFile(p, "utf8");
   }
 
-  const dead = deadFrom(filesByRel);
+  // مسح kit facades في lib/* لرصد المكوّنات المُعاد تصديرها (حيّة وإن لم
+  // يستوردها ملف داخل SRC مباشرةً) — تفادي إيجاب كاذب على البيت الحيّ خلف الـkit.
+  const externalTargets = [];
+  for (const p of await collect(LIB, [".ts", ".tsx"])) {
+    for (const t of externalSrcTargets(await readFile(p, "utf8"))) externalTargets.push(t);
+  }
+
+  const dead = deadFrom(filesByRel, externalTargets);
   const baseline = await readBaseline();
   const fresh = dead.filter((d) => !baseline.has(d));
   const stale = [...baseline].filter((b) => !dead.includes(b)).sort();

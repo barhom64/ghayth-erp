@@ -2,11 +2,28 @@
 // التشغيل: node scripts/src/check-dead-components.test.mjs
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { extractSpecifiers, resolveSpecifier, relativeJoin, isCandidate, isRouteFile, deadFrom, stripComments, assertScannedNonEmpty } from "./check-dead-components.mjs";
+import { extractSpecifiers, resolveSpecifier, relativeJoin, isCandidate, isRouteFile, deadFrom, stripComments, assertScannedNonEmpty, externalSrcTargets } from "./check-dead-components.mjs";
 
 test("assertScannedNonEmpty يفشل مغلقًا على صفر ملف (ملاحظة Codex)", () => {
   assert.throws(() => assertScannedNonEmpty(0));
   assert.doesNotThrow(() => assertScannedNonEmpty(7));
+});
+
+test("externalSrcTargets يستخرج مسار SRC من إعادة تصدير kit (lib/*)", () => {
+  assert.deepEqual(
+    externalSrcTargets('export { PageHeader } from "../../../artifacts/ghayth-erp/src/components/page-header";'),
+    ["components/page-header"],
+  );
+  assert.deepEqual(externalSrcTargets('import x from "react";'), []);
+});
+
+test("deadFrom: المكوّن المُعاد تصديره من kit ليس يتيمًا (تصحيح #3007)", () => {
+  const files = {
+    "components/page-header.tsx": "export function PageHeader(){ return null; }",
+    "components/orphan.tsx": "export function O(){ return null; }",
+  };
+  assert.deepEqual(deadFrom(files), ["components/orphan.tsx", "components/page-header.tsx"]);
+  assert.deepEqual(deadFrom(files, ["components/page-header"]), ["components/orphan.tsx"]);
 });
 
 test("extractSpecifiers يلتقط import/export/dynamic", () => {

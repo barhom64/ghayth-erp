@@ -1,13 +1,7 @@
-# مكوّنات يتيمة (لا يستوردها أي ملف) مجمّدة كأساس — حارس check-dead-components.
-# تقرير «علم» بالحالة الحالية؛ مرشّحة للتنظيف عبر PRs مستقلّة (الدستور: حذف بإثبات).
-# يفشل الحارس على أي يتيم جديد خارج هذه القائمة.
-components/approval-actions.tsx
-components/create-page-layout.tsx
-components/data-table-presets.tsx
-components/form-shell.tsx
-components/list-page.tsx
-components/page-header.tsx
-components/shared/entity-print.tsx
+# مكوّنات يتيمة (لا يستوردها أي ملف، ولا يُعيد تصديرها أي kit facade في lib/*)
+# مجمّدة كأساس — حارس check-dead-components. تقرير «علم» بالحالة الحالية.
+# يفشل الحارس على أي يتيم جديد خارج هذه القائمة. (صُحّح: أُسقطت 7 مكوّنات
+# حيّة يُعيد تصديرها ui-core/workflow-kit/report-kit عبر lib/.)
 components/shared/journal-template-picker.tsx
 components/ui/accordion.tsx
 components/ui/aspect-ratio.tsx
