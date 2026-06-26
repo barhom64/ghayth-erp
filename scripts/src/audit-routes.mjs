@@ -72,6 +72,10 @@ const ALLOWLIST = new Set([
   // مُبقيان للمرجع/التراجع (doc 25 §٨: تحويل لا حذف؛ لا يُحذفان قبل ثبات التبديل).
   "pages/create/finance/vouchers-create.tsx",
   "pages/create/finance/expenses-create.tsx",
+  // م٨ (إكمال التبديل) — customer-receipt: مسارها /finance/receivables/receipt يُحوَّل
+  // بـ redirect إلى «تحصيل من عميل» الموحّد (/finance/collect) بعد ثبوت بوابة §٧.٥.
+  // الملف مُبقًى للمرجع/التراجع (doc 25 §٨: تحويل لا حذف).
+  "pages/create/finance/customer-receipt.tsx",
 ]);
 
 const SOURCE_EXTS = [".ts", ".tsx", ".js", ".jsx"];

@@ -9,3 +9,5 @@ components/ui/toggle.tsx
 # (doc 25 §٨: تحويل لا حذف). مُدرجان أيضًا في scripts/src/audit-routes.mjs.
 pages/create/finance/vouchers-create.tsx
 pages/create/finance/expenses-create.tsx
+# م٨ (إكمال التبديل) — customer-receipt محوّلة بـ redirect إلى /finance/collect (§٧.٥ ثبتت). مُبقاة.
+pages/create/finance/customer-receipt.tsx

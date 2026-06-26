@@ -199,7 +199,8 @@ const ProfitabilityUmrahAgent = lazy(() => import("@/pages/finance/profitability
 const CustomerAdvances = lazy(() => import("@/pages/finance/customer-advances"));
 const CustomerAdvancesCreate = lazy(() => import("@/pages/create/finance/customer-advances-create"));
 const CustomerAdvancesApply = lazy(() => import("@/pages/create/finance/customer-advances-apply"));
-const CustomerReceiptWizard = lazy(() => import("@/pages/create/finance/customer-receipt")); // originally PR #1178
+// م٨ (إكمال التبديل) — customer-receipt محوّلة بـ redirect إلى «تحصيل من عميل» الموحّد
+// (/finance/collect, م٣) بعد ثبوت بوابة §٧.٥ (٦/٦). الملف مُبقًى (doc 25 §٨).
 const Dunning = lazy(() => import("@/pages/finance/dunning"));
 const CollectionStages = lazy(() => import("@/pages/finance/collection-stages"));
 const BadDebt = lazy(() => import("@/pages/finance/bad-debt"));
@@ -388,7 +389,7 @@ export const financeRoutes = [
   { path: "/finance/tax", component: TaxSystem },
   { path: "/finance/tax-filing-calendar", component: TaxFilingCalendar },
   { path: "/finance/receivables", component: Receivables },
-  { path: "/finance/receivables/receipt", component: CustomerReceiptWizard },
+  { path: "/finance/receivables/receipt", component: redirectTo("/finance/collect") },
   { path: "/finance/customer-statement-print", component: CustomerStatementPrint },
   { path: "/finance/customer-360-sheet", component: Customer360Sheet },
   { path: "/finance/customer-risk", component: CustomerRisk },
