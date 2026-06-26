@@ -18,6 +18,7 @@ import { internalTechRef } from "../lib/internalRef.js";
 import { scopeCan } from "../lib/rbac/authzEngine.js";
 import { logger } from "../lib/logger.js";
 import { requestIdempotencyToken, markIdempotencyReplay } from "../lib/requestIdempotency.js";
+import { resolveAssetAccounts } from "../lib/finance/assetClassAccounts.js";
 
 export const financeAlgorithmsRouter = Router();
 financeAlgorithmsRouter.use(authMiddleware);
@@ -1078,12 +1079,15 @@ financeAlgorithmsRouter.post("/fixed-assets", authorize({ feature: "finance.algo
          "depreciationMethod","currentBookValue","accumulatedDepreciation",
          "assetAccountCode","depreciationAccountCode","accDepreciationAccountCode",status
        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,0,$13,$14,$15,'active')`;
+    // Book the asset into its per-class accounts (by category) instead of the
+    // generic "other" defaults; an explicit per-asset code still wins.
+    const acct = resolveAssetAccounts(b);
     const insertParams = [scope.companyId, b.branchId ?? scope.branchId, b.code ?? null, b.name,
        b.description ?? null, b.category ?? null, b.purchaseDate,
        purchaseCost, salvageValue, usefulYears,
        b.depreciationMethod, purchaseCost,
-       b.assetAccountCode, b.depreciationAccountCode,
-       b.accDepreciationAccountCode];
+       acct.asset, acct.dep,
+       acct.accDep];
 
     let insertId = 0;
     if (b.paymentAccountCode) {
@@ -1108,7 +1112,7 @@ financeAlgorithmsRouter.post("/fixed-assets", authorize({ feature: "finance.algo
           sourceId: insertId,
           sourceKey: `finance:asset_acquisition:${insertId}`,
           lines: [
-            { accountCode: b.assetAccountCode, debit: purchaseCost, credit: 0, description: `اقتناء ${b.name}`, assetId: insertId },
+            { accountCode: acct.asset, debit: purchaseCost, credit: 0, description: `اقتناء ${b.name}`, assetId: insertId },
             { accountCode: paymentAcct, debit: 0, credit: purchaseCost, description: `سداد اقتناء ${b.name}` },
           ],
         });
@@ -1139,9 +1143,9 @@ financeAlgorithmsRouter.post("/fixed-assets", authorize({ feature: "finance.algo
         salvageValue,
         usefulLifeYears: usefulYears,
         depreciationMethod: b.depreciationMethod,
-        assetAccountCode: b.assetAccountCode,
-        depreciationAccountCode: b.depreciationAccountCode,
-        accDepreciationAccountCode: b.accDepreciationAccountCode,
+        assetAccountCode: acct.asset,
+        depreciationAccountCode: acct.dep,
+        accDepreciationAccountCode: acct.accDep,
         paymentAccountCode: b.paymentAccountCode ?? null,
         acquisitionPosted: Boolean(b.paymentAccountCode),
       },
@@ -2241,9 +2245,17 @@ financeAlgorithmsRouter.post("/cip/:id/capitalize", authorize({ feature: "financ
     const depMethod = b.depreciationMethod ?? (cip.targetDepreciationMethod as string | null) ?? "straight_line";
     const assetName = b.assetName ?? `${cip.name} (مرسمل)`;
     const assetCode = b.assetCode ?? (cip.code as string | null) ?? null;
-    const targetAssetCode = (cip.targetAssetAccountCode as string | null) ?? "1280";
-    const targetDepCode = (cip.targetDepreciationAccountCode as string | null) ?? "5790";
-    const targetAccDepCode = (cip.targetAccDepreciationAccountCode as string | null) ?? "1290";
+    // Book the capitalised asset into its per-class accounts (by target
+    // category) instead of the generic "other" defaults.
+    const cipAcct = resolveAssetAccounts({
+      category: (cip.targetAssetCategory as string | null) ?? (cip.category as string | null),
+      assetAccountCode: cip.targetAssetAccountCode,
+      depreciationAccountCode: cip.targetDepreciationAccountCode,
+      accDepreciationAccountCode: cip.targetAccDepreciationAccountCode,
+    });
+    const targetAssetCode = cipAcct.asset;
+    const targetDepCode = cipAcct.dep;
+    const targetAccDepCode = cipAcct.accDep;
     const cipCode = (cip.cipAccountCode as string | null) ?? "1270";
 
     let newAssetId: number | null = null;
