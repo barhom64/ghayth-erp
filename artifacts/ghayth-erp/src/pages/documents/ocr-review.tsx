@@ -109,7 +109,7 @@ export default function OcrReviewPage() {
         method: "POST",
         body: JSON.stringify(payload),
       });
-      toast({ title: "تم تأكيد المستخلَص وحفظه على الكيان" });
+      toast({ title: "تم تأكيد المستخلَص وتسجيل الكيان المرتبط" });
       setItems((p) => p.filter((x) => x.id !== id));
     } catch (err: any) {
       toast({ variant: "destructive", title: "فشل التأكيد", description: err?.message });

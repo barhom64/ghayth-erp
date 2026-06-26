@@ -609,7 +609,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       { label: "اعتماد المصروفات", icon: CheckSquare, link: "/finance/expenses?tab=pending", minRoleLevel: 40 },
     ],
     "/finance/vouchers": [
-      { label: "سند جديد", icon: Plus, link: "/finance/vouchers/create" },
+      { label: "سند جديد", icon: Plus, link: "/finance/documents/create" },
     ],
     "/finance/purchase-orders": [
       { label: "طلب شراء جديد", icon: Plus, link: "/finance/purchase-orders?action=new" },

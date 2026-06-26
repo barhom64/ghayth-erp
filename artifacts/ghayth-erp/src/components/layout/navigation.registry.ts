@@ -361,7 +361,7 @@ export const allNavSections: NavSection[] = [
           { label: "تحويل بين الحسابات", path: "/finance/treasury/transfer", icon: ArrowLeftRight },
           { label: "النقد في الطريق", path: "/finance/cash-in-transit", icon: Banknote },
           { label: "المقبوضات", path: "/finance/receivables", icon: DollarSign },
-          { label: "سند قبض العميل (تطبيق تلقائي)", path: "/finance/receivables/receipt", icon: DollarSign },
+          { label: "تحصيل من عميل (مطابقة تلقائية)", path: "/finance/collect", icon: DollarSign },
           { label: "المدفوعات", path: "/finance/payments", icon: Wallet },
           { label: "دفعات مقدمة من العملاء", path: "/finance/customer-advances", icon: ArrowLeftRight },
           { label: "منضدة دفعات العملاء المقدمة", path: "/finance/customer-advances-workbench", icon: Briefcase },
