@@ -96,7 +96,8 @@ export function buildDocumentJournalLegs(
     totalVat = round2(totalVat + round2(line.vat || 0));
 
     // counter slices: one per allocation (validated to sum to net), else the whole line.
-    const slices =
+    type Slice = { amount: number; dims?: Record<string, unknown>; entityRef: JournalLeg["entityRef"] };
+    const slices: Slice[] =
       line.allocations && line.allocations.length > 0
         ? line.allocations.map((a) => ({
             amount: round2(a.amount),
@@ -107,7 +108,7 @@ export function buildDocumentJournalLegs(
             },
             entityRef: { entityType: a.entityType, entityId: a.entityId },
           }))
-        : [{ amount: net, dims: line.dims, entityRef: null as JournalLeg["entityRef"] }];
+        : [{ amount: net, dims: line.dims, entityRef: null }];
 
     if (line.allocations && line.allocations.length > 0) {
       const sliceSum = round2(slices.reduce((s, x) => s + x.amount, 0));
@@ -158,4 +159,65 @@ export function buildDocumentJournalLegs(
   }
 
   return legs;
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Line resolver — raw document input → ResolvedDocLine. Computes net (qty ×
+// unitPrice) + VAT (net × rate%), and normalizes each allocation's split type
+// (amount / percent / quantity) into an absolute amount. Pure + testable.
+// ───────────────────────────────────────────────────────────────────────────
+
+export type RawAllocationInput = {
+  entityType: string;
+  entityId: number;
+  allocationType: "amount" | "percent" | "quantity";
+  amount?: number;
+  percent?: number;
+  quantity?: number;
+  costBearer?: string | null;
+  dims?: Record<string, unknown>;
+};
+
+export type RawDocLine = {
+  lineNo: number;
+  quantity: number;
+  unitPrice: number;
+  /** VAT rate as a percentage (e.g. 15 for 15%); 0/undefined = no VAT */
+  taxRatePercent?: number;
+  counterAccountCode: string;
+  dims?: Record<string, unknown>;
+  allocations?: RawAllocationInput[];
+};
+
+/** Resolve one raw line (compute net/VAT, normalize allocation splits to amounts). */
+export function resolveDocumentLine(raw: RawDocLine): ResolvedDocLine {
+  const qty = Number(raw.quantity) || 0;
+  const price = Number(raw.unitPrice) || 0;
+  const net = round2(qty * price);
+  const vat = round2(net * ((Number(raw.taxRatePercent) || 0) / 100));
+
+  const allocations = raw.allocations?.map((a): LineAllocationInput => {
+    let amount: number;
+    switch (a.allocationType) {
+      case "amount":
+        amount = round2(Number(a.amount) || 0);
+        break;
+      case "percent":
+        amount = round2(net * ((Number(a.percent) || 0) / 100));
+        break;
+      case "quantity":
+        amount = round2((Number(a.quantity) || 0) * price);
+        break;
+      default:
+        throw new DocumentJournalError(`نوع توزيع غير معروف للبند ${raw.lineNo}: ${a.allocationType}`);
+    }
+    return { entityType: a.entityType, entityId: a.entityId, amount, costBearer: a.costBearer, dims: a.dims };
+  });
+
+  return { lineNo: raw.lineNo, net, vat, counterAccountCode: raw.counterAccountCode, dims: raw.dims, allocations };
+}
+
+/** Resolve a whole document's raw lines. */
+export function resolveDocumentLines(raws: RawDocLine[]): ResolvedDocLine[] {
+  return raws.map(resolveDocumentLine);
 }

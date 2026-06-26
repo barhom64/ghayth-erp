@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   buildDocumentJournalLegs,
+  resolveDocumentLine,
+  resolveDocumentLines,
   DocumentJournalError,
 } from "../../src/lib/financeDocumentJournal.js";
 
@@ -100,5 +102,55 @@ describe("buildDocumentJournalLegs — م١-ب multi-line posting", () => {
     expect(() =>
       buildDocumentJournalLegs({ direction: "payment", cashAccountCode: "1111" }, []),
     ).toThrow(DocumentJournalError);
+  });
+});
+
+describe("resolveDocumentLine — raw input → resolved line", () => {
+  it("computes net + VAT from qty × unitPrice × rate%", () => {
+    const r = resolveDocumentLine({
+      lineNo: 1, quantity: 10, unitPrice: 100, taxRatePercent: 15, counterAccountCode: "5510",
+    });
+    expect(r.net).toBeCloseTo(1000, 2);
+    expect(r.vat).toBeCloseTo(150, 2);
+  });
+
+  it("normalizes percent allocations to amounts (30/30/40 of 9,000)", () => {
+    const r = resolveDocumentLine({
+      lineNo: 1, quantity: 1, unitPrice: 9000, counterAccountCode: "5610",
+      allocations: [
+        { entityType: "vehicle", entityId: 11, allocationType: "percent", percent: 30 },
+        { entityType: "vehicle", entityId: 12, allocationType: "percent", percent: 30 },
+        { entityType: "vehicle", entityId: 13, allocationType: "percent", percent: 40 },
+      ],
+    });
+    expect(r.allocations!.map((a) => a.amount)).toEqual([2700, 2700, 3600]);
+  });
+
+  it("normalizes quantity allocations to amounts (qty × unitPrice)", () => {
+    const r = resolveDocumentLine({
+      lineNo: 1, quantity: 100, unitPrice: 5, counterAccountCode: "5510", // net 500
+      allocations: [
+        { entityType: "project", entityId: 1, allocationType: "quantity", quantity: 60 }, // 300
+        { entityType: "project", entityId: 2, allocationType: "quantity", quantity: 40 }, // 200
+      ],
+    });
+    expect(r.allocations!.map((a) => a.amount)).toEqual([300, 200]);
+  });
+
+  it("resolve → build end-to-end: percent split balances", () => {
+    const lines = resolveDocumentLines([
+      {
+        lineNo: 1, quantity: 1, unitPrice: 9000, counterAccountCode: "5610",
+        allocations: [
+          { entityType: "vehicle", entityId: 11, allocationType: "percent", percent: 50 },
+          { entityType: "vehicle", entityId: 12, allocationType: "percent", percent: 50 },
+        ],
+      },
+    ]);
+    const legs = buildDocumentJournalLegs({ direction: "payment", cashAccountCode: "1111" }, lines);
+    expect(legs.filter((l) => l.accountCode === "5610").map((l) => l.debit)).toEqual([4500, 4500]);
+    expect(legs.reduce((s, l) => s + l.debit, 0)).toBeCloseTo(
+      legs.reduce((s, l) => s + l.credit, 0), 2,
+    );
   });
 });
