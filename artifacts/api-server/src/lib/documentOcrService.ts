@@ -60,8 +60,11 @@ function toAsciiDigits(s: string): string {
 }
 
 function parseAmount(raw: string): number | null {
-  const ascii = toAsciiDigits(raw).replace(/[,٬\s]/g, "").replace(/٫/g, ".");
-  const m = ascii.match(/-?\d+(?:\.\d{1,3})?/);
+  // أزل النِسب المئوية (مثل «15%» أو «١٥٪») أولًا حتى لا تُلتقط نسبة الضريبة بدل
+  // مبلغها (سطر «ضريبة 15%: 150» يجب أن يُعيد 150 لا 15). ثم وحّد الفواصل والأرقام.
+  const ascii = toAsciiDigits(raw).replace(/\d[\d.,٬]*\s*[%٪]/g, " ");
+  const cleaned = ascii.replace(/[,٬\s]/g, "").replace(/٫/g, ".");
+  const m = cleaned.match(/-?\d+(?:\.\d{1,3})?/);
   if (!m) return null;
   const n = Number(m[0]);
   return Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
@@ -71,10 +74,12 @@ function parseAmount(raw: string): number | null {
 function findLabeledAmount(text: string, labels: RegExp): number | null {
   const lines = text.split(/\r?\n/);
   for (const line of lines) {
-    if (labels.test(line)) {
-      const amt = parseAmount(line);
-      if (amt != null && amt > 0) return amt;
-    }
+    const m = line.match(labels);
+    if (!m) continue;
+    // حلّل ما بعد الكلمة المفتاحية أولًا (النمط الغالب: تسمية ← قيمة، فلا يُلتقط رقم
+    // فاتورة سابق على نفس السطر)، ثم السطر كاملًا احتياطًا (قيمة قبل التسمية).
+    const amt = parseAmount(line.slice((m.index ?? 0) + m[0].length)) ?? parseAmount(line);
+    if (amt != null && amt > 0) return amt;
   }
   return null;
 }

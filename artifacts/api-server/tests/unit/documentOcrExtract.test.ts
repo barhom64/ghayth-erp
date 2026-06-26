@@ -23,6 +23,18 @@ describe("extractFields", () => {
     expect(fields.vatAmount).toBe(150);
   });
 
+  it("ignores a percentage token and captures the VAT money on the same line", () => {
+    // «ضريبة 15%: 150» يجب أن يُعيد 150 (المبلغ) لا 15 (النسبة) — قيمة تُخزَّن للمراجعة.
+    expect(extractFields("ضريبة القيمة المضافة 15%: 150.00").fields.vatAmount).toBe(150);
+    expect(extractFields("المجموع: 1000\nضريبة ١٥٪: ١٥٠").fields.vatAmount).toBe(150);
+  });
+
+  it("parses the amount after the label when a number precedes it on the line", () => {
+    // رقم فاتورة قبل «الإجمالي» على نفس السطر يجب ألّا يُلتقط كمبلغ.
+    expect(extractFields("INV-77 الإجمالي: 500").fields.amount).toBe(500);
+    expect(extractFields("A1234 Total: 500").fields.amount).toBe(500);
+  });
+
   it("normalises YYYY/MM/DD and DD-MM-YYYY dates to ISO", () => {
     expect(extractFields("التاريخ 2026/03/05").fields.date).toBe("2026-03-05");
     expect(extractFields("Date: 05-03-2026").fields.date).toBe("2026-03-05");

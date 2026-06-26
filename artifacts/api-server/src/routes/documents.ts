@@ -1544,7 +1544,11 @@ router.get("/ocr/extractions", authorize({ feature: "documents.my", action: "lis
                 WHERE e."companyId"=$1 AND e."deletedAt" IS NULL`;
     if (status) { sql += ` AND e.status=$2`; params.push(status); }
     sql += ` ORDER BY e.id DESC LIMIT 100`;
-    const data = await rawQuery(sql, params);
+    const rows = await rawQuery<{ documentId: number }>(sql, params);
+    // رشّح بـACL المستند (نفس فلتر التنزيل/المعاينة): لا يُكشف مستخلَص مستند لا يُسمح
+    // للمستخدم بقراءته. الحالة الغالبة (لا صفوف ACL) ترجع true سريعًا.
+    const acl = await Promise.all(rows.map((r) => checkDocumentAcl(r.documentId, scope, "read")));
+    const data = rows.filter((_, i) => acl[i]);
     res.json(maskFields(req, { data, total: data.length, extractions: data }));
   } catch (err) { handleRouteError(err, res, "document OCR list"); }
 });
@@ -1558,6 +1562,9 @@ router.post("/:id/ocr/rerun", authorize({ feature: "documents.my", action: "upda
       [id, scope.companyId],
     );
     if (!doc) throw new NotFoundError("المستند غير موجود");
+    // ACL لكل مستند (نفس فلتر التنزيل/المعاينة): قراءة OCR = قراءة محتوى الملف، فلا
+    // يجوز لمستخدم في المسار تشغيلها على مستند لا يُسمح له بقراءته. 404 لا 403 (لا تسريب).
+    if (!(await checkDocumentAcl(id, scope, "read"))) throw new NotFoundError("المستند غير موجود");
     if (!doc.storageKey) throw new ValidationError("لا ملف مرفوع لهذا المستند");
     if (doc.mimeType && !/^image\//i.test(doc.mimeType)) {
       throw new ValidationError("قراءة OCR تدعم الصور حاليًا — PDF يحتاج تحويلًا لصورة (لاحقًا)");
@@ -1611,6 +1618,15 @@ router.post("/ocr/extractions/:id/confirm", authorize({ feature: "documents.my",
       req.body?.appliedToId != null && Number.isInteger(Number(req.body.appliedToId)) && Number(req.body.appliedToId) > 0
         ? Number(req.body.appliedToId)
         : null;
+    // ACL المستند قبل التعديل (نفس فلتر التنزيل): لا يراجِع مستخلَص مستند لا يُسمح بقراءته.
+    const [ext] = await rawQuery<{ documentId: number }>(
+      `SELECT "documentId" FROM document_ocr_extractions
+        WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL AND status='pending'`,
+      [id, scope.companyId],
+    );
+    if (!ext || !(await checkDocumentAcl(ext.documentId, scope, "read"))) {
+      throw new NotFoundError("استخراج غير موجود أو ليس قيد المراجعة");
+    }
     const [row] = await rawQuery<{ id: number; documentId: number }>(
       `UPDATE document_ocr_extractions
           SET status='confirmed',
@@ -1637,6 +1653,15 @@ router.post("/ocr/extractions/:id/reject", authorize({ feature: "documents.my", 
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const notes = typeof req.body?.notes === "string" ? req.body.notes : null;
+    // ACL المستند قبل التعديل (نفس فلتر التنزيل): لا يبتّ في مستخلَص مستند لا يُسمح بقراءته.
+    const [ext] = await rawQuery<{ documentId: number }>(
+      `SELECT "documentId" FROM document_ocr_extractions
+        WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL AND status='pending'`,
+      [id, scope.companyId],
+    );
+    if (!ext || !(await checkDocumentAcl(ext.documentId, scope, "read"))) {
+      throw new NotFoundError("استخراج غير موجود أو ليس قيد المراجعة");
+    }
     const [row] = await rawQuery<{ id: number; documentId: number }>(
       `UPDATE document_ocr_extractions
           SET status='rejected', "reviewedBy"=$1, "reviewedAt"=NOW(), notes=$3, "updatedAt"=NOW()
