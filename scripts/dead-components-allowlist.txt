@@ -1,36 +1,6 @@
-# مكوّنات يتيمة (لا يستوردها أي ملف، ولا يُعيد تصديرها أي kit facade في lib/*)
-# مجمّدة كأساس — حارس check-dead-components. تقرير «علم» بالحالة الحالية.
-# يفشل الحارس على أي يتيم جديد خارج هذه القائمة. (صُحّح: أُسقطت 7 مكوّنات
-# حيّة يُعيد تصديرها ui-core/workflow-kit/report-kit عبر lib/.)
-components/shared/journal-template-picker.tsx
-components/ui/accordion.tsx
-components/ui/aspect-ratio.tsx
-components/ui/avatar.tsx
-components/ui/breadcrumb.tsx
-components/ui/breadcrumbs.tsx
-components/ui/button-group.tsx
-components/ui/calendar.tsx
-components/ui/carousel.tsx
-components/ui/chart.tsx
-components/ui/context-menu.tsx
-components/ui/drawer.tsx
-components/ui/empty.tsx
-components/ui/field.tsx
-components/ui/form.tsx
-components/ui/hover-card.tsx
-components/ui/input-group.tsx
-components/ui/input-otp.tsx
-components/ui/item.tsx
-components/ui/kbd.tsx
-components/ui/menubar.tsx
-components/ui/navigation-menu.tsx
-components/ui/pagination.tsx
-components/ui/radio-group.tsx
-components/ui/resizable.tsx
-components/ui/scroll-area.tsx
-components/ui/sidebar.tsx
-components/ui/spinner.tsx
-components/ui/toggle-group.tsx
-pages/bi/dashboards-tab.tsx
-pages/bi/kpis-tab.tsx
-pages/bi/reports-tab.tsx
+# مكوّنات يتيمة مجمّدة كأساس — حارس check-dead-components.
+# الكاشف يحسب إعادة التصدير من lib/* فلا يُصنّف المكوّن الحيّ خلف الـkit يتيمًا.
+# نُظّف الجزء الأكبر (3 صفحات BI في #3004، 29 مكوّنًا في #3007). البقيّة أدناه
+# يتيمة كشفها تأثير السلسلة (كان يستوردها فقط مكوّنات مُزالة) — مرشّحة لتنظيف تابع:
+components/ui/separator.tsx
+components/ui/toggle.tsx
