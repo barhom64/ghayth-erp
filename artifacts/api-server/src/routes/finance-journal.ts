@@ -398,6 +398,142 @@ journalRouter.delete("/documents/import/presets/:id", authorize({ feature: "fina
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// م٣ — تحصيل العميل داخل «قبض» (مطابقة آلية). يجلب فواتير العميل المفتوحة + يطبّق
+// FIFO (أو تخصيص يدوي) + الزائد دفعة مقدمة، عبر محرّك postCustomerReceipt المعتمد
+// (لا ازدواج قيد). preview قراءة فقط؛ collect يُرحّل ويُدقّق ويُطلق نفس حدث
+// finance.payment.received (نفس سلسلة سند القبض). docs/25 §٧.٣ + §٩.٣.
+// ─────────────────────────────────────────────────────────────────────────────
+const collectionApplicationSchema = z.object({ invoiceId: z.any(), amount: z.any() });
+const collectPreviewSchema = z.object({
+  clientId: z.any(),
+  amount: z.any(),
+  // تخصيص يدوي يَجُبّ FIFO (السداد الجزئي/الانتقائي). غيابه = FIFO تلقائي.
+  applications: z.array(collectionApplicationSchema).optional(),
+});
+const collectPostSchema = collectPreviewSchema.extend({
+  method: z.enum(["cash", "bank", "transfer", "check", "bank_transfer"]).optional().default("bank"),
+  cashAccountCode: z.string().optional(),
+  date: z.string().optional(),
+  branchId: z.any().optional(),
+  reference: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+function normalizeCollectionApplications(apps?: { invoiceId?: unknown; amount?: unknown }[]) {
+  const cleaned = apps
+    ?.map((a) => ({ invoiceId: Number(a.invoiceId), amount: Number(a.amount) }))
+    .filter((a) => Number.isInteger(a.invoiceId) && a.invoiceId > 0 && a.amount > 0);
+  return cleaned && cleaned.length > 0 ? cleaned : undefined;
+}
+
+journalRouter.post("/documents/collect/preview", authorize({ feature: "finance.journal", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(collectPreviewSchema.safeParse(req.body ?? {}));
+    const clientId = Number(b.clientId);
+    const amount = Number(b.amount);
+    if (!Number.isInteger(clientId) || clientId <= 0) throw new ValidationError("اختر العميل", { field: "clientId" });
+    if (!(amount > 0)) throw new ValidationError("أدخل مبلغًا أكبر من صفر", { field: "amount" });
+    const { previewCollection } = await import("../lib/financeCollectionService.js");
+    const preview = await previewCollection({
+      companyId: scope.companyId,
+      clientId,
+      amount,
+      applications: normalizeCollectionApplications(b.applications),
+    });
+    res.json(preview);
+  } catch (err) {
+    handleRouteError(err, res, "خطأ في معاينة التحصيل");
+  }
+});
+
+journalRouter.post("/documents/collect", authorize({ feature: "finance.journal", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(collectPostSchema.safeParse(req.body ?? {}));
+    const clientId = Number(b.clientId);
+    const amount = Number(b.amount);
+    if (!Number.isInteger(clientId) || clientId <= 0) throw new ValidationError("اختر العميل", { field: "clientId" });
+    if (!(amount > 0)) throw new ValidationError("أدخل مبلغًا أكبر من صفر", { field: "amount" });
+
+    // حلّ الفرع — نفس سياسة /documents.
+    const branchId = b.branchId != null && b.branchId !== "" ? Number(b.branchId) : (scope.branchId ?? null);
+    if (branchId == null) throw new ValidationError("الفرع مطلوب لتسجيل التحصيل", { field: "branchId" });
+    if (!scope.isOwner && !OWNER_GM_ROLES.includes(scope.role) &&
+        scope.allowedBranches.length > 0 && !scope.allowedBranches.includes(branchId)) {
+      throw new ForbiddenError("لا تملك صلاحية التسجيل في هذا الفرع", { field: "branchId" });
+    }
+
+    // معاينة القيد/التخصيص المشتقّ بلا ترحيل (الذيل §٢.٦).
+    if (isDryRun(req)) {
+      const { previewCollection } = await import("../lib/financeCollectionService.js");
+      const preview = await previewCollection({
+        companyId: scope.companyId,
+        clientId,
+        amount,
+        applications: normalizeCollectionApplications(b.applications),
+      });
+      res.json({ dryRun: true, ...preview });
+      return;
+    }
+
+    // مفتاح ثابت متوافق مع receiptKey (^[A-Za-z0-9_-]{8,64}$) مشتقّ من رمز الطلب.
+    const idempotencyToken = requestIdempotencyToken(req);
+    const receiptKey = `rcpt-${idempotencyToken}`.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
+
+    const { postCollection } = await import("../lib/financeCollectionService.js");
+    const result = await postCollection({
+      companyId: scope.companyId,
+      branchId,
+      createdBy: scope.activeAssignmentId,
+      clientId,
+      amount,
+      method: b.method,
+      cashAccountCode: b.cashAccountCode ?? null,
+      receiptKey,
+      receivedDate: b.date ? toDateISO(b.date) : undefined,
+      reference: b.reference ?? null,
+      notes: b.notes ?? null,
+      applications: normalizeCollectionApplications(b.applications),
+      // فاتورة مُطبَّقة قد تكون على فرع آخر — يجب أن يملك المُدخِل صلاحيته.
+      assertBranchAccess: (documentBranchId) => {
+        if (!scope.isOwner && !OWNER_GM_ROLES.includes(scope.role) &&
+            scope.allowedBranches.length > 0 && !scope.allowedBranches.includes(documentBranchId)) {
+          throw new ForbiddenError("فاتورة على فرع خارج صلاحيتك", { field: "applications" });
+        }
+      },
+    });
+
+    // أثر تدقيق + حدث (القاعدة 12 + سلسلة سند القبض) — مرة واحدة عند الترحيل الفعلي.
+    if (!result.alreadyExists) {
+      await createAuditLog({
+        companyId: scope.companyId,
+        branchId,
+        userId: scope.userId,
+        action: "financial_document.collected",
+        entity: "journal_entries",
+        entityId: result.journalId,
+        after: { clientId, amount, applied: result.applied.length, leftover: result.leftover, advanceId: result.advanceId },
+        activeRoleKey: scope.selectedRoleKey ?? null,
+      });
+      emitEvent({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "finance.payment.received",
+        entity: "journal_entries",
+        entityId: result.journalId,
+        after: { clientId, amount },
+        details: JSON.stringify({ clientId, amount, applied: result.applied.length, leftover: result.leftover }),
+      }).catch((e) => logger.error(e, "finance collect event failed"));
+    }
+
+    res.status(result.alreadyExists ? 200 : 201).json(result);
+  } catch (err) {
+    handleRouteError(err, res, "خطأ في تسجيل التحصيل");
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // ZOD SCHEMAS — request body validation
 // ─────────────────────────────────────────────────────────────────────────────
 

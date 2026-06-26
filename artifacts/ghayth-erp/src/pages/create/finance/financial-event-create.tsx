@@ -172,6 +172,16 @@ export default function FinancialEventCreate() {
             ))}
           </div>
 
+          {/* م٣ — تحصيل العميل: «قبض» على فواتير عميل مفتوحة (مطابقة آلية FIFO). */}
+          {isReceipt && (
+            <p className="text-xs text-muted-foreground">
+              لتحصيل دفعة من عميل على فواتيره المفتوحة (مطابقة آلية، الأقدم أولًا):{" "}
+              <button type="button" className="text-primary hover:underline" onClick={() => navigate("/finance/collect")}>
+                تحصيل من عميل ←
+              </button>
+            </p>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <FormFieldWrapper label="التاريخ" required>
               <DatePicker value={form.date} onChange={(v) => setForm((f) => ({ ...f, date: v }))} />

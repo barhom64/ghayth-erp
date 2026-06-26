@@ -79,6 +79,10 @@ POST /finance/documents/import/analyze
 # أي إجراء تشغيلي — نظير umrah/import/presets المُعفى أصلًا. تُعزل بـ companyId+userId.
 POST /finance/documents/import/presets
 DELETE /finance/documents/import/presets/:id
+# POST /finance/documents/collect/preview — م٣: معاينة تحصيل قراءة فقط. تجلب فواتير
+# العميل المفتوحة وتحسب تخصيص FIFO/يدوي وتُعيدها — لا كتابة في القاعدة ولا ترحيل.
+# الترحيل + الأثر يحدثان عند POST /finance/documents/collect (المُدقَّق + الحدث).
+POST /finance/documents/collect/preview
 POST /finance/vendor-invoices/impact-preview
 POST /finance/zatca/test-connection
 POST /hr/:id/ocr/rerun
