@@ -1528,7 +1528,7 @@ router.delete("/:id/acls/:aclId", authorize({ feature: "documents", action: "upd
 // م٢-ج — محرّك قراءة المستند (OCR، مسار الوثائق). يملأ سقالة الهجرة 171 + stubs.
 // tesseract داخلي (عربي+إنجليزي) → استخراج حقول بدرجة ثقة → **تأكيد بشري** قبل
 // التطبيق (docs/25 §١١.٣، الطبقة ب المساعِدة). يُعيد استخدام ObjectStorageService
-// لقراءة بايتات الملف + documentOcrEngine للقراءة والاستخراج.
+// لقراءة بايتات الملف + documentOcrService للقراءة والاستخراج.
 // ─────────────────────────────────────────────────────────────────────────────
 router.get("/ocr/extractions", authorize({ feature: "documents.my", action: "list" }), async (req: Request, res: Response) => {
   try {
@@ -1568,7 +1568,7 @@ router.post("/:id/ocr/rerun", authorize({ feature: "documents.my", action: "upda
     for await (const chunk of file.createReadStream()) chunks.push(chunk as Buffer);
     const buffer = Buffer.concat(chunks);
     // المحرّك (tesseract كسول التحميل) ثم استخراج الحقول الحتمي.
-    const { runOcr, extractFields } = await import("../lib/documentOcrEngine.js");
+    const { runOcr, extractFields } = await import("../lib/documentOcrService.js");
     const ocr = await runOcr(buffer);
     const docType = (typeof req.body?.docType === "string" && req.body.docType) || doc.category || "invoice";
     const { fields, fieldConfidence } = extractFields(ocr.text, docType);

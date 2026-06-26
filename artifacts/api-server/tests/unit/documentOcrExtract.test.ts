@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractFields } from "../../src/lib/documentOcrEngine.js";
+import { extractFields } from "../../src/lib/documentOcrService.js";
 
 /**
  * م٢-ج — استخراج حقول OCR. النواة نقية بلا tesseract: نثبت أن تحويل نص OCR →

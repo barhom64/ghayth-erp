@@ -1,6 +1,7 @@
 /**
- * documentOcrEngine — م٢-ج: محرّك قراءة المستند الداخلي (مسار الوثائق). يملأ سقالة
- * الهجرة 171 (documents.ocr* + document_ocr_extractions) + stubs OCR.
+ * documentOcrService — م٢-ج: خدمة قراءة المستند الداخلية (قدرة تقنية محايدة لمسار
+ * الوثائق — لا تتّخذ قرار مسار، فهي Service لا Engine حسب حارس بيت المحرّكات). تملأ
+ * سقالة الهجرة 171 (documents.ocr* + document_ocr_extractions) + stubs OCR.
  *
  * المرجع: docs/finance-audit/25 §١١.٣ — الطبقة ب (مساعِد): tesseract داخلي
  * (عربي+إنجليزي) بدرجة ثقة + **تأكيد بشري** (لا حفظ تلقائي). صفر تكلفة خارجية.

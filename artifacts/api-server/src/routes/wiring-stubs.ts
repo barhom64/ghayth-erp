@@ -56,7 +56,7 @@ function notImplemented(res: Response, feature: string): void {
 
 /* ============================================================
  * Documents — OCR: نُقِلت الأربع نقاط (extractions/confirm/reject/rerun) إلى
- * routes/documents.ts بتنفيذ حقيقي (محرّك documentOcrEngine + تأكيد بشري + Audit).
+ * routes/documents.ts بتنفيذ حقيقي (خدمة documentOcrService + تأكيد بشري + Audit).
  * أُزيلت الـstubs هنا تفاديًا لتعارض المسارات تحت /documents (م٢-ج).
  * ============================================================ */
 
