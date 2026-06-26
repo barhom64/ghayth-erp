@@ -1,0 +1,13 @@
+# مكوّنات يتيمة مجمّدة كأساس — حارس check-dead-components.
+# الكاشف يحسب إعادة التصدير من lib/* فلا يُصنّف المكوّن الحيّ خلف الـkit يتيمًا.
+# نُظّف الجزء الأكبر (3 صفحات BI في #3004، 29 مكوّنًا في #3007). البقيّة أدناه
+# يتيمة كشفها تأثير السلسلة (كان يستوردها فقط مكوّنات مُزالة) — مرشّحة لتنظيف تابع:
+components/ui/separator.tsx
+components/ui/toggle.tsx
+# م٨ (التبديل) — سند القبض/الصرف والمصروف القديمان: مساراهما يُحوَّلان بـ redirect إلى
+# «تسجيل واقعة» الموحّد (/finance/documents/create)؛ الملفان مُبقيان للمرجع/التراجع
+# (doc 25 §٨: تحويل لا حذف). مُدرجان أيضًا في scripts/src/audit-routes.mjs.
+pages/create/finance/vouchers-create.tsx
+pages/create/finance/expenses-create.tsx
+# م٨ (إكمال التبديل) — customer-receipt محوّلة بـ redirect إلى /finance/collect (§٧.٥ ثبتت). مُبقاة.
+pages/create/finance/customer-receipt.tsx

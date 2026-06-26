@@ -66,6 +66,16 @@ const ALLOWLIST = new Set([
   // reference until their content is fully merged into org-tree as tabs.
   "pages/hr/organization.tsx",
   "pages/hr/organization-structure.tsx",
+  // م٨ (التبديل) — سند القبض/الصرف والمصروف القديمان: مساراهما (/finance/vouchers/create
+  // و /finance/expenses/create) يُحوَّلان بـ redirect إلى «تسجيل واقعة» الموحّد
+  // (/finance/documents/create) الذي يشملهما كحالة قبض/صرف بجدول بنود. الملفان
+  // مُبقيان للمرجع/التراجع (doc 25 §٨: تحويل لا حذف؛ لا يُحذفان قبل ثبات التبديل).
+  "pages/create/finance/vouchers-create.tsx",
+  "pages/create/finance/expenses-create.tsx",
+  // م٨ (إكمال التبديل) — customer-receipt: مسارها /finance/receivables/receipt يُحوَّل
+  // بـ redirect إلى «تحصيل من عميل» الموحّد (/finance/collect) بعد ثبوت بوابة §٧.٥.
+  // الملف مُبقًى للمرجع/التراجع (doc 25 §٨: تحويل لا حذف).
+  "pages/create/finance/customer-receipt.tsx",
 ]);
 
 const SOURCE_EXTS = [".ts", ".tsx", ".js", ".jsx"];
