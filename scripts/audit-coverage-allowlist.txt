@@ -54,9 +54,6 @@ POST /admin/pbx-control/transcripts/run-next
 POST /admin/permissions/explain
 POST /admin/vendor-settings/:slug/test
 POST /admin/vendor-settings/company/smtp/test
-POST /documents/:id/ocr/rerun
-POST /documents/ocr/extractions/:id/confirm
-POST /documents/ocr/extractions/:id/reject
 POST /events/outbox/drain
 POST /finance/:id/ocr/rerun
 POST /finance/bank-guarantees/:id/cancel

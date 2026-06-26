@@ -1524,4 +1524,134 @@ router.delete("/:id/acls/:aclId", authorize({ feature: "documents", action: "upd
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// م٢-ج — محرّك قراءة المستند (OCR، مسار الوثائق). يملأ سقالة الهجرة 171 + stubs.
+// tesseract داخلي (عربي+إنجليزي) → استخراج حقول بدرجة ثقة → **تأكيد بشري** قبل
+// التطبيق (docs/25 §١١.٣، الطبقة ب المساعِدة). يُعيد استخدام ObjectStorageService
+// لقراءة بايتات الملف + documentOcrEngine للقراءة والاستخراج.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/ocr/extractions", authorize({ feature: "documents.my", action: "list" }), async (req: Request, res: Response) => {
+  try {
+    const scope = req.scope!;
+    const status = (req.query.status as string) || null;
+    const params: unknown[] = [scope.companyId];
+    // ضمّ documents (نفس المسار) لإظهار عنوان المستند واسم ملفه، فيعرف المراجع ما يؤكّده.
+    let sql = `SELECT e.id, e."documentId", e."docType", e.fields, e.confidence, e.status,
+                      e."reviewedBy", e."reviewedAt", e."appliedTo", e."appliedToId", e."createdAt",
+                      d.title AS "docTitle", d."fileName"
+                 FROM document_ocr_extractions e
+                 LEFT JOIN documents d ON d.id = e."documentId" AND d."deletedAt" IS NULL
+                WHERE e."companyId"=$1 AND e."deletedAt" IS NULL`;
+    if (status) { sql += ` AND e.status=$2`; params.push(status); }
+    sql += ` ORDER BY e.id DESC LIMIT 100`;
+    const data = await rawQuery(sql, params);
+    res.json(maskFields(req, { data, total: data.length, extractions: data }));
+  } catch (err) { handleRouteError(err, res, "document OCR list"); }
+});
+
+router.post("/:id/ocr/rerun", authorize({ feature: "documents.my", action: "update" }), async (req: Request, res: Response) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [doc] = await rawQuery<{ id: number; storageKey: string | null; mimeType: string | null; category: string | null }>(
+      `SELECT id, "storageKey", "mimeType", category FROM documents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId],
+    );
+    if (!doc) throw new NotFoundError("المستند غير موجود");
+    if (!doc.storageKey) throw new ValidationError("لا ملف مرفوع لهذا المستند");
+    if (doc.mimeType && !/^image\//i.test(doc.mimeType)) {
+      throw new ValidationError("قراءة OCR تدعم الصور حاليًا — PDF يحتاج تحويلًا لصورة (لاحقًا)");
+    }
+    // اقرأ بايتات الملف من التخزين الكائني (تدفّق → Buffer).
+    const file = await objectStorageService.getObjectEntityFile(doc.storageKey);
+    const chunks: Buffer[] = [];
+    for await (const chunk of file.createReadStream()) chunks.push(chunk as Buffer);
+    const buffer = Buffer.concat(chunks);
+    // المحرّك (tesseract كسول التحميل) ثم استخراج الحقول الحتمي.
+    const { runOcr, extractFields } = await import("../lib/documentOcrEngine.js");
+    const ocr = await runOcr(buffer);
+    const docType = (typeof req.body?.docType === "string" && req.body.docType) || doc.category || "invoice";
+    const { fields, fieldConfidence } = extractFields(ocr.text, docType);
+    const confidence = Math.round((Number(ocr.confidence) || 0) * (fieldConfidence / 100) * 100) / 100;
+    // أبطِل المعلّق السابق لنفس المستند ثم أدرج الاستخراج الجديد (pending → مراجعة بشرية).
+    await rawExecute(
+      `UPDATE document_ocr_extractions SET "deletedAt"=NOW() WHERE "companyId"=$1 AND "documentId"=$2 AND status='pending' AND "deletedAt" IS NULL`,
+      [scope.companyId, id],
+    );
+    const [ins] = await rawQuery<{ id: number }>(
+      `INSERT INTO document_ocr_extractions ("companyId","documentId","docType",fields,confidence,status)
+       VALUES ($1,$2,$3,$4::jsonb,$5,'pending') RETURNING id`,
+      [scope.companyId, id, docType, JSON.stringify(fields), confidence],
+    );
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "document.ocr.rerun", entity: "document_ocr_extractions", entityId: ins.id,
+      after: { documentId: id, confidence, ocrConfidence: ocr.confidence, fieldConfidence },
+    }).catch((e) => logger.error(e, "document ocr rerun audit failed"));
+    res.status(201).json({ id: ins.id, fields, confidence, ocrConfidence: ocr.confidence, status: "pending" });
+  } catch (err) { handleRouteError(err, res, "document OCR rerun"); }
+});
+
+router.post("/ocr/extractions/:id/confirm", authorize({ feature: "documents.my", action: "update" }), async (req: Request, res: Response) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    // الحقول المُراجَعة (إن أُرسلت) تحلّ محلّ المُستخرَجة؛ وإلا نُبقي المُستخرَجة كما هي
+    // (تأكيد سريع بلا تعديل من صندوق الوارد لا يجوز أن يمحو ما استُخرج).
+    const editedFields =
+      req.body?.fields && typeof req.body.fields === "object" && !Array.isArray(req.body.fields)
+        ? JSON.stringify(req.body.fields)
+        : null;
+    // الكيان المرتبط (موظف/مركبة/فاتورة…): يُسجَّل كبيانات وصفية على صف الاستخراج فقط.
+    // المسار الخادم (الوثائق) لا يكتب في كيان المسار القائد احترامًا لحدود المسارات؛
+    // تطبيق المستخرَج المؤكَّد على الكيان يتم لاحقًا عبر عقد المسار المالك.
+    const appliedTo =
+      typeof req.body?.appliedTo === "string" && /^[a-z_]{1,40}$/i.test(req.body.appliedTo) ? req.body.appliedTo : null;
+    const appliedToId =
+      req.body?.appliedToId != null && Number.isInteger(Number(req.body.appliedToId)) && Number(req.body.appliedToId) > 0
+        ? Number(req.body.appliedToId)
+        : null;
+    const [row] = await rawQuery<{ id: number; documentId: number }>(
+      `UPDATE document_ocr_extractions
+          SET status='confirmed',
+              fields=COALESCE($3::jsonb, fields),
+              "appliedTo"=COALESCE($5, "appliedTo"),
+              "appliedToId"=COALESCE($6, "appliedToId"),
+              "reviewedBy"=$1, "reviewedAt"=NOW(), "updatedAt"=NOW()
+        WHERE id=$2 AND "companyId"=$4 AND "deletedAt" IS NULL AND status='pending'
+        RETURNING id, "documentId"`,
+      [scope.activeAssignmentId ?? scope.userId, id, editedFields, scope.companyId, appliedTo, appliedToId],
+    );
+    if (!row) throw new NotFoundError("استخراج غير موجود أو ليس قيد المراجعة");
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "document.ocr.confirmed", entity: "document_ocr_extractions", entityId: row.id,
+      after: { documentId: row.documentId, fieldsEdited: editedFields != null, appliedTo, appliedToId },
+    }).catch((e) => logger.error(e, "document ocr confirm audit failed"));
+    res.json({ ok: true, id: row.id, status: "confirmed" });
+  } catch (err) { handleRouteError(err, res, "document OCR confirm"); }
+});
+
+router.post("/ocr/extractions/:id/reject", authorize({ feature: "documents.my", action: "update" }), async (req: Request, res: Response) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const notes = typeof req.body?.notes === "string" ? req.body.notes : null;
+    const [row] = await rawQuery<{ id: number; documentId: number }>(
+      `UPDATE document_ocr_extractions
+          SET status='rejected', "reviewedBy"=$1, "reviewedAt"=NOW(), notes=$3, "updatedAt"=NOW()
+        WHERE id=$2 AND "companyId"=$4 AND "deletedAt" IS NULL AND status='pending'
+        RETURNING id, "documentId"`,
+      [scope.activeAssignmentId ?? scope.userId, id, notes, scope.companyId],
+    );
+    if (!row) throw new NotFoundError("استخراج غير موجود أو ليس قيد المراجعة");
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "document.ocr.rejected", entity: "document_ocr_extractions", entityId: row.id,
+      after: { documentId: row.documentId, notes },
+    }).catch((e) => logger.error(e, "document ocr reject audit failed"));
+    res.json({ ok: true, id: row.id, status: "rejected" });
+  } catch (err) { handleRouteError(err, res, "document OCR reject"); }
+});
+
 export default router;
