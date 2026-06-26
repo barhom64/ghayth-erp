@@ -101,6 +101,12 @@ const OFF_SIDEBAR_ALLOWLIST = new Set([
   "/finance/intercompany/consolidation",
   // create variant — reuses ExpensesCreate, opened from the expenses list.
   "/finance/expenses/multi-line",
+  // بوابة الاستيراد المالي (م٢-أ): variant إنشاء «استيراد من ملف» للمستند الموحّد
+  // «تسجيل واقعة مالية». تمرّ على نفس POST /finance/documents (لا اشتقاق مكرّر)،
+  // وتُفتح بزر لا من القائمة الجانبية. تُسطَّح في القائمة مع شقيقتها
+  // /finance/documents/create عند م٨ (التبديل الكامل + تنظيف القائمة)؛ تبقى حتى
+  // ذلك قابلة للوصول بالرابط/لوحة الأوامر مثل صفحة الإنشاء الموحّدة.
+  "/finance/documents/import",
   // Settings-hub tab deep-paths: each opens a tab of /settings by URL / command
   // palette / search without adding a separate sidebar entry (the hub is one
   // page). branches/companies/departments/audit-log DO have sidebar entries; the

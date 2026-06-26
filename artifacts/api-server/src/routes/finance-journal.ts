@@ -219,6 +219,89 @@ journalRouter.post("/documents", authorize({ feature: "finance.journal", action:
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// م٢-أ — بوابة الاستيراد (Excel/CSV حتمي). تُحوّل ملفًا → **نفس بنود
+// POST /documents**؛ قراءة فقط (لا كتابة، لا أثر). الاشتقاق + المعاينة + الحفظ +
+// الأثر يبقى كلّه في /documents (محرّك واحد، لا ازدواج منطق). الجسم المُعاد جاهز
+// لإرساله إلى /documents بـ dryRun للمعاينة ثم بلا dryRun للحفظ.
+// المرجع: docs/25 §٧ (م٢) + §١١.٣ (الطبقة أ — حتمي ١٠٠٪ صفر تكلفة).
+// ─────────────────────────────────────────────────────────────────────────────
+
+// قوالب الاستيراد الجاهزة (قوالب أمثلة) — لاختيار التعيين + تنزيل قالب CSV.
+journalRouter.get("/documents/import/templates", authorize({ feature: "finance.journal", action: "create" }), async (_req, res) => {
+  try {
+    const { FINANCE_IMPORT_TEMPLATES, templateToCsv } = await import("../lib/financeImportParse.js");
+    res.json({
+      templates: FINANCE_IMPORT_TEMPLATES.map((t) => ({
+        key: t.key,
+        title: t.title,
+        direction: t.direction,
+        documentKind: t.documentKind,
+        note: t.note ?? null,
+        sampleHeaders: t.sampleHeaders,
+        sampleCsv: templateToCsv(t),
+      })),
+    });
+  } catch (err) {
+    handleRouteError(err, res, "خطأ في جلب قوالب الاستيراد");
+  }
+});
+
+const importAnalyzeSchema = z.object({
+  source: z.enum(["csv", "excel"]),
+  templateKey: z.string().min(1),
+  // CSV: نص الملف مباشرةً؛ Excel: محتوى الملف بترميز base64.
+  content: z.string().min(1),
+});
+
+journalRouter.post("/documents/import/analyze", authorize({ feature: "finance.journal", action: "create" }), async (req, res) => {
+  try {
+    const b = zodParse(importAnalyzeSchema.safeParse(req.body ?? {}));
+    const { parseCsvTable, aoaToTable, mapTableToDocument, findTemplate } = await import("../lib/financeImportParse.js");
+    const template = findTemplate(b.templateKey);
+    if (!template) throw new ValidationError("قالب استيراد غير معروف", { field: "templateKey" });
+
+    let table;
+    if (b.source === "csv") {
+      table = parseCsvTable(b.content);
+    } else {
+      const { parseFirstSheetAOA } = await import("../lib/excelCompat.js");
+      const buf = Buffer.from(b.content, "base64");
+      if (buf.length === 0) throw new ValidationError("تعذّر قراءة ملف Excel (محتوى غير صالح)");
+      const aoa = await parseFirstSheetAOA(buf);
+      table = aoaToTable(aoa);
+    }
+    if (table.headers.length === 0) throw new ValidationError("الملف فارغ أو بلا ترويسة");
+
+    const result = mapTableToDocument(table, template);
+    // جسم جاهز لـ POST /finance/documents (نفس المحرّك للمعاينة بـ dryRun ثم للحفظ).
+    const documentBody = {
+      direction: result.direction,
+      documentKind: result.documentKind,
+      lines: result.lines.map((l) => ({
+        itemName: l.itemName,
+        description: l.description,
+        quantity: l.quantity,
+        unit: l.unit,
+        unitPrice: l.unitPrice,
+        taxRatePercent: l.taxRatePercent,
+        counterAccountCode: l.counterAccountCode,
+        costCenter: l.costCenter,
+      })),
+    };
+    res.json({
+      direction: result.direction,
+      documentKind: result.documentKind,
+      lines: result.lines,
+      warnings: result.warnings,
+      stats: result.stats,
+      documentBody,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "خطأ في تحليل ملف الاستيراد");
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // ZOD SCHEMAS — request body validation
 // ─────────────────────────────────────────────────────────────────────────────
 
