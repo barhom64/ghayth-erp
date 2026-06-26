@@ -3,6 +3,7 @@ import {
   buildDocumentJournalLegs,
   resolveDocumentLine,
   resolveDocumentLines,
+  buildDocumentPersistencePlan,
   DocumentJournalError,
 } from "../../src/lib/financeDocumentJournal.js";
 
@@ -152,5 +153,50 @@ describe("resolveDocumentLine — raw input → resolved line", () => {
     expect(legs.reduce((s, l) => s + l.debit, 0)).toBeCloseTo(
       legs.reduce((s, l) => s + l.credit, 0), 2,
     );
+  });
+});
+
+describe("buildDocumentPersistencePlan — rows to insert + legs to post", () => {
+  it("maps lines to financial_document_lines rows with computed tax + total", () => {
+    const plan = buildDocumentPersistencePlan(
+      { direction: "payment", cashAccountCode: "1111", vatAccountCode: "1180" },
+      [
+        { lineNo: 1, itemName: "ديزل", unit: "لتر", quantity: 100, unitPrice: 2, taxRatePercent: 15, counterAccountCode: "5510" },
+        { lineNo: 2, itemName: "إطار", unit: "قطعة", quantity: 4, unitPrice: 250, counterAccountCode: "5610" },
+      ],
+    );
+    expect(plan.lineRows).toHaveLength(2);
+    expect(plan.lineRows[0]).toMatchObject({
+      lineNo: 1, itemName: "ديزل", unit: "لتر", quantity: 100, unitPrice: 2,
+      taxAmount: 30, lineTotal: 230, accountCode: "5510",
+    });
+    expect(plan.lineRows[1]).toMatchObject({ taxAmount: 0, lineTotal: 1000, accountCode: "5610" });
+    expect(plan.totals).toMatchObject({ net: 1200, vat: 30, gross: 1230 });
+    // journal balances
+    expect(plan.journalLegs.reduce((s, l) => s + l.debit, 0)).toBeCloseTo(
+      plan.journalLegs.reduce((s, l) => s + l.credit, 0), 2,
+    );
+  });
+
+  it("preserves allocation split type (percent) + links rows by lineNo", () => {
+    const plan = buildDocumentPersistencePlan(
+      { direction: "payment", cashAccountCode: "1111" },
+      [
+        {
+          lineNo: 1, itemName: "صيانة", quantity: 1, unitPrice: 9000, counterAccountCode: "5610",
+          allocations: [
+            { entityType: "vehicle", entityId: 11, allocationType: "percent", percent: 50 },
+            { entityType: "vehicle", entityId: 12, allocationType: "percent", percent: 50, costBearer: "driver" },
+          ],
+        },
+      ],
+    );
+    expect(plan.allocationRows).toHaveLength(2);
+    expect(plan.allocationRows[0]).toMatchObject({
+      lineNo: 1, entityType: "vehicle", entityId: 11, allocationType: "percent", percent: 50, amount: null, quantity: null,
+    });
+    expect(plan.allocationRows[1].costBearer).toBe("driver");
+    // the journal still splits into two 4,500 legs (resolved from percent)
+    expect(plan.journalLegs.filter((l) => l.accountCode === "5610").map((l) => l.debit)).toEqual([4500, 4500]);
   });
 });

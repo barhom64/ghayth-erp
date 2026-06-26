@@ -175,6 +175,7 @@ export type RawAllocationInput = {
   percent?: number;
   quantity?: number;
   costBearer?: string | null;
+  reason?: string | null;
   dims?: Record<string, unknown>;
 };
 
@@ -187,6 +188,13 @@ export type RawDocLine = {
   counterAccountCode: string;
   dims?: Record<string, unknown>;
   allocations?: RawAllocationInput[];
+  // persistence metadata (financial_document_lines) — not used by the math
+  itemId?: number | null;
+  itemName?: string | null;
+  description?: string | null;
+  unit?: string | null;
+  taxCodeId?: number | null;
+  costCenter?: string | null;
 };
 
 /** Resolve one raw line (compute net/VAT, normalize allocation splits to amounts). */
@@ -220,4 +228,96 @@ export function resolveDocumentLine(raw: RawDocLine): ResolvedDocLine {
 /** Resolve a whole document's raw lines. */
 export function resolveDocumentLines(raws: RawDocLine[]): ResolvedDocLine[] {
   return raws.map(resolveDocumentLine);
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Persistence plan — raw document → the exact rows to INSERT into the three
+// migration-418 tables (financial_document_lines, financial_line_allocations)
+// plus the balanced journal legs. Pure: the DB executor becomes a thin loop
+// over this plan inside one transaction. Reference: migration 418 columns.
+// ───────────────────────────────────────────────────────────────────────────
+
+/** A row destined for financial_document_lines (FKs documentId/lineId added at insert). */
+export type DocumentLineRow = {
+  lineNo: number;
+  itemId: number | null;
+  itemName: string | null;
+  description: string | null;
+  quantity: number;
+  unit: string | null;
+  unitPrice: number;
+  taxCodeId: number | null;
+  taxAmount: number;
+  lineTotal: number;
+  accountCode: string;
+  costCenter: string | null;
+};
+
+/** A row destined for financial_line_allocations (lineId resolved from lineNo at insert). */
+export type AllocationRow = {
+  lineNo: number;
+  entityType: string;
+  entityId: number;
+  allocationType: "amount" | "percent" | "quantity";
+  amount: number | null;
+  percent: number | null;
+  quantity: number | null;
+  costBearer: string | null;
+  reason: string | null;
+};
+
+export type DocumentPersistencePlan = {
+  lineRows: DocumentLineRow[];
+  allocationRows: AllocationRow[];
+  journalLegs: JournalLeg[];
+  totals: { net: number; vat: number; gross: number };
+};
+
+/**
+ * Build the full persistence plan for a unified financial document: the line
+ * rows + allocation rows to store, and the balanced journal legs to post.
+ * Throws (via the builders) on an unbalanced journal or a bad allocation split.
+ */
+export function buildDocumentPersistencePlan(
+  header: DocJournalHeader,
+  rawLines: RawDocLine[],
+): DocumentPersistencePlan {
+  const resolved = resolveDocumentLines(rawLines);
+  const journalLegs = buildDocumentJournalLegs(header, resolved);
+
+  const lineRows: DocumentLineRow[] = rawLines.map((raw, i) => {
+    const r = resolved[i];
+    return {
+      lineNo: raw.lineNo,
+      itemId: raw.itemId ?? null,
+      itemName: raw.itemName ?? null,
+      description: raw.description ?? null,
+      quantity: Number(raw.quantity) || 0,
+      unit: raw.unit ?? null,
+      unitPrice: Number(raw.unitPrice) || 0,
+      taxCodeId: raw.taxCodeId ?? null,
+      taxAmount: r.vat,
+      lineTotal: round2(r.net + r.vat),
+      accountCode: raw.counterAccountCode,
+      costCenter: raw.costCenter ?? null,
+    };
+  });
+
+  const allocationRows: AllocationRow[] = rawLines.flatMap((raw) =>
+    (raw.allocations ?? []).map((a) => ({
+      lineNo: raw.lineNo,
+      entityType: a.entityType,
+      entityId: a.entityId,
+      allocationType: a.allocationType,
+      amount: a.allocationType === "amount" ? Number(a.amount) || 0 : null,
+      percent: a.allocationType === "percent" ? Number(a.percent) || 0 : null,
+      quantity: a.allocationType === "quantity" ? Number(a.quantity) || 0 : null,
+      costBearer: a.costBearer ?? null,
+      reason: a.reason ?? null,
+    })),
+  );
+
+  const net = round2(resolved.reduce((s, l) => s + l.net, 0));
+  const vat = round2(resolved.reduce((s, l) => s + l.vat, 0));
+  return { lineRows, allocationRows, journalLegs, totals: { net, vat, gross: round2(net + vat) } };
 }
