@@ -180,13 +180,27 @@ run_step "check:button-nesting" node scripts/src/check-button-nesting.mjs
 # fails only on a NEW offender. Pure-logic fixtures guard the detector.
 run_step "check:jsx-generic-component:tests" node scripts/src/check-jsx-generic-component.test.mjs
 run_step "check:jsx-generic-component" node scripts/src/check-jsx-generic-component.mjs
-# Unified financial-attachment workspace: a page must not render BOTH the
-# unified FinancialAttachmentViewer (#2237) AND a raw FileDropZone for the same
-# document — that is two upload entries for one attachment (the #2975 duplicate
-# the user flagged). OFFLINE source scan; empty baseline — fails on any file
-# combining both. `type Attachment` import alone is allowed. Pure-logic tests.
-run_step "check:attachment-workspace-unified:tests" node scripts/src/check-attachment-workspace-unified.test.mjs
-run_step "check:attachment-workspace-unified" node scripts/src/check-attachment-workspace-unified.mjs
+# Canonical component pairs (registry): a file must not use both a canonical
+# unified component and its raw alternative (two entries for one job). Registry-
+# driven (scripts/src/check-canonical-component-pairs.mjs PAIRS) — generalises &
+# replaces the per-case attachment guard (#2978); the financial-attachment pair
+# (FinancialAttachmentViewer vs FileDropZone, #2975) is the first registry entry.
+# OFFLINE source scan; baseline scripts/canonical-component-pairs-allowlist.txt.
+# `type Attachment` import alone is allowed. Pure-logic tests.
+run_step "check:canonical-component-pairs:tests" node scripts/src/check-canonical-component-pairs.test.mjs
+run_step "check:canonical-component-pairs" node scripts/src/check-canonical-component-pairs.mjs
+# Component hygiene — detect duplicate / unrelated components system-wide
+# («علم وجود مكوّنات مكرّرة أو ليست ذات علاقة»). Baseline mode: current state
+# frozen in scripts/*-allowlist.txt (the awareness report); fails only on a NEW
+# offender. Pure-logic fixtures guard each detector.
+#   • duplicate-component-content — two differently-named .tsx with identical
+#     normalized body (copy-paste the dup-filenames guard misses).
+#   • dead-components — a component .tsx no file imports (orphan/dead); counts
+#     re-exports from lib/* kit facades so live components aren't false-flagged.
+run_step "check:duplicate-component-content:tests" node scripts/src/check-duplicate-component-content.test.mjs
+run_step "check:duplicate-component-content" node scripts/src/check-duplicate-component-content.mjs
+run_step "check:dead-components:tests" node scripts/src/check-dead-components.test.mjs
+run_step "check:dead-components" node scripts/src/check-dead-components.mjs
 # Responsive tables: a raw <table> not inside an overflow scroll container
 # clips/breaks the layout on phone widths (the 2026-06 mobile pass wrapped
 # every offender). OFFLINE source scan; empty baseline in
