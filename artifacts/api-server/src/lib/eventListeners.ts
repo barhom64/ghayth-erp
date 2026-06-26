@@ -1860,7 +1860,7 @@ export function registerEventListeners() {
         const payRef = (details.ref as string) || `UPAY-${payload.entityId}`;
         if (sarAmount > 0) {
           const [cashCode, arCode] = await Promise.all([
-            getAccountCodeFromMapping(payload.companyId, "invoice_payment_cash", "debit", method === "cash" ? "1100" : "1110"),
+            getAccountCodeFromMapping(payload.companyId, "invoice_payment_cash", "debit", method === "cash" ? "1111" : "1124"),
             getAccountCodeFromMapping(payload.companyId, "invoice_payment_ar", "credit", "1131"),
           ]);
           await createGuardedJournalEntry({
