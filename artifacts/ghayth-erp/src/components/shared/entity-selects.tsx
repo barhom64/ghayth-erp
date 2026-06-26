@@ -1,7 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { z } from "zod";
-import { useApiQuery, useApiMutation } from "@/lib/api";
-import { useToast } from "@/hooks/use-toast";
+import { useApiQuery } from "@/lib/api";
 import { SearchableSelect, SearchableSelectField, type SelectOption } from "./searchable-select";
 import { FormFieldWrapper, fieldErrorClass } from "./form-field-wrapper";
 import {
@@ -10,8 +8,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { FormShell, FormTextField } from "@workspace/ui-core";
 import { AllowCreateDrawer, type EntityKind } from "./allow-create-drawer";
 
 interface QuickCreateField {
@@ -19,92 +15,6 @@ interface QuickCreateField {
   label: string;
   required?: boolean;
   type?: string;
-}
-
-interface QuickCreateDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  title: string;
-  fields: QuickCreateField[];
-  apiPath: string;
-  invalidateKey: string;
-  onCreated?: (data: any) => void;
-}
-
-function QuickCreateDialog({
-  open,
-  onOpenChange,
-  title,
-  fields,
-  apiPath,
-  invalidateKey,
-  onCreated,
-}: QuickCreateDialogProps) {
-  const { toast } = useToast();
-  const createMut = useApiMutation<unknown, Record<string, any>>(apiPath, "POST", [[invalidateKey]]);
-
-  // Build a runtime zod schema and default values from the fields prop.
-  // Required fields gate the submit button via FormShell's built-in
-  // validation — no more "missing fields" toast list.
-  const schemaShape: Record<string, z.ZodString> = {};
-  const defaults: Record<string, string> = {};
-  for (const f of fields) {
-    const s = z.string().trim();
-    schemaShape[f.key] = f.required ? s.min(1, "مطلوب") : s;
-    defaults[f.key] = "";
-  }
-  const quickCreateSchema = z.object(schemaShape);
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-        </DialogHeader>
-        <FormShell
-          // Remount on open so the form clears between consecutive
-          // create flows without an explicit reset.
-          key={open ? "open" : "closed"}
-          schema={quickCreateSchema as unknown as z.ZodType<Record<string, string>>}
-          defaultValues={defaults}
-          submitLabel={createMut.isPending ? "جاري الإنشاء..." : "إنشاء"}
-          secondaryActions={
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>إلغاء</Button>
-          }
-          onSubmit={(values) => {
-            // #2134 — drop untouched optional fields instead of sending "".
-            // The backend zod schemas validate present values strictly (an
-            // empty-string email fails z.email()), so a quick-create with
-            // «البريد» left blank 422'd and the entity silently never existed.
-            const payload = Object.fromEntries(
-              Object.entries(values).filter(([, v]) => String(v ?? "").trim() !== "")
-            );
-            createMut.mutate(payload, {
-              onSuccess: (data: any) => {
-                onCreated?.(data);
-                onOpenChange(false);
-                toast({ title: `تم الإنشاء بنجاح` });
-              },
-              onError: (err: any) => {
-                toast({ variant: "destructive", title: "خطأ في الإنشاء", description: err?.fix ?? err?.message });
-              },
-            });
-          }}
-        >
-          {fields.map((field) => (
-            <FormTextField
-              key={field.key}
-              name={field.key}
-              label={field.label}
-              required={field.required}
-              type={field.type as any}
-              placeholder={field.label}
-            />
-          ))}
-        </FormShell>
-      </DialogContent>
-    </Dialog>
-  );
 }
 
 /* ------------------------------------------------------------------ *
@@ -190,10 +100,11 @@ interface EntitySelectConfig {
    */
   serverSearch?: boolean;
   /**
-   * When set, "+ جديد" opens the unified FULL create form in a drawer
-   * (`AllowCreateDrawer`) instead of the truncated `QuickCreateDialog`. Set it
-   * once a registered embedded form exists for the entity (migration is
-   * selector-by-selector). See allow-create-drawer.tsx.
+   * When set, "+ جديد" opens the entity's registered FULL embedded create form
+   * in the unified drawer (`AllowCreateDrawer`). When omitted, the same drawer
+   * hosts a generic field-driven form built from `createFields`. Either way
+   * there is ONE create surface (the retired `QuickCreateDialog` is gone).
+   * See allow-create-drawer.tsx.
    */
   createEntityKind?: EntityKind;
   /**
@@ -333,24 +244,20 @@ function buildEntitySelect(config: EntitySelectConfig) {
           createNewLabel={config.createLabel}
           onSearchChange={config.serverSearch ? setSearchText : undefined}
         />
-        {allowCreate && (config.createEntityKind ? (
+        {allowCreate && (
           <AllowCreateDrawer
             kind={config.createEntityKind}
+            genericConfig={config.createEntityKind ? undefined : {
+              title: config.createTitle,
+              fields: config.createFields,
+              apiPath: config.createApiPath,
+              invalidateKey: config.queryKey,
+            }}
             open={showCreate}
             onOpenChange={setShowCreate}
             onCreated={handleCreated}
           />
-        ) : (
-          <QuickCreateDialog
-            open={showCreate}
-            onOpenChange={setShowCreate}
-            title={config.createTitle}
-            fields={config.createFields}
-            apiPath={config.createApiPath}
-            invalidateKey={config.queryKey}
-            onCreated={handleCreated}
-          />
-        ))}
+        )}
       </>
     );
   };
@@ -741,7 +648,7 @@ export const CommitteeSelect = buildEntitySelect({
 // id, since the per-category attendance policy keys off the string key.
 // Backend: /org/employee-categories. Quick-create disabled here — the
 // 6 system categories are seeded by migration 270 and a per-company
-// override needs a richer form than what the QuickCreateDialog offers.
+// override needs a richer form than the generic field-driven create offers.
 export const EmployeeCategorySelect = buildEntitySelect({
   queryKey: "employee-categories-list",
   endpoint: "/org/employee-categories",
