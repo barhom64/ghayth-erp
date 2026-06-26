@@ -345,7 +345,6 @@ export const allNavSections: NavSection[] = [
           { label: "مركز التسويات", path: "/finance/reconciliation-hub", icon: RefreshCw },
           { label: "القيود اليدوية", path: "/finance/journal-manual", icon: FileSignature, minRoleLevel: 70 },
           { label: "قوالب القيود", path: "/finance/journal-templates", icon: FileText },
-          { label: "قوالب قيود سريعة", path: "/finance/journal-quick-templates", icon: Zap },
           { label: "معالج عكس قيد", path: "/finance/journal/reverse", icon: ArrowLeftRight },
           { label: "قيود دورية", path: "/finance/recurring-journals", icon: CalendarClock },
           { label: "تقويم الدورية", path: "/finance/recurring-calendar", icon: Calendar },
