@@ -12,6 +12,7 @@ import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { formatCurrency, roundMoney, todayLocal } from "@/lib/formatters";
 import { isMoneyAccount } from "@/lib/finance-account-usage";
 import { LineItemsTable } from "@/components/shared/line-items-table";
+import { LineAllocationsEditor, type LineAllocation } from "@/components/shared/line-allocations-editor";
 import { BranchSelect, AccountSelect } from "@/components/shared/entity-selects";
 import { NumberField, FormFieldWrapper, TextField } from "@/components/shared/form-field-wrapper";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
@@ -30,10 +31,11 @@ type DocLine = {
   unit: string;
   unitPrice: number;
   taxRatePercent: number;
+  allocations: LineAllocation[];
 };
 
 const emptyLine = (): DocLine => ({
-  itemName: "", description: "", quantity: 1, unit: "", unitPrice: 0, taxRatePercent: 0,
+  itemName: "", description: "", quantity: 1, unit: "", unitPrice: 0, taxRatePercent: 0, allocations: [],
 });
 
 const lineNet = (l: DocLine) => roundMoney((Number(l.quantity) || 0) * (Number(l.unitPrice) || 0));
@@ -71,7 +73,8 @@ export default function FinancialEventCreate() {
   function setLine(i: number, field: keyof DocLine, val: any) {
     setForm((f) => {
       const lines = [...f.lines];
-      lines[i] = { ...lines[i], [field]: field === "itemName" || field === "description" || field === "unit" ? val : Number(val) || 0 };
+      const passthrough = field === "itemName" || field === "description" || field === "unit" || field === "allocations";
+      lines[i] = { ...lines[i], [field]: passthrough ? val : Number(val) || 0 };
       return { ...f, lines };
     });
   }
@@ -88,14 +91,26 @@ export default function FinancialEventCreate() {
       description: form.description || undefined,
       lines: form.lines
         .filter((l) => Number(l.quantity) > 0 && Number(l.unitPrice) > 0)
-        .map((l) => ({
-          itemName: l.itemName || undefined,
-          description: l.description || undefined,
-          quantity: Number(l.quantity) || 0,
-          unit: l.unit || undefined,
-          unitPrice: Number(l.unitPrice) || 0,
-          taxRatePercent: Number(l.taxRatePercent) || 0,
-        })),
+        .map((l) => {
+          const allocs = l.allocations.filter((a) => a.entityId);
+          return {
+            itemName: l.itemName || undefined,
+            description: l.description || undefined,
+            quantity: Number(l.quantity) || 0,
+            unit: l.unit || undefined,
+            unitPrice: Number(l.unitPrice) || 0,
+            taxRatePercent: Number(l.taxRatePercent) || 0,
+            allocations: allocs.length > 0
+              ? allocs.map((a) => ({
+                  entityType: a.entityType,
+                  entityId: Number(a.entityId),
+                  allocationType: "percent" as const,
+                  percent: Number(a.percent) || 0,
+                  costBearer: a.costBearer || undefined,
+                }))
+              : undefined,
+          };
+        }),
       ...extra,
     };
   }
@@ -179,6 +194,9 @@ export default function FinancialEventCreate() {
               { header: "ضريبة %", width: "80px", render: (l, i) => <NumberField label="ضريبة" hideLabel className="w-16" min={0} value={l.taxRatePercent || ""} onChange={(v) => setLine(i, "taxRatePercent", v)} placeholder="0" /> },
               { header: "الإجمالي", width: "110px", render: (l) => <span className="font-mono text-sm">{formatCurrency(lineTotal(l))}</span> },
             ]}
+            renderExpansion={(l, i) => (
+              <LineAllocationsEditor value={l.allocations} onChange={(next) => setLine(i, "allocations", next)} />
+            )}
             renderTotals={() => (
               <tr className="bg-surface-subtle font-semibold border-t">
                 <td colSpan={6} className="px-3 py-2 text-muted-foreground">الإجمالي (صافٍ {formatCurrency(totalNet)} + ضريبة {formatCurrency(totalVat)})</td>
