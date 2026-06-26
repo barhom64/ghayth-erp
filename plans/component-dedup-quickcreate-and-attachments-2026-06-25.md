@@ -26,5 +26,6 @@
 - يلزم مواءمة backend + يمسّ العمرة المتنازَعة ⇒ خطة منفصلة تُعرض قبل التنفيذ (تصعيد لإبراهيم: قرار + احتمال migration). لا يُنفَّذ في هذه الدفعة.
 
 ## التتبّع
-- [ ] الدفعة 1: توحيد AllowCreateDrawer + حذف QuickCreateDialog (PR + مجلس).
-- [ ] المسار 2: خطة توحيد لوحات المرفقات (تُعرض على إبراهيم).
+- [x] المسار 1: توحيد AllowCreateDrawer + حذف QuickCreateDialog — **مُدمَج #2991**.
+- [x] المسار 2 / الدفعة A (واجهة): توحيد `EntityDocuments` + حذف `EntityAttachmentPanel` (نفس `/documents`، props اختيارية رجعية، quickUpload + مصغّرات + تصنيفات أملاك). ترحيل contract-detail + unit-detail. مجلس: يُعتمد.
+- [ ] المسار 2 / الدفعة B (backend، العمرة المتنازَعة): توحيد `UmrahAttachmentsPanel` ⇒ **هجرة `umrah_attachments → documents`** — تُعرض كتصميم + بيان ضرورة لتوقيع إبراهيم الصريح قبل كتابة الـmigration (المادة 3).
