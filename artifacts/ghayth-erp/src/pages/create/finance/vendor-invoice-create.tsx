@@ -26,21 +26,14 @@ import { LiveImpactPreview } from "@/components/shared/impact-preview";
 import { FinancialAttachmentViewer } from "@/components/shared/financial-attachment-viewer";
 import { SupplierItemPicker, type SupplierItem } from "@/components/shared/supplier-item-picker";
 import { useSupplierFinanceDefaults, useSupplierItems } from "@/lib/financial-memory";
+import { ACCOUNT_PURPOSE_OPTIONS } from "@/lib/finance/account-purposes";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
 // accountPurpose options (TEXT). The financial engine resolves each to a GL
 // account on the server — the UI NEVER carries a GL code (FIN-P11 #2241).
-const ACCOUNT_PURPOSE_OPTIONS: { value: string; label: string }[] = [
-  { value: "general_expense", label: "مصروف عام / إداري" },
-  { value: "service_expense", label: "خدمات / أتعاب مهنية" },
-  { value: "vehicle_expense", label: "مصروف مركبات (صيانة/وقود)" },
-  { value: "project_cost", label: "تكلفة مشروع/مقاولات" },
-  { value: "store_inventory", label: "مخزون / بضاعة" },
-  { value: "inventory_receipt", label: "استلام مخزون" },
-  { value: "fixed_asset_purchase", label: "شراء أصل ثابت (رسملة)" },
-  { value: "supplier_prepayment", label: "دفعة مقدمة لمورد" },
-];
+// ACCOUNT_PURPOSE_OPTIONS مُوحَّد في @/lib/finance/account-purposes (مصدر واحد
+// مع صفحة فاتورة المورد التشغيلية م٤؛ المفاتيح عقدٌ مع المحرّك المالي).
 
 interface VendorInvoiceLine {
   itemId?: number;

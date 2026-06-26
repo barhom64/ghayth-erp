@@ -64,6 +64,7 @@ const FinancialEventCreate = lazy(() => import("@/pages/create/finance/financial
 const FinancialImportGateway = lazy(() => import("@/pages/create/finance/financial-import-gateway"));
 const CustomerCollection = lazy(() => import("@/pages/create/finance/customer-collection"));
 const FinancialInvoiceCreate = lazy(() => import("@/pages/create/finance/financial-invoice-create"));
+const FinancialVendorInvoiceCreate = lazy(() => import("@/pages/create/finance/financial-vendor-invoice-create"));
 const VoucherDetail = lazy(() => import("@/pages/details/voucher-detail"));
 const Journal = lazy(() => import("@/pages/finance/journal"));
 const JournalDetail = lazy(() => import("@/pages/finance/journal-detail"));
@@ -292,6 +293,7 @@ export const financeRoutes = [
   { path: "/finance/documents/import", component: FinancialImportGateway },
   { path: "/finance/collect", component: CustomerCollection },
   { path: "/finance/documents/invoice", component: FinancialInvoiceCreate },
+  { path: "/finance/documents/vendor-invoice", component: FinancialVendorInvoiceCreate },
   { path: "/finance/vouchers/:id", component: VoucherDetail },
   { path: "/finance/journal", component: Journal },
   { path: "/finance/journal/activity", component: PostingActivity },

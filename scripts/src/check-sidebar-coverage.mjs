@@ -115,6 +115,10 @@ const OFF_SIDEBAR_ALLOWLIST = new Set([
   // البنود الموحّد + ربط كل بند بكيانه، يمرّ على منفذ الفاتورة القائم
   // POST /finance/invoices (روحان لنفس السجل §١١.٢). يُسطَّح/يُدمج عند م٨.
   "/finance/documents/invoice",
+  // فاتورة مشتريات تشغيلية (م٤): variant إنشاء يُفتح بزر من «تسجيل واقعة». نفس جدول
+  // البنود + غرض حساب وربط لكل بند + مرفق إلزامي، يمرّ على منفذ فاتورة المورد القائم
+  // POST /finance/vendor-invoices (روحان لنفس السجل §١١.٢). يُسطَّح/يُدمج عند م٨.
+  "/finance/documents/vendor-invoice",
   // Settings-hub tab deep-paths: each opens a tab of /settings by URL / command
   // palette / search without adding a separate sidebar entry (the hub is one
   // page). branches/companies/departments/audit-log DO have sidebar entries; the

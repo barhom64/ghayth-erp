@@ -188,6 +188,10 @@ export default function FinancialEventCreate() {
             <button type="button" className="text-primary hover:underline" onClick={() => navigate("/finance/documents/invoice")}>
               فاتورة مبيعات ←
             </button>
+            {" · "}
+            <button type="button" className="text-primary hover:underline" onClick={() => navigate("/finance/documents/vendor-invoice")}>
+              فاتورة مشتريات ←
+            </button>
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
