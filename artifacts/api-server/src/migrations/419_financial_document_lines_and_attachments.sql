@@ -54,7 +54,10 @@ CREATE TABLE IF NOT EXISTS financial_document_lines (
   "accountCode"   VARCHAR(40),                   -- الحساب المقابل المشتقّ (فارغ=توجيه تلقائي)
   "costCenter"    VARCHAR(60),                   -- بُعد السطر (تجاوز اختياري — م٤)
   "createdAt"     TIMESTAMP NOT NULL DEFAULT NOW(),
-  "updatedAt"     TIMESTAMP NOT NULL DEFAULT NOW()
+  "updatedAt"     TIMESTAMP NOT NULL DEFAULT NOW(),
+  -- أهداف FK مركّبة تربط الأبناء بهوية السطر (المستأجر + المستند) — عزل المستأجر (قاعدة ٧)
+  CONSTRAINT uq_fin_doc_lines_id_company UNIQUE (id, "companyId"),
+  CONSTRAINT uq_fin_doc_lines_identity UNIQUE (id, "companyId", "documentKind", "documentId")
 );
 CREATE INDEX IF NOT EXISTS idx_fin_doc_lines_doc
   ON financial_document_lines ("documentKind", "documentId", "lineNo");
@@ -66,7 +69,7 @@ CREATE TABLE IF NOT EXISTS financial_line_allocations (
   id                BIGSERIAL PRIMARY KEY,
   "companyId"       INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
   "branchId"        INTEGER,
-  "lineId"          BIGINT NOT NULL REFERENCES financial_document_lines(id) ON DELETE CASCADE,
+  "lineId"          BIGINT NOT NULL,
   "entityType"      VARCHAR(40) NOT NULL,          -- vehicle/employee/property/project/case…
   "entityId"        INTEGER NOT NULL,
   "allocationType"  VARCHAR(20) NOT NULL DEFAULT 'amount'
@@ -77,7 +80,10 @@ CREATE TABLE IF NOT EXISTS financial_line_allocations (
   "costBearer"      VARCHAR(40),                   -- تفريع حوكمي لكل جزء (الدستور)
   "reason"          TEXT,
   "createdAt"       TIMESTAMP NOT NULL DEFAULT NOW(),
-  "updatedAt"       TIMESTAMP NOT NULL DEFAULT NOW()
+  "updatedAt"       TIMESTAMP NOT NULL DEFAULT NOW(),
+  -- FK مركّب: companyId الجزء يطابق companyId السطر (لا توزيع عابر للمستأجر)
+  CONSTRAINT fk_fin_line_alloc_line FOREIGN KEY ("lineId", "companyId")
+    REFERENCES financial_document_lines (id, "companyId") ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_fin_line_alloc_line
   ON financial_line_allocations ("lineId");
@@ -93,7 +99,7 @@ CREATE TABLE IF NOT EXISTS financial_attachments (
   "branchId"      INTEGER,
   "documentKind"  VARCHAR(20) NOT NULL CHECK ("documentKind" IN ('voucher', 'expense')),
   "documentId"    INTEGER NOT NULL,
-  "lineId"        BIGINT REFERENCES financial_document_lines(id) ON DELETE CASCADE,  -- NULL=مرفق المستند
+  "lineId"        BIGINT,                         -- NULL=مرفق المستند (FK مركّب أدناه عند الضبط)
   "url"           TEXT NOT NULL,
   "fileName"      TEXT,
   "mimeType"      VARCHAR(120),
@@ -101,7 +107,12 @@ CREATE TABLE IF NOT EXISTS financial_attachments (
   "serialNo"      VARCHAR(40),                   -- ترقيم داخلي (من مركز الترقيم)
   "status"        VARCHAR(20) NOT NULL DEFAULT 'linked'
                     CHECK ("status" IN ('linked', 'needs_replace', 'pending')),
-  "createdAt"     TIMESTAMP NOT NULL DEFAULT NOW()
+  "createdAt"     TIMESTAMP NOT NULL DEFAULT NOW(),
+  -- FK مركّب: عند ضبط lineId يجب أن يطابق المرفق هوية السطر كاملةً (المستأجر +
+  -- المستند) فلا يشير مرفق تحت مستند/شركة إلى سطر مستند/شركة أخرى. lineId=NULL
+  -- (مرفق المستند) لا يُفحَص (MATCH SIMPLE).
+  CONSTRAINT fk_fin_attach_line FOREIGN KEY ("lineId", "companyId", "documentKind", "documentId")
+    REFERENCES financial_document_lines (id, "companyId", "documentKind", "documentId") ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_fin_attach_doc
   ON financial_attachments ("documentKind", "documentId");
