@@ -101,6 +101,24 @@ const OFF_SIDEBAR_ALLOWLIST = new Set([
   "/finance/intercompany/consolidation",
   // create variant — reuses ExpensesCreate, opened from the expenses list.
   "/finance/expenses/multi-line",
+  // بوابة الاستيراد المالي (م٢-أ): variant إنشاء «استيراد من ملف» للمستند الموحّد
+  // «تسجيل واقعة مالية». تمرّ على نفس POST /finance/documents (لا اشتقاق مكرّر)،
+  // وتُفتح بزر لا من القائمة الجانبية. تُسطَّح في القائمة مع شقيقتها
+  // /finance/documents/create عند م٨ (التبديل الكامل + تنظيف القائمة)؛ تبقى حتى
+  // ذلك قابلة للوصول بالرابط/لوحة الأوامر مثل صفحة الإنشاء الموحّدة.
+  "/finance/documents/import",
+  // تحصيل العميل داخل «قبض» (م٣): variant إنشاء «تحصيل من عميل» يُفتح بزر من تبويب
+  // «قبض» في صفحة تسجيل الواقعة (لا من القائمة). يطبّق FIFO على فواتير العميل عبر
+  // POST /finance/documents/collect (محرّك postCustomerReceipt). يُسطَّح/يُدمج عند م٨.
+  "/finance/collect",
+  // فاتورة مبيعات تشغيلية (م٤): variant إنشاء يُفتح بزر من «تسجيل واقعة». نفس جدول
+  // البنود الموحّد + ربط كل بند بكيانه، يمرّ على منفذ الفاتورة القائم
+  // POST /finance/invoices (روحان لنفس السجل §١١.٢). يُسطَّح/يُدمج عند م٨.
+  "/finance/documents/invoice",
+  // فاتورة مشتريات تشغيلية (م٤): variant إنشاء يُفتح بزر من «تسجيل واقعة». نفس جدول
+  // البنود + غرض حساب وربط لكل بند + مرفق إلزامي، يمرّ على منفذ فاتورة المورد القائم
+  // POST /finance/vendor-invoices (روحان لنفس السجل §١١.٢). يُسطَّح/يُدمج عند م٨.
+  "/finance/documents/vendor-invoice",
   // Settings-hub tab deep-paths: each opens a tab of /settings by URL / command
   // palette / search without adding a separate sidebar entry (the hub is one
   // page). branches/companies/departments/audit-log DO have sidebar entries; the

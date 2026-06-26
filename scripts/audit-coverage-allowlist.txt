@@ -69,6 +69,20 @@ POST /finance/journal/:id/reverse
 POST /finance/ocr/extractions/:id/confirm
 POST /finance/ocr/extractions/:id/reject
 POST /finance/payment-run/execute
+# POST /finance/documents/import/analyze — بوابة الاستيراد م٢: قراءة فقط. تحلّل ملف
+# Excel/CSV وتُعيّنه إلى بنود مستند ثم تُعيدها للمراجعة — لا كتابة في قاعدة البيانات
+# ولا ترحيل. الكتابة + الأثر يحدثان عند POST /finance/documents (المُدقَّق أصلًا)
+# عندما يضغط المستخدم «حفظ». تدقيق إجراء بلا تغيير = تلويث سجل التدقيق، فيُعفى.
+POST /finance/documents/import/analyze
+# POST/DELETE /finance/documents/import/presets — م٢-ب: تعيينات استيراد محفوظة (تفضيل
+# إعداد لكل مستخدم: ترويسة المصدر → حقل). كتابة إعداد قابلة للعكس، لا تمسّ الدفتر ولا
+# أي إجراء تشغيلي — نظير umrah/import/presets المُعفى أصلًا. تُعزل بـ companyId+userId.
+POST /finance/documents/import/presets
+DELETE /finance/documents/import/presets/:id
+# POST /finance/documents/collect/preview — م٣: معاينة تحصيل قراءة فقط. تجلب فواتير
+# العميل المفتوحة وتحسب تخصيص FIFO/يدوي وتُعيدها — لا كتابة في القاعدة ولا ترحيل.
+# الترحيل + الأثر يحدثان عند POST /finance/documents/collect (المُدقَّق + الحدث).
+POST /finance/documents/collect/preview
 POST /finance/vendor-invoices/impact-preview
 POST /finance/zatca/test-connection
 POST /hr/:id/ocr/rerun

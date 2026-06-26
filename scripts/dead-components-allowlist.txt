@@ -4,3 +4,8 @@
 # يتيمة كشفها تأثير السلسلة (كان يستوردها فقط مكوّنات مُزالة) — مرشّحة لتنظيف تابع:
 components/ui/separator.tsx
 components/ui/toggle.tsx
+# م٨ (التبديل) — سند القبض/الصرف والمصروف القديمان: مساراهما يُحوَّلان بـ redirect إلى
+# «تسجيل واقعة» الموحّد (/finance/documents/create)؛ الملفان مُبقيان للمرجع/التراجع
+# (doc 25 §٨: تحويل لا حذف). مُدرجان أيضًا في scripts/src/audit-routes.mjs.
+pages/create/finance/vouchers-create.tsx
+pages/create/finance/expenses-create.tsx

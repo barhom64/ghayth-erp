@@ -110,7 +110,7 @@ const CATEGORIES: WorkflowCategory[] = [
       { title: "قوالب قيود سريعة", description: "12 نموذج جاهز للاستخدام", href: "/finance/journal-quick-templates", icon: Layers, isNew: true },
       { title: "معالج عكس قيد", description: "3 خطوات آمنة لإنشاء قيد عاكس", href: "/finance/journal/reverse", icon: RotateCcw, isNew: true },
       { title: "تحويل بين الحسابات", description: "بطاقات مرئية للحساب المصدر والمستهدف", href: "/finance/treasury/transfer", icon: Banknote },
-      { title: "مصاريف متعددة", description: "نموذج المصروف الموحَّد — احفظ وأضف آخر", href: "/finance/expenses/create", icon: Receipt },
+      { title: "مصاريف متعددة", description: "نموذج المصروف الموحَّد — احفظ وأضف آخر", href: "/finance/documents/create", icon: Receipt },
       { title: "توزيع التكاليف", description: "قسّم فاتورة على عدة جهات", href: "/finance/expenses/split", icon: Layers },
     ],
   },
