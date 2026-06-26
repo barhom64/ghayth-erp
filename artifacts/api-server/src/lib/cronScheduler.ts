@@ -1221,8 +1221,10 @@ async function dailyInvoiceOverdueEscalation(): Promise<string> {
     // excluding it here would silently skip the day-7 reminder when the cron
     // ran normally on day 1. Only paid/cancelled invoices are excluded.
     const invoices = await rawQuery<Record<string, unknown>>(
-      `SELECT i.id, i.ref, i."clientId", i.total, i."paidAmount", i."dueDate",
+      `SELECT i.id, i.ref, i."clientId", i."branchId", i.total, i."paidAmount", i."dueDate",
               c.name AS "clientName", c.phone AS "clientPhone", c.email AS "clientEmail",
+              c."isBlacklisted" AS "clientBlacklisted",
+              c.classification AS "clientClassification",
               (CURRENT_DATE - i."dueDate"::date) AS "daysOverdue",
               i.status
        FROM invoices i
@@ -1315,6 +1317,133 @@ async function dailyInvoiceOverdueEscalation(): Promise<string> {
           } catch (e) {
             logger.warn(e, `[cronScheduler] client invoice-overdue notification failed (inv=${inv.id})`);
           }
+        }
+      }
+
+      // ─────────────────────────────────────────────────────────────────────
+      // Spec ملف 03 §تحصيل 6 مراحل (السطر 49-51): internal escalation tiers
+      //   يوم 21 → تصعيد للمدير المالي
+      //   يوم 30 → إشعار GM + حظر العميل + غرامة 2% شهرياً (مفوّض من إبراهيم)
+      //   يوم 60 → إشعار القانوني + تصنيف العميل churned (مفوّض من إبراهيم)
+      //
+      // Channels: explicit ["email"] only. The internal in_app awareness is
+      // already covered by the broadcastAlert call above (which fires for
+      // EVERY phase). Adding in_app here would re-create the fan-out issue
+      // Codex caught in slice 1.
+      // ─────────────────────────────────────────────────────────────────────
+      const inheritedBranchId = Number(inv.branchId ?? 0) || 1; // fallback to branch 1 if invoice has no branch
+      const outstanding = Number(inv.total ?? 0) - Number(inv.paidAmount ?? 0);
+      const escalationBase = {
+        companyId: company.id,
+        title: "",
+        body: "",
+        channels: ["email" as const],
+        templateVars: {
+          clientName: String(inv.clientName ?? "—"),
+          invoiceRef: String(inv.ref ?? ""),
+          days: String(days),
+          amount: outstanding.toFixed(2),
+        },
+        clientId: inv.clientId as number,
+        refType: "invoice",
+        refId: inv.id as number,
+        priority: "high" as const,
+      };
+
+      if (days === 21) {
+        // Escalate to CFO (fallback chain CFO → GM → owner inside the helper).
+        try {
+          const cfoAssignmentId = await getCfoAssignmentId(company.id, inheritedBranchId);
+          if (cfoAssignmentId) {
+            const [cfo] = await rawQuery<{ name: string; email: string | null }>(
+              `SELECT e.name, e.email FROM employee_assignments ea
+                 JOIN employees e ON e.id = ea."employeeId"
+                WHERE ea.id = $1`,
+              [cfoAssignmentId],
+            );
+            await dispatchNotification({
+              ...escalationBase,
+              eventCategory: "invoice.escalation.fm",
+              templateKey: "invoice.escalation.fm",
+              templateVars: { ...escalationBase.templateVars, managerName: String(cfo?.name ?? "—") },
+              assignmentId: cfoAssignmentId,
+              recipientEmail: cfo?.email ?? undefined,
+              recipientName: cfo?.name ?? undefined,
+            });
+          }
+        } catch (e) {
+          logger.warn(e, `[cronScheduler] invoice-overdue day-21 FM escalation failed (inv=${inv.id})`);
+        }
+      } else if (days === 30) {
+        // 1) blacklist the client (block new invoices). Idempotent — only set
+        //    if not already blacklisted, so we never thrash the row.
+        if (!inv.clientBlacklisted) {
+          try {
+            await rawExecute(
+              `UPDATE clients SET "isBlacklisted" = TRUE, "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $2`,
+              [inv.clientId as number, company.id],
+            );
+          } catch (e) {
+            logger.warn(e, `[cronScheduler] invoice-overdue day-30 blacklist failed (client=${inv.clientId})`);
+          }
+        }
+        // 2) notify GM (helper falls back to owner).
+        try {
+          const gmAssignmentId = await getDirectorAssignmentId(company.id, inheritedBranchId);
+          if (gmAssignmentId) {
+            const [gm] = await rawQuery<{ name: string; email: string | null }>(
+              `SELECT e.name, e.email FROM employee_assignments ea
+                 JOIN employees e ON e.id = ea."employeeId"
+                WHERE ea.id = $1`,
+              [gmAssignmentId],
+            );
+            await dispatchNotification({
+              ...escalationBase,
+              eventCategory: "invoice.blocked.gm",
+              templateKey: "invoice.blocked.gm",
+              templateVars: { ...escalationBase.templateVars, managerName: String(gm?.name ?? "—") },
+              assignmentId: gmAssignmentId,
+              recipientEmail: gm?.email ?? undefined,
+              recipientName: gm?.name ?? undefined,
+            });
+          }
+        } catch (e) {
+          logger.warn(e, `[cronScheduler] invoice-overdue day-30 GM escalation failed (inv=${inv.id})`);
+        }
+      } else if (days === 60) {
+        // 1) flip client classification to 'churned' — idempotent guard.
+        if (inv.clientClassification !== "churned") {
+          try {
+            await rawExecute(
+              `UPDATE clients SET classification = 'churned', "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $2`,
+              [inv.clientId as number, company.id],
+            );
+          } catch (e) {
+            logger.warn(e, `[cronScheduler] invoice-overdue day-60 churn failed (client=${inv.clientId})`);
+          }
+        }
+        // 2) hand over to legal (helper falls back GM → owner).
+        try {
+          const legal = await getLegalResponsible(company.id);
+          if (legal) {
+            const [legalContact] = await rawQuery<{ email: string | null }>(
+              `SELECT e.email FROM employee_assignments ea
+                 JOIN employees e ON e.id = ea."employeeId"
+                WHERE ea.id = $1`,
+              [legal.assignmentId],
+            );
+            await dispatchNotification({
+              ...escalationBase,
+              eventCategory: "invoice.legal_handover",
+              templateKey: "invoice.legal_handover",
+              templateVars: { ...escalationBase.templateVars, managerName: legal.employeeName },
+              assignmentId: legal.assignmentId,
+              recipientEmail: legalContact?.email ?? undefined,
+              recipientName: legal.employeeName,
+            });
+          }
+        } catch (e) {
+          logger.warn(e, `[cronScheduler] invoice-overdue day-60 legal handover failed (inv=${inv.id})`);
         }
       }
 
@@ -2005,6 +2134,19 @@ async function weeklyClientClassification(): Promise<string> {
       const monthsSinceLastInvoice = lastInvoice
         ? (Date.now() - lastInvoice.getTime()) / (30 * 86400000)
         : 999;
+
+      // PRESERVE LIFECYCLE CHURN — Codex review on PR #3012.
+      // The daily invoice-overdue cron flips classification to 'churned'
+      // on day 60 as a legal-handover lifecycle state. This weekly
+      // recompute is purely revenue-based (last invoice age + total
+      // revenue). If we let it run for a churned client whose last
+      // invoice is recent (60 days ago, not 12 months), it would flip
+      // them back to 'regular'/'prospect'/'vip' and undo the legal
+      // handover. We never demote out of 'churned' from this cron —
+      // exit from churn is an explicit ops decision (admin PATCH).
+      if (client.classification === "churned") {
+        continue;
+      }
 
       let newClass: string;
       if (monthsSinceLastInvoice >= 12) newClass = "churned";

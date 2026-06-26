@@ -382,10 +382,21 @@ invoicesRouter.post("/invoices/impact-preview", authorize({ feature: "finance.in
     let clientName = "";
     if (clientId) {
       const [client] = await rawQuery<Record<string, unknown>>(
-        `SELECT name FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        `SELECT name, "isBlacklisted" FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
         [Number(clientId), scope.companyId]
       );
       clientName = (client?.name as string | undefined) || "";
+      // Spec ملف 03 §تحصيل 6 مراحل (يوم 30): when the daily overdue cron
+      // blacklists a client, this MUST actually block new invoices —
+      // otherwise the GM-escalation email lies. Codex review on PR #3012.
+      // Override is available via PATCH /clients/:id (admin) which lifts
+      // the flag once the GM decides to accept the risk or the client pays.
+      if (client?.isBlacklisted === true) {
+        throw new ForbiddenError(
+          `العميل ${clientName || `#${clientId}`} محظور بسبب فواتير متأخرة. لا يمكن إصدار فاتورة جديدة قبل تحصيل المستحقات أو رفع الحظر من قِبَل المدير العام.`,
+          { field: "clientId", fix: "حصّل المستحقات المتأخرة أو اطلب من المدير العام رفع الحظر من ملف العميل." }
+        );
+      }
     }
 
     const subtotal = (Array.isArray(lines) ? lines : []).reduce((sum: number, l: any) => {
