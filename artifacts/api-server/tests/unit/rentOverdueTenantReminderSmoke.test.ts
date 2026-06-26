@@ -39,7 +39,7 @@ const SRC = readFileSync(
   "utf8",
 );
 const MIG = readFileSync(
-  join(import.meta.dirname!, "..", "..", "src", "migrations", "421_seed_rent_overdue_day1_template.sql"),
+  join(import.meta.dirname!, "..", "..", "src", "migrations", "423_seed_rent_overdue_day1_template.sql"),
   "utf8",
 );
 
@@ -51,14 +51,14 @@ function section(marker: string, len = 12000): string {
 describe("Rent overdue → tenant SMS reminder on day 1 (spec ملف 05)", () => {
   const cron = section("async function monthlyRentPenalties");
 
-  it("migration 421 seeds property.rent.overdue.day1 in sms + email + whatsapp (ar + en)", () => {
+  it("migration 423 seeds property.rent.overdue.day1 in sms + email + whatsapp (ar + en)", () => {
     // 3 channels × 2 languages = 6 INSERT tuples.
     const count = MIG.split("'property.rent.overdue.day1'").length - 1;
     expect(count).toBeGreaterThanOrEqual(6);
     expect(MIG).toContain("WHERE NOT EXISTS"); // idempotent
   });
 
-  it("migration 421 seeds as GLOBAL default (companyId IS NULL) so future companies inherit it", () => {
+  it("migration 423 seeds as GLOBAL default (companyId IS NULL) so future companies inherit it", () => {
     // Codex P2: per-existing-company seeding would leave companies created
     // by bootstrapCompany (settings.ts:897) with blank rent reminders.
     // Global row is matched by getTemplate's

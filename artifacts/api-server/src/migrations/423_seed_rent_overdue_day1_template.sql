@@ -1,5 +1,5 @@
 -- ===========================================================================
--- 421_seed_rent_overdue_day1_template.sql
+-- 423_seed_rent_overdue_day1_template.sql
 -- ---------------------------------------------------------------------------
 -- WHAT:    seed property.rent.overdue.day1 template — a tenant-facing
 --          reminder sent on the FIRST day a rent payment goes overdue,
