@@ -42,11 +42,12 @@ import { CheckSquare, BookOpen } from "lucide-react";
 import {
   DetailPageLayout,
   EntityComments,
+  EntityDocuments,
+  PROPERTY_ATTACHMENT_CATEGORIES,
 } from "@workspace/entity-kit";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { PrintButton } from "@/components/shared/print-button";
-import { EntityAttachmentPanel } from "@/components/shared/entity-attachment-panel";
 import { PropertyAlertsPanel, buildUnitAlerts } from "@/components/shared/property-alerts-panel";
 
 const TABS = [
@@ -718,11 +719,14 @@ export default function UnitDetail() {
       {activeTab === "attachments" && id && (
         <Card className="border-0 shadow-sm">
           <CardContent className="p-5">
-            <EntityAttachmentPanel
+            <EntityDocuments
               entityType="property_unit"
               entityId={Number(id)}
-              label="مرفقات الوحدة"
+              title="مرفقات الوحدة"
+              categories={PROPERTY_ATTACHMENT_CATEGORIES}
               defaultCategory="unit_photo_before"
+              quickUpload
+              viewMode="grid"
             />
           </CardContent>
         </Card>

@@ -44,6 +44,7 @@ export {
 // ─── Documents ────────────────────────────────────────────────────────
 export {
   EntityDocuments,
+  PROPERTY_ATTACHMENT_CATEGORIES,
 } from "../../../artifacts/ghayth-erp/src/components/shared/entity-documents";
 
 // ─── Inline edit / delete helpers ─────────────────────────────────────
