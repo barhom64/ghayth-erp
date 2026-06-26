@@ -25,7 +25,7 @@ const SRC = readFileSync(
   "utf8",
 );
 
-function section(marker: string, len = 4000): string {
+function section(marker: string, len = 7000): string {
   const idx = SRC.indexOf(marker);
   return idx === -1 ? "" : SRC.slice(idx, idx + len);
 }
@@ -71,5 +71,40 @@ describe("Invoice overdue → client SMS/email reminders (spec ملف 03)", () =
   it("internal broadcastAlert path is preserved (no regression)", () => {
     expect(cron).toContain('broadcastAlert');
     expect(cron).toContain('"invoice_overdue"');
+  });
+
+  it("constrains client reminders to email + sms (NOT in_app — would fan out to all employees)", () => {
+    // CRITICAL: dispatchNotification without explicit channels reads the
+    // routing rule which adds in_app, and in_app without assignmentId/
+    // targetRole fans out to up to 100 active employees per
+    // resolveInAppRecipients. For a client-facing dunning message this
+    // would (a) leak the client's outstanding balance internally and
+    // (b) hit every employee with a malformed message. We pass
+    // channels explicitly. Codex review on PR #3010 caught this.
+    expect(cron).toContain('clientChannels: ("email" | "sms")[]');
+    expect(cron).toMatch(/clientChannels\.push\("email"\)/);
+    expect(cron).toMatch(/clientChannels\.push\("sms"\)/);
+    expect(cron).toContain('channels: clientChannels');
+  });
+
+  it("SELECT still picks up the invoice after day-1 flipped its status to overdue (day-7 reminder reachable)", () => {
+    // CRITICAL: day-1 phase flips invoices to status='overdue'. The
+    // earlier SELECT excluded status='overdue', so the day-7 reminder
+    // would never be reachable in the normal daily-cron path — the
+    // invoice would be filtered out on day 7. Codex review on PR #3010
+    // caught this. Fix: only paid/cancelled excluded.
+    expect(cron).toMatch(/i\.status NOT IN\s*\(\s*'paid'\s*,\s*'cancelled'\s*\)/);
+    // Belt-and-suspenders: make sure we didn't accidentally re-add 'overdue'
+    // to the exclusion list.
+    expect(cron).not.toMatch(/NOT IN\s*\([^)]*'overdue'/);
+  });
+
+  it("safely skips clients without contact details (no infinite warn loop)", () => {
+    // When the client has neither an email nor a phone we cannot deliver
+    // anything — we log once at info level and move on instead of calling
+    // dispatchNotification with no channels (which would either no-op
+    // silently or, in some configs, fall back to in_app fan-out).
+    expect(cron).toContain('!clientEmail && !clientPhone');
+    expect(cron).toContain('no contact for inv');
   });
 });

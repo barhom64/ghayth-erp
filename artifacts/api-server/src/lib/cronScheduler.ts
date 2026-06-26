@@ -1217,6 +1217,9 @@ async function dailyInvoiceOverdueEscalation(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let actions = 0;
   for (const company of companies) {
+    // Include status='overdue' too — day-1 flips an invoice to 'overdue', so
+    // excluding it here would silently skip the day-7 reminder when the cron
+    // ran normally on day 1. Only paid/cancelled invoices are excluded.
     const invoices = await rawQuery<Record<string, unknown>>(
       `SELECT i.id, i.ref, i."clientId", i.total, i."paidAmount", i."dueDate",
               c.name AS "clientName", c.phone AS "clientPhone", c.email AS "clientEmail",
@@ -1224,7 +1227,7 @@ async function dailyInvoiceOverdueEscalation(): Promise<string> {
               i.status
        FROM invoices i
        LEFT JOIN clients c ON c.id = i."clientId"
-       WHERE i."companyId" = $1 AND i.status NOT IN ('paid','cancelled','overdue')
+       WHERE i."companyId" = $1 AND i.status NOT IN ('paid','cancelled')
          AND i."dueDate" < CURRENT_DATE`,
       [company.id]
     );
@@ -1266,30 +1269,52 @@ async function dailyInvoiceOverdueEscalation(): Promise<string> {
       // أعلاه). تقطعنا الإشعار عند هذين اليومين فقط في هذه الشريحة (Slice 1
       // of the overdue activation plan). المراحل 21/30/60 — التصعيدات
       // الداخلية + الحظر + churn — تأتي في شريحة منفصلة لأنها قرارات أعمال.
+      //
+      // CHANNEL DISCIPLINE — CRITICAL: we pass `channels` EXPLICITLY here
+      // because the default `invoice` routing rule resolves to
+      // ["in_app","email"], and in_app without an assignmentId/targetRole
+      // fans out to up to 100 ACTIVE employees in the tenant (see
+      // notificationDispatch.resolveInAppRecipients). For a CLIENT-facing
+      // dunning reminder that would (a) leak the client's outstanding
+      // balance internally and (b) hit every employee with a malformed
+      // "you have an overdue invoice" message. We keep client reminders to
+      // email + sms ONLY and target the client by their own contact
+      // details. The accountant's in_app awareness is preserved through
+      // the broadcastAlert call above.
       if (days === 1 || days === 7) {
-        try {
-          const outstanding = Number(inv.total ?? 0) - Number(inv.paidAmount ?? 0);
-          await dispatchNotification({
-            companyId: company.id,
-            eventCategory: "invoice.overdue",
-            title: "",
-            body: "",
-            templateKey: "invoice.overdue",
-            templateVars: {
-              invoiceRef: String(inv.ref ?? ""),
-              days: String(days),
-              amount: outstanding.toFixed(2),
-            },
-            recipientEmail: (inv.clientEmail as string | null) ?? undefined,
-            recipientPhone: (inv.clientPhone as string | null) ?? undefined,
-            recipientName: (inv.clientName as string | null) ?? undefined,
-            clientId: inv.clientId as number,
-            refType: "invoice",
-            refId: inv.id as number,
-            priority: "high",
-          });
-        } catch (e) {
-          logger.warn(e, `[cronScheduler] client invoice-overdue notification failed (inv=${inv.id})`);
+        const clientEmail = (inv.clientEmail as string | null) ?? null;
+        const clientPhone = (inv.clientPhone as string | null) ?? null;
+        if (!clientEmail && !clientPhone) {
+          logger.info(`[cronScheduler] client invoice-overdue: no contact for inv=${inv.id} — skipped`);
+        } else {
+          const clientChannels: ("email" | "sms")[] = [];
+          if (clientEmail) clientChannels.push("email");
+          if (clientPhone) clientChannels.push("sms");
+          try {
+            const outstanding = Number(inv.total ?? 0) - Number(inv.paidAmount ?? 0);
+            await dispatchNotification({
+              companyId: company.id,
+              eventCategory: "invoice.overdue",
+              title: "",
+              body: "",
+              channels: clientChannels,
+              templateKey: "invoice.overdue",
+              templateVars: {
+                invoiceRef: String(inv.ref ?? ""),
+                days: String(days),
+                amount: outstanding.toFixed(2),
+              },
+              recipientEmail: clientEmail ?? undefined,
+              recipientPhone: clientPhone ?? undefined,
+              recipientName: (inv.clientName as string | null) ?? undefined,
+              clientId: inv.clientId as number,
+              refType: "invoice",
+              refId: inv.id as number,
+              priority: "high",
+            });
+          } catch (e) {
+            logger.warn(e, `[cronScheduler] client invoice-overdue notification failed (inv=${inv.id})`);
+          }
         }
       }
 
