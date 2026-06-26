@@ -10,6 +10,10 @@
 --   financial_attachments     — مرفق لكل مستند و«لكل بند» عبر lineId. اليوم
 --     المرفق رابط مفرد على المستند فقط (فجوة موثّقة في الكود:
 --     expenses-create.tsx «needs a future financial_attachments table»).
+--   financial_line_allocations — توزيع البند الواحد على أكثر من كيان تشغيلي
+--     (مثل: صيانة ٩٬٠٠٠ على ٣ مركبات ٣٬٠٠٠ لكلٍّ). بدونه يُجبَر المستخدم على
+--     تجزئة السطر يدويًا — ضد التوجيه الذكي. allocationType: amount/percent/
+--     quantity، مع costBearer لكل جزء (تفريع حوكمي — الدستور).
 --
 -- DESIGN: additive + idempotent. الربط بالمستند polymorphic
 --   (documentKind ∈ voucher|expense + documentId) — لا FK صلب على documentId
@@ -24,6 +28,7 @@
 -- @rollback:
 --   BEGIN;
 --     DROP TABLE IF EXISTS financial_attachments;
+--     DROP TABLE IF EXISTS financial_line_allocations;
 --     DROP TABLE IF EXISTS financial_document_lines;
 --   COMMIT;
 
@@ -56,7 +61,32 @@ CREATE INDEX IF NOT EXISTS idx_fin_doc_lines_doc
 CREATE INDEX IF NOT EXISTS idx_fin_doc_lines_company
   ON financial_document_lines ("companyId", "branchId");
 
--- 2) مرفقات المستند المالي (مستوى المستند + مستوى البند عبر lineId)
+-- 2) توزيع البند الواحد على أكثر من كيان تشغيلي (تقسيم بالمبلغ/النسبة/الكمية)
+CREATE TABLE IF NOT EXISTS financial_line_allocations (
+  id                BIGSERIAL PRIMARY KEY,
+  "companyId"       INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  "branchId"        INTEGER,
+  "lineId"          BIGINT NOT NULL REFERENCES financial_document_lines(id) ON DELETE CASCADE,
+  "entityType"      VARCHAR(40) NOT NULL,          -- vehicle/employee/property/project/case…
+  "entityId"        INTEGER NOT NULL,
+  "allocationType"  VARCHAR(20) NOT NULL DEFAULT 'amount'
+                      CHECK ("allocationType" IN ('amount', 'percent', 'quantity')),
+  "amount"          NUMERIC(14,2),                 -- يُملأ حسب allocationType
+  "percent"         NUMERIC(7,4),
+  "quantity"        NUMERIC(14,3),
+  "costBearer"      VARCHAR(40),                   -- تفريع حوكمي لكل جزء (الدستور)
+  "reason"          TEXT,
+  "createdAt"       TIMESTAMP NOT NULL DEFAULT NOW(),
+  "updatedAt"       TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_fin_line_alloc_line
+  ON financial_line_allocations ("lineId");
+CREATE INDEX IF NOT EXISTS idx_fin_line_alloc_entity
+  ON financial_line_allocations ("entityType", "entityId");
+CREATE INDEX IF NOT EXISTS idx_fin_line_alloc_company
+  ON financial_line_allocations ("companyId", "branchId");
+
+-- 3) مرفقات المستند المالي (مستوى المستند + مستوى البند عبر lineId)
 CREATE TABLE IF NOT EXISTS financial_attachments (
   id              BIGSERIAL PRIMARY KEY,
   "companyId"     INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
