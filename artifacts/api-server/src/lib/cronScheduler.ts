@@ -54,6 +54,7 @@ import { decryptSecret } from "./secrets.js";
 import { processDueRecurringJournals } from "./recurringJournalProcessor.js";
 import { processDueAmortizations } from "./engines/prepaidAmortizationEngine.js";
 import { processDueRecognitions } from "./engines/deferredRevenueEngine.js";
+import { overstayPenaltyAmount } from "./umrahPenaltyMath.js";
 import {
   assetDepreciationProfile, type DepreciationAssetRow,
   eosAccrualProfile, leaveAccrualProfile,
@@ -3403,6 +3404,90 @@ async function monthlyBadDebtReminder(): Promise<string> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// monthlyFxRevaluationCompute — أتمتة حساب إعادة تقييم العملات وإدراجها في طابور
+// الترحيل (لا ترحيل GL تلقائي — البشر يراجعون ويرحّلون من gl-posting-queue). يحلّ
+// آخر فجوة «بشر يتذكّرون» في جدول المواصفة: المسار المباشر/الطابور كان يدويًّا.
+//
+// السلامة الدفترية:
+//   • **لا ترحيل GL** — يكتب fx_revaluation_log/_lines بـjournalEntryId NULL فقط
+//     (يحسب + يُدرج الطابور)؛ الترحيل الفعلي يبقى بيد الإنسان عبر الطابور.
+//   • idempotent عبر حارسَي الازدواج نفسيهما اللذين يستعملهما المسار اليدوي
+//     (compute endpoint): صف fx_revaluations مُرحَّل للفترة → تخطٍّ؛ سجل طابور
+//     غير مُرحَّل للفترة → تخطٍّ.
+//   • بوابة الفترة + وجود الفترة المالية (FK) + وجود تعرّض عملات أجنبية — وإلا تخطٍّ.
+//   • runPeriodEndRevaluation داخل withTransaction (ذرّي).
+// ─────────────────────────────────────────────────────────────────────────────
+async function monthlyFxRevaluationCompute(): Promise<string> {
+  const period = currentPeriod();
+  const [y, m] = period.split("-").map(Number);
+  const periodEnd = toDateISO(new Date(y, m, 0)); // آخر يوم في الشهر = asOfDate
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE status='active'`);
+  const { runPeriodEndRevaluation } = await import("./fx/revaluation.js");
+  let computed = 0;
+  let skipped = 0;
+
+  for (const c of companies) {
+    try {
+      // تعرّض عملات أجنبية مفتوح؟ (نفس فحص التذكير) — وإلا لا شيء لإعادة تقييمه.
+      const [fxExposure] = await rawQuery<{ n: number }>(
+        `SELECT COUNT(*)::int AS n FROM invoices
+          WHERE "companyId"=$1 AND currency IS NOT NULL AND currency<>'SAR' AND status NOT IN ('paid','cancelled')`,
+        [c.id],
+      ).catch(() => [{ n: 0 }]);
+      if (!fxExposure || fxExposure.n === 0) { skipped++; continue; }
+
+      // الفترة مفتوحة + معرّفة (runPeriodEndRevaluation يطلب periodId FK).
+      const periodCheck = await checkFinancialPeriodOpen(Number(c.id), periodEnd);
+      if (!periodCheck.open) { skipped++; continue; }
+      const [finPeriod] = await rawQuery<{ id: number }>(
+        `SELECT id FROM financial_periods
+          WHERE "companyId"=$1 AND "deletedAt" IS NULL
+            AND "startDate" <= $2::date AND "endDate" >= $2::date
+          ORDER BY id ASC LIMIT 1`,
+        [c.id, periodEnd],
+      );
+      if (!finPeriod) { skipped++; continue; }
+
+      // حارس الازدواج (1): رُحّلت مباشرةً للفترة؟
+      const [postedDirect] = await rawQuery<{ id: number }>(
+        `SELECT id FROM fx_revaluations WHERE "companyId"=$1 AND period=$2 LIMIT 1`,
+        [c.id, period],
+      ).catch(() => []);
+      if (postedDirect) { skipped++; continue; }
+      // حارس الازدواج (2): محسوبة في الطابور سلفًا (سجل غير مُرحَّل)؟
+      const [pendingQueue] = await rawQuery<{ id: number }>(
+        `SELECT id FROM fx_revaluation_log
+          WHERE "companyId"=$1 AND to_char("asOfDate",'YYYY-MM')=$2 AND "journalEntryId" IS NULL LIMIT 1`,
+        [c.id, period],
+      ).catch(() => []);
+      if (pendingQueue) { skipped++; continue; }
+
+      const [sysUser] = await rawQuery<{ id: number }>(
+        `SELECT ea.id FROM employee_assignments ea
+          WHERE ea."companyId"=$1 AND ea.role IN ('finance_manager','general_manager','owner') AND ea.status='active'
+          ORDER BY ea.role='owner' DESC LIMIT 1`,
+        [c.id],
+      );
+      const ranBy = sysUser?.id != null ? Number(sysUser.id) : undefined;
+
+      const result = await runPeriodEndRevaluation({
+        companyId: Number(c.id), periodId: Number(finPeriod.id), asOfDate: periodEnd, ranBy,
+      });
+
+      await createAuditLog({
+        companyId: Number(c.id), userId: ranBy ?? 0,
+        action: "fx_revaluation.compute.cron", entity: "fx_revaluation_log", entityId: Number(result.revaluationLogId),
+        after: { period, periodEnd, totalGain: result.totalGain, totalLoss: result.totalLoss, source: "cron" },
+      }).catch((e) => logger.error(e, "[CRON] FX revaluation compute audit failed"));
+      computed++;
+    } catch (err) {
+      logger.error(err, `[CRON] monthlyFxRevaluationCompute failed for company ${c.id}:`);
+    }
+  }
+  return `FX revaluation auto-compute: ${computed} queued, ${skipped} skipped`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // MONTHLY FX REVALUATION REMINDER (Track C.3)
 // ─────────────────────────────────────────────────────────────────────────────
 async function monthlyFxRevaluationReminder(): Promise<string> {
@@ -3593,17 +3678,16 @@ async function umrahDailyOverstayScan(): Promise<string> {
     for (const row of penaltySettings) {
       penaltyByKey[row.key] = Number(row.value ?? 0);
     }
-    const perDay = penaltyByKey["umrah.overstay_daily_penalty"] ?? 0;
-    const tierDays = penaltyByKey["umrah.overstay_tier_days"] ?? 0;
-    const tierAmount = penaltyByKey["umrah.overstay_tier_amount"] ?? 0;
-    const useTiered = tierDays > 0 && tierAmount > 0;
+    const overstayCfg = {
+      perDay: penaltyByKey["umrah.overstay_daily_penalty"] ?? 0,
+      tierDays: penaltyByKey["umrah.overstay_tier_days"] ?? 0,
+      tierAmount: penaltyByKey["umrah.overstay_tier_amount"] ?? 0,
+    };
     for (const o of overstayed) {
-      const overDays = Math.max(0, Number(o.overDays) || 0);
-      // Tiered: ceil(overDays / tierDays) × tierAmount. Per-day fallback
-      // matches the pre-PR behaviour exactly.
-      const penalty = useTiered
-        ? Math.ceil(overDays / tierDays) * tierAmount
-        : overDays * perDay;
+      // ceil(overDays / tierDays) × tierAmount when tiered, else overDays ×
+      // perDay. Shared with the mutamers import (umrahPenaltyMath) so both
+      // billing paths compute the IDENTICAL invoiced penalty.
+      const penalty = overstayPenaltyAmount(o.overDays, overstayCfg);
       await rawExecute(
         `INSERT INTO umrah_violations ("companyId","branchId",type,"referenceType","referenceNumber",
           "mutamerId","groupId","subAgentId","penaltyAmount",status,description,"createdAt","updatedAt")
@@ -5035,6 +5119,7 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "hourly_obligations_scan", description: "فحص الالتزامات — ترقية المتأخرات وتصعيد المهام", schedule: "15 * * * *", handler: hourlyObligationsScan },
   { name: "daily_dunning_auto_send", description: "إرسال تلقائي لخطابات التحصيل حسب المرحلة", schedule: "0 9 * * *", handler: dailyDunningAutoSend },
   { name: "monthly_bad_debt_reminder", description: "تذكير CFO باحتساب مخصص الديون المشكوك فيها", schedule: "0 9 1 * *", handler: monthlyBadDebtReminder },
+  { name: "monthly_fx_revaluation_compute", description: "حساب إعادة تقييم العملات تلقائيًّا وإدراجها في طابور الترحيل (لا ترحيل GL تلقائي — idempotent) قبل تذكير CFO", schedule: "0 8 28 * *", handler: monthlyFxRevaluationCompute },
   { name: "monthly_fx_revaluation_reminder", description: "تذكير CFO بترحيل إعادة تقييم العملات", schedule: "0 9 28 * *", handler: monthlyFxRevaluationReminder },
   { name: "daily_budget_variance_alert", description: "تنبيه تجاوز الميزانية اليومي", schedule: "0 10 * * *", handler: dailyBudgetVarianceAlert },
   { name: "rate_limit_fallback_alert", description: "تنبيه عند انتقال حدود الطلبات إلى الذاكرة المحلية (Redis fallback)", schedule: "*/2 * * * *", handler: rateLimitFallbackAlertCheck },

@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FormFieldWrapper } from "@/components/shared/form-field-wrapper";
-import { AccountSelect, CostCenterSelect, VehicleSelect, ProjectSelect, EmployeeSelect, ClientSelect, VendorSelect, DriverSelect } from "@/components/shared/entity-selects";
+import { AccountSelect, CostCenterSelect, VehicleSelect, ProjectSelect, EmployeeSelect, ClientSelect, VendorSelect, DriverSelect, BuildingSelect, UnitSelect, DepartmentSelect, UmrahSeasonSelect, UmrahAgentSelect } from "@/components/shared/entity-selects";
+import { ProductSelect } from "@/components/shared/product-select";
+import { useApiQuery } from "@/lib/api";
 import { ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, Pencil } from "lucide-react";
 
 /**
@@ -80,6 +81,12 @@ export function LineAllocationPanel({
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const set = (field: keyof LineAllocation, v: any) => onChange({ ...value, [field]: v });
+
+  // بيانات مرجعية كسولة للبُعدين بلا entity-select مخصّص (العقد / الأصل الثابت).
+  // تُجلب فقط عند فتح اللوحة، ومن نفس endpoints التي يستهلكها AllocationTargetSelect
+  // كي تعرض الواجهتان الصفوف ذاتها (مصدر بيانات واحد).
+  const { data: contractsData } = useApiQuery<{ data: any[] }>(["contracts-list"], "/properties/contracts", expanded);
+  const { data: assetsData } = useApiQuery<{ data: any[] }>(["fixed-assets"], "/finance/fixed-assets", expanded);
 
   const badge = STATUS_BADGE[status];
   const hasAccount = !!value.accountCode;
@@ -156,23 +163,19 @@ export function LineAllocationPanel({
             allowCreate={false}
           />
 
-          <FormFieldWrapper label="العقار (ID)">
-            <Input
-              type="number" dir="ltr"
-              value={value.propertyId ?? ""}
-              onChange={(e) => set("propertyId", e.target.value)}
-              placeholder="propertyId"
-            />
-          </FormFieldWrapper>
+          <BuildingSelect
+            value={value.propertyId ?? ""}
+            onChange={(v) => set("propertyId", v)}
+            label="العقار"
+            allowCreate={false}
+          />
 
-          <FormFieldWrapper label="الوحدة (ID)">
-            <Input
-              type="number" dir="ltr"
-              value={value.unitId ?? ""}
-              onChange={(e) => set("unitId", e.target.value)}
-              placeholder="unitId"
-            />
-          </FormFieldWrapper>
+          <UnitSelect
+            value={value.unitId ?? ""}
+            onChange={(v) => set("unitId", v)}
+            label="الوحدة"
+            allowCreate={false}
+          />
 
           <ProjectSelect
             value={value.projectId ?? ""}
@@ -181,22 +184,28 @@ export function LineAllocationPanel({
             allowCreate={false}
           />
 
-          <FormFieldWrapper label="العقد (ID)">
-            <Input
-              type="number" dir="ltr"
-              value={value.contractId ?? ""}
-              onChange={(e) => set("contractId", e.target.value)}
-              placeholder="contractId"
-            />
+          <FormFieldWrapper label="العقد">
+            <Select value={value.contractId ?? "_none"} onValueChange={(v) => set("contractId", v === "_none" ? undefined : v)}>
+              <SelectTrigger><SelectValue placeholder="اختر العقد" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none">— بدون —</SelectItem>
+                {(contractsData?.data ?? []).map((c: any) => (
+                  <SelectItem key={c.id} value={String(c.id)}>{c.tenantName ?? `عقد #${c.id}`}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </FormFieldWrapper>
 
-          <FormFieldWrapper label="الأصل الثابت (ID)">
-            <Input
-              type="number" dir="ltr"
-              value={value.assetId ?? ""}
-              onChange={(e) => set("assetId", e.target.value)}
-              placeholder="assetId"
-            />
+          <FormFieldWrapper label="الأصل الثابت">
+            <Select value={value.assetId ?? "_none"} onValueChange={(v) => set("assetId", v === "_none" ? undefined : v)}>
+              <SelectTrigger><SelectValue placeholder="اختر الأصل" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none">— بدون —</SelectItem>
+                {(assetsData?.data ?? []).map((a: any) => (
+                  <SelectItem key={a.id} value={String(a.id)}>{a.name ?? `أصل #${a.id}`}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </FormFieldWrapper>
 
           <EmployeeSelect
@@ -213,21 +222,17 @@ export function LineAllocationPanel({
             allowCreate={false}
           />
 
-          <FormFieldWrapper label="القسم (ID)">
-            <Input
-              type="number" dir="ltr"
-              value={value.departmentId ?? ""}
-              onChange={(e) => set("departmentId", e.target.value)}
-              placeholder="departmentId"
-            />
-          </FormFieldWrapper>
+          <DepartmentSelect
+            value={value.departmentId ?? ""}
+            onChange={(v) => set("departmentId", v)}
+            label="القسم"
+            allowCreate={false}
+          />
 
-          <FormFieldWrapper label="المنتج (ID)">
-            <Input
-              type="number" dir="ltr"
+          <FormFieldWrapper label="المنتج">
+            <ProductSelect
               value={value.productId ?? ""}
-              onChange={(e) => set("productId", e.target.value)}
-              placeholder="productId"
+              onChange={(v) => set("productId", v)}
             />
           </FormFieldWrapper>
 
@@ -245,23 +250,19 @@ export function LineAllocationPanel({
             allowCreate={false}
           />
 
-          <FormFieldWrapper label="موسم العمرة (ID)">
-            <Input
-              type="number" dir="ltr"
-              value={value.umrahSeasonId ?? ""}
-              onChange={(e) => set("umrahSeasonId", e.target.value)}
-              placeholder="umrahSeasonId"
-            />
-          </FormFieldWrapper>
+          <UmrahSeasonSelect
+            value={value.umrahSeasonId ?? ""}
+            onChange={(v) => set("umrahSeasonId", v)}
+            label="موسم العمرة"
+            allowCreate={false}
+          />
 
-          <FormFieldWrapper label="وكيل العمرة (ID)">
-            <Input
-              type="number" dir="ltr"
-              value={value.umrahAgentId ?? ""}
-              onChange={(e) => set("umrahAgentId", e.target.value)}
-              placeholder="umrahAgentId"
-            />
-          </FormFieldWrapper>
+          <UmrahAgentSelect
+            value={value.umrahAgentId ?? ""}
+            onChange={(v) => set("umrahAgentId", v)}
+            label="وكيل العمرة"
+            allowCreate={false}
+          />
 
           {status === "manual_override" && (
             <div className="md:col-span-3">

@@ -5,6 +5,9 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
+import { z } from "zod";
+import { useApiMutation } from "@/lib/api";
+import { FormShell, FormTextField } from "@workspace/ui-core";
 
 /**
  * The contract every embedded create form fulfils so it can be hosted inside
@@ -17,6 +20,23 @@ export interface EmbeddedCreateFormProps {
   onCreated: (created: any) => void;
   /** Called when the operator cancels (إلغاء). */
   onCancel: () => void;
+}
+
+/** Field descriptor for the generic (field-driven) create form — the unified
+ *  successor to the retired QuickCreateDialog, for entities without a
+ *  registered full form. */
+export interface GenericCreateField {
+  key: string;
+  label: string;
+  required?: boolean;
+  type?: string;
+}
+/** Config for the generic create form, hosted inside the SAME unified drawer. */
+export interface GenericCreateConfig {
+  title: string;
+  fields: GenericCreateField[];
+  apiPath: string;
+  invalidateKey: string;
 }
 
 /**
@@ -135,9 +155,66 @@ const ENTITY_CREATE_FORMS: Record<EntityKind, RegistryEntry> = {
   },
 };
 
+/**
+ * Generic field-driven create form (absorbs the retired QuickCreateDialog):
+ * same FormShell + zod-from-fields + mutation, but hosted inside the unified
+ * drawer so there is ONE create surface (دستور §15/§5). Fulfils the same
+ * EmbeddedCreateFormProps contract as the registered forms.
+ */
+function GenericCreateForm({
+  config,
+  onCreated,
+  onCancel,
+}: { config: GenericCreateConfig } & EmbeddedCreateFormProps) {
+  const { toast } = useToast();
+  const createMut = useApiMutation<unknown, Record<string, any>>(config.apiPath, "POST", [[config.invalidateKey]]);
+  const schemaShape: Record<string, z.ZodString> = {};
+  const defaults: Record<string, string> = {};
+  for (const f of config.fields) {
+    const s = z.string().trim();
+    schemaShape[f.key] = f.required ? s.min(1, "مطلوب") : s;
+    defaults[f.key] = "";
+  }
+  const schema = z.object(schemaShape);
+  return (
+    <FormShell
+      schema={schema as unknown as z.ZodType<Record<string, string>>}
+      defaultValues={defaults}
+      submitLabel={createMut.isPending ? "جاري الإنشاء..." : "إنشاء"}
+      secondaryActions={
+        <Button type="button" variant="outline" onClick={onCancel}>إلغاء</Button>
+      }
+      onSubmit={(values) => {
+        // #2134 — drop untouched optional fields instead of sending "".
+        const payload = Object.fromEntries(
+          Object.entries(values).filter(([, v]) => String(v ?? "").trim() !== ""),
+        );
+        createMut.mutate(payload, {
+          onSuccess: (data: any) => onCreated(data),
+          onError: (err: any) =>
+            toast({ variant: "destructive", title: "خطأ في الإنشاء", description: err?.fix ?? err?.message }),
+        });
+      }}
+    >
+      {config.fields.map((field) => (
+        <FormTextField
+          key={field.key}
+          name={field.key}
+          label={field.label}
+          required={field.required}
+          type={field.type as any}
+          placeholder={field.label}
+        />
+      ))}
+    </FormShell>
+  );
+}
+
 export interface AllowCreateDrawerProps {
-  /** Which registered entity to create. */
-  kind: EntityKind;
+  /** Registered entity to create with its FULL form. Omit when using genericConfig. */
+  kind?: EntityKind;
+  /** Generic field-driven create for entities without a registered full form. */
+  genericConfig?: GenericCreateConfig;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Bubbles the created row up; the drawer closes itself afterwards. */
@@ -153,15 +230,24 @@ export interface AllowCreateDrawerProps {
  * Generalised "create-in-drawer" host. When a selector's "+ جديد" action
  * fires, this opens a Sheet that mounts the FULL unified create form for the
  * chosen entity; on save it returns the new row to the parent (which selects
- * it) and closes. Replaces the truncated `QuickCreateDialog` selector by
- * selector — see docs/finance/FINANCE_PRODUCTSELECT_AND_ALLOWCREATE_DRAWER_PLAN.md.
+ * it) and closes. Hosts either a registered full form (by `kind`) or a generic
+ * field-driven form (`genericConfig`); the truncated `QuickCreateDialog` is
+ * retired — see docs/finance/FINANCE_PRODUCTSELECT_AND_ALLOWCREATE_DRAWER_PLAN.md.
  */
-export function AllowCreateDrawer({ kind, open, onOpenChange, onCreated, contextLabel }: AllowCreateDrawerProps) {
-  const entry = ENTITY_CREATE_FORMS[kind];
+export function AllowCreateDrawer({ kind, genericConfig, open, onOpenChange, onCreated, contextLabel }: AllowCreateDrawerProps) {
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  if (!entry) return null;
-  const { title, Form, fullPagePath } = entry;
+  const entry = kind ? ENTITY_CREATE_FORMS[kind] : undefined;
+  if (!entry && !genericConfig) return null;
+  const title = entry?.title ?? genericConfig!.title;
+  const fullPagePath = entry?.fullPagePath;
+  const Form = entry?.Form;
+  const handleCreated = (created: any) => {
+    toast({ title: "تم الإنشاء", description: "تم إنشاء السجل وتحديده في الحقل." });
+    onCreated(created);
+    onOpenChange(false);
+  };
+  const handleCancel = () => onOpenChange(false);
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="left" className="w-full sm:max-w-2xl overflow-y-auto">
@@ -189,16 +275,13 @@ export function AllowCreateDrawer({ kind, open, onOpenChange, onCreated, context
           </div>
         </SheetHeader>
         {open && (
-          <Suspense fallback={<LoadingSpinner />}>
-            <Form
-              onCreated={(created) => {
-                toast({ title: "تم الإنشاء", description: "تم إنشاء السجل وتحديده في الحقل." });
-                onCreated(created);
-                onOpenChange(false);
-              }}
-              onCancel={() => onOpenChange(false)}
-            />
-          </Suspense>
+          Form ? (
+            <Suspense fallback={<LoadingSpinner />}>
+              <Form onCreated={handleCreated} onCancel={handleCancel} />
+            </Suspense>
+          ) : (
+            <GenericCreateForm config={genericConfig!} onCreated={handleCreated} onCancel={handleCancel} />
+          )
         )}
       </SheetContent>
     </Sheet>
