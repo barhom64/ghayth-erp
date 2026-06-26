@@ -189,6 +189,18 @@ run_step "check:jsx-generic-component" node scripts/src/check-jsx-generic-compon
 # `type Attachment` import alone is allowed. Pure-logic tests.
 run_step "check:canonical-component-pairs:tests" node scripts/src/check-canonical-component-pairs.test.mjs
 run_step "check:canonical-component-pairs" node scripts/src/check-canonical-component-pairs.mjs
+# Component hygiene — detect duplicate / unrelated components system-wide
+# («علم وجود مكوّنات مكرّرة أو ليست ذات علاقة»). Baseline mode: current state
+# frozen in scripts/*-allowlist.txt (the awareness report); fails only on a NEW
+# offender. Pure-logic fixtures guard each detector.
+#   • duplicate-component-content — two differently-named .tsx with identical
+#     normalized body (copy-paste the dup-filenames guard misses).
+#   • dead-components — a component .tsx no file imports (orphan/dead); counts
+#     re-exports from lib/* kit facades so live components aren't false-flagged.
+run_step "check:duplicate-component-content:tests" node scripts/src/check-duplicate-component-content.test.mjs
+run_step "check:duplicate-component-content" node scripts/src/check-duplicate-component-content.mjs
+run_step "check:dead-components:tests" node scripts/src/check-dead-components.test.mjs
+run_step "check:dead-components" node scripts/src/check-dead-components.mjs
 # Responsive tables: a raw <table> not inside an overflow scroll container
 # clips/breaks the layout on phone widths (the 2026-06 mobile pass wrapped
 # every offender). OFFLINE source scan; empty baseline in
