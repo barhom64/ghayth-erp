@@ -230,6 +230,132 @@ function SettlementPolicyCard() {
   );
 }
 
+/**
+ * ترحيل تسوية الضريبة لفترة — معاينة القيد المقترح (GET /tax-settlement/preview)
+ * ثم ترحيله للدفتر بإجراء بشري متعمّد (POST /tax-settlement/post). idempotent:
+ * إعادة الترحيل لا تنشئ قيدًا مكررًا. لا cron — التقديم قرار المستخدم.
+ */
+interface SettlementLine { accountCode: string; debit: number; credit: number }
+interface SettlementPreview {
+  period: string;
+  accounts: { output: string; input: string; settlement: string };
+  outputVat: number;
+  inputVat: number;
+  netVat: number;
+  direction: "payable" | "refundable";
+  lines: SettlementLine[];
+  ref: string;
+  alreadyPosted: boolean;
+  postedJournalId: number | null;
+}
+
+function currentMonth() {
+  return todayLocal().slice(0, 7); // YYYY-MM من توقيت الرياض
+}
+
+function SettlementPostPanel() {
+  const [period, setPeriod] = useState(currentMonth());
+  const valid = /^\d{4}-\d{2}$/.test(period);
+
+  const { data, isLoading, isError, refetch } = useApiQuery<SettlementPreview>(
+    ["tax-settlement-preview", period],
+    `/finance/tax-settlement/preview?period=${period}`,
+    { enabled: valid },
+  );
+
+  const postMut = useApiMutation<SettlementPreview, { period: string }>(
+    "/finance/tax-settlement/post",
+    "POST",
+    [["tax-settlement-preview", period]],
+    { successMessage: "تم ترحيل قيد التسوية" },
+  );
+
+  const hasMovement = !!data && data.lines.length >= 2;
+
+  return (
+    <Card className="mt-4">
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <h3 className="text-base font-semibold">ترحيل تسوية الفترة</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              معاينة قيد التسوية المقترح ثم ترحيله للدفتر — قابل للإعادة بأمان (لا تكرار)
+            </p>
+          </div>
+          <Input
+            type="month"
+            value={period}
+            onChange={(e) => setPeriod(e.target.value)}
+            className="w-40"
+          />
+        </div>
+
+        {!valid && <p className="text-xs text-destructive mt-3">صيغة الفترة YYYY-MM</p>}
+        {valid && isLoading && <p className="text-xs text-muted-foreground mt-3">جاري التحميل…</p>}
+        {valid && isError && <p className="text-xs text-destructive mt-3">تعذّر تحميل المعاينة</p>}
+
+        {data && (
+          <div className="mt-4">
+            {data.alreadyPosted ? (
+              <Badge className="bg-status-success-surface text-status-success-foreground">
+                مُرحَّل — قيد رقم {data.postedJournalId}
+              </Badge>
+            ) : hasMovement ? (
+              <>
+                <div className="grid gap-3 grid-cols-2 md:grid-cols-3 mb-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground">ضريبة المخرجات</p>
+                    <p className="text-base font-semibold">{formatCurrency(data.outputVat)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">ضريبة المدخلات</p>
+                    <p className="text-base font-semibold">{formatCurrency(data.inputVat)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">
+                      الصافي ({data.direction === "payable" ? "مستحق للهيئة" : "قابل للاسترداد"})
+                    </p>
+                    <p className={`text-base font-bold ${data.direction === "payable" ? "text-orange-600" : "text-emerald-700"}`}>
+                      {formatCurrency(Math.abs(data.netVat))}
+                    </p>
+                  </div>
+                </div>
+
+                {/* القيد المقترح */}
+                <div className="rounded-md border divide-y text-sm">
+                  <div className="grid grid-cols-3 px-3 py-1.5 text-xs text-muted-foreground bg-muted/40">
+                    <span>الحساب</span><span className="text-end">مدين</span><span className="text-end">دائن</span>
+                  </div>
+                  {data.lines.map((l, i) => (
+                    <div key={i} className="grid grid-cols-3 px-3 py-1.5 tabular-nums">
+                      <span className="font-mono">{l.accountCode}</span>
+                      <span className="text-end">{l.debit ? formatCurrency(l.debit) : "—"}</span>
+                      <span className="text-end">{l.credit ? formatCurrency(l.credit) : "—"}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex justify-end mt-4">
+                  <GuardedButton
+                    perm="finance:update"
+                    size="sm"
+                    disabled={postMut.isPending}
+                    onClick={() => postMut.mutate({ period }, { onSuccess: () => refetch() })}
+                  >
+                    {postMut.isPending ? "جاري الترحيل" : "ترحيل التسوية"}
+                  </GuardedButton>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">لا توجد حركة ضريبية في هذه الفترة للتسوية</p>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function VatReconciliationPage() {
   const [startDate, setStartDate] = useState(startOfMonthLocal());
   const [endDate, setEndDate] = useState(todayLocal());
@@ -427,6 +553,9 @@ export default function VatReconciliationPage() {
 
       {/* سياسة التسوية — قياسية قابلة للتعديل من الواجهة */}
       <SettlementPolicyCard />
+
+      {/* ترحيل تسوية الفترة — معاينة + ترحيل بشري للدفتر */}
+      <SettlementPostPanel />
     </PageShell>
   );
 }
