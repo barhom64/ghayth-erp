@@ -192,6 +192,11 @@ export default function FinancialEventCreate() {
             <button type="button" className="text-primary hover:underline" onClick={() => navigate("/finance/documents/vendor-invoice")}>
               فاتورة مشتريات ←
             </button>
+            {" · "}
+            {/* م٦ — «القيد» (الروح المحاسبية §١١.٢): قيد يومية يدوي للمحاسب. */}
+            <button type="button" className="text-primary hover:underline" onClick={() => navigate("/finance/journal/create")}>
+              قيد محاسبي ←
+            </button>
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
