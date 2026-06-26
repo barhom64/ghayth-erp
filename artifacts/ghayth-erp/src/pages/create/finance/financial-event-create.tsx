@@ -182,6 +182,14 @@ export default function FinancialEventCreate() {
             </p>
           )}
 
+          {/* م٤ — أنواع أخرى من الوقائع المالية (تمرّ على محرّكاتها القائمة). */}
+          <p className="text-xs text-muted-foreground">
+            أنواع أخرى:{" "}
+            <button type="button" className="text-primary hover:underline" onClick={() => navigate("/finance/documents/invoice")}>
+              فاتورة مبيعات ←
+            </button>
+          </p>
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <FormFieldWrapper label="التاريخ" required>
               <DatePicker value={form.date} onChange={(v) => setForm((f) => ({ ...f, date: v }))} />

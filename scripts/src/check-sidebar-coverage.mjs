@@ -111,6 +111,10 @@ const OFF_SIDEBAR_ALLOWLIST = new Set([
   // «قبض» في صفحة تسجيل الواقعة (لا من القائمة). يطبّق FIFO على فواتير العميل عبر
   // POST /finance/documents/collect (محرّك postCustomerReceipt). يُسطَّح/يُدمج عند م٨.
   "/finance/collect",
+  // فاتورة مبيعات تشغيلية (م٤): variant إنشاء يُفتح بزر من «تسجيل واقعة». نفس جدول
+  // البنود الموحّد + ربط كل بند بكيانه، يمرّ على منفذ الفاتورة القائم
+  // POST /finance/invoices (روحان لنفس السجل §١١.٢). يُسطَّح/يُدمج عند م٨.
+  "/finance/documents/invoice",
   // Settings-hub tab deep-paths: each opens a tab of /settings by URL / command
   // palette / search without adding a separate sidebar entry (the hub is one
   // page). branches/companies/departments/audit-log DO have sidebar entries; the
