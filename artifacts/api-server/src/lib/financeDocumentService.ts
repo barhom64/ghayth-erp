@@ -16,6 +16,7 @@
  * (constitution rule 3).
  */
 import { rawQuery, withTransaction } from "./rawdb.js";
+import { logger } from "./logger.js";
 import type { JournalEntryLine } from "./businessHelpers.js";
 import {
   buildDocumentPersistencePlan,
@@ -143,6 +144,38 @@ async function resolveCostBearerAccounts(
   }
 }
 
+/**
+ * م٥-ب — لكل توزيع متحمِّله ≠ الشركة: سجّل **التزامًا متابَعًا** (مطالبة استرداد)
+ * عبر obligationsEngine (docs/25 §١٠ «متابعة حتى التسوية»). يُربط بكيان التوزيع
+ * (أدقّ مرجع متاح؛ ربط طرفٍ محدّد لاحقًا حين يحمل costBearer مُعرِّف طرف). أفضل-جهد
+ * بعد ترحيل القيد (لا يُفشِل المستند المُرحَّل)، وidempotent عبر dedupeKey.
+ */
+async function registerCostBearerObligations(input: FinancialDocumentInput, journalId: number): Promise<void> {
+  const parties = input.rawLines.flatMap((line) =>
+    (line.allocations ?? [])
+      .filter((a) => a.costBearer && a.costBearer !== "company")
+      .map((a) => ({ line, a })),
+  );
+  if (parties.length === 0) return;
+  const { registerObligation } = await import("./obligationsEngine.js");
+  const due = input.postingDate ? new Date(input.postingDate) : new Date();
+  due.setDate(due.getDate() + 30); // متابعة بعد ٣٠ يومًا
+  const dueAt = due.toISOString().slice(0, 10);
+  for (const { line, a } of parties) {
+    await registerObligation({
+      companyId: input.companyId,
+      branchId: input.branchId,
+      entityType: a.entityType,
+      entityId: a.entityId,
+      obligationType: "follow_up",
+      title: `مطالبة استرداد (${a.costBearer}) على ${a.entityType}#${a.entityId} — ${input.ref}`,
+      dueAt,
+      dedupeKey: `costbearer:${input.sourceKey}:${line.lineNo}:${a.entityType}:${a.entityId}:${a.costBearer}`,
+      metadata: { journalId, costBearer: a.costBearer, ref: input.ref, reason: a.reason ?? null, documentKind: input.documentKind },
+    }).catch((e) => logger.error(e, "م٥ obligation registration failed for one allocation"));
+  }
+}
+
 export async function postFinancialDocument(
   input: FinancialDocumentInput,
 ): Promise<PostFinancialDocumentResult> {
@@ -158,7 +191,7 @@ export async function postFinancialDocument(
   // pure + unit-tested: throws on an unbalanced journal or bad allocation split.
   const plan = buildDocumentPersistencePlan(header, input.rawLines);
 
-  return withTransaction(async () => {
+  const result = await withTransaction(async () => {
     const posted = await financialEngine.postJournalEntry({
       companyId: input.companyId,
       branchId: input.branchId ?? 0,
@@ -241,4 +274,12 @@ export async function postFinancialDocument(
 
     return { journalId: posted.journalId, alreadyExists: false, documentLineIds };
   });
+
+  // م٥-ب — سجّل التزامات المتابعة بعد نجاح الترحيل (أفضل-جهد، لا يُكرَّر عند الإعادة).
+  if (!result.alreadyExists) {
+    await registerCostBearerObligations(input, result.journalId).catch((e) =>
+      logger.error(e, "م٥ obligation registration failed"),
+    );
+  }
+  return result;
 }
