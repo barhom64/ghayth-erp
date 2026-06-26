@@ -8,6 +8,8 @@ import {
 import {
   DetailPageLayout,
   EntityComments,
+  EntityDocuments,
+  UMRAH_ATTACHMENT_CATEGORIES,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { PrintButton } from "@/components/shared/print-button";
@@ -18,7 +20,6 @@ import { Edit, Calendar, Users, TrendingUp, Wallet, AlertTriangle, Shield, Layer
 import { Link } from "wouter";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
-import { UmrahAttachmentsPanel } from "@/components/shared/umrah-attachments-panel";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -344,7 +345,17 @@ export default function UmrahSeasonDetail() {
 
       {id && <EntityComments entityType="umrah-season" entityId={id} />}
       {id && <EntityTags entityType="umrah-season" entityId={id} />}
-      {id && <UmrahAttachmentsPanel entityType="season" entityId={id} />}
+      {id && (
+        <EntityDocuments
+          entityType="umrah_season"
+          entityId={id}
+          title="المرفقات"
+          categories={UMRAH_ATTACHMENT_CATEGORIES}
+          quickUpload
+          canDelete
+          viewMode="grid"
+        />
+      )}
     </div>
   );
 

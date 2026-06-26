@@ -9,6 +9,8 @@ import {
   DetailPageLayout,
   type ExtraTab,
   EntityComments,
+  EntityDocuments,
+  UMRAH_ATTACHMENT_CATEGORIES,
 } from "@workspace/entity-kit";
 import {
   FormShell,
@@ -19,7 +21,6 @@ import {
   type DataTableColumn,
 } from "@workspace/ui-core";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { UmrahAttachmentsPanel } from "@/components/shared/umrah-attachments-panel";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { JourneyStepIndicator } from "@/components/shared/journey-step-indicator";
 import { UserPlus, FileText, ExternalLink, Phone, Mail, MapPin, DollarSign, Plus, X, Wallet } from "lucide-react";
@@ -79,7 +80,7 @@ function AddPaymentForm({ subAgentId, onSuccess }: { subAgentId: number; onSucce
 }
 
 // Detail view for `umrah_sub_agents`. Reuses the polymorphic
-// UmrahAttachmentsPanel + EntityComments + EntityTags helpers so the
+// EntityDocuments + EntityComments + EntityTags helpers so the
 // only sub-agent-specific code is the header + bio card. Statement of
 // account and pricing CTAs link to the existing endpoints (#305 PDF
 // statement + /umrah/pricing page).
@@ -389,7 +390,17 @@ export default function UmrahSubAgentDetail() {
 
       {sa && <EntityComments entityType="umrah-sub-agent" entityId={sa.id} />}
       {sa && <EntityTags entityType="umrah-sub-agent" entityId={sa.id} />}
-      {sa && <UmrahAttachmentsPanel entityType="sub_agent" entityId={sa.id} />}
+      {sa && (
+        <EntityDocuments
+          entityType="umrah_sub_agent"
+          entityId={Number(sa.id)}
+          title="المرفقات"
+          categories={UMRAH_ATTACHMENT_CATEGORIES}
+          quickUpload
+          canDelete
+          viewMode="grid"
+        />
+      )}
     </div>
   );
 
