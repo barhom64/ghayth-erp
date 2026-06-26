@@ -64,6 +64,140 @@ export const journalRouter = Router();
 journalRouter.use(authMiddleware);
 
 // ─────────────────────────────────────────────────────────────────────────────
+// م١-ب — «المستند المالي» الموحّد (قبض/صرف بجدول بنود + توزيع + مرفقات).
+// المنفذ الجديد بجانب /vouchers و/expenses القديمة (تبقى عاملة حتى التبديل §٨).
+// يُعيد استخدام postFinancialDocument (محرّك القيد المعتمد). docs/25 §٢ ; #2994.
+// ─────────────────────────────────────────────────────────────────────────────
+const documentAllocationSchema = z.object({
+  entityType: z.string(),
+  entityId: z.any(),
+  allocationType: z.enum(["amount", "percent", "quantity"]).optional().default("amount"),
+  amount: z.any().optional(),
+  percent: z.any().optional(),
+  quantity: z.any().optional(),
+  costBearer: z.string().optional(),
+  reason: z.string().optional(),
+});
+const documentLineSchema = z.object({
+  itemId: z.any().optional(),
+  itemName: z.string().optional(),
+  description: z.string().optional(),
+  quantity: z.any(),
+  unitPrice: z.any(),
+  unit: z.string().optional(),
+  taxRatePercent: z.any().optional(),
+  taxCodeId: z.any().optional(),
+  counterAccountCode: z.string().optional(),
+  costCenter: z.string().optional(),
+  allocations: z.array(documentAllocationSchema).optional(),
+});
+const createFinancialDocumentSchema = z.object({
+  direction: z.enum(["receipt", "payment"]),
+  documentKind: z.enum(["voucher", "expense"]).optional().default("voucher"),
+  cashAccountCode: z.string().min(1),
+  vatAccountCode: z.string().optional(),
+  description: z.string().optional(),
+  date: z.string().optional(),
+  branchId: z.any().optional(),
+  reference: z.string().optional(),
+  lines: z.array(documentLineSchema).min(1, "بند واحد على الأقل مطلوب"),
+  attachments: z.array(z.object({
+    url: z.string(),
+    fileName: z.string().optional(),
+    mimeType: z.string().optional(),
+    documentType: z.string().optional(),
+    serialNo: z.string().optional(),
+    lineNo: z.any().optional(),
+  })).optional(),
+});
+
+journalRouter.post("/documents", authorize({ feature: "finance.journal", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(createFinancialDocumentSchema.safeParse(req.body ?? {}));
+
+    const branchId = b.branchId != null && b.branchId !== "" ? Number(b.branchId) : (scope.branchId ?? null);
+    if (branchId == null) {
+      throw new ValidationError("الفرع مطلوب لتسجيل الواقعة", { field: "branchId", fix: "حدّد الفرع" });
+    }
+    if (!scope.isOwner && !OWNER_GM_ROLES.includes(scope.role) &&
+        scope.allowedBranches.length > 0 && !scope.allowedBranches.includes(branchId)) {
+      throw new ForbiddenError("لا تملك صلاحية التسجيل في هذا الفرع", { field: "branchId" });
+    }
+
+    const isReceipt = b.direction === "receipt";
+    const fallbackCounter = isReceipt ? "4930" : "5399"; // إيرادات/مصروفات متنوعة (توجيه تلقائي — يُشتقّ من الكيان في م٤)
+    const rawLines = b.lines.map((l, i) => ({
+      lineNo: i + 1,
+      quantity: Number(l.quantity) || 0,
+      unitPrice: Number(l.unitPrice) || 0,
+      taxRatePercent: l.taxRatePercent != null ? Number(l.taxRatePercent) : 0,
+      counterAccountCode: l.counterAccountCode || fallbackCounter,
+      itemId: l.itemId != null && l.itemId !== "" ? Number(l.itemId) : null,
+      itemName: l.itemName ?? null,
+      description: l.description ?? null,
+      unit: l.unit ?? null,
+      taxCodeId: l.taxCodeId != null && l.taxCodeId !== "" ? Number(l.taxCodeId) : null,
+      costCenter: l.costCenter ?? null,
+      allocations: l.allocations?.map((a) => ({
+        entityType: a.entityType,
+        entityId: Number(a.entityId),
+        allocationType: a.allocationType,
+        amount: a.amount != null ? Number(a.amount) : undefined,
+        percent: a.percent != null ? Number(a.percent) : undefined,
+        quantity: a.quantity != null ? Number(a.quantity) : undefined,
+        costBearer: a.costBearer ?? null,
+        reason: a.reason ?? null,
+      })),
+    }));
+    const hasVat = rawLines.some((l) => (l.taxRatePercent || 0) > 0);
+    const vatAccountCode = b.vatAccountCode || (hasVat ? (isReceipt ? "2131" : "1180") : undefined);
+
+    // معاينة القيد المشتقّ — بناء نقي بلا ترحيل (الذيل §٢.٦).
+    if (isDryRun(req)) {
+      const { buildDocumentPersistencePlan } = await import("../lib/financeDocumentJournal.js");
+      const plan = buildDocumentPersistencePlan(
+        { direction: b.direction, cashAccountCode: b.cashAccountCode, vatAccountCode },
+        rawLines,
+      );
+      res.json({ dryRun: true, lines: plan.journalLegs, totals: plan.totals });
+      return;
+    }
+
+    const idempotencyToken = requestIdempotencyToken(req);
+    const { postFinancialDocument } = await import("../lib/financeDocumentService.js");
+    const result = await postFinancialDocument({
+      companyId: scope.companyId,
+      branchId,
+      createdBy: scope.activeAssignmentId,
+      documentKind: b.documentKind,
+      direction: b.direction,
+      cashAccountCode: b.cashAccountCode,
+      vatAccountCode,
+      ref: `${isReceipt ? "RV" : "PV"}-${idempotencyToken}`,
+      description: b.description || (isReceipt ? "قبض" : "صرف"),
+      sourceKey: `finance:document:${idempotencyToken}`,
+      postingDate: b.date ? toDateISO(b.date) : undefined,
+      rawLines,
+      attachments: b.attachments?.map((a) => ({
+        url: a.url, fileName: a.fileName ?? null, mimeType: a.mimeType ?? null,
+        documentType: a.documentType ?? null, serialNo: a.serialNo ?? null,
+        lineNo: a.lineNo != null && a.lineNo !== "" ? Number(a.lineNo) : null,
+      })),
+      headerMeta: { reference: b.reference ?? null, operationType: b.direction },
+    });
+
+    res.status(result.alreadyExists ? 200 : 201).json({
+      journalId: result.journalId,
+      documentLineIds: result.documentLineIds,
+      alreadyExists: result.alreadyExists,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "خطأ في تسجيل الواقعة المالية");
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // ZOD SCHEMAS — request body validation
 // ─────────────────────────────────────────────────────────────────────────────
 
