@@ -35,7 +35,7 @@ import {
   resolveTaskSlaReminderConfig,
   shouldFireSlaReminder,
 } from "./inboxClassifier.js";
-import { processFallbackChains } from "./notificationDispatch.js";
+import { processFallbackChains, dispatchNotification } from "./notificationDispatch.js";
 import {
   resolveSystemSmtpConfig,
   formatFromHeader,
@@ -1219,7 +1219,7 @@ async function dailyInvoiceOverdueEscalation(): Promise<string> {
   for (const company of companies) {
     const invoices = await rawQuery<Record<string, unknown>>(
       `SELECT i.id, i.ref, i."clientId", i.total, i."paidAmount", i."dueDate",
-              c.name AS "clientName", c.phone AS "clientPhone",
+              c.name AS "clientName", c.phone AS "clientPhone", c.email AS "clientEmail",
               (CURRENT_DATE - i."dueDate"::date) AS "daysOverdue",
               i.status
        FROM invoices i
@@ -1238,6 +1238,7 @@ async function dailyInvoiceOverdueEscalation(): Promise<string> {
       else if (days >= 14) phase = "reminder";
       else if (days >= 7) phase = "first_notice";
       else if (days >= 3) phase = "alert";
+      else if (days >= 1) phase = "first_reminder"; // Spec 03 §collection day-1: SMS+email to client
       if (!phase) continue;
 
       // Flip the invoice status to 'overdue' when appropriate — reports,
@@ -1259,6 +1260,39 @@ async function dailyInvoiceOverdueEscalation(): Promise<string> {
         days >= 30 ? "critical" : "warning",
         "invoice", inv.id as number
       );
+
+      // Spec ملف 03 §تحصيل 6 مراحل (السطر 46-47): يوم 1 → SMS+إيميل للعميل،
+      // يوم 7 → إيميل ثاني للعميل (+ إشعار المحاسب الداخلي عبر broadcastAlert
+      // أعلاه). تقطعنا الإشعار عند هذين اليومين فقط في هذه الشريحة (Slice 1
+      // of the overdue activation plan). المراحل 21/30/60 — التصعيدات
+      // الداخلية + الحظر + churn — تأتي في شريحة منفصلة لأنها قرارات أعمال.
+      if (days === 1 || days === 7) {
+        try {
+          const outstanding = Number(inv.total ?? 0) - Number(inv.paidAmount ?? 0);
+          await dispatchNotification({
+            companyId: company.id,
+            eventCategory: "invoice.overdue",
+            title: "",
+            body: "",
+            templateKey: "invoice.overdue",
+            templateVars: {
+              invoiceRef: String(inv.ref ?? ""),
+              days: String(days),
+              amount: outstanding.toFixed(2),
+            },
+            recipientEmail: (inv.clientEmail as string | null) ?? undefined,
+            recipientPhone: (inv.clientPhone as string | null) ?? undefined,
+            recipientName: (inv.clientName as string | null) ?? undefined,
+            clientId: inv.clientId as number,
+            refType: "invoice",
+            refId: inv.id as number,
+            priority: "high",
+          });
+        } catch (e) {
+          logger.warn(e, `[cronScheduler] client invoice-overdue notification failed (inv=${inv.id})`);
+        }
+      }
+
       actions++;
     }
   }
