@@ -58,9 +58,26 @@ describe("Rent overdue → tenant SMS reminder on day 1 (spec ملف 05)", () =>
     expect(MIG).toContain("WHERE NOT EXISTS"); // idempotent
   });
 
+  it("migration 420 seeds as GLOBAL default (companyId IS NULL) so future companies inherit it", () => {
+    // Codex P2: per-existing-company seeding would leave companies created
+    // by bootstrapCompany (settings.ts:897) with blank rent reminders.
+    // Global row is matched by getTemplate's
+    // (companyId = $1 OR companyId IS NULL) fallback.
+    expect(MIG).toMatch(/SELECT\s+NULL::int,\s+t\."templateKey"/);
+    expect(MIG).toContain('nt."companyId" IS NULL');
+    expect(MIG).not.toMatch(/FROM companies c\s+CROSS JOIN/);
+  });
+
   it("SELECT picks up the tenant contact details + a usable unit name (with fallback)", () => {
-    expect(cron).toContain('c."tenantPhone"');
-    expect(cron).toContain('c."tenantEmail"');
+    // Tenant contact resolution coalesces from the contract first
+    // (denormalized for offline contracts), then from the linked tenants
+    // row (the normalized source of truth — Codex P2: contract fields are
+    // optional and frequently blank, but tenants.phone/email are typically
+    // populated).
+    expect(cron).toMatch(/COALESCE\(NULLIF\(c\."tenantPhone", ''\), t\.phone\)/);
+    expect(cron).toMatch(/COALESCE\(NULLIF\(c\."tenantEmail", ''\), t\.email\)/);
+    expect(cron).toMatch(/COALESCE\(NULLIF\(c\."tenantName", ''\), t\.name\)/);
+    expect(cron).toMatch(/LEFT JOIN tenants t ON t\.id = c\."tenantId"/);
     // Unit name fallback chain: "Building - #Unit" else "#unitId" — never empty.
     expect(cron).toContain('"unitName"');
     expect(cron).toContain("CONCAT_WS");

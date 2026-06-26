@@ -1791,10 +1791,14 @@ async function monthlyRentPenalties(): Promise<string> {
   for (const company of companies) {
     const overduePayments = await rawQuery<Record<string, unknown>>(
       `SELECT rp.id, rp."dueDate", rp.amount, rp."contractId",
-              c."tenantName", c."tenantPhone", c."tenantEmail", c."unitId",
+              COALESCE(NULLIF(c."tenantName", ''), t.name)             AS "tenantName",
+              COALESCE(NULLIF(c."tenantPhone", ''), t.phone)            AS "tenantPhone",
+              COALESCE(NULLIF(c."tenantEmail", ''), t.email)            AS "tenantEmail",
+              c."unitId",
               COALESCE(NULLIF(TRIM(CONCAT_WS(' - ', u."buildingName", u."unitNumber")), ''), '#' || c."unitId"::text) AS "unitName"
          FROM rent_payments rp
          JOIN rental_contracts c ON c.id = rp."contractId"
+         LEFT JOIN tenants t ON t.id = c."tenantId" AND t."companyId" = c."companyId"
          LEFT JOIN property_units u ON u.id = c."unitId" AND u."companyId" = c."companyId"
         WHERE c."companyId" = $1 AND rp.status IN ('pending','partial')
           AND rp."dueDate" < CURRENT_DATE`,

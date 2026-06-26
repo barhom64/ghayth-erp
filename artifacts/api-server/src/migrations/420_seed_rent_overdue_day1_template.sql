@@ -30,11 +30,17 @@
 --    WHERE "templateKey" = 'property.rent.overdue.day1' AND "isDefault" = true;
 -- ===========================================================================
 
+-- Seed as a GLOBAL default (companyId IS NULL) so:
+--   1. EXISTING companies pick it up via getTemplate's
+--      (companyId = $1 OR companyId IS NULL) fallback.
+--   2. FUTURE companies created by bootstrapCompany (settings.ts:897)
+--      ALSO pick it up automatically — Codex P2 review caught that
+--      seeding per-existing-company would leave new tenants with
+--      blank SMS/email rent reminders forever.
 INSERT INTO notification_templates
   ("companyId", "templateKey", channel, language, "titleTemplate", "bodyTemplate", variables, "isActive", "isDefault")
-SELECT c.id, t."templateKey", t.channel, t.language, t."titleTemplate", t."bodyTemplate", t.variables::jsonb, true, true
-FROM companies c
-CROSS JOIN (VALUES
+SELECT NULL::int, t."templateKey", t.channel, t.language, t."titleTemplate", t."bodyTemplate", t.variables::jsonb, true, true
+FROM (VALUES
   -- SMS (spec line 59 explicitly mentions SMS first)
   ('property.rent.overdue.day1', 'sms', 'ar', NULL,
    'مرحبًا {{tenantName}}، إيجار وحدة {{unitName}} المستحق بتاريخ {{dueDate}} ({{amount}} ريال) لم يُسجَّل سداده. يرجى السداد لتجنب غرامة التأخر.',
@@ -61,7 +67,7 @@ CROSS JOIN (VALUES
 ) AS t("templateKey", channel, language, "titleTemplate", "bodyTemplate", variables)
 WHERE NOT EXISTS (
   SELECT 1 FROM notification_templates nt
-   WHERE nt."companyId" = c.id
+   WHERE nt."companyId" IS NULL
      AND nt."templateKey" = t."templateKey"
      AND nt.channel = t.channel
      AND nt.language = t.language
