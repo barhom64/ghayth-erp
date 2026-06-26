@@ -102,4 +102,40 @@ describe("Invoice overdue escalation tiers (21/30/60) — spec ملف 03", () =>
     expect(cron).toContain('broadcastAlert');
     expect(cron).toContain('"invoice_overdue"');
   });
+
+  // ── Codex review fixes ──────────────────────────────────────────────────
+  it("weeklyClientClassification PRESERVES churned clients (does not overwrite legal-handover state)", () => {
+    const wk = section("async function weeklyClientClassification", 4000);
+    // The lifecycle 'churned' flag set by day-60 escalation must survive
+    // the weekly revenue-based classifier. Without this, a customer
+    // overdue 60 days (recent invoice) would be flipped back to
+    // regular/vip/prospect every Sunday. Codex P2.
+    expect(wk).toContain('client.classification === "churned"');
+    expect(wk).toContain("continue");
+  });
+
+  it("invoice creation rejects new invoices for blacklisted clients (real block, not just a flag)", () => {
+    const route = readFileSync(
+      join(import.meta.dirname!, "..", "..", "src", "routes", "finance-invoices.ts"),
+      "utf8",
+    );
+    // The GM email tells the manager "new invoices are blocked" — that
+    // must be true. The invoice create handler now reads isBlacklisted
+    // and throws a 403 with an Arabic explanation. Codex P2.
+    expect(route).toContain('"isBlacklisted" FROM clients');
+    expect(route).toMatch(/client\?\.isBlacklisted === true/);
+    expect(route).toContain('محظور بسبب فواتير متأخرة');
+  });
+
+  it("day-30 template no longer claims the 2% late fee was applied (it isn't — fee is a separate manual journal entry)", () => {
+    // Applying a 2% fee = a real GL posting. Per ghayth-constitution
+    // §3 rule 3 (ledger safety): any change touching ledger lines
+    // REQUIRES an assertion test on the journal lines. We don't have
+    // that here, so we ask GM to approve the fee manually instead of
+    // claiming it was already applied. Codex P2.
+    expect(MIG).not.toContain("تطبيق غرامة شهرية 2%");
+    expect(MIG).not.toContain("2% monthly late fee applied");
+    expect(MIG).toContain("اعتماد تطبيق غرامة");
+    expect(MIG).toContain("approve a 2% monthly late fee");
+  });
 });

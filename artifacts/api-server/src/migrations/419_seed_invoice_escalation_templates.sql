@@ -47,12 +47,16 @@ CROSS JOIN (VALUES
    '<p>Dear {{managerName}},</p><p>Invoice <strong>#{{invoiceRef}}</strong> for client <strong>{{clientName}}</strong> is now {{days}} days past due.</p><ul><li><strong>Outstanding:</strong> SAR {{amount}}</li><li><strong>Stage:</strong> escalated to Finance Manager</li></ul><p>Please review and decide next steps (direct outreach, payment plan, or escalation to GM).</p>',
    '["managerName","clientName","invoiceRef","days","amount"]'),
 
-  -- ── يوم 30 → إشعار GM + خيار الحظر (الحظر فعلياً يُطبَّق في cron) ────────
+  -- ── يوم 30 → إشعار GM + حظر فعلي + طلب اعتماد الغرامة ───────────────────
+  -- ملاحظة: نُعلن عن الحظر فقط (يُطبَّق فعلياً عبر منع إنشاء فواتير جديدة
+  -- في finance-invoices.ts عند isBlacklisted=TRUE). الغرامة 2% تتطلّب قيداً
+  -- محاسبياً مع assertion على سطور القيد (دستور غيث)، فلا ندّعي تطبيقها
+  -- — نطلب اعتمادها يدوياً من GM. تأتي الأتمتة لاحقاً في شريحة منفصلة.
   ('invoice.blocked.gm', 'email', 'ar', 'تصعيد فاتورة متأخرة وحظر العميل: {{invoiceRef}} (٣٠ يومًا)',
-   '<p>الأستاذ/ة {{managerName}}،</p><p>الفاتورة <strong>#{{invoiceRef}}</strong> للعميل <strong>{{clientName}}</strong> تجاوزت {{days}} يومًا من تاريخ الاستحقاق.</p><ul><li><strong>المبلغ المستحق:</strong> {{amount}} ريال</li><li><strong>المرحلة:</strong> تصعيد للمدير العام</li><li><strong>الإجراء التلقائي:</strong> تم وضع العميل في القائمة السوداء (حظر فواتير جديدة) + تطبيق غرامة شهرية 2%.</li></ul><p>قرارك مطلوب: متابعة قانونية مبكرة، أو خطة سداد بشروط، أو رفع الحظر.</p>',
+   '<p>الأستاذ/ة {{managerName}}،</p><p>الفاتورة <strong>#{{invoiceRef}}</strong> للعميل <strong>{{clientName}}</strong> تجاوزت {{days}} يومًا من تاريخ الاستحقاق.</p><ul><li><strong>المبلغ المستحق:</strong> {{amount}} ريال</li><li><strong>المرحلة:</strong> تصعيد للمدير العام</li><li><strong>الإجراء التلقائي:</strong> تم وضع العميل في القائمة السوداء (إصدار فواتير جديدة لهذا العميل سيُرفض حتى رفع الحظر).</li></ul><p>قرارك مطلوب: متابعة قانونية مبكرة، أو خطة سداد بشروط، أو اعتماد تطبيق غرامة 2% شهرياً (قيد يدوي)، أو رفع الحظر من ملف العميل.</p>',
    '["managerName","clientName","invoiceRef","days","amount"]'),
   ('invoice.blocked.gm', 'email', 'en', 'Overdue invoice + client blocked: {{invoiceRef}} (30 days)',
-   '<p>Dear {{managerName}},</p><p>Invoice <strong>#{{invoiceRef}}</strong> for client <strong>{{clientName}}</strong> is now {{days}} days past due.</p><ul><li><strong>Outstanding:</strong> SAR {{amount}}</li><li><strong>Stage:</strong> escalated to GM</li><li><strong>Automatic action:</strong> client blacklisted (new invoices blocked) + 2% monthly late fee applied.</li></ul><p>Your decision: early legal action, conditional payment plan, or lift the block.</p>',
+   '<p>Dear {{managerName}},</p><p>Invoice <strong>#{{invoiceRef}}</strong> for client <strong>{{clientName}}</strong> is now {{days}} days past due.</p><ul><li><strong>Outstanding:</strong> SAR {{amount}}</li><li><strong>Stage:</strong> escalated to GM</li><li><strong>Automatic action:</strong> client blacklisted (new invoices for this client will be rejected until the block is lifted).</li></ul><p>Your decision: early legal action, conditional payment plan, approve a 2% monthly late fee (manual journal entry), or lift the block from the client profile.</p>',
    '["managerName","clientName","invoiceRef","days","amount"]'),
 
   -- ── يوم 60 → إشعار القانوني + تصنيف العميل churned ──────────────────────

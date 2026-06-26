@@ -2135,6 +2135,19 @@ async function weeklyClientClassification(): Promise<string> {
         ? (Date.now() - lastInvoice.getTime()) / (30 * 86400000)
         : 999;
 
+      // PRESERVE LIFECYCLE CHURN — Codex review on PR #3012.
+      // The daily invoice-overdue cron flips classification to 'churned'
+      // on day 60 as a legal-handover lifecycle state. This weekly
+      // recompute is purely revenue-based (last invoice age + total
+      // revenue). If we let it run for a churned client whose last
+      // invoice is recent (60 days ago, not 12 months), it would flip
+      // them back to 'regular'/'prospect'/'vip' and undo the legal
+      // handover. We never demote out of 'churned' from this cron —
+      // exit from churn is an explicit ops decision (admin PATCH).
+      if (client.classification === "churned") {
+        continue;
+      }
+
       let newClass: string;
       if (monthsSinceLastInvoice >= 12) newClass = "churned";
       else if (rev >= 100000) newClass = "vip";
