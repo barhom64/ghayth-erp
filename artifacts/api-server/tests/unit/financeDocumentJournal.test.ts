@@ -200,3 +200,49 @@ describe("buildDocumentPersistencePlan — rows to insert + legs to post", () =>
     expect(plan.journalLegs.filter((l) => l.accountCode === "5610").map((l) => l.debit)).toEqual([4500, 4500]);
   });
 });
+
+describe("buildDocumentJournalLegs — م٥ تفريع costBearer (حساب ذمة الطرف)", () => {
+  const sumDebit = (legs: { debit: number }[]) => legs.reduce((s, l) => s + l.debit, 0);
+  const sumCredit = (legs: { credit: number }[]) => legs.reduce((s, l) => s + l.credit, 0);
+
+  it("شريحة بمتحمِّل ≠ الشركة (overrideAccountCode) تُمدِّن ذمة الطرف لا المصروف", () => {
+    // صرف 1000 على مصروف 5510، المتحمِّل سائق → ذمة الموظف 1143 بدل المصروف (§١٠).
+    const legs = buildDocumentJournalLegs(
+      { direction: "payment", cashAccountCode: "1111" },
+      [
+        {
+          lineNo: 1, net: 1000, vat: 0, counterAccountCode: "5510",
+          allocations: [
+            { entityType: "employee", entityId: 7, amount: 1000, costBearer: "driver", overrideAccountCode: "1143" },
+          ],
+        },
+      ],
+    );
+    expect(legs.some((l) => l.accountCode === "5510")).toBe(false); // لا مصروف
+    const rec = legs.find((l) => l.accountCode === "1143")!;
+    expect(rec.debit).toBeCloseTo(1000, 2);
+    expect(rec.credit).toBe(0);
+    const cash = legs.find((l) => l.accountCode === "1111")!;
+    expect(cash.credit).toBeCloseTo(1000, 2);
+    expect(sumDebit(legs)).toBeCloseTo(sumCredit(legs), 2);
+  });
+
+  it("شريحة مختلطة: حصة الشركة تبقى مصروفًا، حصة الطرف تتحوّل ذمة — والقيد متوازن", () => {
+    const legs = buildDocumentJournalLegs(
+      { direction: "payment", cashAccountCode: "1111" },
+      [
+        {
+          lineNo: 1, net: 2000, vat: 0, counterAccountCode: "5510",
+          allocations: [
+            { entityType: "unit", entityId: 1, amount: 1000, costBearer: "company" },
+            { entityType: "tenant", entityId: 2, amount: 1000, costBearer: "tenant", overrideAccountCode: "1131" },
+          ],
+        },
+      ],
+    );
+    expect(legs.find((l) => l.accountCode === "5510")!.debit).toBeCloseTo(1000, 2); // الشركة → مصروف
+    expect(legs.find((l) => l.accountCode === "1131")!.debit).toBeCloseTo(1000, 2); // المستأجر → ذمة
+    expect(legs.find((l) => l.accountCode === "1111")!.credit).toBeCloseTo(2000, 2);
+    expect(sumDebit(legs)).toBeCloseTo(sumCredit(legs), 2);
+  });
+});

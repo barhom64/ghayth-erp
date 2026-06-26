@@ -27,6 +27,12 @@ export type LineAllocationInput = {
   amount: number;
   costBearer?: string | null;
   dims?: Record<string, unknown>;
+  /**
+   * م٥ — تفريع costBearer: حساب ذمة الطرف المُحلّ (في الخدمة، DB) حين المتحمِّل ≠
+   * الشركة. عند ضبطه يَجُبّ حساب المصروف لهذه الشريحة (مدين ذمة الطرف بدل المصروف،
+   * docs/25 §١٠). غيابه = شريحة عادية على حساب البند (المصروف/الإيراد).
+   */
+  overrideAccountCode?: string | null;
 };
 
 export type ResolvedDocLine = {
@@ -96,11 +102,13 @@ export function buildDocumentJournalLegs(
     totalVat = round2(totalVat + round2(line.vat || 0));
 
     // counter slices: one per allocation (validated to sum to net), else the whole line.
-    type Slice = { amount: number; dims?: Record<string, unknown>; entityRef: JournalLeg["entityRef"] };
+    // م٥: شريحة المتحمِّل ≠ الشركة تحمل overrideAccountCode (ذمة الطرف) فتَجُبّ حساب البند.
+    type Slice = { amount: number; accountCode: string; dims?: Record<string, unknown>; entityRef: JournalLeg["entityRef"] };
     const slices: Slice[] =
       line.allocations && line.allocations.length > 0
         ? line.allocations.map((a) => ({
             amount: round2(a.amount),
+            accountCode: a.overrideAccountCode || line.counterAccountCode,
             dims: {
               ...(line.dims ?? {}),
               ...(a.dims ?? {}),
@@ -108,7 +116,7 @@ export function buildDocumentJournalLegs(
             },
             entityRef: { entityType: a.entityType, entityId: a.entityId },
           }))
-        : [{ amount: net, dims: line.dims, entityRef: null }];
+        : [{ amount: net, accountCode: line.counterAccountCode, dims: line.dims, entityRef: null }];
 
     if (line.allocations && line.allocations.length > 0) {
       const sliceSum = round2(slices.reduce((s, x) => s + x.amount, 0));
@@ -121,7 +129,7 @@ export function buildDocumentJournalLegs(
 
     for (const s of slices) {
       legs.push({
-        accountCode: line.counterAccountCode,
+        accountCode: s.accountCode,
         debit: isReceipt ? 0 : s.amount,
         credit: isReceipt ? s.amount : 0,
         dims: s.dims && Object.keys(s.dims).length > 0 ? s.dims : undefined,
@@ -177,6 +185,8 @@ export type RawAllocationInput = {
   costBearer?: string | null;
   reason?: string | null;
   dims?: Record<string, unknown>;
+  /** م٥ — حساب ذمة الطرف المُحلّ (تضبطه الخدمة حين costBearer ≠ company). */
+  overrideAccountCode?: string | null;
 };
 
 export type RawDocLine = {
@@ -219,7 +229,7 @@ export function resolveDocumentLine(raw: RawDocLine): ResolvedDocLine {
       default:
         throw new DocumentJournalError(`نوع توزيع غير معروف للبند ${raw.lineNo}: ${a.allocationType}`);
     }
-    return { entityType: a.entityType, entityId: a.entityId, amount, costBearer: a.costBearer, dims: a.dims };
+    return { entityType: a.entityType, entityId: a.entityId, amount, costBearer: a.costBearer, dims: a.dims, overrideAccountCode: a.overrideAccountCode };
   });
 
   return { lineNo: raw.lineNo, net, vat, counterAccountCode: raw.counterAccountCode, dims: raw.dims, allocations };

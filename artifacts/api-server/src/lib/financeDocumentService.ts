@@ -110,6 +110,39 @@ function legToJournalLine(leg: JournalLeg): JournalEntryLine {
  * deferred balances), then persist the structured lines/allocations/attachments
  * linked to that journal. Idempotent via sourceKey.
  */
+// م٥ — تفريع costBearer: لكل نوع متحمِّل (≠ الشركة) عمليةُ نية + حساب ذمة احتياطي
+// (يطابق seed الهجرة 422). يحلّها المحرّك لحساب قابل للترحيل لكل شركة.
+const COST_BEARER_RECEIVABLE: Record<string, { op: string; fallback: string }> = {
+  driver:      { op: "cost_bearer_receivable_driver",      fallback: "1143" },
+  employee:    { op: "cost_bearer_receivable_employee",    fallback: "1143" },
+  tenant:      { op: "cost_bearer_receivable_tenant",      fallback: "1131" },
+  customer:    { op: "cost_bearer_receivable_customer",    fallback: "1131" },
+  supplier:    { op: "cost_bearer_receivable_supplier",    fallback: "1190" },
+  insurance:   { op: "cost_bearer_receivable_insurance",   fallback: "1191" },
+  third_party: { op: "cost_bearer_receivable_third_party", fallback: "1192" },
+};
+
+/**
+ * م٥ — لكل توزيع متحمِّله ≠ الشركة: حُلّ حساب ذمة الطرف المدين (DB) واضبط
+ * overrideAccountCode فيَجُبّ حساب المصروف لتلك الشريحة عند بناء القيد (§١٠).
+ * متحمِّل غير معروف يبقى على حساب البند (لا تحويل، لا fallback صامت لحساب خاطئ).
+ */
+async function resolveCostBearerAccounts(
+  companyId: number,
+  rawLines: RawDocLine[],
+  engine: { resolveAccountCode: (c: number, op: string, side: "debit" | "credit", fb: string) => Promise<string> },
+): Promise<void> {
+  for (const line of rawLines) {
+    for (const a of line.allocations ?? []) {
+      const cb = a.costBearer;
+      if (!cb || cb === "company") continue;
+      const m = COST_BEARER_RECEIVABLE[cb];
+      if (!m) continue;
+      a.overrideAccountCode = await engine.resolveAccountCode(companyId, m.op, "debit", m.fallback);
+    }
+  }
+}
+
 export async function postFinancialDocument(
   input: FinancialDocumentInput,
 ): Promise<PostFinancialDocumentResult> {
@@ -118,10 +151,12 @@ export async function postFinancialDocument(
     cashAccountCode: input.cashAccountCode,
     vatAccountCode: input.vatAccountCode ?? null,
   };
+  const { financialEngine } = await import("./engines/index.js");
+  // م٥ — حُلّ حساب ذمة الطرف لكل توزيع متحمِّله ≠ الشركة قبل بناء الخطة (§١٠).
+  await resolveCostBearerAccounts(input.companyId, input.rawLines, financialEngine);
+
   // pure + unit-tested: throws on an unbalanced journal or bad allocation split.
   const plan = buildDocumentPersistencePlan(header, input.rawLines);
-
-  const { financialEngine } = await import("./engines/index.js");
 
   return withTransaction(async () => {
     const posted = await financialEngine.postJournalEntry({
