@@ -13,6 +13,7 @@ import { formatCurrency, roundMoney, todayLocal } from "@/lib/formatters";
 import { isMoneyAccount } from "@/lib/finance-account-usage";
 import { LineItemsTable } from "@/components/shared/line-items-table";
 import { LineAllocationsEditor, type LineAllocation } from "@/components/shared/line-allocations-editor";
+import { DocumentAttachmentsPanel, type DocAttachment } from "@/components/shared/document-attachments-panel";
 import { BranchSelect, AccountSelect } from "@/components/shared/entity-selects";
 import { NumberField, FormFieldWrapper, TextField } from "@/components/shared/form-field-wrapper";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
@@ -21,8 +22,8 @@ import { DataTable, type DataTableColumn } from "@workspace/ui-core";
  * تسجيل واقعة مالية — م١-ب. الواجهة تشغيلية: يدخل المستخدم (الكيان/الطرف + ما حدث +
  * البنود + الحساب البنكي)، والنظام يشتقّ القيد خلفيًا. تبويبا قبض/صرف تصنيف لا إلزام
  * (docs/25 §٢.١). يُرسل إلى POST /finance/documents (الذي يُعيد استخدام محرّك القيد).
- * النسخة الأولى: الهيكل + جدول البنود (بالوحدة) + معاينة القيد المشتقّ. التوزيع
- * والمرفقات بمستويين يُضافان في الدفعة التالية. القديم (vouchers/expenses) يبقى عاملًا.
+ * م١-ب الواجهة: الهيكل + جدول البنود (بالوحدة) + توزيع السطر على عدة كيانات +
+ * المرفقات الموسومة بمستويين + معاينة القيد المشتقّ. القديم (vouchers/expenses) يبقى عاملًا.
  */
 type DocLine = {
   itemName: string;
@@ -57,6 +58,7 @@ export default function FinancialEventCreate() {
     reference: "",
     description: "",
     lines: [emptyLine()] as DocLine[],
+    attachments: [] as DocAttachment[],
   });
 
   const saveMut = useApiMutation<{ journalId: number }, any>("/finance/documents", "POST", [["vouchers"], ["journal-manual"]], {
@@ -111,6 +113,12 @@ export default function FinancialEventCreate() {
               : undefined,
           };
         }),
+      attachments: form.attachments.length > 0
+        ? form.attachments.map((a) => ({
+            url: a.url, fileName: a.fileName, mimeType: a.mimeType,
+            documentType: a.documentType, lineNo: a.lineNo,
+          }))
+        : undefined,
       ...extra,
     };
   }
@@ -210,6 +218,12 @@ export default function FinancialEventCreate() {
             <TextField label="رقم المرجع (اختياري)" value={form.reference} onChange={(v) => setForm((f) => ({ ...f, reference: v }))} placeholder="رقم الفاتورة / العقد / الشيك" />
             <TextField label="البيان (اختياري)" value={form.description} onChange={(v) => setForm((f) => ({ ...f, description: v }))} placeholder="يُولّد تلقائيًا إن تُرك فارغًا" />
           </div>
+
+          <DocumentAttachmentsPanel
+            value={form.attachments}
+            onChange={(v) => setForm((f) => ({ ...f, attachments: v }))}
+            lineCount={form.lines.length}
+          />
 
           {preview && preview.length > 0 && (
             <div className="border rounded-lg p-3 bg-muted/30">
