@@ -2549,18 +2549,27 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
           // over-allocate a PO/Nusk invoice. Σ must include withheld
           // amounts on previous allocations (gross discharged), so the
           // SUM picks up amount + whtAmount.
+          // FOR UPDATE locks the obligation row inside this voucher's
+          // transaction (rawQuery is ALS-bound to the active tx). Without the
+          // lock two concurrent vouchers paying the SAME PO/nusk both read a
+          // stale Σ below (neither tx sees the other's uncommitted allocation
+          // under READ COMMITTED) and both pass the #901 cap → over-allocation.
+          // With it, the second voucher waits, then re-reads Σ including the
+          // first's committed allocation and is capped correctly.
           let obligationCap: number | null = null;
           if (a.obligationType === "purchase_order") {
             const [po] = await rawQuery<{ totalAmount: string | number }>(
               `SELECT "totalAmount" FROM purchase_orders
-                WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+                WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+                FOR UPDATE`,
               [a.obligationId, scope.companyId]
             );
             if (po) obligationCap = Number(po.totalAmount);
           } else if (a.obligationType === "nusk_invoice") {
             const [ni] = await rawQuery<{ totalAmount: string | number; refundAmount: string | number }>(
               `SELECT "totalAmount", "refundAmount" FROM umrah_nusk_invoices
-                WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+                WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+                FOR UPDATE`,
               [a.obligationId, scope.companyId]
             );
             if (ni) obligationCap = Number(ni.totalAmount) - Number(ni.refundAmount ?? 0);
