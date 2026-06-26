@@ -34,6 +34,7 @@ import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { registerObligation } from "../lib/obligationsEngine.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
+import { assertNotSelfApproval } from "../lib/rbac/selfApprovalCreators.js";
 import { markIdempotencyReplay, requestIdempotencyToken, boundedIdempotencyToken } from "../lib/requestIdempotency.js";
 import { assertDocumentBranchAccess } from "../lib/branchResolution.js";
 import { z } from "zod";
@@ -1021,6 +1022,11 @@ async function poApprovalAction(req: any, res: any, newStatus: "approved" | "rej
     // creation month is the budget period; validateBudget falls back to the
     // current period when createdAt is unexpectedly empty.
     if (newStatus === "approved") {
+      // Maker-checker: the creator may not APPROVE their own PO (a spend
+      // commitment) — the same segregation the unified approval chain
+      // enforces. Owners (no employeeId) are exempt.
+      await assertNotSelfApproval("purchase_order", id, scope.companyId, scope.employeeId);
+
       const poPeriod = String((po as Record<string, unknown>).createdAt ?? "").slice(0, 7) || undefined;
       const poLines = await rawQuery<{ accountCode: string; amt: string }>(
         `SELECT "accountCode", SUM("lineTotal")::text AS amt
