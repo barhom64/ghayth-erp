@@ -112,6 +112,21 @@ d("م٣ — postCollection: server-side FIFO over open invoices + balanced JE (l
       `SELECT "paidAmount"::text, status FROM invoices WHERE id=$1`, [inv2]);
     expect(Number(i2.paidAmount)).toBe(50);
     expect(i2.status).toBe("partial");
+
+    // ── §٧.٥ إثبات إلغاء مهام التحصيل: الإنذار/التقادم مدفوعٌ بحالة الفاتورة
+    //    (status NOT paid AND المتبقي>0). تحصيل «قبض» يحدّث الحالة، فالفاتورة
+    //    المدفوعة بالكامل تسقط تلقائيًا من مجموعة الإنذار بلا مهمة إلغاء منفصلة،
+    //    بينما الجزئية تبقى للمتبقّي. (نفس فلتر aging في finance-invoices.ts.)
+    const dunnable = await rawQuery<{ id: number }>(
+      `SELECT id FROM invoices
+        WHERE "companyId"=$1 AND "clientId"=$2 AND "deletedAt" IS NULL
+          AND status NOT IN ('draft','cancelled','paid','rejected','returned')
+          AND (total - COALESCE("paidAmount",0)) > 0.01`,
+      [COMPANY, clientId],
+    );
+    const dunnableIds = dunnable.map((r) => r.id);
+    expect(dunnableIds).not.toContain(inv1); // مدفوعة بالكامل → خارج الإنذار
+    expect(dunnableIds).toContain(inv2);     // جزئية → تبقى للمتبقّي
   });
 
   it("excess → advance: collecting 50 now clears inv2 (30 outstanding) + records a 20 leftover advance", async () => {
