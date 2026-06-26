@@ -15,6 +15,7 @@ import { assertNotSelfApproval } from "../../src/lib/rbac/selfApprovalCreators.j
 const read = (p: string) => readFileSync(join(import.meta.dirname!, p), "utf8");
 const CUSTODIES = read("../../src/routes/finance-custodies.ts");
 const JOURNAL = read("../../src/routes/finance-journal.ts");
+const PURCHASE = read("../../src/routes/finance-purchase.ts");
 
 describe("assertNotSelfApproval — helper contract", () => {
   it("is exempt for a null approver (owners / non-employee approvers)", async () => {
@@ -35,6 +36,10 @@ describe("finance-direct approval endpoints enforce maker-checker on APPROVE", (
 
   it("salary-advance approve calls the guard for the 'salary_advance' refType", () => {
     expect(JOURNAL).toMatch(/assertNotSelfApproval\("salary_advance", advanceId, scope\.companyId, scope\.employeeId\)/);
+  });
+
+  it("purchase-order approve calls the guard for the 'purchase_order' refType", () => {
+    expect(PURCHASE).toMatch(/assertNotSelfApproval\("purchase_order", id, scope\.companyId, scope\.employeeId\)/);
   });
 
   it("only self-APPROVAL is blocked — the guard sits behind newStatus === 'approved'", () => {
