@@ -187,6 +187,27 @@ journalRouter.post("/documents", authorize({ feature: "finance.journal", action:
       headerMeta: { reference: b.reference ?? null, operationType: b.direction },
     });
 
+    // أثر تدقيق إلزامي لكل إجراء تشغيلي (الدستور قاعدة ١٢) — مرة واحدة عند الإنشاء
+    // الفعلي؛ إعادة التشغيل (idempotent) لا تُكرّر الأثر.
+    if (!result.alreadyExists) {
+      await createAuditLog({
+        companyId: scope.companyId,
+        branchId: branchId ?? undefined,
+        userId: scope.userId,
+        action: "financial_document.created",
+        entity: "journal_entries",
+        entityId: result.journalId,
+        after: {
+          direction: b.direction,
+          documentKind: b.documentKind,
+          cashAccountCode: b.cashAccountCode,
+          lineCount: rawLines.length,
+          total: roundTo2(rawLines.reduce((s, l) => s + l.quantity * l.unitPrice * (1 + (l.taxRatePercent || 0) / 100), 0)),
+        },
+        activeRoleKey: scope.selectedRoleKey ?? null,
+      });
+    }
+
     res.status(result.alreadyExists ? 200 : 201).json({
       journalId: result.journalId,
       documentLineIds: result.documentLineIds,
