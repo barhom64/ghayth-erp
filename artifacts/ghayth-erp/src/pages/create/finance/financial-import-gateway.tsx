@@ -373,7 +373,7 @@ export default function FinancialImportGateway() {
                     <label className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                       <Checkbox checked={presetDefault} onCheckedChange={(v) => setPresetDefault(v === true)} /> افتراضي
                     </label>
-                    <Button type="button" variant="outline" size="sm" onClick={handleSavePreset} disabled={savePresetMut.isPending}>
+                    <Button type="button" variant="outline" size="sm" onClick={handleSavePreset} disabled={savePresetMut.isPending} rateLimitAware>
                       <Save className="w-4 h-4 ml-1" /> حفظ كقالب
                     </Button>
                   </div>
