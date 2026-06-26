@@ -1,0 +1,92 @@
+# مجلس غيث — مراجعة Claude الإلزامية على كل PR (الطبقة 2 من ghayth-review).
+# المسار: .github/workflows/ghayth-council.yml
+#
+# الغرض: لا أحد يتعدّى المجلس. يعمل تلقائيًا على كل pull_request (لا يحتاج @claude)،
+# يشغّل ghayth-review بطبقاته الثلاث على diff الـPR، ينشر الحكم، ويُفشِل الفحص
+# عند «يُرفض» أو «يُعتمد بشرط» أو غياب المفتاح — فيصير فحصًا إلزاميًا في branch
+# protection يمنع الدمج.
+#
+# التهيئة (مرة واحدة من المالك):
+#   1. سرّ المصادقة في Settings → Secrets and variables → Actions:
+#        - ANTHROPIC_API_KEY  (مفتاح Anthropic)  أو
+#        - CLAUDE_CODE_OAUTH_TOKEN  (اشتراك Claude — بلا تكلفة استهلاك)
+#      أي LLM يراجع كل PR آليًا يحتاج مصادقة؛ لا يوجد مسار بلا أحدهما.
+#   2. branch protection: أضِف فحص «ghayth-council» إلى Required status checks،
+#      وأبقِ bypass list فارغة.
+name: ghayth-council
+
+on:
+  pull_request:
+    branches: [main, master]
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+jobs:
+  council:
+    name: ghayth-council
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: التحقق من مصادقة Claude (لا تمرير صامت)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ] && [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+            echo "🚫 لا ANTHROPIC_API_KEY ولا CLAUDE_CODE_OAUTH_TOKEN — المجلس لا يعمل بلا مصادقة."
+            echo "أضِف أحدهما في Settings → Secrets and variables → Actions. لن يُمرَّر الفحص بصمت."
+            exit 1
+          fi
+
+      - name: مجلس ghayth-review على diff الـPR
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          direct_prompt: |
+            أنت مجلس مراجعة نظام غيث. راجع diff هذا الـPR عبر مهارة ghayth-review
+            في `.claude/skills/ghayth-review/SKILL.md` بطبقاتها الثلاث، مدقّقًا على
+            الكود الفعلي للـ diff لا على وصف الـPR:
+              - الطبقة 0: الامتثال لدستور `docs/ghayth-constitution.md` (أي خرق = يُرفض).
+              - الطبقة 1: اليقيني (صحة الكود، الوصل، الحدود، الهجرات).
+              - الطبقة 2: المجلس بأربع عدسات (معمارية/دفتر/أمان وعزل/واجهة) + رئيس.
+
+            انشر الحكم المنظّم كاملًا تعليقًا على الـPR بصيغة مخرج ghayth-review.
+
+            ثم في آخر خطوة، اكتب القرار النهائي بكلمة واحدة إلى ملف القرار:
+              - يُعتمد        → echo APPROVED   > council-decision.txt
+              - يُعتمد بشرط   → echo CONDITIONAL > council-decision.txt
+              - يُرفض         → echo REJECTED    > council-decision.txt
+            هذا الملف إلزامي — اكتبه دائمًا.
+
+            قيود: لا تعدّل كودًا، لا تدمج، لا تفتح PR. مراجعة وحكم فقط.
+
+      - name: بوابة القرار — النجاح فقط عند «يُعتمد»
+        run: |
+          if [ ! -f council-decision.txt ]; then
+            echo "🚫 المجلس لم يُصدر قرارًا (council-decision.txt مفقود) — يُعامَل كرفض، لا تمرير صامت."
+            exit 1
+          fi
+          decision="$(tr -d '[:space:]' < council-decision.txt)"
+          echo "قرار المجلس: $decision"
+          case "$decision" in
+            APPROVED)
+              echo "✅ يُعتمد — البوابة خضراء." ;;
+            CONDITIONAL)
+              echo "🚫 يُعتمد بشرط — الشروط يجب أن تُعالَج قبل الدمج (الحوكمة: النجاح = «يُعتمد»)."; exit 1 ;;
+            REJECTED)
+              echo "🚫 يُرفض — راجع حكم المجلس في تعليق الـPR."; exit 1 ;;
+            *)
+              echo "🚫 قرار غير معروف ($decision) — يُعامَل كرفض."; exit 1 ;;
+          esac
