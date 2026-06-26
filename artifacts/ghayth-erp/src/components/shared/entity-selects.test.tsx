@@ -98,9 +98,9 @@ describe("ClientSelect (#2134)", () => {
     expect(screen.getByTestId("selected")).toHaveTextContent("777");
   });
 
-  // NOTE: ClientSelect's inline-create now opens the full-form AllowCreateDrawer
-  // (createEntityKind: "client"), not the truncated QuickCreateDialog — so the
-  // quick-create payload-strip case moved to a still-on-dialog select below.
+  // NOTE: ClientSelect's inline-create opens the registered full-form drawer
+  // (createEntityKind: "client"). The quick-create payload-strip case below
+  // uses SupplierSelect, whose drawer hosts the generic field-driven form.
 });
 
 function SupplierHarness() {
@@ -113,7 +113,7 @@ function SupplierHarness() {
   );
 }
 
-describe("QuickCreateDialog quick-create (#2134) — selects still on the dialog", () => {
+describe("generic field-driven quick-create via unified drawer (#2134)", () => {
   it("strips empty optional fields and the new entity appears + is selected immediately", async () => {
     const user = userEvent.setup();
     mutateSpy.mockImplementation((_payload: any, opts: any) => {
