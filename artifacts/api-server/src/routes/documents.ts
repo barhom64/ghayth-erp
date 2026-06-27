@@ -3,7 +3,6 @@ import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { checkDocumentAcl } from "../lib/documentAcl.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { ObjectStorageService } from "../lib/objectStorage.js";
-import { Readable } from "stream";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, ConflictError,
   parseId,
@@ -433,20 +432,14 @@ router.get("/:id/download", authorize({ feature: "documents", action: "export" }
     ).catch((e) => logger.error(e, "document access log failed (download)"));
 
     try {
-      const objectFile = await objectStorageService.getObjectEntityFile(doc.storageKey);
-      const response = await objectStorageService.downloadObject(objectFile);
+      const obj = await objectStorageService.openObjectStream(doc.storageKey);
 
       res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(doc.fileName || 'file')}"`);
-      if (doc.mimeType) res.setHeader("Content-Type", doc.mimeType);
+      res.setHeader("Content-Type", doc.mimeType || obj.contentType);
       res.setHeader("X-Content-Type-Options", "nosniff");
-      res.status(response.status);
+      if (obj.size != null) res.setHeader("Content-Length", String(obj.size));
 
-      if (response.body) {
-        const nodeStream = Readable.fromWeb(response.body as ReadableStream<Uint8Array>);
-        nodeStream.pipe(res);
-      } else {
-        res.end();
-      }
+      obj.stream.pipe(res);
     } catch (e) {
       logger.error(e, "document download: file not found in storage");
       throw new NotFoundError("الملف غير موجود في التخزين");
@@ -486,21 +479,15 @@ router.get("/:id/preview", authorize({ feature: "documents", action: "export" })
     ).catch((e) => logger.error(e, "document access log failed (preview)"));
 
     try {
-      const objectFile = await objectStorageService.getObjectEntityFile(doc.storageKey);
-      const response = await objectStorageService.downloadObject(objectFile);
+      const obj = await objectStorageService.openObjectStream(doc.storageKey);
 
       res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(doc.fileName || 'file')}"`);
-      if (doc.mimeType) res.setHeader("Content-Type", doc.mimeType);
+      res.setHeader("Content-Type", doc.mimeType || obj.contentType);
       res.setHeader("X-Content-Type-Options", "nosniff");
       res.setHeader("Cache-Control", "private, max-age=300");
-      res.status(response.status);
+      if (obj.size != null) res.setHeader("Content-Length", String(obj.size));
 
-      if (response.body) {
-        const nodeStream = Readable.fromWeb(response.body as ReadableStream<Uint8Array>);
-        nodeStream.pipe(res);
-      } else {
-        res.end();
-      }
+      obj.stream.pipe(res);
     } catch (e) {
       logger.error(e, "document preview: file not found in storage");
       throw new NotFoundError("الملف غير موجود في التخزين");
