@@ -2276,6 +2276,146 @@ async function weeklyFleetReport(): Promise<string> {
   return `Weekly fleet reports: ${sent}`;
 }
 
+/**
+ * Spec ملف 04 §تنبيهات الأسطول السبعة — تنبيه «استبدال محتمل»:
+ * إذا تكررت أعطال مركبة (3 أو أكثر في الشهر التقويمي الحالي) → بريد
+ * للمدير العام (أو مدير الفرع) مع سؤال: هل تُستبدل المركبة؟
+ *
+ * الموجود اليوم في smartAlerts.checkVehicleRepeatedBreakdowns: نافذة
+ * 90 يومًا تضع المركبة under_review، broadcast لا أكثر. هذه الدالة
+ * تكمل الفجوة: نافذة شهر تقويمي + بريد صريح للمدير + idempotency على
+ * (vehicleId, alertMonth).
+ *
+ * تعمل يوميًا حتى يصل التنبيه يوم وقوع العطل الثالث، لا تنتظر آخر
+ * الشهر. عمود alertMonth في fleet_replacement_alerts يحفظ التكرار
+ * مرّة واحدة لكل شهر تقويمي حتى لو فُتح/أُغلق العمل اليومي عدّة مرات.
+ *
+ * channel = email فقط (داخلي للمدير) — بلا in_app fan-out (درس Codex
+ * P2 من شريحة ١: in_app بلا assignmentId يتسرّب لكل الموظفين).
+ */
+async function dailyVehicleReplacementCheck(): Promise<string> {
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
+  let alerted = 0;
+  for (const company of companies) {
+    const candidates = await rawQuery<Record<string, unknown>>(
+      `SELECT fv.id AS "vehicleId",
+              fv."branchId",
+              fv."plateNumber",
+              CONCAT_WS(' ', fv.make, fv.model) AS "vehicleName",
+              COUNT(b.id) AS "breakdownCount",
+              array_agg(DISTINCT b.category) FILTER (WHERE b.category IS NOT NULL) AS categories,
+              date_trunc('month', CURRENT_DATE)::date AS "alertMonth"
+         FROM fleet_vehicles fv
+         JOIN fleet_breakdowns b
+           ON b."vehicleId" = fv.id
+          AND b."companyId" = fv."companyId"
+          AND b."deletedAt" IS NULL
+          AND b.status <> 'cancelled'
+          AND b."reportedAt" >= date_trunc('month', CURRENT_DATE)
+          AND b."reportedAt" <  date_trunc('month', CURRENT_DATE) + INTERVAL '1 month'
+        WHERE fv."companyId" = $1
+          AND fv."deletedAt" IS NULL
+        GROUP BY fv.id, fv."branchId", fv."plateNumber", fv.make, fv.model
+        HAVING COUNT(b.id) >= 3`,
+      [company.id]
+    );
+    for (const c of candidates) {
+      const vehicleId = Number(c.vehicleId);
+      const alertMonth = String(c.alertMonth).slice(0, 10);
+      const branchId = c.branchId != null ? Number(c.branchId) : null;
+
+      const existing = await rawQuery<Record<string, unknown>>(
+        `SELECT 1 FROM fleet_replacement_alerts
+          WHERE "vehicleId" = $1 AND "alertMonth" = $2::date LIMIT 1`,
+        [vehicleId, alertMonth]
+      );
+      if (existing.length > 0) continue;
+
+      // وجِّه للمدير العام (أو owner) عند branch محدد؛ ولو ما فيش branch،
+      // ابحث على مستوى الشركة (branchId = 0 ⇒ مالك الشركة).
+      let managerAssignment: number | null = null;
+      let managerName = 'المدير العام';
+      try {
+        if (branchId) {
+          managerAssignment = await getDirectorAssignmentId(company.id, branchId);
+        }
+        if (!managerAssignment) {
+          const [fallback] = await rawQuery<{ id: number; name: string }>(
+            `SELECT ea.id, e.name
+               FROM employee_assignments ea
+               LEFT JOIN employees e ON e.id = ea."employeeId"
+              WHERE ea."companyId" = $1 AND ea.status = 'active'
+                AND ea.role IN ('general_manager','owner')
+              ORDER BY CASE ea.role WHEN 'general_manager' THEN 1 ELSE 2 END
+              LIMIT 1`,
+            [company.id]
+          );
+          if (fallback) { managerAssignment = fallback.id; managerName = fallback.name || managerName; }
+        } else {
+          const [byBranch] = await rawQuery<{ name: string }>(
+            `SELECT e.name FROM employee_assignments ea
+              LEFT JOIN employees e ON e.id = ea."employeeId"
+              WHERE ea.id = $1`,
+            [managerAssignment]
+          );
+          if (byBranch?.name) managerName = byBranch.name;
+        }
+      } catch (e) {
+        logger.warn(e, `[cronScheduler] vehicle_replacement: manager lookup failed (vehicleId=${vehicleId})`);
+      }
+
+      if (!managerAssignment) {
+        logger.info(`[cronScheduler] vehicle_replacement: no manager found (company=${company.id}, vehicleId=${vehicleId}) — skipped`);
+        continue;
+      }
+
+      const categoriesArr = Array.isArray(c.categories)
+        ? (c.categories as Array<string | null>).filter((x): x is string => typeof x === 'string')
+        : [];
+      const categoriesText = categoriesArr.length > 0 ? categoriesArr.join(', ') : 'غير محدد';
+      const monthLabel = alertMonth.slice(0, 7); // YYYY-MM
+
+      try {
+        await dispatchNotification({
+          companyId: company.id,
+          eventCategory: "fleet.breakdown.replacement_candidate",
+          title: "",
+          body: "",
+          channels: ["email" as const],
+          templateKey: "fleet.breakdown.replacement_candidate",
+          templateVars: {
+            managerName: managerName,
+            plateNumber: String(c.plateNumber ?? '—'),
+            vehicleName: String(c.vehicleName ?? '—'),
+            breakdownCount: String(c.breakdownCount ?? 0),
+            month: monthLabel,
+            categories: categoriesText,
+          },
+          assignmentId: managerAssignment,
+          refType: "fleet_vehicle",
+          refId: vehicleId,
+          priority: "high",
+        });
+      } catch (e) {
+        logger.warn(e, `[cronScheduler] vehicle_replacement dispatch failed (vehicleId=${vehicleId})`);
+        continue;
+      }
+
+      // سجّل التنبيه قبل الانتقال — يضمن عدم إعادة الإرسال نفس الشهر.
+      await rawExecute(
+        `INSERT INTO fleet_replacement_alerts
+           ("vehicleId","alertMonth","companyId","branchId","breakdownCount","alertedAssignmentId")
+         VALUES ($1,$2::date,$3,$4,$5,$6)
+         ON CONFLICT ("vehicleId","alertMonth") DO NOTHING`,
+        [vehicleId, alertMonth, company.id, branchId, Number(c.breakdownCount), managerAssignment]
+      ).catch((e) => logger.error(e, "[cronScheduler] fleet_replacement_alerts insert failed"));
+
+      alerted++;
+    }
+  }
+  return `Vehicle replacement alerts: ${alerted}`;
+}
+
 async function weeklyCrmReport(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let sent = 0;
@@ -5528,6 +5668,10 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "monthly_closing_prep", description: "تذكير الإقفال يوم 28", schedule: "0 8 28 * *", handler: monthlyClosingPrep },
   { name: "weekly_hr_report", description: "تقرير HR الأسبوعي", schedule: "0 8 * * 0", handler: weeklyHrReport },
   { name: "weekly_fleet_report", description: "تقرير الأسطول الأسبوعي", schedule: "0 8 * * 0", handler: weeklyFleetReport },
+  // ملف 04 §تنبيهات الأسطول — تنبيه استبدال محتمل (3+ أعطال/شهر).
+  // يومي صباحًا 06:30 ليصل اليوم الذي يقع فيه العطل الثالث (idempotent
+  // عبر fleet_replacement_alerts: مرّة واحدة لكل مركبة لكل شهر تقويمي).
+  { name: "daily_vehicle_replacement_check", description: "تنبيه استبدال محتمل (3+ أعطال/شهر)", schedule: "30 6 * * *", handler: dailyVehicleReplacementCheck },
   { name: "weekly_crm_report", description: "تقرير CRM الأسبوعي", schedule: "0 8 * * 0", handler: weeklyCrmReport },
   { name: "weekly_cash_flow", description: "فحص التدفق النقدي الأسبوعي", schedule: "0 9 * * 1", handler: weeklyCashFlowCheck },
   { name: "weekly_property_revenue", description: "إيرادات عقارية أسبوعية", schedule: "0 9 * * 1", handler: weeklyPropertyRevenue },
