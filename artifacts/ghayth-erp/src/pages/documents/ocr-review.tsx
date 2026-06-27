@@ -109,7 +109,25 @@ export default function OcrReviewPage() {
         method: "POST",
         body: JSON.stringify(payload),
       });
-      toast({ title: "تم تأكيد المستخلَص وتسجيل الكيان المرتبط" });
+      // البند ٣ — تطبيق على الموظف عبر عقد HR (إن كان الكيان موظفًا ووثيقة هوية/إقامة).
+      // الوثائق لا تكتب على الموظف؛ نمرّر الحقول المؤكَّدة لعقد HR (يحتاج صلاحية HR،
+      // سياسة «املأ الفارغ فقط»). لو نقصت الصلاحية → التأكيد محفوظ والتطبيق يُترك لـHR.
+      const item = items.find((x) => x.id === id);
+      const isIdentityDoc = /iqama|residence|الإقامة|الاقامة|هوية|national/i.test(item?.docType || "");
+      if (t?.appliedTo === "employee" && t?.appliedToId && isIdentityDoc) {
+        try {
+          const r = await apiFetch<{ applied?: string[] }>(`/employees/${Number(t.appliedToId)}/ocr-apply`, {
+            method: "POST",
+            body: JSON.stringify({ docType: item?.docType, fields: edits[id] || {} }),
+          });
+          const n = r?.applied?.length ?? 0;
+          toast({ title: n ? `تم التأكيد وتطبيق ${n} حقل فارغ على الموظف` : "تم التأكيد — لا حقول فارغة للتعبئة على الموظف" });
+        } catch {
+          toast({ title: "تم التأكيد — التطبيق على الموظف يحتاج صلاحية الموارد البشرية" });
+        }
+      } else {
+        toast({ title: "تم تأكيد المستخلَص وتسجيل الكيان المرتبط" });
+      }
       setItems((p) => p.filter((x) => x.id !== id));
     } catch (err: any) {
       toast({ variant: "destructive", title: "فشل التأكيد", description: err?.message });
