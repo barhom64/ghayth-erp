@@ -15,6 +15,7 @@ import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requireMinLevel } from "../middlewares/roleGuard.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { assertNotSelfApproval } from "../lib/rbac/selfApprovalCreators.js";
 import { issueNumber } from "../lib/numberingService.js";
 import {
   emitEvent,
@@ -2318,6 +2319,13 @@ journalRouter.patch("/expenses/:id/approve", authorize({ feature: "finance.journ
       );
     }
 
+    // Maker-checker: the creator may not APPROVE their own expense — the same
+    // segregation the unified approval chain enforces. Only self-approval is
+    // blocked (reject/return stay open); owners (no employeeId) are exempt.
+    if (newStatus === "approved") {
+      await assertNotSelfApproval("expense", expenseId, scope.companyId, scope.employeeId);
+    }
+
     // Central lifecycle engine: expense approval uses the shared `status`
     // column on journal_entries. fromStates restricts the decision to
     // pending/draft — an already-approved or already-rejected expense
@@ -3355,6 +3363,13 @@ journalRouter.patch("/salary-advances/:id/approve", authorize({ feature: "financ
         field: "notes",
         fix: "اكتب سبب رفض السلفة",
       });
+    }
+
+    // Maker-checker: the creator may not APPROVE their own salary advance —
+    // the same segregation the unified approval chain enforces. Only
+    // self-approval is blocked; owners (no employeeId) are exempt.
+    if (newStatus === "approved") {
+      await assertNotSelfApproval("salary_advance", advanceId, scope.companyId, scope.employeeId);
     }
 
     // Central lifecycle engine: salary advances live on journal_entries

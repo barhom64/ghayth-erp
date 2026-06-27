@@ -11,6 +11,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { assertNotSelfApproval } from "../lib/rbac/selfApprovalCreators.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { markIdempotencyReplay, requestIdempotencyToken } from "../lib/requestIdempotency.js";
 import { assertDocumentBranchAccess } from "../lib/branchResolution.js";
@@ -1134,6 +1135,14 @@ custodiesRouter.patch("/custodies/:id/approve", authorize({ feature: "finance.cu
             : "اكتب سبب إرجاع العهدة لإعادة التقديم",
         },
       );
+    }
+
+    // Maker-checker: the creator may not APPROVE their own custody (cash
+    // advance) — the same segregation the unified approval chain enforces.
+    // Reject/return stay open (a creator may withdraw their own request);
+    // only self-approval is blocked. Owners (no employeeId) are exempt.
+    if (newStatus === "approved") {
+      await assertNotSelfApproval("custody", custodyId, scope.companyId, scope.employeeId);
     }
 
     // Central lifecycle engine: custody approval goes through the shared

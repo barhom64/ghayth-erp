@@ -76,6 +76,10 @@ const ALLOWLIST = new Set([
   // بـ redirect إلى «تحصيل من عميل» الموحّد (/finance/collect) بعد ثبوت بوابة §٧.٥.
   // الملف مُبقًى للمرجع/التراجع (doc 25 §٨: تحويل لا حذف).
   "pages/create/finance/customer-receipt.tsx",
+  // البند ٢/م٦ — journal-quick-templates: مسارها /finance/journal-quick-templates يُحوَّل
+  // بـ redirect إلى «قيد يومية» (/finance/journal/create) بعد دمج قوالبها الـ١٢ فيها
+  // كمنتقي قالب (بياناتها صارت lib/journal-templates.ts). الملف redirect stub مُبقًى (§٨).
+  "pages/create/finance/journal-quick-templates.tsx",
 ]);
 
 const SOURCE_EXTS = [".ts", ".tsx", ".js", ".jsx"];

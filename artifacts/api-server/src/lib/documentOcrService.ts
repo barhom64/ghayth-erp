@@ -20,7 +20,7 @@ export type OcrResult = { text: string; confidence: number };
 
 /**
  * شغّل OCR على صورة (Buffer/مسار/URL) باللغتين. غير نقي (tesseract). يُحمَّل كسولًا
- * فلا يُثقِل الإقلاع، ويُنهى العامل دائمًا. PDF يحتاج تحويلًا لصورة أولًا (لاحقًا).
+ * فلا يُثقِل الإقلاع، ويُنهى العامل دائمًا. للـPDF استخدم runOcrDocument.
  */
 export async function runOcr(input: Buffer | string, langs = "ara+eng"): Promise<OcrResult> {
   const { createWorker } = await import("tesseract.js");
@@ -31,6 +31,40 @@ export async function runOcr(input: Buffer | string, langs = "ara+eng"): Promise
   } finally {
     await worker.terminate().catch(() => {});
   }
+}
+
+/**
+ * pdfToPngImages — يصيّر أوّل صفحات PDF صورًا PNG عبر mupdf (WASM، بلا ثنائي native،
+ * نواة مضمّنة محليًّا فلا شبكة وقت التشغيل). الفواتير غالبًا صفحة واحدة، فنكتفي بأوّل
+ * maxPages لتفادي تكلفة الملفات الطويلة. scale=2 يرفع الدقّة لتحسين دقّة القراءة.
+ */
+export async function pdfToPngImages(pdf: Buffer, maxPages = 3, scale = 2): Promise<Buffer[]> {
+  const mupdf = await import("mupdf");
+  const doc = mupdf.Document.openDocument(pdf, "application/pdf");
+  const count = Math.min(doc.countPages(), Math.max(1, maxPages));
+  const out: Buffer[] = [];
+  for (let i = 0; i < count; i++) {
+    const page = doc.loadPage(i);
+    const pix = page.toPixmap(mupdf.Matrix.scale(scale, scale), mupdf.ColorSpace.DeviceRGB, false);
+    out.push(Buffer.from(pix.asPNG()));
+  }
+  return out;
+}
+
+/**
+ * runOcrDocument — يقرأ مستندًا (صورة أو PDF) باللغتين. صورة → runOcr مباشرة؛ PDF →
+ * يُصيَّر لصفحات صور ثم تُقرأ كلها ويُدمج النص + تُتوسّط الثقة. غير نقي (tesseract+mupdf).
+ */
+export async function runOcrDocument(input: Buffer, mimeType: string | null, langs = "ara+eng"): Promise<OcrResult> {
+  if (!(mimeType && /pdf/i.test(mimeType))) return runOcr(input, langs);
+  const pages = await pdfToPngImages(input);
+  if (!pages.length) return { text: "", confidence: 0 };
+  const results: OcrResult[] = [];
+  for (const p of pages) results.push(await runOcr(p, langs));
+  return {
+    text: results.map((r) => r.text).join("\n\n"),
+    confidence: Math.round((results.reduce((s, r) => s + r.confidence, 0) / results.length) * 100) / 100,
+  };
 }
 
 // ───────────────────────────────────────────────────────────────────────────

@@ -1566,17 +1566,17 @@ router.post("/:id/ocr/rerun", authorize({ feature: "documents.my", action: "upda
     // يجوز لمستخدم في المسار تشغيلها على مستند لا يُسمح له بقراءته. 404 لا 403 (لا تسريب).
     if (!(await checkDocumentAcl(id, scope, "read"))) throw new NotFoundError("المستند غير موجود");
     if (!doc.storageKey) throw new ValidationError("لا ملف مرفوع لهذا المستند");
-    if (doc.mimeType && !/^image\//i.test(doc.mimeType)) {
-      throw new ValidationError("قراءة OCR تدعم الصور حاليًا — PDF يحتاج تحويلًا لصورة (لاحقًا)");
+    if (doc.mimeType && !/^image\//i.test(doc.mimeType) && !/pdf/i.test(doc.mimeType)) {
+      throw new ValidationError("قراءة OCR تدعم الصور وملفات PDF حاليًا");
     }
     // اقرأ بايتات الملف من التخزين الكائني (تدفّق → Buffer).
     const file = await objectStorageService.getObjectEntityFile(doc.storageKey);
     const chunks: Buffer[] = [];
     for await (const chunk of file.createReadStream()) chunks.push(chunk as Buffer);
     const buffer = Buffer.concat(chunks);
-    // المحرّك (tesseract كسول التحميل) ثم استخراج الحقول الحتمي.
-    const { runOcr, extractFields } = await import("../lib/documentOcrService.js");
-    const ocr = await runOcr(buffer);
+    // المحرّك (tesseract + mupdf كسولا التحميل): صورة أو PDF → نص ثم استخراج الحقول الحتمي.
+    const { runOcrDocument, extractFields } = await import("../lib/documentOcrService.js");
+    const ocr = await runOcrDocument(buffer, doc.mimeType);
     const docType = (typeof req.body?.docType === "string" && req.body.docType) || doc.category || "invoice";
     const { fields, fieldConfidence } = extractFields(ocr.text, docType);
     const confidence = Math.round((Number(ocr.confidence) || 0) * (fieldConfidence / 100) * 100) / 100;
