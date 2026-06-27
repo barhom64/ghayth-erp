@@ -68,6 +68,32 @@ describe("extractFields", () => {
     expect(r.fieldConfidence).toBe(100);
   });
 
+  it("for a vehicle_registration docType, extracts VIN (17) + plate + registration expiry", () => {
+    const r = extractFields(
+      "استمارة مركبة\nرقم الهيكل: 1HGCM82633A004352\nرقم اللوحة: ABC 1234\nانتهاء الاستمارة 2027-09-30",
+      "vehicle_registration",
+    );
+    expect(r.fields.vinNumber).toBe("1HGCM82633A004352");
+    expect(r.fields.plateNumber).toBe("ABC 1234");
+    expect(r.fields.registrationExpiry).toBe("2027-09-30");
+    expect(r.fields.amount).toBeUndefined();
+  });
+
+  it("for a driving_license docType, extracts the license number + class + expiry", () => {
+    const r = extractFields("رخصة قيادة\nرقم الرخصة: 1098765432\nالفئة: 3\nتاريخ الانتهاء 2029-04-15", "driving_license");
+    expect(r.fields.licenseNumber).toBe("1098765432");
+    expect(r.fields.licenseClass).toBe("3");
+    expect(r.fields.expiryDate).toBe("2029-04-15");
+    expect(r.fields.amount).toBeUndefined();
+  });
+
+  it("for commercial_registration, extracts a 10-digit CR number (not the vehicle branch)", () => {
+    const r = extractFields("سجل تجاري\nرقم السجل: 1010234567\nجهة الإصدار: وزارة التجارة", "commercial_registration");
+    expect(r.fields.crNumber).toBe("1010234567");
+    expect(r.fields.issuingAuthority).toContain("وزارة التجارة");
+    expect(r.fields.plateNumber).toBeUndefined(); // ليست فرع المركبة رغم "registration"
+  });
+
   it("scores confidence by captured critical fields (amount+date highest)", () => {
     const full = extractFields("الإجمالي: 500\nالتاريخ 2026-01-01\nرقم الفاتورة: X9\nضريبة: 75\nالرقم الضريبي 300012345600003");
     expect(full.fieldConfidence).toBe(100);

@@ -82,6 +82,16 @@ export type ExtractedFields = {
   // وثائق الهوية (نوع iqama/الهوية الوطنية) — رقم ١٠ خانات + تاريخ انتهاء
   idNumber?: string | null;
   expiryDate?: string | null;
+  // استمارة المركبة (نوع vehicle_registration) — لوحة + هيكل + انتهاء الاستمارة
+  plateNumber?: string | null;
+  vinNumber?: string | null;
+  registrationExpiry?: string | null;
+  // رخصة القيادة (نوع driving_license) — رقم الرخصة + الفئة (+expiryDate أعلاه)
+  licenseNumber?: string | null;
+  licenseClass?: string | null;
+  // السجل التجاري (نوع commercial_registration) — رقم السجل + جهة الإصدار
+  crNumber?: string | null;
+  issuingAuthority?: string | null;
 };
 
 export type ExtractionResult = {
@@ -171,15 +181,78 @@ function extractIdentityFields(text: string): ExtractionResult {
 }
 
 /**
+ * استمارة المركبة (vehicle_registration): رقم الهيكل VIN (١٧ خانة بلا I/O/Q) + رقم
+ * اللوحة + تاريخ انتهاء الاستمارة. حتمي؛ يصحّحه المراجع البشري قبل التطبيق على المركبة.
+ */
+function extractVehicleFields(text: string): ExtractionResult {
+  const vinNumber =
+    findFirst(text, /(?:رقم\s*الهيكل|vin|chassis)\s*(?:no\.?|number)?\s*[:#]?\s*([A-HJ-NPR-Za-hj-npr-z0-9]{17})/i) ??
+    findFirst(text, /\b([A-HJ-NPR-Z0-9]{17})\b/);
+  const plateNumber = findFirst(
+    text,
+    /(?:رقم\s*اللوحة|اللوحة|plate\s*(?:no\.?|number)?)\s*[:#]?\s*([A-Za-zء-ي0-9][A-Za-zء-ي0-9 \-]{2,11})/i,
+  );
+  const registrationExpiry =
+    findLabeledDate(text, /(انتهاء|الصلاحية|صلاحية|expiry|expir|valid\s*until|\bexp\b)/i) ?? findDate(text);
+  const fields: ExtractedFields = { plateNumber, vinNumber, registrationExpiry };
+  let score = 0;
+  if (vinNumber != null) score += 40;
+  if (plateNumber != null) score += 35;
+  if (registrationExpiry != null) score += 25;
+  return { fields, fieldConfidence: score };
+}
+
+/** رخصة القيادة (driving_license): رقم الرخصة + تاريخ الانتهاء + الفئة. */
+function extractLicenseFields(text: string): ExtractionResult {
+  const licenseNumber =
+    findFirst(text, /(?:رقم\s*الرخصة|license\s*(?:no\.?|number)?)\s*[:#]?\s*([A-Za-z0-9\-]{4,})/i) ??
+    findFirst(text, /\b(\d{10})\b/);
+  const expiryDate =
+    findLabeledDate(text, /(انتهاء|الصلاحية|صلاحية|expiry|expir|valid\s*until|\bexp\b)/i) ?? findDate(text);
+  const licenseClass = findFirst(text, /(?:الفئة|الدرجة|class)\s*[:#]?\s*([A-Za-zء-ي0-9]{1,12})/i);
+  const fields: ExtractedFields = { licenseNumber, expiryDate, licenseClass };
+  let score = 0;
+  if (licenseNumber != null) score += 50;
+  if (expiryDate != null) score += 35;
+  if (licenseClass != null) score += 15;
+  return { fields, fieldConfidence: score };
+}
+
+/** السجل التجاري (commercial_registration): رقم السجل (١٠ خانات) + جهة الإصدار. */
+function extractCommercialRegFields(text: string): ExtractionResult {
+  const crNumber =
+    findFirst(text, /(?:رقم\s*السجل|سجل\s*تجاري|c\.?r\.?\s*(?:no\.?|number)?|commercial\s*reg)\s*[:#]?\s*(\d{10})/i) ??
+    findFirst(text, /\b(\d{10})\b/);
+  const issuingAuthority = findFirst(text, /(?:جهة\s*الإصدار|أصدرها|issued\s*by|issuing\s*authority)\s*[:#]?\s*([^\n]{2,60})/i);
+  const fields: ExtractedFields = { crNumber, issuingAuthority };
+  let score = 0;
+  if (crNumber != null) score += 70;
+  if (issuingAuthority != null) score += 30;
+  return { fields, fieldConfidence: score };
+}
+
+/**
  * استخرج الحقول المهيكلة من نص OCR. حتمي: نفس النص → نفس الحقول. يتفرّع حسب النوع:
- * وثيقة هوية (إقامة) → رقم+انتهاء؛ غيرها → حقول فاتورة. الثقة = نسبة الحقول المُلتقطة،
- * فيقرّر المراجع البشري قبل التطبيق على الكيان.
+ * هوية(إقامة)→رقم+انتهاء؛ رخصة→رقم+فئة+انتهاء؛ سجل تجاري→رقم+جهة؛ استمارة مركبة→
+ * لوحة+هيكل+انتهاء؛ غيرها→فاتورة. الثقة = نسبة الحقول، فيقرّر المراجع قبل التطبيق.
  */
 export function extractFields(ocrText: string, docType = "invoice"): ExtractionResult {
   const text = ocrText || "";
   // وثيقة هوية (إقامة/هوية وطنية): استخراج مختلف عن الفاتورة.
   if (/iqama|residence|الإقامة|الاقامة|هوية|national/i.test(docType)) {
     return extractIdentityFields(text);
+  }
+  // رخصة قيادة.
+  if (/driving_license|driving|license|رخصة/i.test(docType)) {
+    return extractLicenseFields(text);
+  }
+  // سجل تجاري — قبل المركبة (كلاهما يحوي "registration").
+  if (/commercial|سجل\s*تجاري|cr_?reg|commercial_registration/i.test(docType)) {
+    return extractCommercialRegFields(text);
+  }
+  // استمارة مركبة: لوحة/هيكل/انتهاء.
+  if (/vehicle|registration|استمارة|مركبة|سيارة/i.test(docType)) {
+    return extractVehicleFields(text);
   }
   const amount =
     findLabeledAmount(text, /(الإجمالي|الاجمالي|المجموع|الإجمالي شامل|grand total|total amount|total)/i) ??

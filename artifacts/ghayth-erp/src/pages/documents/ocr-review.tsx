@@ -109,21 +109,30 @@ export default function OcrReviewPage() {
         method: "POST",
         body: JSON.stringify(payload),
       });
-      // البند ٣ — تطبيق على الموظف عبر عقد HR (إن كان الكيان موظفًا ووثيقة هوية/إقامة).
-      // الوثائق لا تكتب على الموظف؛ نمرّر الحقول المؤكَّدة لعقد HR (يحتاج صلاحية HR،
-      // سياسة «املأ الفارغ فقط»). لو نقصت الصلاحية → التأكيد محفوظ والتطبيق يُترك لـHR.
+      // البند ٣ — تطبيق المستخلَص المؤكَّد على كيان المسار القائد عبر عقده. الوثائق لا
+      // تكتب على الكيان؛ نمرّر الحقول لعقد المالك (موظف→HR، مركبة→الأسطول…، يحتاج صلاحية
+      // المسار المالك، سياسة «املأ الفارغ فقط»). نقص الصلاحية → التأكيد محفوظ والتطبيق
+      // يُترك للمسار المالك. (إضافة مسار قائد جديد = سطر واحد في الإحالة أدناه.)
       const item = items.find((x) => x.id === id);
-      const isIdentityDoc = /iqama|residence|الإقامة|الاقامة|هوية|national/i.test(item?.docType || "");
-      if (t?.appliedTo === "employee" && t?.appliedToId && isIdentityDoc) {
+      const dt = item?.docType || "";
+      const applyEndpoint =
+        t?.appliedTo === "employee" && /iqama|residence|الإقامة|الاقامة|هوية|national|driving_license|driving|license|رخصة/i.test(dt)
+          ? `/employees/${Number(t.appliedToId)}/ocr-apply`
+          : t?.appliedTo === "vehicle" && /vehicle|registration|استمارة|مركبة|سيارة/i.test(dt)
+            ? `/fleet/vehicles/${Number(t.appliedToId)}/ocr-apply`
+            : t?.appliedTo === "company" && /commercial|سجل\s*تجاري|cr_?reg|registration/i.test(dt)
+              ? `/settings/companies/${Number(t.appliedToId)}/ocr-apply`
+              : null;
+      if (applyEndpoint && t?.appliedToId) {
         try {
-          const r = await apiFetch<{ applied?: string[] }>(`/employees/${Number(t.appliedToId)}/ocr-apply`, {
+          const r = await apiFetch<{ applied?: string[] }>(applyEndpoint, {
             method: "POST",
-            body: JSON.stringify({ docType: item?.docType, fields: edits[id] || {} }),
+            body: JSON.stringify({ docType: dt, fields: edits[id] || {} }),
           });
           const n = r?.applied?.length ?? 0;
-          toast({ title: n ? `تم التأكيد وتطبيق ${n} حقل فارغ على الموظف` : "تم التأكيد — لا حقول فارغة للتعبئة على الموظف" });
+          toast({ title: n ? `تم التأكيد وتطبيق ${n} حقل فارغ على الكيان` : "تم التأكيد — لا حقول فارغة للتعبئة على الكيان" });
         } catch {
-          toast({ title: "تم التأكيد — التطبيق على الموظف يحتاج صلاحية الموارد البشرية" });
+          toast({ title: "تم التأكيد — التطبيق على الكيان يحتاج صلاحية المسار المالك" });
         }
       } else {
         toast({ title: "تم تأكيد المستخلَص وتسجيل الكيان المرتبط" });
