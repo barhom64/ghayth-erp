@@ -1791,6 +1791,7 @@ async function monthlyRentPenalties(): Promise<string> {
   for (const company of companies) {
     const overduePayments = await rawQuery<Record<string, unknown>>(
       `SELECT rp.id, rp."dueDate", rp.amount, rp."contractId",
+              c."branchId",
               COALESCE(NULLIF(c."tenantName", ''), t.name)             AS "tenantName",
               COALESCE(NULLIF(c."tenantPhone", ''), t.phone)            AS "tenantPhone",
               COALESCE(NULLIF(c."tenantEmail", ''), t.email)            AS "tenantEmail",
@@ -1808,14 +1809,27 @@ async function monthlyRentPenalties(): Promise<string> {
       const lateDays = Math.floor((Date.now() - new Date(p.dueDate as string | Date).getTime()) / 86400000);
       let targetStage: string | null = null;
       let targetPhase: number | null = null;
-      // Spec ملف 05 §إيجار متأخر السداسي (السطر 59): يوم 1 → SMS للمستأجر.
-      // Phase 0 = first tenant-facing reminder; runs ONCE per payment (the
-      // late_rent_actions idempotency table guards it like every other phase).
+      // Spec ملف 05 §إيجار متأخر السداسي (السطر 59) — السلسلة الكاملة:
+      //   يوم 1  → SMS تذكير (phase 0 — شريحة ٣)
+      //   يوم 3  → تنبيه داخلي (phase 1)
+      //   يوم 5  → غرامة 2% (phase 5 — موضعها الجديد بعد نقلها من يوم 60)
+      //   يوم 7  → إشعار رسمي (phase 2)
+      //   يوم 14 → زيارة ميدانية (phase 3)
+      //   يوم 21 → إنذار رسمي (phase 7 — مرحلة جديدة)
+      //   يوم 30 → تصعيد GM + قانوني (phase 4 — تحسين)
+      //   يوم 60 → إخلاء (phase 8 — مرحلة جديدة، استبدلت الغرامة هنا)
+      //   يوم 90 → إحالة قانونية كقضية (phase 6 — لجوء أخير)
+      // كل مرحلة محروسة بـ idempotency على (paymentId, phase) في
+      // late_rent_actions. الترتيب else-if يختار أعلى مرحلة منطبقة فقط؛ هذا
+      // متعمد: لو وصلتنا دفعة قديمة (مثلاً مُستوردة) متأخرة 90 يومًا، لا
+      // نُرسل سلسلة الإشعارات بأثر رجعي بل ننتقل مباشرة لمسار اللجوء الأخير.
       if (lateDays >= 90)      { targetStage = 'legal_transfer';  targetPhase = 6; }
-      else if (lateDays >= 60) { targetStage = 'penalty_applied'; targetPhase = 5; }
+      else if (lateDays >= 60) { targetStage = 'eviction';        targetPhase = 8; }
       else if (lateDays >= 30) { targetStage = 'escalation';      targetPhase = 4; }
+      else if (lateDays >= 21) { targetStage = 'formal_notice';   targetPhase = 7; }
       else if (lateDays >= 14) { targetStage = 'field_visit';     targetPhase = 3; }
       else if (lateDays >= 7)  { targetStage = 'notification';    targetPhase = 2; }
+      else if (lateDays >= 5)  { targetStage = 'penalty_applied'; targetPhase = 5; }
       else if (lateDays >= 3)  { targetStage = 'alert';           targetPhase = 1; }
       else if (lateDays >= 1)  { targetStage = 'tenant_reminder'; targetPhase = 0; }
       if (!targetStage || targetPhase === null) continue;
@@ -1878,10 +1892,193 @@ async function monthlyRentPenalties(): Promise<string> {
 
       let actionLabel = targetStage;
       if (targetStage === 'penalty_applied') {
+        // يوم 5 — غرامة 2%. لا قيد دفتر جديد: تُضاف على رصيد rent_payments
+        // (نفس النمط القائم قبل شريحة ٤، فقط نُقل التاريخ من يوم 60 → يوم 5
+        // وفق المواصفة). كتابة سطور journal تتطلب assertion test (دستور §٣
+        // قاعدة ٣) — نتركها لمسار محاسبي منفصل حين يقرّر إبراهيم اعتمادها.
         const lateFee = roundTo2(Number(p.amount) * 0.02);
         await rawExecute(`UPDATE rent_payments SET amount = amount + $1, "updatedAt"=NOW() WHERE id = $2`, [lateFee, p.id]);
+        const newTotal = roundTo2(Number(p.amount) + lateFee);
         actionLabel = `غرامة تأخير ${lateFee}`;
         penalties++;
+        // إشعار المستأجر بالغرامة المضافة — قنوات صريحة، بلا in_app.
+        const tenantPhone = (p.tenantPhone as string | null) ?? null;
+        const tenantEmail = (p.tenantEmail as string | null) ?? null;
+        if (tenantPhone || tenantEmail) {
+          const tenantChannels: ("email" | "sms" | "whatsapp")[] = [];
+          if (tenantPhone) { tenantChannels.push("sms"); tenantChannels.push("whatsapp"); }
+          if (tenantEmail) tenantChannels.push("email");
+          try {
+            await dispatchNotification({
+              companyId: company.id,
+              eventCategory: "property.rent.overdue.day5",
+              title: "",
+              body: "",
+              channels: tenantChannels,
+              templateKey: "property.rent.overdue.day5",
+              templateVars: {
+                tenantName: String(p.tenantName ?? "—"),
+                unitName: String(p.unitName ?? p.unitId ?? "—"),
+                dueDate: String(p.dueDate ?? ""),
+                amount: newTotal.toFixed(2),
+                lateFee: lateFee.toFixed(2),
+              },
+              recipientEmail: tenantEmail ?? undefined,
+              recipientPhone: tenantPhone ?? undefined,
+              recipientName: (p.tenantName as string | null) ?? undefined,
+              refType: "rent_payment",
+              refId: Number(p.id),
+              priority: "high",
+            });
+          } catch (e) {
+            logger.warn(e, `[cronScheduler] rent overdue day-5 dispatch failed (rent_payment=${p.id})`);
+          }
+        }
+      } else if (targetStage === 'field_visit') {
+        actionLabel = 'زيارة ميدانية';
+        // إشعار المستأجر بقرب الزيارة الميدانية — قنوات صريحة، بلا in_app.
+        const tenantPhone = (p.tenantPhone as string | null) ?? null;
+        const tenantEmail = (p.tenantEmail as string | null) ?? null;
+        if (tenantPhone || tenantEmail) {
+          const tenantChannels: ("email" | "sms" | "whatsapp")[] = [];
+          if (tenantPhone) tenantChannels.push("sms");
+          if (tenantEmail) tenantChannels.push("email");
+          try {
+            await dispatchNotification({
+              companyId: company.id,
+              eventCategory: "property.rent.overdue.day14",
+              title: "",
+              body: "",
+              channels: tenantChannels,
+              templateKey: "property.rent.overdue.day14",
+              templateVars: {
+                tenantName: String(p.tenantName ?? "—"),
+                unitName: String(p.unitName ?? p.unitId ?? "—"),
+                dueDate: String(p.dueDate ?? ""),
+                amount: Number(p.amount ?? 0).toFixed(2),
+                lateDays: String(lateDays),
+              },
+              recipientEmail: tenantEmail ?? undefined,
+              recipientPhone: tenantPhone ?? undefined,
+              recipientName: (p.tenantName as string | null) ?? undefined,
+              refType: "rent_payment",
+              refId: Number(p.id),
+              priority: "high",
+            });
+          } catch (e) {
+            logger.warn(e, `[cronScheduler] rent overdue day-14 dispatch failed (rent_payment=${p.id})`);
+          }
+        }
+      } else if (targetStage === 'formal_notice') {
+        actionLabel = 'إنذار رسمي';
+        // إشعار المستأجر بالإنذار الرسمي — كل القنوات (SMS+email+WA) لأنها
+        // مرحلة قانونية حاسمة قبل تصعيد GM والقانونية.
+        const tenantPhone = (p.tenantPhone as string | null) ?? null;
+        const tenantEmail = (p.tenantEmail as string | null) ?? null;
+        if (tenantPhone || tenantEmail) {
+          const tenantChannels: ("email" | "sms" | "whatsapp")[] = [];
+          if (tenantPhone) { tenantChannels.push("sms"); tenantChannels.push("whatsapp"); }
+          if (tenantEmail) tenantChannels.push("email");
+          try {
+            await dispatchNotification({
+              companyId: company.id,
+              eventCategory: "property.rent.overdue.day21",
+              title: "",
+              body: "",
+              channels: tenantChannels,
+              templateKey: "property.rent.overdue.day21",
+              templateVars: {
+                tenantName: String(p.tenantName ?? "—"),
+                unitName: String(p.unitName ?? p.unitId ?? "—"),
+                dueDate: String(p.dueDate ?? ""),
+                amount: Number(p.amount ?? 0).toFixed(2),
+                lateDays: String(lateDays),
+              },
+              recipientEmail: tenantEmail ?? undefined,
+              recipientPhone: tenantPhone ?? undefined,
+              recipientName: (p.tenantName as string | null) ?? undefined,
+              refType: "rent_payment",
+              refId: Number(p.id),
+              priority: "high",
+            });
+          } catch (e) {
+            logger.warn(e, `[cronScheduler] rent overdue day-21 dispatch failed (rent_payment=${p.id})`);
+          }
+        }
+      } else if (targetStage === 'escalation') {
+        actionLabel = 'تصعيد GM + قانوني';
+        // يوم 30 — تصعيد داخلي للـ GM والقانونية. قنوات صريحة email فقط
+        // (لكل مستلم) لتجنّب in_app fan-out (درس Codex P2 من شريحة ١).
+        const branchIdForLookup = Number(p.branchId ?? 0);
+        try {
+          const gmId = branchIdForLookup ? await getDirectorAssignmentId(company.id, branchIdForLookup) : null;
+          const legalResp = await getLegalResponsible(company.id);
+          for (const target of [
+            { assignmentId: gmId, name: 'المدير العام' },
+            { assignmentId: legalResp?.assignmentId ?? null, name: legalResp?.employeeName ?? 'القسم القانوني' },
+          ]) {
+            if (!target.assignmentId) continue;
+            await dispatchNotification({
+              companyId: company.id,
+              eventCategory: "property.rent.overdue.day30",
+              title: "",
+              body: "",
+              channels: ["email" as const],
+              templateKey: "property.rent.overdue.day30",
+              templateVars: {
+                managerName: target.name,
+                tenantName: String(p.tenantName ?? "—"),
+                unitName: String(p.unitName ?? p.unitId ?? "—"),
+                dueDate: String(p.dueDate ?? ""),
+                amount: Number(p.amount ?? 0).toFixed(2),
+                lateDays: String(lateDays),
+              },
+              assignmentId: target.assignmentId,
+              refType: "rent_payment",
+              refId: Number(p.id),
+              priority: "high",
+            });
+          }
+        } catch (e) {
+          logger.warn(e, `[cronScheduler] rent overdue day-30 escalation dispatch failed (rent_payment=${p.id})`);
+        }
+      } else if (targetStage === 'eviction') {
+        actionLabel = 'إشعار إخلاء';
+        // يوم 60 — إشعار إخلاء للمستأجر + تنبيه GM/قانوني. لا نُنشئ قضية
+        // قانونية تلقائيًا (legal_transfer يوم 90 يفعل ذلك): الإخلاء قرار
+        // إنساني يبقى للـ GM والقانونية. هنا فقط نُشعر بالنية الموثّقة.
+        const tenantPhone = (p.tenantPhone as string | null) ?? null;
+        const tenantEmail = (p.tenantEmail as string | null) ?? null;
+        if (tenantPhone || tenantEmail) {
+          const tenantChannels: ("email" | "sms" | "whatsapp")[] = [];
+          if (tenantPhone) { tenantChannels.push("sms"); tenantChannels.push("whatsapp"); }
+          if (tenantEmail) tenantChannels.push("email");
+          try {
+            await dispatchNotification({
+              companyId: company.id,
+              eventCategory: "property.rent.overdue.day60",
+              title: "",
+              body: "",
+              channels: tenantChannels,
+              templateKey: "property.rent.overdue.day60",
+              templateVars: {
+                tenantName: String(p.tenantName ?? "—"),
+                unitName: String(p.unitName ?? p.unitId ?? "—"),
+                dueDate: String(p.dueDate ?? ""),
+                amount: Number(p.amount ?? 0).toFixed(2),
+                lateDays: String(lateDays),
+              },
+              recipientEmail: tenantEmail ?? undefined,
+              recipientPhone: tenantPhone ?? undefined,
+              recipientName: (p.tenantName as string | null) ?? undefined,
+              refType: "rent_payment",
+              refId: Number(p.id),
+              priority: "high",
+            });
+          } catch (e) {
+            logger.warn(e, `[cronScheduler] rent overdue day-60 tenant dispatch failed (rent_payment=${p.id})`);
+          }
+        }
       } else if (targetStage === 'legal_transfer') {
         try {
           const responsible = await getLegalResponsible(company.id);
@@ -1950,8 +2147,8 @@ async function monthlyRentPenalties(): Promise<string> {
         actionLabel = 'تحويل للقسم القانوني';
       } else if (targetStage === 'alert') actionLabel = 'تنبيه بالتأخر';
       else if (targetStage === 'notification') actionLabel = 'إشعار رسمي';
-      else if (targetStage === 'field_visit') actionLabel = 'زيارة ميدانية';
-      else if (targetStage === 'escalation') actionLabel = 'تصعيد لإدارة الأملاك';
+      // field_visit / formal_notice / escalation / eviction labels معالَجة
+      // داخل فروعها (مع dispatch المستأجر/الداخلي).
 
       await rawExecute(
         `INSERT INTO late_rent_actions ("contractId","paymentId",phase,action,"sentAt",notes)
