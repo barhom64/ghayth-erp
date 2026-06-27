@@ -40,6 +40,7 @@ import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.
 import { markIdempotencyReplay, requestIdempotencyToken } from "../lib/requestIdempotency.js";
 import { resolveTransactionBranch, assertDocumentBranchAccess } from "../lib/branchResolution.js";
 import { resolveBadDebtPolicy, STANDARD_BAD_DEBT_RATES, BAD_DEBT_POLICY_SETTING_KEY } from "../lib/badDebtPolicy.js";
+import { postBadDebtProvision, readAllowanceBalance } from "../lib/finance/badDebtProvision.js";
 import { resolveSettings, upsertSetting } from "../lib/settings.js";
 import { z } from "zod";
 
@@ -4015,7 +4016,15 @@ invoicesRouter.get("/bad-debt/preview", authorize({ feature: "finance.collection
     };
     const totalProvision = roundTo2(provision.current + provision.d30 + provision.d60 + provision.d90 + provision.d90plus);
 
-    res.json({ asOf, rates, buckets, provision, totalProvision, invoiceCount: invoices.length });
+    // الأثر المتوقع: المخصّص (1135) رصيدٌ مستهدف، فنعرض الرصيد الحالي والفرق الذي
+    // سيُرحَّل فعليًّا (delta-to-target) — لا الإجمالي الكامل.
+    const previewPeriod = (asOf || todayISO()).slice(0, 7);
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const allowanceCode = await financialEngine.resolveAccountCode(scope.companyId, "bad_debt_allowance", "credit", "1135");
+    const currentAllowance = await readAllowanceBalance(scope.companyId, allowanceCode, `BAD-DEBT-${previewPeriod}`);
+    const delta = roundTo2(totalProvision - currentAllowance);
+
+    res.json({ asOf, rates, buckets, provision, totalProvision, currentAllowance, delta, invoiceCount: invoices.length });
   } catch (err) {
     handleRouteError(err, res, "Bad debt preview error:");
   }
@@ -4031,12 +4040,6 @@ invoicesRouter.post("/bad-debt/post", authorize({ feature: "finance.collection",
     if (!/^\d{4}-\d{2}$/.test(targetPeriod)) {
       throw new ValidationError("صيغة الفترة غير صحيحة (YYYY-MM)");
     }
-    const targetDate = asOf || `${targetPeriod}-28`;
-    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, targetDate);
-    if (!periodCheck.open) {
-      throw new ConflictError(`لا يمكن تسجيل مخصص ديون في فترة مُقفلة: ${periodCheck.periodName ?? ""}`);
-    }
-
     const ref = `BAD-DEBT-${targetPeriod}`;
     const [existing] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM journal_entries WHERE "companyId"=$1 AND ref=$2 AND "deletedAt" IS NULL LIMIT 1`,
@@ -4049,87 +4052,58 @@ invoicesRouter.post("/bad-debt/post", authorize({ feature: "finance.collection",
       );
     }
 
-    // النِسَب: القياسي ← تهيئة الشركة (settings) ← تجاوز الطلب (body.rates).
-    const r = await resolveBadDebtPolicy(scope.companyId, rates ?? undefined);
-
-    // Exclude draft + cancelled + paid invoices. Drafts haven't posted a GL
-    // AR DR yet — accruing an allowance for them would credit allowance for
-    // doubtful accounts against a receivable the GL doesn't show, breaking
-    // trial balance reconciliation. Cancelled/paid never accrue allowance.
-    // Status `sent` is treated as the legacy synonym for `approved` (some
-    // older invoices missed the schema update).
-    const invoices = await rawQuery<Record<string, unknown>>(
-      `SELECT "createdAt", "dueDate", (total - COALESCE("paidAmount",0)) AS outstanding
-         FROM invoices
-        WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "createdAt" <= $2
-          AND status NOT IN ('draft','cancelled','paid','rejected','returned')
-          AND (total - COALESCE("paidAmount",0)) > 0.01`,
-      [scope.companyId, targetDate]
-    );
-    const asOfMs = new Date(targetDate).getTime();
-    const buckets = { current: 0, d30: 0, d60: 0, d90: 0, d90plus: 0 };
-    for (const inv of invoices) {
-      const due = inv.dueDate ? new Date(inv.dueDate as string | Date).getTime()
-        : new Date(inv.createdAt as string | Date).getTime() + 30 * 86400000;
-      const d = Math.floor((asOfMs - due) / 86400000);
-      const amt = Number(inv.outstanding);
-      const ra = roundTo2(amt);
-      if (d <= 0) buckets.current = roundTo2(buckets.current + ra);
-      else if (d <= 30) buckets.d30 = roundTo2(buckets.d30 + ra);
-      else if (d <= 60) buckets.d60 = roundTo2(buckets.d60 + ra);
-      else if (d <= 90) buckets.d90 = roundTo2(buckets.d90 + ra);
-      else buckets.d90plus = roundTo2(buckets.d90plus + ra);
-    }
-    const total = roundTo2(
-      buckets.current * r.current + buckets.d30 * r.d30 + buckets.d60 * r.d60 + buckets.d90 * r.d90 + buckets.d90plus * r.d90plus
-    );
-
-    if (total <= 0) {
-      throw new ValidationError("لا يوجد مبلغ لمخصص الديون المشكوك فيها");
-    }
-
-    const { financialEngine } = await import("../lib/engines/index.js");
-    const [expenseCode, allowanceCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "bad_debt_expense", "debit", "5820"),
-      financialEngine.resolveAccountCode(scope.companyId, "bad_debt_allowance", "credit", "1135"),
-    ]);
-
-    let journalId: number | null = null;
-    try {
-      const badDebtResult = await financialEngine.postJournalEntry({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        createdBy: scope.activeAssignmentId,
-        ref,
-        description: `مخصص ديون مشكوك فيها ${targetPeriod}${notes ? ` — ${notes}` : ""}`,
-        sourceType: "bad_debt_allowance",
-        sourceId: 0,
-        sourceKey: `finance:bad_debt:${scope.companyId}:${targetPeriod}`,
-        lines: [
-          { accountCode: expenseCode, debit: total, credit: 0 },
-          { accountCode: allowanceCode, debit: 0, credit: total },
-        ],
-      });
-      journalId = badDebtResult.journalId;
-      markIdempotencyReplay(req, res, badDebtResult.alreadyExists);
-    } catch (je) {
+    // Delta-to-target: post only (aging target − current allowance balance) so the
+    // allowance (1135) reflects the aging-based target each period without the
+    // cumulative over-provision a full-total-per-period posting would cause. The
+    // engine resolves rates (standard←company←request), reads the current 1135
+    // balance, computes the signed delta, and posts it — shared with the monthly
+    // cron via the same ref/sourceKey (idempotent per period).
+    const result = await postBadDebtProvision({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      period: targetPeriod,
+      asOf,
+      rates: rates ?? undefined,
+      createdBy: scope.activeAssignmentId,
+      notes,
+    }).catch((je) => {
       logger.error(je, "Bad debt JE error:");
       throw new IntegrationError(
         "فشل تسجيل قيد مخصص الديون المشكوك فيها",
-        { field: "journalEntry", fix: "راجع إعدادات الحسابات (5170/1210) ثم أعد المحاولة" }
+        { field: "journalEntry", fix: "راجع إعدادات الحسابات (5820/1135) ثم أعد المحاولة" }
       );
+    });
+
+    if (result.reason === "period_closed") {
+      throw new ConflictError("لا يمكن تسجيل مخصص ديون في فترة مُقفلة");
     }
 
+    // Already at target → no journal entry needed (not an error — a no-op).
+    if (!result.posted) {
+      res.status(200).json({
+        ref, period: targetPeriod, posted: false,
+        message: "المخصّص مطابق للهدف بالتقادم — لا حاجة لتعديل",
+        target: result.target, currentAllowance: result.currentAllowance, delta: 0,
+        total: result.target, buckets: result.buckets, rates: result.rates,
+      });
+      return;
+    }
+
+    markIdempotencyReplay(req, res, false);
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "bad_debt.posted",
       entity: "journal_entries",
-      entityId: journalId ?? 0,
-      details: JSON.stringify({ period: targetPeriod, total, buckets, rates: r }),
+      entityId: result.journalId ?? 0,
+      details: JSON.stringify({ period: targetPeriod, target: result.target, delta: result.delta, currentAllowance: result.currentAllowance, buckets: result.buckets, rates: result.rates }),
     }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
-    res.status(201).json({ journalId, ref, period: targetPeriod, total, buckets, rates: r });
+    res.status(201).json({
+      journalId: result.journalId, ref, period: targetPeriod, posted: true,
+      target: result.target, currentAllowance: result.currentAllowance, delta: result.delta,
+      total: result.target, buckets: result.buckets, rates: result.rates,
+    });
   } catch (err) {
     handleRouteError(err, res, "Bad debt post error:");
   }
