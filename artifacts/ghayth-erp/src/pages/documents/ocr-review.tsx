@@ -116,11 +116,13 @@ export default function OcrReviewPage() {
       const item = items.find((x) => x.id === id);
       const dt = item?.docType || "";
       const applyEndpoint =
-        t?.appliedTo === "employee" && /iqama|residence|الإقامة|الاقامة|هوية|national/i.test(dt)
+        t?.appliedTo === "employee" && /iqama|residence|الإقامة|الاقامة|هوية|national|driving_license|driving|license|رخصة/i.test(dt)
           ? `/employees/${Number(t.appliedToId)}/ocr-apply`
           : t?.appliedTo === "vehicle" && /vehicle|registration|استمارة|مركبة|سيارة/i.test(dt)
             ? `/fleet/vehicles/${Number(t.appliedToId)}/ocr-apply`
-            : null;
+            : t?.appliedTo === "company" && /commercial|سجل\s*تجاري|cr_?reg|registration/i.test(dt)
+              ? `/settings/companies/${Number(t.appliedToId)}/ocr-apply`
+              : null;
       if (applyEndpoint && t?.appliedToId) {
         try {
           const r = await apiFetch<{ applied?: string[] }>(applyEndpoint, {
