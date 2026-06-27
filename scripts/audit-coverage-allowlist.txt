@@ -114,3 +114,11 @@ PUT /documents/saudi/wps/credentials/:bankCode
 PUT /finance/saudi/wps/credentials/:bankCode
 PUT /hr/saudi/wps/credentials/:bankCode
 PUT /warehouse/saudi/wps/credentials/:bankCode
+# PUT /storage/uploads/direct/*key — ANONYMOUS signed direct-upload (self-hosted
+# local-disk driver). The endpoint is intentionally unauthenticated: authorization
+# is the timing-safe HMAC sig+exp on the URL, so there is NO session principal to
+# record at upload time. This step only writes opaque bytes to the storage backend;
+# the meaningful, principal-bearing audit happens when the object is bound to a
+# document via the authenticated POST /documents/upload (and finance/hr/admin
+# equivalents), which already log who/what/when. Nothing to audit here by design.
+PUT /storage/uploads/direct/*key
