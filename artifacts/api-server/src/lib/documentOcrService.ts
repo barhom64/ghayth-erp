@@ -73,11 +73,15 @@ export async function runOcrDocument(input: Buffer, mimeType: string | null, lan
 // ───────────────────────────────────────────────────────────────────────────
 
 export type ExtractedFields = {
-  amount: number | null;
-  vatAmount: number | null;
-  date: string | null;
-  invoiceNo: string | null;
-  taxNumber: string | null;
+  // فاتورة (نوع invoice)
+  amount?: number | null;
+  vatAmount?: number | null;
+  date?: string | null;
+  invoiceNo?: string | null;
+  taxNumber?: string | null;
+  // وثائق الهوية (نوع iqama/الهوية الوطنية) — رقم ١٠ خانات + تاريخ انتهاء
+  idNumber?: string | null;
+  expiryDate?: string | null;
 };
 
 export type ExtractionResult = {
@@ -135,12 +139,48 @@ function findFirst(text: string, re: RegExp): string | null {
   return m ? (m[1] ?? m[0]).trim() : null;
 }
 
+/** تاريخ على سطر يحمل كلمة مفتاحية (انتهاء/صلاحية/expiry) → YYYY-MM-DD. */
+function findLabeledDate(text: string, labels: RegExp): string | null {
+  for (const line of text.split(/\r?\n/)) {
+    if (labels.test(line)) {
+      const d = findDate(line);
+      if (d) return d;
+    }
+  }
+  return null;
+}
+
 /**
- * استخرج الحقول المهيكلة من نص OCR. حتمي: نفس النص → نفس الحقول. الثقة = نسبة
- * الحقول الأساسية المُلتقطة (مبلغ/تاريخ على الأقل)، فيقرّر المراجع البشري.
+ * وثائق الهوية (إقامة/هوية وطنية): رقم ١٠ خانات (يبدأ ١ مواطن / ٢ مقيم) + تاريخ
+ * انتهاء — لا حقول فاتورة. حتمي؛ يبقى الاسم للمراجع البشري (لا NER، لا تخمين هوية).
  */
-export function extractFields(ocrText: string, _docType = "invoice"): ExtractionResult {
+function extractIdentityFields(text: string): ExtractionResult {
+  const idNumber =
+    findFirst(
+      text,
+      /(?:رقم\s*(?:الهوية|الإقامة|الاقامة)|id\s*(?:no\.?|number)?|iqama\s*(?:no\.?|number)?)\s*[:#]?\s*([12]\d{9})/i,
+    ) ?? findFirst(text, /\b([12]\d{9})\b/);
+  const expiryDate =
+    findLabeledDate(text, /(انتهاء|الصلاحية|صلاحية|expiry|expir|valid\s*until|\bexp\b)/i) ?? findDate(text);
+  const fields: ExtractedFields = { idNumber, expiryDate };
+  // ثقة الاستخراج: وزن أعلى لرقم الهوية ثم تاريخ الانتهاء (الحقلان الحرجان للوثيقة).
+  let score = 0;
+  if (idNumber != null) score += 60;
+  if (expiryDate != null) score += 40;
+  return { fields, fieldConfidence: score };
+}
+
+/**
+ * استخرج الحقول المهيكلة من نص OCR. حتمي: نفس النص → نفس الحقول. يتفرّع حسب النوع:
+ * وثيقة هوية (إقامة) → رقم+انتهاء؛ غيرها → حقول فاتورة. الثقة = نسبة الحقول المُلتقطة،
+ * فيقرّر المراجع البشري قبل التطبيق على الكيان.
+ */
+export function extractFields(ocrText: string, docType = "invoice"): ExtractionResult {
   const text = ocrText || "";
+  // وثيقة هوية (إقامة/هوية وطنية): استخراج مختلف عن الفاتورة.
+  if (/iqama|residence|الإقامة|الاقامة|هوية|national/i.test(docType)) {
+    return extractIdentityFields(text);
+  }
   const amount =
     findLabeledAmount(text, /(الإجمالي|الاجمالي|المجموع|الإجمالي شامل|grand total|total amount|total)/i) ??
     findLabeledAmount(text, /(المبلغ|القيمة|amount|value)/i);
