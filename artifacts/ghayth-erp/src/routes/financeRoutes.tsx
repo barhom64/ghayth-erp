@@ -167,7 +167,6 @@ const BankGuarantees = lazy(() => import("@/pages/finance/bank-guarantees"));
 const JournalManual = lazy(() => import("@/pages/finance/journal-manual"));
 const GLPostingQueue = lazy(() => import("@/pages/finance/gl-posting-queue"));
 const JournalManualCreate = lazy(() => import("@/pages/create/finance/journal-manual-create"));
-const JournalQuickTemplates = lazy(() => import("@/pages/create/finance/journal-quick-templates"));
 const JournalReversal = lazy(() => import("@/pages/create/finance/journal-reversal"));
 const JournalManualDetail = lazy(() => import("@/pages/finance/journal-manual-detail"));
 const Intercompany = lazy(() => import("@/pages/finance/intercompany"));
@@ -432,7 +431,8 @@ export const financeRoutes = [
   // GAP_MATRIX P0 — manual journals touch the GL directly; gate at 70 (managers).
   { path: "/finance/journal-manual", component: JournalManual, minRoleLevel: 70 },
   { path: "/finance/journal-manual/create", component: JournalManualCreate, minRoleLevel: 70 },
-  { path: "/finance/journal-quick-templates", component: JournalQuickTemplates, minRoleLevel: 70 },
+  // البند ٢/م٦ — «قوالب قيود سريعة» دُمجت في «قيد يومية» كمنتقي قوالب → redirect (§٨).
+  { path: "/finance/journal-quick-templates", component: redirectTo("/finance/journal/create") },
   { path: "/finance/journal/reverse", component: JournalReversal, minRoleLevel: 70 },
   { path: "/finance/journal-manual/:id", component: JournalManualDetail, minRoleLevel: 70 },
   { path: "/finance/gl-posting-queue", component: GLPostingQueue },
