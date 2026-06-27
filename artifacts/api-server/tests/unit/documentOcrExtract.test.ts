@@ -54,6 +54,20 @@ describe("extractFields", () => {
     expect(extractFields(t)).toEqual(extractFields(t));
   });
 
+  it("for an identity docType, extracts a 10-digit ID/iqama number + expiry (not invoice fields)", () => {
+    const r = extractFields("هوية وطنية\nرقم الهوية: 1012345678\nتاريخ الانتهاء 2030/05/01", "iqama");
+    expect(r.fields.idNumber).toBe("1012345678");
+    expect(r.fields.expiryDate).toBe("2030-05-01");
+    expect(r.fields.amount).toBeUndefined();
+  });
+
+  it("identity: captures a resident iqama number (starts with 2) and labelled expiry", () => {
+    const r = extractFields("إقامة\nرقم الإقامة 2087654321\nانتهاء الصلاحية 2028-12-31", "iqama");
+    expect(r.fields.idNumber).toBe("2087654321");
+    expect(r.fields.expiryDate).toBe("2028-12-31");
+    expect(r.fieldConfidence).toBe(100);
+  });
+
   it("scores confidence by captured critical fields (amount+date highest)", () => {
     const full = extractFields("الإجمالي: 500\nالتاريخ 2026-01-01\nرقم الفاتورة: X9\nضريبة: 75\nالرقم الضريبي 300012345600003");
     expect(full.fieldConfidence).toBe(100);

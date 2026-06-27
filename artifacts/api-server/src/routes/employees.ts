@@ -3606,4 +3606,70 @@ router.post(
   }
 );
 
+// ─────────────────────────────────────────────────────────────────────────────
+// البند ٣ — عقد HR: تطبيق مستخرَج OCR مؤكَّد (وثيقة هوية/إقامة) على الموظف.
+//
+// حدّ المسار: مسار الوثائق (خادم) لا يكتب في كيان الموظف؛ يمرّر الحقول المؤكَّدة،
+// وهذا العقد المملوك لـHR يكتبها داخل نطاقه — بصلاحية HR (لا صلاحية الوثائق) + عزل
+// companyId + تدقيق. السياسة: «املأ الفارغ فقط» — لا يطمس رقم/انتهاء إقامة قائمًا
+// (حقل امتثال حسّاس)؛ القائم يبقى ويُبلَّغ في skipped. الدفعة الأولى: الإقامة فقط.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post(
+  "/:id/ocr-apply",
+  authorize({ feature: "hr.employees", action: "update", resource: { table: "employees", idParam: "id" } }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const docType = String(req.body?.docType ?? "");
+      const fields = req.body?.fields && typeof req.body.fields === "object" ? req.body.fields : {};
+      if (!/iqama|residence|الإقامة|الاقامة|هوية|national/i.test(docType)) {
+        throw new ValidationError("نوع المستند غير مدعوم بعد للتطبيق الآلي على الموظف", {
+          field: "docType",
+          fix: "الدفعة الحالية تدعم وثائق الهوية/الإقامة فقط.",
+        });
+      }
+      const [emp] = await rawQuery<{ id: number; iqamaNumber: string | null; iqamaExpiry: string | null }>(
+        `SELECT id, "iqamaNumber", "iqamaExpiry" FROM employees WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!emp) throw new NotFoundError("الموظف غير موجود");
+      // تحقّق المدخلات (يُحترم تحقّق المراجع البشري قبلها): رقم ١٠ خانات + تاريخ ISO.
+      const idNumber = typeof fields.idNumber === "string" && /^[12]\d{9}$/.test(fields.idNumber) ? fields.idNumber : null;
+      const expiry =
+        typeof fields.expiryDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(fields.expiryDate) ? fields.expiryDate : null;
+      // «املأ الفارغ فقط»: نُطبّق على الحقل الفارغ، ونُبقي القائم في skipped.
+      const setIqamaNumber = !!idNumber && !emp.iqamaNumber;
+      const setIqamaExpiry = !!expiry && !emp.iqamaExpiry;
+      const applied: string[] = [];
+      const skipped: string[] = [];
+      if (idNumber) (setIqamaNumber ? applied : skipped).push("iqamaNumber");
+      if (expiry) (setIqamaExpiry ? applied : skipped).push("iqamaExpiry");
+      if (!applied.length) {
+        res.json({ ok: true, applied, skipped, message: "لا حقول فارغة للتعبئة — القيم القائمة محفوظة." });
+        return;
+      }
+      await rawExecute(
+        `UPDATE employees SET
+           "iqamaNumber" = COALESCE(NULLIF("iqamaNumber", ''), $1),
+           "iqamaExpiry" = COALESCE("iqamaExpiry", $2),
+           "updatedAt"   = NOW()
+         WHERE id=$3 AND "companyId"=$4 AND "deletedAt" IS NULL`,
+        [setIqamaNumber ? idNumber : null, setIqamaExpiry ? expiry : null, id, scope.companyId],
+      );
+      void createAuditLog({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "employee.ocr.applied",
+        entity: "employees",
+        entityId: id,
+        after: { docType, applied, skipped },
+      }).catch((e) => logger.error(e, "employee ocr apply audit failed"));
+      res.json({ ok: true, applied, skipped });
+    } catch (err) {
+      handleRouteError(err, res, "employee OCR apply error:");
+    }
+  },
+);
+
 export default router;
