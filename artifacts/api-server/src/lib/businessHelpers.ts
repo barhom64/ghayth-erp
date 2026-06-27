@@ -914,9 +914,18 @@ export async function reverseAccountBalances(
   // moved chart_of_accounts.currentBalance, so reversing it would corrupt
   // the ledger by the negative of an entry that never posted. The flag also
   // makes a double reversal a no-op.
+  // FOR UPDATE mirrors applyJournalEntryBalances' self-lock (its H2 comment):
+  // when this runs inside the caller's transaction (rawQuery is ALS-bound),
+  // it serialises concurrent reversals of the SAME entry so the balance can't
+  // be rewound twice — the double-application race the forward guards against.
+  // The posted-entry callers (expense/salary-advance/custody reject) already
+  // hold the row lock via applyTransition; this makes the helper self-defending
+  // for any future caller. Harmless on the draft-delete bare callers
+  // (balancesApplied=false → the early return below).
   const [je] = await rawQuery<{ balancesApplied: boolean; entryDate: string }>(
     `SELECT "balancesApplied", date::text AS "entryDate"
-       FROM journal_entries WHERE id = $1 AND "companyId" = $2`,
+       FROM journal_entries WHERE id = $1 AND "companyId" = $2
+       FOR UPDATE`,
     [journalId, companyId]
   );
   if (!je || je.balancesApplied === false) return;
