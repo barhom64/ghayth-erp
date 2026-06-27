@@ -1,0 +1,17 @@
+{
+  "name": "@workspace/ui-native",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-native": "*",
+    "@expo/vector-icons": "*",
+    "expo-haptics": "*",
+    "react-native-safe-area-context": "*"
+  },
+  "dependencies": {
+    "@workspace/tokens": "workspace:*"
+  }
+}
