@@ -55,6 +55,7 @@ import { processDueRecurringJournals } from "./recurringJournalProcessor.js";
 import { processDueAmortizations } from "./engines/prepaidAmortizationEngine.js";
 import { processDueRecognitions } from "./engines/deferredRevenueEngine.js";
 import { overstayPenaltyAmount } from "./umrahPenaltyMath.js";
+import { postBadDebtProvision } from "./finance/badDebtProvision.js";
 import {
   assetDepreciationProfile, type DepreciationAssetRow,
   eosAccrualProfile, leaveAccrualProfile,
@@ -3315,6 +3316,72 @@ async function monthlyHrAccruals(): Promise<string> {
   return `Monthly HR accruals: ${processed} company(ies) posted, ${skipped} skipped`;
 }
 
+// مخصّص الديون المشكوك فيها — أتمتة شهرية بنهج delta-to-target (المحاسبة القياسية):
+// المخصّص في 1135 رصيدٌ مستهدف، فيُرحَّل كل فترة الفرقُ فقط بين الهدف بالتقادم ورصيد
+// المخصّص الحالي (زيادة DR5820/CR1135، نقص DR1135/CR5820)، بلا تراكم. idempotent
+// مشترك مع المسار اليدوي عبر مرجع الفترة `BAD-DEBT-{period}`، وبوابة الفترة داخل
+// المحرّك. assertion على سطور القيد في badDebtProvisionDelta.dynamic.test.ts.
+async function monthlyBadDebtProvision(): Promise<string> {
+  const period = currentPeriod();
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
+  let processed = 0;
+  let skipped = 0;
+
+  for (const company of companies) {
+    try {
+      // idempotency مشترك مع المسار اليدوي — مرجع واحد للفترة.
+      const ref = `BAD-DEBT-${period}`;
+      const [existing] = await rawQuery<{ id: number }>(
+        `SELECT id FROM journal_entries WHERE "companyId"=$1 AND ref=$2 AND "deletedAt" IS NULL LIMIT 1`,
+        [company.id, ref],
+      );
+      if (existing) { skipped++; continue; }
+
+      const [systemUser] = await rawQuery<Record<string, unknown>>(
+        `SELECT ea.id FROM employee_assignments ea WHERE ea."companyId" = $1 AND ea.role IN ('finance_manager','general_manager','owner') AND ea.status='active' ORDER BY ea.role='owner' DESC LIMIT 1`,
+        [company.id],
+      );
+      if (!systemUser) {
+        logger.warn(`[CRON] monthlyBadDebtProvision: no finance/owner user for company ${company.id}, skipping`);
+        skipped++;
+        continue;
+      }
+      const [systemBranch] = await rawQuery<Record<string, unknown>>(
+        `SELECT id FROM branches WHERE "companyId" = $1 LIMIT 1`,
+        [company.id],
+      );
+      if (!systemBranch?.id) { skipped++; continue; }
+      const branchId = Number(systemBranch.id);
+
+      // المحرّك المشترك: يحسب الهدف بالتقادم، يقرأ رصيد 1135، ويرحّل الفرق فقط.
+      // بوابة الفترة + الـidempotency (sourceKey) داخله ⇒ posted=false عند
+      // (فترة مُقفلة / مطابق للهدف / مُرحَّل مسبقًا) فنتخطّى.
+      const result = await postBadDebtProvision({
+        companyId: Number(company.id),
+        branchId,
+        period,
+        createdBy: Number(systemUser.id),
+      });
+      if (!result.posted) { skipped++; continue; }
+
+      await createAuditLog({
+        companyId: Number(company.id),
+        branchId,
+        userId: Number(systemUser.id),
+        action: "bad_debt.provision.cron",
+        entity: "journal_entries",
+        entityId: Number(result.journalId ?? 0),
+        after: { period, target: result.target, currentAllowance: result.currentAllowance, delta: result.delta, ref, source: "cron" },
+      }).catch((e) => logger.error(e, "[CRON] bad-debt provision audit log failed"));
+
+      processed++;
+    } catch (err) {
+      logger.error(err, `[CRON] monthlyBadDebtProvision failed for company ${company.id}:`);
+    }
+  }
+  return `Monthly bad-debt provision: ${processed} company(ies) posted, ${skipped} skipped`;
+}
+
 async function runScheduledReports(): Promise<string> {
   const tz = await getSystemTimezone();
   const now = new Date();
@@ -5542,6 +5609,7 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "monthly_inventory_audit", description: "جرد المخزون الشهري", schedule: "0 6 1 * *", handler: monthlyInventoryAudit },
   { name: "monthly_auto_depreciation", description: "إهلاك الأصول الثابتة التلقائي", schedule: "0 6 2 * *", handler: monthlyAutoDepreciation },
   { name: "monthly_hr_accruals", description: "استحقاقات الموارد البشرية الشهرية التلقائية (إجازات + نهاية الخدمة) — idempotent عبر مرجع الفترة المشترك", schedule: "0 6 3 * *", handler: monthlyHrAccruals },
+  { name: "monthly_bad_debt_provision", description: "مخصّص الديون المشكوك فيها الشهري التلقائي (delta-to-target) — يرحّل فرق الهدف بالتقادم، idempotent عبر مرجع الفترة المشترك", schedule: "0 6 4 * *", handler: monthlyBadDebtProvision },
   { name: "yearly_leave_balance_renewal", description: "تجديد أرصدة الإجازات 1 يناير", schedule: "0 0 1 1 *", handler: yearlyLeaveBalanceRenewal },
   { name: "daily_kpi_snapshot", description: "لقطة KPI اليومية", schedule: "0 2 * * *", handler: dailyKpiSnapshot },
   { name: "daily_smart_alert_scan", description: "فحص التنبيهات الذكية", schedule: "0 8 * * *", handler: dailySmartAlertScan },
