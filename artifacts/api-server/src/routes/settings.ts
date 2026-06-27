@@ -963,7 +963,7 @@ router.post("/companies/purge-preview", authorize({ feature: "settings", action:
   try {
     const scope = req.scope!;
     if (!scope.isOwner) throw new ForbiddenError("هذه العملية متاحة للمالك فقط");
-    const { companyIds } = companyPurgeSchema.parse(req.body ?? {});
+    const { companyIds } = zodParse(companyPurgeSchema.safeParse(req.body ?? {}));
     for (const id of companyIds) {
       if (!scope.allowedCompanies?.includes(id) && scope.companyId !== id) {
         throw new ForbiddenError(`لا تملك صلاحية على الشركة رقم ${id}`);
@@ -979,7 +979,7 @@ router.post("/companies/purge", authorize({ feature: "settings", action: "update
   try {
     const scope = req.scope!;
     if (!scope.isOwner) throw new ForbiddenError("هذه العملية متاحة للمالك فقط");
-    const { companyIds, confirm } = companyPurgeSchema.parse(req.body ?? {});
+    const { companyIds, confirm } = zodParse(companyPurgeSchema.safeParse(req.body ?? {}));
     if (confirm !== true) throw new ValidationError("يجب تأكيد الحذف النهائي (confirm=true)");
     for (const id of companyIds) {
       if (!scope.allowedCompanies?.includes(id) && scope.companyId !== id) {
