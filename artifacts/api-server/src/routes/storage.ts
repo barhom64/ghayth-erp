@@ -152,7 +152,17 @@ router.post("/storage/uploads/request-url", authMiddleware, uploadLimiter, autho
       const apiPrefix = req.originalUrl
         .split("?")[0]
         .replace(/\/storage\/uploads\/request-url$/, "");
-      uploadURL = `${apiPrefix}/storage/uploads/direct/${entityId}?exp=${exp}&sig=${sig}`;
+      // Transport-only ".upload" suffix: some on-prem reverse proxies (e.g.
+      // the prod VPS nginx) serve static assets via a regex `location` that
+      // matches by file extension (.png/.jpg/.css/…) and takes priority over
+      // the /api proxy_pass, so a signed PUT whose URL path ends in such an
+      // extension is 404'd by nginx before it ever reaches us — silently
+      // breaking every image/static-typed upload. Appending a neutral
+      // ".upload" extension keeps the path out of that static regex so it
+      // always proxies through; the direct-upload route strips it to recover
+      // the real `entityId` (the stored object key still keeps its true
+      // extension for MIME inference). PDFs were unaffected and need no change.
+      uploadURL = `${apiPrefix}/storage/uploads/direct/${entityId}.upload?exp=${exp}&sig=${sig}`;
     }
 
     const scope = req.scope;
@@ -194,7 +204,14 @@ const directUploadRaw = express.raw({
 router.put("/storage/uploads/direct/*key", directUploadIpLimiter, directUploadRaw, async (req: Request, res: Response) => {
   try {
     const raw = req.params.key;
-    const entityId = Array.isArray(raw) ? raw.join("/") : String(raw ?? "");
+    let entityId = Array.isArray(raw) ? raw.join("/") : String(raw ?? "");
+    // Strip the transport-only ".upload" suffix added by request-url so the
+    // URL path never ends in a static file extension the reverse proxy would
+    // intercept. The recovered entityId is the real object key (and is what
+    // the HMAC signature was computed over).
+    if (entityId.endsWith(".upload")) {
+      entityId = entityId.slice(0, -".upload".length);
+    }
     if (!DIRECT_KEY_RE.test(entityId)) {
       throw new ValidationError("مسار رفع غير صالح");
     }
