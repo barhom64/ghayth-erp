@@ -1,63 +1,72 @@
-import { Ionicons } from "@expo/vector-icons";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+/**
+ * مركز الوحدة — عرض sections الوحدة في شبكة
+ */
+import React from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GLoadingState, GButton } from '@workspace/ui-native';
+import { useColors } from '@/hooks/useColors';
+import { NAV_MODULES } from '@/lib/modules';
+import { getModuleDef } from '@/lib/moduleSections';
+import { useList } from '@/hooks/useApi';
+import type { ComponentProps } from 'react';
 
-import { AppButton, ListRow } from "@/components/ui";
-import { useColors } from "@/hooks/useColors";
-import { NAV_MODULES } from "@/lib/modules";
-import { getModuleDef } from "@/lib/moduleSections";
+type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
 export default function ModuleHubScreen() {
   const c = useColors();
-  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { key } = useLocalSearchParams<{ key: string }>();
 
-  const mod = NAV_MODULES.find((m) => m.key === key);
+  const mod = NAV_MODULES.find(m => m.key === key);
   const def = getModuleDef(key);
 
-  // Module without a native section config → keep the "coming soon" placeholder.
   if (!def) {
     return (
-      <View style={[styles.placeholder, { backgroundColor: c.bg, paddingBottom: insets.bottom + 24 }]}>
-        <Stack.Screen options={{ title: mod?.label ?? "وحدة" }} />
+      <View style={[styles.placeholder, { backgroundColor: c.bg }]}>
+        <Stack.Screen options={{ title: mod?.label ?? 'وحدة' }} />
         <View style={[styles.iconWrap, { backgroundColor: c.surfaceAlt }]}>
-          <Ionicons name={mod?.icon ?? "cube-outline"} size={44} color={c.primary} />
+          <Ionicons name={(mod?.icon ?? 'cube-outline') as IoniconName} size={44} color={c.brand} />
         </View>
-        <Text style={[styles.title, { color: c.text }]}>{mod?.label ?? "هذه الوحدة"}</Text>
+        <Text style={[styles.title, { color: c.text }]}>{mod?.label ?? 'هذه الوحدة'}</Text>
         <Text style={[styles.body, { color: c.textMuted }]}>
           هذه الوحدة قيد الإطلاق على تطبيق الجوال وستتوفر هنا قريبًا.
         </Text>
-        <View style={{ width: "100%", marginTop: 8 }}>
-          <AppButton title="رجوع" icon="arrow-forward-outline" variant="secondary" onPress={() => router.back()} />
-        </View>
+        <GButton title="رجوع" icon="arrow-forward-outline" variant="secondary" onPress={() => router.back()} style={{ marginTop: 8, width: '100%' }} />
       </View>
     );
   }
 
   return (
-    <ScrollView
-      style={{ backgroundColor: c.bg }}
-      contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 24 }]}
-    >
+    <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={styles.list}>
       <Stack.Screen options={{ title: def.label }} />
-      {def.sections.map((s) => (
-        <ListRow
-          key={s.key}
-          leftIcon={s.icon}
-          title={s.label}
-          onPress={() => router.push({ pathname: "/m/[module]/[section]", params: { module: def.key, section: s.key } })}
-        />
-      ))}
+      <View style={styles.grid}>
+        {def.sections.map(s => (
+          <Pressable
+            key={s.key}
+            onPress={() => router.push({ pathname: '/m/[module]/[section]', params: { module: def.key, section: s.key } })}
+            style={({ pressed }) => [
+              styles.sectionCard,
+              { backgroundColor: pressed ? c.surfaceAlt : c.surface, borderColor: c.border },
+            ]}
+          >
+            <Ionicons name={(s.icon ?? 'list-outline') as IoniconName} size={28} color={c.brand} />
+            <Text style={[styles.sectionLabel, { color: c.text }]}>{s.label}</Text>
+          </Pressable>
+        ))}
+      </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  list: { padding: 16, gap: 10, flexGrow: 1 },
-  placeholder: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 16 },
-  iconWrap: { width: 96, height: 96, borderRadius: 28, alignItems: "center", justifyContent: "center" },
-  title: { fontSize: 22, fontWeight: "800", textAlign: "center" },
-  body: { fontSize: 15, lineHeight: 24, textAlign: "center" },
+  list: { padding: 16, paddingBottom: 40 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  sectionCard: { width: '47%', borderWidth: 1, borderRadius: 12, padding: 16, alignItems: 'center', gap: 10, minHeight: 90 },
+  sectionLabel: { fontSize: 13, fontWeight: '600', textAlign: 'center' },
+  placeholder: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 16 },
+  iconWrap: { width: 96, height: 96, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
+  title: { fontSize: 22, fontWeight: '800', textAlign: 'center' },
+  body: { fontSize: 15, lineHeight: 24, textAlign: 'center' },
 });

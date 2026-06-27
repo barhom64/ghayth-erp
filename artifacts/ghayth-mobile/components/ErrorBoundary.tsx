@@ -1,0 +1,35 @@
+import React, { Component, type ErrorInfo, type ReactNode } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+
+interface Props { children: ReactNode }
+interface State { hasError: boolean; message: string }
+
+export class ErrorBoundary extends Component<Props, State> {
+  state: State = { hasError: false, message: '' };
+
+  static getDerivedStateFromError(error: Error): State {
+    return { hasError: true, message: error.message };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('[ErrorBoundary]', error, info);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={styles.container}>
+          <Text style={styles.title}>حدث خطأ غير متوقع</Text>
+          <Text style={styles.message}>{this.state.message}</Text>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, backgroundColor: '#F7F9FC' },
+  title: { fontSize: 18, fontWeight: '700', color: '#0F1729', textAlign: 'center', marginBottom: 8 },
+  message: { fontSize: 14, color: '#64748B', textAlign: 'center', lineHeight: 22 },
+});
