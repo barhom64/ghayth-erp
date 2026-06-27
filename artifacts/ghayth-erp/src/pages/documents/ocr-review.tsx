@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { useLocation } from "wouter";
 import { apiFetch } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -57,6 +58,7 @@ const TARGETS_BY_DOCTYPE: Record<string, { value: string; label: string }[]> = {
 
 export default function OcrReviewPage() {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [items, setItems] = useState<Extraction[]>([]);
   const [loading, setLoading] = useState(true);
   const [edits, setEdits] = useState<Record<number, Record<string, string>>>({});
@@ -134,6 +136,21 @@ export default function OcrReviewPage() {
         } catch {
           toast({ title: "تم التأكيد — التطبيق على الكيان يحتاج صلاحية المسار المالك" });
         }
+      } else if (/invoice|فاتورة/i.test(dt)) {
+        // فاتورة مشتريات: ليست «ملء كيان قائم» بل إنشاء مستند مالي جديد. لا إنشاء آلي —
+        // نفتح نموذج فاتورة المورد معبَّأً (مبلغ/تاريخ/رقم/ضريبة) + مطابقة المورّد بالرقم
+        // الضريبي على الفاتورة. البشر يختار/يؤكّد المورّد ويحفظ عبر المسار المُدقَّق.
+        const f = edits[id] || {};
+        const qs = new URLSearchParams();
+        if (f.amount) qs.set("ocrAmount", String(f.amount));
+        if (f.vatAmount) qs.set("ocrVat", String(f.vatAmount));
+        if (f.date) qs.set("ocrDate", String(f.date));
+        if (f.invoiceNo) qs.set("ocrInvoiceNo", String(f.invoiceNo));
+        if (f.taxNumber) qs.set("ocrTaxNumber", String(f.taxNumber));
+        setItems((p) => p.filter((x) => x.id !== id));
+        toast({ title: "تم التأكيد — فتح نموذج فاتورة المشتريات معبَّأً" });
+        navigate(`/finance/documents/vendor-invoice?${qs.toString()}`);
+        return;
       } else {
         toast({ title: "تم تأكيد المستخلَص وتسجيل الكيان المرتبط" });
       }
@@ -189,7 +206,10 @@ export default function OcrReviewPage() {
         const conf = Number(ex.confidence ?? 0);
         const targetOptions = TARGETS_BY_DOCTYPE[ex.docType] || [];
         const t = targets[ex.id] || { appliedTo: targetOptions[0]?.value ?? "", appliedToId: "" };
-        const requireTarget = targetOptions.length > 0;
+        // الفاتورة تُنشئ مستندًا جديدًا (لا كيان قائم برقم) → لا تتطلّب رقم كيان؛ التأكيد
+        // يفتح نموذج فاتورة المشتريات معبَّأً (البند ٣، فاتورة المورد).
+        const isInvoice = /invoice|فاتورة/i.test(ex.docType);
+        const requireTarget = targetOptions.length > 0 && !isInvoice;
         return (
           <Card key={ex.id} className="p-4 space-y-3">
             <div className="flex items-start justify-between">
