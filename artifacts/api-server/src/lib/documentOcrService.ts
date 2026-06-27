@@ -82,6 +82,10 @@ export type ExtractedFields = {
   // وثائق الهوية (نوع iqama/الهوية الوطنية) — رقم ١٠ خانات + تاريخ انتهاء
   idNumber?: string | null;
   expiryDate?: string | null;
+  // استمارة المركبة (نوع vehicle_registration) — لوحة + هيكل + انتهاء الاستمارة
+  plateNumber?: string | null;
+  vinNumber?: string | null;
+  registrationExpiry?: string | null;
 };
 
 export type ExtractionResult = {
@@ -171,15 +175,41 @@ function extractIdentityFields(text: string): ExtractionResult {
 }
 
 /**
+ * استمارة المركبة (vehicle_registration): رقم الهيكل VIN (١٧ خانة بلا I/O/Q) + رقم
+ * اللوحة + تاريخ انتهاء الاستمارة. حتمي؛ يصحّحه المراجع البشري قبل التطبيق على المركبة.
+ */
+function extractVehicleFields(text: string): ExtractionResult {
+  const vinNumber =
+    findFirst(text, /(?:رقم\s*الهيكل|vin|chassis)\s*(?:no\.?|number)?\s*[:#]?\s*([A-HJ-NPR-Za-hj-npr-z0-9]{17})/i) ??
+    findFirst(text, /\b([A-HJ-NPR-Z0-9]{17})\b/);
+  const plateNumber = findFirst(
+    text,
+    /(?:رقم\s*اللوحة|اللوحة|plate\s*(?:no\.?|number)?)\s*[:#]?\s*([A-Za-zء-ي0-9][A-Za-zء-ي0-9 \-]{2,11})/i,
+  );
+  const registrationExpiry =
+    findLabeledDate(text, /(انتهاء|الصلاحية|صلاحية|expiry|expir|valid\s*until|\bexp\b)/i) ?? findDate(text);
+  const fields: ExtractedFields = { plateNumber, vinNumber, registrationExpiry };
+  let score = 0;
+  if (vinNumber != null) score += 40;
+  if (plateNumber != null) score += 35;
+  if (registrationExpiry != null) score += 25;
+  return { fields, fieldConfidence: score };
+}
+
+/**
  * استخرج الحقول المهيكلة من نص OCR. حتمي: نفس النص → نفس الحقول. يتفرّع حسب النوع:
- * وثيقة هوية (إقامة) → رقم+انتهاء؛ غيرها → حقول فاتورة. الثقة = نسبة الحقول المُلتقطة،
- * فيقرّر المراجع البشري قبل التطبيق على الكيان.
+ * وثيقة هوية (إقامة) → رقم+انتهاء؛ استمارة مركبة → لوحة+هيكل+انتهاء؛ غيرها → حقول
+ * فاتورة. الثقة = نسبة الحقول المُلتقطة، فيقرّر المراجع البشري قبل التطبيق على الكيان.
  */
 export function extractFields(ocrText: string, docType = "invoice"): ExtractionResult {
   const text = ocrText || "";
   // وثيقة هوية (إقامة/هوية وطنية): استخراج مختلف عن الفاتورة.
   if (/iqama|residence|الإقامة|الاقامة|هوية|national/i.test(docType)) {
     return extractIdentityFields(text);
+  }
+  // استمارة مركبة: لوحة/هيكل/انتهاء.
+  if (/vehicle|registration|استمارة|مركبة|سيارة/i.test(docType)) {
+    return extractVehicleFields(text);
   }
   const amount =
     findLabeledAmount(text, /(الإجمالي|الاجمالي|المجموع|الإجمالي شامل|grand total|total amount|total)/i) ??
