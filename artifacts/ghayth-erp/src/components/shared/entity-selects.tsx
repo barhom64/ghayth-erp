@@ -338,6 +338,12 @@ export const SupplierSelect = buildEntitySelect({
   createTitle: "إضافة مورد جديد",
   createLabel: "+ مورد جديد",
   createApiPath: "/warehouse/suppliers",
+  // Warehouse suppliers and finance vendors are the SAME `suppliers` table
+  // (both INSERT INTO suppliers — finance-vendors.ts:160 / warehouse.ts:1591),
+  // so the quick-add opens the SAME full AP-aware vendor form (name, contact,
+  // phone, email, tax number, address, payment terms, WHT) instead of the
+  // stripped 2-field generic. createFields stays only as the legacy fallback.
+  createEntityKind: "vendor",
   createFields: [
     { key: "name", label: "اسم المورد", required: true },
     { key: "phone", label: "الهاتف" },

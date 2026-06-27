@@ -44,7 +44,7 @@ vi.mock("@/lib/api", () => ({
   useApiMutation: () => ({ mutate: mutateSpy, isPending: false }),
 }));
 
-import { ClientSelect, SupplierSelect, mergeEntityOptions } from "./entity-selects";
+import { ClientSelect, UmrahAgentSelect, mergeEntityOptions } from "./entity-selects";
 
 function Harness() {
   const [clientId, setClientId] = useState("");
@@ -100,15 +100,17 @@ describe("ClientSelect (#2134)", () => {
 
   // NOTE: ClientSelect's inline-create opens the registered full-form drawer
   // (createEntityKind: "client"). The quick-create payload-strip case below
-  // uses SupplierSelect, whose drawer hosts the generic field-driven form.
+  // uses UmrahAgentSelect, still a generic field-driven form (name + optional
+  // phone/country). SupplierSelect was moved onto the full vendor form
+  // (createEntityKind: "vendor"), so it no longer exercises the generic path.
 });
 
-function SupplierHarness() {
-  const [supplierId, setSupplierId] = useState("");
+function AgentHarness() {
+  const [agentId, setAgentId] = useState("");
   return (
     <div>
-      <SupplierSelect value={supplierId} onChange={setSupplierId} label="المورد" />
-      <div data-testid="selected">{supplierId}</div>
+      <UmrahAgentSelect value={agentId} onChange={setAgentId} label="الوكيل" />
+      <div data-testid="selected">{agentId}</div>
     </div>
   );
 }
@@ -117,26 +119,26 @@ describe("generic field-driven quick-create via unified drawer (#2134)", () => {
   it("strips empty optional fields and the new entity appears + is selected immediately", async () => {
     const user = userEvent.setup();
     mutateSpy.mockImplementation((_payload: any, opts: any) => {
-      opts?.onSuccess?.({ id: 901, name: "مورد لحظي", phone: null, taxNumber: null });
+      opts?.onSuccess?.({ id: 901, name: "وكيل لحظي", phone: null, country: null });
     });
-    render(<SupplierHarness />);
+    render(<AgentHarness />);
 
     await user.click(screen.getByRole("combobox"));
-    await user.click(await screen.findByText(hasText("+ مورد جديد")));
+    await user.click(await screen.findByText(hasText("+ وكيل جديد")));
 
-    await user.type(await screen.findByPlaceholderText("اسم المورد"), "مورد لحظي");
+    await user.type(await screen.findByPlaceholderText("اسم الوكيل"), "وكيل لحظي");
     await user.click(screen.getByRole("button", { name: "إنشاء" }));
 
-    // payload: only the typed field — phone/taxNumber left blank are OMITTED,
+    // payload: only the typed field — phone/country left blank are OMITTED,
     // not sent as "" (#2134 — an empty "" used to 422 on backend validators).
     const payload = mutateSpy.mock.calls.at(-1)?.[0];
-    expect(payload).toEqual({ name: "مورد لحظي" });
+    expect(payload).toEqual({ name: "وكيل لحظي" });
 
     // selected instantly (before any refetch): the form holds the id AND the
     // trigger renders the new label; reopening lists it too (≥ 2 matches).
     expect(screen.getByTestId("selected")).toHaveTextContent("901");
     await user.click(screen.getByRole("combobox"));
-    const matches = await screen.findAllByText(hasText("مورد لحظي"));
+    const matches = await screen.findAllByText(hasText("وكيل لحظي"));
     expect(matches.length).toBeGreaterThanOrEqual(2);
   });
 });
