@@ -19,6 +19,7 @@ import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { createCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
 import { reloadCronScheduler } from "../lib/cronScheduler.js";
 import { bootstrapCompany } from "../lib/companyBootstrap.js";
+import { previewCompanyPurge, purgeCompanies } from "../lib/purgeCompany.js";
 import {
   TASK_SLA_REMINDER_SETTING_KEY,
   DEFAULT_TASK_SLA_REMINDER_CONFIG,
@@ -941,6 +942,62 @@ router.post("/companies", authorize({ feature: "settings", action: "update" }), 
       ],
       ...body,
     });
+  } catch (err) { handleRouteError(err, res, "settings"); }
+});
+
+/* ── Company hard-purge (owner only) ────────────────────────────────────────
+ * Two-step, owner-gated permanent deletion of an ENTIRE company and all of its
+ * data across the schema. `purge-preview` returns the per-table row counts that
+ * WOULD be deleted (read-only); `purge` performs the irreversible delete inside
+ * a single transaction. The plain DELETE /companies/:id cannot remove a company
+ * that has any child data (half the FKs to companies are NO ACTION) — this
+ * clears dependents in FK-safe order first. See lib/purgeCompany.ts. Mounted
+ * before /companies/:id so the literal paths are not captured by the :id param.
+ */
+const companyPurgeSchema = z.object({
+  companyIds: z.array(z.number().int().positive()).min(1).max(20),
+  confirm: z.boolean().optional(),
+});
+
+router.post("/companies/purge-preview", authorize({ feature: "settings", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!scope.isOwner) throw new ForbiddenError("هذه العملية متاحة للمالك فقط");
+    const { companyIds } = companyPurgeSchema.parse(req.body ?? {});
+    for (const id of companyIds) {
+      if (!scope.allowedCompanies?.includes(id) && scope.companyId !== id) {
+        throw new ForbiddenError(`لا تملك صلاحية على الشركة رقم ${id}`);
+      }
+      if (id === scope.companyId) throw new ValidationError("لا يمكنك حذف الشركة الحالية — بدّل إلى شركة أخرى أولاً");
+    }
+    const preview = await withTransaction((client) => previewCompanyPurge(client, companyIds));
+    res.json({ companyIds, ...preview });
+  } catch (err) { handleRouteError(err, res, "settings"); }
+});
+
+router.post("/companies/purge", authorize({ feature: "settings", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!scope.isOwner) throw new ForbiddenError("هذه العملية متاحة للمالك فقط");
+    const { companyIds, confirm } = companyPurgeSchema.parse(req.body ?? {});
+    if (confirm !== true) throw new ValidationError("يجب تأكيد الحذف النهائي (confirm=true)");
+    for (const id of companyIds) {
+      if (!scope.allowedCompanies?.includes(id) && scope.companyId !== id) {
+        throw new ForbiddenError(`لا تملك صلاحية على الشركة رقم ${id}`);
+      }
+      if (id === scope.companyId) throw new ValidationError("لا يمكنك حذف الشركة الحالية — بدّل إلى شركة أخرى أولاً");
+    }
+    const before = await withTransaction((client) => previewCompanyPurge(client, companyIds));
+    const result = await withTransaction((client) => purgeCompanies(client, companyIds));
+    for (const id of companyIds) {
+      createAuditLog({
+        companyId: scope.companyId, userId: scope.userId, action: "settings.deleted",
+        entity: "companies", entityId: id,
+        before: { purgedCompanyId: id, preview: before.rows, totalRows: result.total },
+      }).catch((e) => logger.error(e, "settings background task failed"));
+    }
+    logger.warn({ companyIds, total: result.total, passes: result.passes, by: scope.userId }, "company hard-purge executed");
+    res.json({ success: true, ...result });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
