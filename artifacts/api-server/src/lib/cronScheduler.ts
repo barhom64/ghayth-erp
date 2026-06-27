@@ -1790,9 +1790,16 @@ async function monthlyRentPenalties(): Promise<string> {
   let legalHandoffs = 0;
   for (const company of companies) {
     const overduePayments = await rawQuery<Record<string, unknown>>(
-      `SELECT rp.id, rp."dueDate", rp.amount, rp."contractId", c."tenantName", c."tenantPhone", c."unitId"
+      `SELECT rp.id, rp."dueDate", rp.amount, rp."contractId",
+              COALESCE(NULLIF(c."tenantName", ''), t.name)             AS "tenantName",
+              COALESCE(NULLIF(c."tenantPhone", ''), t.phone)            AS "tenantPhone",
+              COALESCE(NULLIF(c."tenantEmail", ''), t.email)            AS "tenantEmail",
+              c."unitId",
+              COALESCE(NULLIF(TRIM(CONCAT_WS(' - ', u."buildingName", u."unitNumber")), ''), '#' || c."unitId"::text) AS "unitName"
          FROM rent_payments rp
          JOIN rental_contracts c ON c.id = rp."contractId"
+         LEFT JOIN tenants t ON t.id = c."tenantId" AND t."companyId" = c."companyId"
+         LEFT JOIN property_units u ON u.id = c."unitId" AND u."companyId" = c."companyId"
         WHERE c."companyId" = $1 AND rp.status IN ('pending','partial')
           AND rp."dueDate" < CURRENT_DATE`,
       [company.id]
@@ -1801,12 +1808,16 @@ async function monthlyRentPenalties(): Promise<string> {
       const lateDays = Math.floor((Date.now() - new Date(p.dueDate as string | Date).getTime()) / 86400000);
       let targetStage: string | null = null;
       let targetPhase: number | null = null;
+      // Spec ملف 05 §إيجار متأخر السداسي (السطر 59): يوم 1 → SMS للمستأجر.
+      // Phase 0 = first tenant-facing reminder; runs ONCE per payment (the
+      // late_rent_actions idempotency table guards it like every other phase).
       if (lateDays >= 90)      { targetStage = 'legal_transfer';  targetPhase = 6; }
       else if (lateDays >= 60) { targetStage = 'penalty_applied'; targetPhase = 5; }
       else if (lateDays >= 30) { targetStage = 'escalation';      targetPhase = 4; }
       else if (lateDays >= 14) { targetStage = 'field_visit';     targetPhase = 3; }
       else if (lateDays >= 7)  { targetStage = 'notification';    targetPhase = 2; }
       else if (lateDays >= 3)  { targetStage = 'alert';           targetPhase = 1; }
+      else if (lateDays >= 1)  { targetStage = 'tenant_reminder'; targetPhase = 0; }
       if (!targetStage || targetPhase === null) continue;
 
       const existing = await rawQuery<Record<string, unknown>>(
@@ -1814,6 +1825,56 @@ async function monthlyRentPenalties(): Promise<string> {
         [p.id, targetPhase]
       );
       if (existing.length > 0) continue;
+
+      // Phase 0 — day-1 tenant-facing reminder. Dispatched BEFORE the
+      // existing internal escalation ladder fires anything. Channels are
+      // explicitly the tenant-facing set (sms/email/whatsapp) — we do NOT
+      // include in_app here because the engine would fan it out to active
+      // employees with no assignmentId/targetRole (the lesson Codex flagged
+      // on PR #3010). The property manager already sees this via the
+      // existing phase-tracking dashboards on late_rent_actions.
+      if (targetStage === 'tenant_reminder') {
+        const tenantPhone = (p.tenantPhone as string | null) ?? null;
+        const tenantEmail = (p.tenantEmail as string | null) ?? null;
+        if (!tenantPhone && !tenantEmail) {
+          logger.info(`[cronScheduler] rent overdue day-1: tenant has no contact (rent_payment=${p.id}) — skipped`);
+        } else {
+          const tenantChannels: ("email" | "sms" | "whatsapp")[] = [];
+          if (tenantPhone) { tenantChannels.push("sms"); tenantChannels.push("whatsapp"); }
+          if (tenantEmail) tenantChannels.push("email");
+          try {
+            await dispatchNotification({
+              companyId: company.id,
+              eventCategory: "property.rent.overdue.day1",
+              title: "",
+              body: "",
+              channels: tenantChannels,
+              templateKey: "property.rent.overdue.day1",
+              templateVars: {
+                tenantName: String(p.tenantName ?? "—"),
+                unitName: String(p.unitName ?? p.unitId ?? "—"),
+                dueDate: String(p.dueDate ?? ""),
+                amount: Number(p.amount ?? 0).toFixed(2),
+              },
+              recipientEmail: tenantEmail ?? undefined,
+              recipientPhone: tenantPhone ?? undefined,
+              recipientName: (p.tenantName as string | null) ?? undefined,
+              refType: "rent_payment",
+              refId: Number(p.id),
+              priority: "high",
+            });
+          } catch (e) {
+            logger.warn(e, `[cronScheduler] rent overdue day-1 dispatch failed (rent_payment=${p.id})`);
+          }
+        }
+        // Record the action so the next day's cron doesn't re-send.
+        await rawExecute(
+          `INSERT INTO late_rent_actions ("contractId","paymentId",phase,action,"sentAt",notes)
+           VALUES ($1,$2,$3,$4,NOW(),$5)`,
+          [p.contractId, p.id, 0, 'تذكير المستأجر', `تذكير سداد يوم ${lateDays}`]
+        ).catch((e) => logger.error(e, "[cronScheduler] tenant_reminder late_rent_actions insert failed"));
+        continue;
+      }
 
       let actionLabel = targetStage;
       if (targetStage === 'penalty_applied') {
