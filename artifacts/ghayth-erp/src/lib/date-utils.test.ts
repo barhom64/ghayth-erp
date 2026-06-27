@@ -11,7 +11,14 @@
  * Assertions use locally-constructed dates so they are timezone-stable.
  */
 import { describe, it, expect } from "vitest";
-import { toArabicDigits, isValidDate, toISODate, formatTime } from "./date-utils";
+import {
+  toArabicDigits,
+  isValidDate,
+  toISODate,
+  formatTime,
+  gregorianToHijri,
+  hijriToGregorian,
+} from "./date-utils";
 
 describe("toArabicDigits", () => {
   it("converts every Western digit to its Arabic-Indic counterpart", () => {
@@ -61,5 +68,37 @@ describe("formatTime — 24-hour", () => {
 
   it("returns an empty string for an invalid date", () => {
     expect(formatTime(new Date("invalid"))).toBe("");
+  });
+});
+
+// Umm al-Qura Hijri ↔ Gregorian. gregorianToHijri delegates to Intl
+// (islamic-umalqura); hijriToGregorian inverts it by approximating then
+// searching ±30 days for the exact match. These pin the round-trip exactness
+// (verified across 1300-1500 AH, max search offset 4/30) so a future refactor
+// of the approximation or the window can't silently shift a pilgrim's date.
+describe("Hijri ↔ Gregorian (Umm al-Qura)", () => {
+  it("round-trips gregorian↔hijri exactly across the supported range", () => {
+    const samples: [number, number, number][] = [
+      [1300, 1, 1],
+      [1420, 6, 15],
+      [1445, 12, 29],
+      [1447, 6, 1],
+      [1500, 12, 29],
+    ];
+    for (const [y, m, d] of samples) {
+      const g = hijriToGregorian(y, m, d);
+      const h = gregorianToHijri(g);
+      expect([h.year, h.month, h.day]).toEqual([y, m, d]);
+    }
+  });
+
+  it("gregorianToHijri returns a plausible Umm al-Qura date (2000-01-01 → ~1420 AH)", () => {
+    const h = gregorianToHijri(new Date(2000, 0, 1));
+    expect(h.year).toBeGreaterThanOrEqual(1420);
+    expect(h.year).toBeLessThanOrEqual(1421);
+    expect(h.month).toBeGreaterThanOrEqual(1);
+    expect(h.month).toBeLessThanOrEqual(12);
+    expect(h.day).toBeGreaterThanOrEqual(1);
+    expect(h.day).toBeLessThanOrEqual(30);
   });
 });
