@@ -68,6 +68,17 @@ describe("extractFields", () => {
     expect(r.fieldConfidence).toBe(100);
   });
 
+  it("for a vehicle_registration docType, extracts VIN (17) + plate + registration expiry", () => {
+    const r = extractFields(
+      "استمارة مركبة\nرقم الهيكل: 1HGCM82633A004352\nرقم اللوحة: ABC 1234\nانتهاء الاستمارة 2027-09-30",
+      "vehicle_registration",
+    );
+    expect(r.fields.vinNumber).toBe("1HGCM82633A004352");
+    expect(r.fields.plateNumber).toBe("ABC 1234");
+    expect(r.fields.registrationExpiry).toBe("2027-09-30");
+    expect(r.fields.amount).toBeUndefined();
+  });
+
   it("scores confidence by captured critical fields (amount+date highest)", () => {
     const full = extractFields("الإجمالي: 500\nالتاريخ 2026-01-01\nرقم الفاتورة: X9\nضريبة: 75\nالرقم الضريبي 300012345600003");
     expect(full.fieldConfidence).toBe(100);

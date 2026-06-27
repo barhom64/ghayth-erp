@@ -5637,4 +5637,74 @@ router.get("/rental-contracts/:id/payments", authorize({ feature: "fleet.vehicle
   } catch (err) { handleRouteError(err, res, "rental payments list error"); }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// البند ٣ (دفعة ٢) — عقد الأسطول: تطبيق مستخرَج OCR مؤكَّد (استمارة مركبة) على المركبة.
+//
+// حدّ المسار: مسار الوثائق (خادم) لا يكتب في جدول المركبة؛ يمرّر الحقول المؤكَّدة، وهذا
+// العقد المملوك للأسطول يكتبها داخل نطاقه — بصلاحية fleet.vehicles (لا صلاحية الوثائق)
+// + ACL للصف + عزل companyId + تدقيق. السياسة: «املأ الفارغ فقط» — لا يطمس لوحة/هيكل/
+// انتهاء استمارة قائمًا؛ القائم يبقى ويُبلَّغ في skipped. (نفس نمط عقد HR في الموظف.)
+// ─────────────────────────────────────────────────────────────────────────────
+router.post(
+  "/vehicles/:id/ocr-apply",
+  authorize({ feature: "fleet.vehicles", action: "update", resource: { table: "fleet_vehicles", idParam: "id" } }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const docType = String(req.body?.docType ?? "");
+      const fields = req.body?.fields && typeof req.body.fields === "object" ? req.body.fields : {};
+      if (!/vehicle|registration|استمارة|مركبة|سيارة/i.test(docType)) {
+        throw new ValidationError("نوع المستند غير مدعوم بعد للتطبيق الآلي على المركبة", {
+          field: "docType",
+          fix: "الدفعة الحالية تدعم استمارة المركبة فقط.",
+        });
+      }
+      const [veh] = await rawQuery<{ id: number; plateNumber: string | null; vinNumber: string | null; registrationExpiry: string | null }>(
+        `SELECT id, "plateNumber", "vinNumber", "registrationExpiry" FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!veh) throw new NotFoundError("المركبة غير موجودة");
+      const plate =
+        typeof fields.plateNumber === "string" && fields.plateNumber.trim() ? fields.plateNumber.trim().slice(0, 20) : null;
+      const vin =
+        typeof fields.vinNumber === "string" && /^[A-HJ-NPR-Z0-9]{11,17}$/i.test(fields.vinNumber) ? fields.vinNumber.toUpperCase() : null;
+      const expiry =
+        typeof fields.registrationExpiry === "string" && /^\d{4}-\d{2}-\d{2}$/.test(fields.registrationExpiry) ? fields.registrationExpiry : null;
+      const setPlate = !!plate && !veh.plateNumber;
+      const setVin = !!vin && !veh.vinNumber;
+      const setExpiry = !!expiry && !veh.registrationExpiry;
+      const applied: string[] = [];
+      const skipped: string[] = [];
+      if (plate) (setPlate ? applied : skipped).push("plateNumber");
+      if (vin) (setVin ? applied : skipped).push("vinNumber");
+      if (expiry) (setExpiry ? applied : skipped).push("registrationExpiry");
+      if (!applied.length) {
+        res.json({ ok: true, applied, skipped, message: "لا حقول فارغة للتعبئة — القيم القائمة محفوظة." });
+        return;
+      }
+      await rawExecute(
+        `UPDATE fleet_vehicles SET
+           "plateNumber"        = COALESCE(NULLIF("plateNumber", ''), $1),
+           "vinNumber"          = COALESCE(NULLIF("vinNumber", ''), $2),
+           "registrationExpiry" = COALESCE("registrationExpiry", $3),
+           "updatedAt"          = NOW()
+         WHERE id=$4 AND "companyId"=$5 AND "deletedAt" IS NULL`,
+        [setPlate ? plate : null, setVin ? vin : null, setExpiry ? expiry : null, id, scope.companyId],
+      );
+      void createAuditLog({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "vehicle.ocr.applied",
+        entity: "fleet_vehicles",
+        entityId: id,
+        after: { docType, applied, skipped },
+      }).catch((e) => logger.error(e, "vehicle ocr apply audit failed"));
+      res.json({ ok: true, applied, skipped });
+    } catch (err) {
+      handleRouteError(err, res, "vehicle OCR apply error:");
+    }
+  },
+);
+
 export default router;
