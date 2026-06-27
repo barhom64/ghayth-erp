@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { useApiMutation } from "@/lib/api";
+import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -52,6 +52,36 @@ export default function FinancialVendorInvoiceCreate() {
   const [sourceAccountCode, setSourceAccountCode] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [lines, setLines] = useState<VLine[]>([emptyLine()]);
+
+  // البند ٣ (فاتورة المورد) — تعبئة مسبقة من فاتورة OCR ممسوحة: لا إنشاء آلي للمستند
+  // المالي؛ فقط نملأ النموذج (المبلغ/التاريخ/الرقم) ونطابق المورّد بالرقم الضريبي على
+  // الفاتورة (تفاصيلها تحدّد المورّد). البشر يراجع ويختار/يؤكّد ويحفظ عبر المسار المُدقَّق.
+  const { data: vendorsData } = useApiQuery<{ data: Array<{ id: number; taxNumber?: string | null }> }>(["vendors-list"], "/finance/vendors");
+  const [ocrPrefilled, setOcrPrefilled] = useState(false);
+  const [ocrSupplierMatched, setOcrSupplierMatched] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (ocrPrefilled || !vendorsData) return; // انتظر الموردين ثم عبّئ مرة واحدة (للمطابقة)
+    const p = new URLSearchParams(window.location.search);
+    const invNo = p.get("ocrInvoiceNo");
+    const amount = Number(p.get("ocrAmount") || "") || 0;
+    const vat = Number(p.get("ocrVat") || "") || 0;
+    const date = p.get("ocrDate");
+    const tax = (p.get("ocrTaxNumber") || "").replace(/\s/g, "");
+    if (!invNo && !amount && !tax) return; // لا بيانات OCR في الرابط
+    if (invNo) setRef(invNo);
+    if (date) setInvoiceDate(date);
+    if (amount > 0) {
+      const net = vat > 0 && amount > vat ? roundMoney(amount - vat) : amount;
+      setLines([{ ...emptyLine(), itemName: "بند من فاتورة ممسوحة (راجع المبلغ)", quantity: 1, unitPrice: net }]);
+      if (vat > 0 && net > 0) setVatRate(Math.round((vat / net) * 100) || 15);
+    }
+    if (tax) {
+      const match = vendorsData.data?.find((v) => (v.taxNumber || "").replace(/\s/g, "") === tax);
+      if (match) { setSupplierId(String(match.id)); setOcrSupplierMatched(true); }
+      else setOcrSupplierMatched(false);
+    }
+    setOcrPrefilled(true);
+  }, [vendorsData, ocrPrefilled]);
 
   const attachmentUrl = attachments[0]?.dataUrl ?? "";
 
@@ -145,6 +175,17 @@ export default function FinancialVendorInvoiceCreate() {
   return (
     <CreatePageLayout title="فاتورة مشتريات (تسجيل واقعة)" subtitle="نفس جدول البنود الموحّد، مع ربط كل بند بكيانه وغرض حسابه — تمرّ على محرّك فاتورة المورد القائم" backPath="/finance/expenses">
       <div dir="rtl">
+        {ocrPrefilled && (
+          <div className="mb-4 rounded-lg border border-status-info-foreground bg-status-info-surface px-4 py-2 text-sm text-status-info-foreground">
+            عُبّئ النموذج من فاتورة ممسوحة (OCR){" "}
+            {ocrSupplierMatched === true
+              ? "— وطُوبق المورّد بالرقم الضريبي."
+              : ocrSupplierMatched === false
+                ? "— لم يُطابَق المورّد بالرقم الضريبي، اختره يدويًّا."
+                : "."}{" "}
+            راجع المبلغ والضريبة والمورّد قبل الحفظ.
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <SupplierSelect value={supplierId} onChange={(v) => setSupplierId(String(v ?? ""))} label="المورد" required allowCreate={false} />

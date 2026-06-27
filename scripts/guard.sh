@@ -397,6 +397,7 @@ run_step "check:finance-period-drift" node scripts/src/check-finance-period-drif
 # fails posting once account_mappings is empty). Baseline in the script's
 # ALLOWLIST (offenders in other in-flight tracks); fails only on a NEW offender,
 # which is exactly how #2044 silently re-introduced vat_output→2200 after #2181.
+run_step "check:postable-fallbacks:tests" node scripts/src/check-postable-fallbacks.test.mjs
 run_step "check:postable-fallbacks" node scripts/src/check-postable-fallbacks.mjs
 # Tenant-isolation (FND-013): a static read/write of a tenant-scoped table
 # (has a "companyId" column) MUST carry a "companyId" predicate, else one
