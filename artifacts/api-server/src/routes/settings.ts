@@ -965,6 +965,42 @@ router.put("/companies/:id", authorize({ feature: "settings", action: "update" }
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
+// البند ٣ (دفعة ٣) — عقد الإعدادات: تطبيق مستخرَج OCR مؤكَّد (سجل تجاري) على الشركة.
+// حدّ المسار: الوثائق (خادم) لا تكتب على الشركة؛ هذا العقد المملوك للإعدادات يكتب
+// crNumber بصلاحية settings + حارس ملكية الشركة (نفس PUT أعلاه) + تدقيق، بسياسة «املأ
+// الفارغ فقط» (لا يطمس سجلًا تجاريًّا قائمًا). جهة الإصدار بلا عمود → تبقى للمراجعة.
+router.post("/companies/:id/ocr-apply", authorize({ feature: "settings", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    if (!scope.allowedCompanies?.includes(id) && scope.companyId !== id) {
+      throw new ForbiddenError("لا يمكنك تعديل شركة لا تملك صلاحية عليها");
+    }
+    const docType = String(req.body?.docType ?? "");
+    const fields = req.body?.fields && typeof req.body.fields === "object" ? req.body.fields : {};
+    if (!/commercial|سجل\s*تجاري|cr_?reg|registration/i.test(docType)) {
+      throw new ValidationError("نوع المستند غير مدعوم بعد للتطبيق على الشركة", { field: "docType", fix: "المدعوم: السجل التجاري." });
+    }
+    const crNumber = typeof fields.crNumber === "string" && /^\d{10}$/.test(fields.crNumber) ? fields.crNumber : null;
+    if (!crNumber) {
+      res.json({ ok: true, applied: [], skipped: [], message: "لا رقم سجل صالح للتطبيق." });
+      return;
+    }
+    const [comp] = await rawQuery<{ id: number; crNumber: string | null }>(`SELECT id, "crNumber" FROM companies WHERE id=$1`, [id]);
+    if (!comp) throw new NotFoundError("الشركة غير موجودة");
+    if (comp.crNumber) {
+      res.json({ ok: true, applied: [], skipped: ["crNumber"], message: "سجل تجاري قائم — لم يُطمَس." });
+      return;
+    }
+    await rawExecute(`UPDATE companies SET "crNumber"=$1 WHERE id=$2`, [crNumber, id]);
+    void createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "company.ocr.applied",
+      entity: "companies", entityId: id, after: { docType, applied: ["crNumber"], crNumber },
+    }).catch((e) => logger.error(e, "company ocr apply audit failed"));
+    res.json({ ok: true, applied: ["crNumber"], skipped: [] });
+  } catch (err) { handleRouteError(err, res, "company OCR apply error:"); }
+});
+
 router.delete("/companies/:id", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
     const id = parseId(req.params.id, "id");
