@@ -36,6 +36,7 @@ import NotFound from "@/pages/not-found";
 const Dashboard = lazy(() => import("@/pages/dashboard"));
 const PrintVerify = lazy(() => import("@/pages/print-verify"));
 const OnboardingSelf = lazy(() => import("@/pages/onboarding-self"));
+const ResetPassword = lazy(() => import("@/pages/reset-password"));
 // Standalone /driver-portal/* retired (#1354) — drivers now log in
 // via the regular /login and land on /me/driver (dashboard auto-
 // redirects them based on user.role === "driver").
@@ -194,6 +195,23 @@ function Router() {
       <Route path="/onboarding">
         <Suspense fallback={<PageLoader />}>
           <OnboardingSelf />
+        </Suspense>
+      </Route>
+      {/* Public token pages (?token=...) — set/reset password without a
+          session. BOTH must be registered here, BEFORE the authenticated
+          catch-all below; otherwise the link falls through to the catch-all
+          and "enters the system" instead of showing the set-password form.
+          /reset-password = forgot-password links; /activate = new-user
+          invitation + activation links. One component, endpoint chosen by
+          path. */}
+      <Route path="/reset-password">
+        <Suspense fallback={<PageLoader />}>
+          <ResetPassword />
+        </Suspense>
+      </Route>
+      <Route path="/activate">
+        <Suspense fallback={<PageLoader />}>
+          <ResetPassword />
         </Suspense>
       </Route>
       {/* /driver-portal/* retired (#1354) — drivers now use the regular
