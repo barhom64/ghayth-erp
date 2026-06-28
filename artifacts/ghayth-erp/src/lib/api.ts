@@ -268,7 +268,33 @@ export async function apiFetch<T = any>(
       // at the SPA router base (import.meta.env.BASE_URL), same origin as the
       // app on web and native alike.
       const appBase = import.meta.env.BASE_URL.replace(/\/$/, "");
-      window.location.href = `${appBase}/login`;
+      // Pre-auth public pages legitimately have NO session: clicking a
+      // password-reset / activation / onboarding link lands the user here
+      // with no cookie, so the AuthProvider's mount-time /auth/me 401s. Force-
+      // redirecting to /login would yank the user off the set-password form
+      // before they can use it — the "the reset link opens but there is no
+      // reset page" bug. On these routes, swallow the 401 silently and let the
+      // page render its own (session-less) UI; only redirect elsewhere.
+      const rawPath =
+        typeof window !== "undefined" ? window.location.pathname : "";
+      const relPath =
+        appBase && rawPath.startsWith(appBase)
+          ? rawPath.slice(appBase.length) || "/"
+          : rawPath;
+      const PRE_AUTH_PATHS = [
+        "/login",
+        "/reset-password",
+        "/activate",
+        "/onboarding",
+        "/setup",
+        "/print/verify",
+      ];
+      const onPreAuthPage = PRE_AUTH_PATHS.some(
+        (p) => relPath === p || relPath.startsWith(`${p}/`),
+      );
+      if (!onPreAuthPage) {
+        window.location.href = `${appBase}/login`;
+      }
       throw new Error("انتهت الجلسة، يرجى تسجيل الدخول مجدداً");
     }
   }
