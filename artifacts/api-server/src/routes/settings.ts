@@ -891,6 +891,14 @@ router.post("/companies", authorize({ feature: "settings", action: "update" }), 
     const body = zodParse(createCompanySchema.safeParse(req.body));
     const scope = req.scope!;
     const { name, nameEn, taxNumber, crNumber } = body;
+    // Validate the optional parent BEFORE creating the company, so an invalid
+    // parent rejects the whole request instead of leaving a half-created company.
+    if (body.parentCompanyId !== undefined && body.parentCompanyId !== null) {
+      const parentId = body.parentCompanyId;
+      if (!scope.allowedCompanies.includes(parentId)) throw new ForbiddenError("لا تملك صلاحية على الشركة الأم المحددة");
+      const [parentExists] = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE id=$1`, [parentId]);
+      if (!parentExists) throw new NotFoundError("الشركة الأم غير موجودة");
+    }
     const r = await rawExecute(`INSERT INTO companies (name, "nameEn", "vatNumber", "crNumber") VALUES ($1,$2,$3,$4)`, [name, nameEn || null, taxNumber || null, crNumber || null]);
     const companyId = r.insertId;
 
@@ -918,12 +926,10 @@ router.post("/companies", authorize({ feature: "settings", action: "update" }), 
       return;
     }
 
-    // Optional parent-company link (mark this company as a subsidiary of another).
-    if (body.parentCompanyId !== undefined && body.parentCompanyId !== null) {
-      const parentId = body.parentCompanyId;
-      if (parentId !== companyId && scope.allowedCompanies.includes(parentId)) {
-        await rawExecute(`UPDATE companies SET "parentCompanyId"=$1 WHERE id=$2`, [parentId, companyId]);
-      }
+    // Apply the optional parent-company link (already validated above). A
+    // brand-new company is a leaf, so no cycle is possible here.
+    if (body.parentCompanyId !== undefined && body.parentCompanyId !== null && body.parentCompanyId !== companyId) {
+      await rawExecute(`UPDATE companies SET "parentCompanyId"=$1 WHERE id=$2`, [body.parentCompanyId, companyId]);
     }
 
     createAuditLog({
@@ -1031,9 +1037,20 @@ router.put("/companies/:id", authorize({ feature: "settings", action: "update" }
       } else {
         if (parentId === id) throw new ValidationError("لا يمكن أن تكون الشركة تابعة لنفسها");
         if (!scope.allowedCompanies?.includes(parentId)) throw new ForbiddenError("لا تملك صلاحية على الشركة الأم المحددة");
-        const [parent] = await rawQuery<{ parentCompanyId: number | null }>(`SELECT "parentCompanyId" FROM companies WHERE id=$1`, [parentId]);
+        const [parent] = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE id=$1`, [parentId]);
         if (!parent) throw new NotFoundError("الشركة الأم غير موجودة");
-        if (parent.parentCompanyId === id) throw new ValidationError("لا يمكن إنشاء ارتباط دائري بين الشركتين");
+        // Reject ANY cycle (A→B→C→A), not just a direct 2-cycle: walk the
+        // proposed parent's ancestry chain; if it already contains this company,
+        // linking would close a loop.
+        const cycle = await rawQuery<{ one: number }>(
+          `WITH RECURSIVE anc AS (
+             SELECT c0.id AS id, c0."parentCompanyId" AS "parentCompanyId" FROM companies c0 WHERE c0.id = $1
+             UNION ALL
+             SELECT c.id AS id, c."parentCompanyId" AS "parentCompanyId" FROM companies c JOIN anc ON c.id = anc."parentCompanyId"
+           ) SELECT 1 AS one FROM anc WHERE anc.id = $2 LIMIT 1`,
+          [parentId, id],
+        );
+        if (cycle.length > 0) throw new ValidationError("لا يمكن إنشاء ارتباط دائري بين الشركات");
         await rawExecute(`UPDATE companies SET "parentCompanyId"=$1 WHERE id=$2`, [parentId, id]);
       }
     }
