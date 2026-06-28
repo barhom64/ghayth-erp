@@ -122,6 +122,7 @@ const createCompanySchema = z.object({
   nameEn: z.string().optional(),
   taxNumber: z.string().optional(),
   crNumber: z.string().optional(),
+  parentCompanyId: z.number().int().positive().nullable().optional(),
 });
 
 const updateCompanySchema = z.object({
@@ -129,6 +130,7 @@ const updateCompanySchema = z.object({
   nameEn: z.string().optional(),
   taxNumber: z.string().optional(),
   crNumber: z.string().optional(),
+  parentCompanyId: z.number().int().positive().nullable().optional(),
 });
 
 const systemControlsSchema = z.record(z.string().min(1), z.unknown());
@@ -916,6 +918,14 @@ router.post("/companies", authorize({ feature: "settings", action: "update" }), 
       return;
     }
 
+    // Optional parent-company link (mark this company as a subsidiary of another).
+    if (body.parentCompanyId !== undefined && body.parentCompanyId !== null) {
+      const parentId = body.parentCompanyId;
+      if (parentId !== companyId && scope.allowedCompanies.includes(parentId)) {
+        await rawExecute(`UPDATE companies SET "parentCompanyId"=$1 WHERE id=$2`, [parentId, companyId]);
+      }
+    }
+
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "settings.created",
       entity: "companies", entityId: companyId,
@@ -1012,6 +1022,21 @@ router.put("/companies/:id", authorize({ feature: "settings", action: "update" }
     }
     const { affectedRows } = await rawExecute(`UPDATE companies SET name=$1, "nameEn"=$2, "vatNumber"=$3, "crNumber"=$4 WHERE id=$5 RETURNING id`, [name, nameEn || null, taxNumber || null, crNumber || null, id]);
     if (!affectedRows) throw new NotFoundError("الشركة غير موجودة");
+
+    // Optional parent-company link: set, change, or clear (null) the parent.
+    if (body.parentCompanyId !== undefined) {
+      const parentId = body.parentCompanyId;
+      if (parentId === null) {
+        await rawExecute(`UPDATE companies SET "parentCompanyId"=NULL WHERE id=$1`, [id]);
+      } else {
+        if (parentId === id) throw new ValidationError("لا يمكن أن تكون الشركة تابعة لنفسها");
+        if (!scope.allowedCompanies?.includes(parentId)) throw new ForbiddenError("لا تملك صلاحية على الشركة الأم المحددة");
+        const [parent] = await rawQuery<{ parentCompanyId: number | null }>(`SELECT "parentCompanyId" FROM companies WHERE id=$1`, [parentId]);
+        if (!parent) throw new NotFoundError("الشركة الأم غير موجودة");
+        if (parent.parentCompanyId === id) throw new ValidationError("لا يمكن إنشاء ارتباط دائري بين الشركتين");
+        await rawExecute(`UPDATE companies SET "parentCompanyId"=$1 WHERE id=$2`, [parentId, id]);
+      }
+    }
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "settings.updated",
       entity: "companies", entityId: id,
