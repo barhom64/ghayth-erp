@@ -72,16 +72,48 @@ class FleetEngineImpl implements DomainEngine {
     });
   }
 
+  /**
+   * البند ٤ شريحة ٢ — صيانة المركبة → قيد حسب التوجيه (مبدآ إبراهيم). يُرحَّل عند
+   * **مادْيَلة** ترشيح المحاسب (حدّ TA-T18: النقل لا يمسّ الدفتر؛ المالية هي السلطة).
+   *   • مبدأ (٢) حساب الأصل: نُفضّل الحساب الفرعي للوحة (صيانة) المفتوح تلقائيًّا عند
+   *     إضافة المركبة، ونسقط للحساب الأب المتخصّص `fleet_maintenance_expense`→5520.
+   *   • مبدأ (١) مَن يتحمّل (costBearer) — يطابق postAccidentGL المعتمد تمامًا:
+   *       - company/driver : مدين حساب صيانة المركبة، دائن النقد. (استرداد السائق يتم
+   *         بخصم الراتب عبر الحدث، لا في هذا القيد.)
+   *       - insurance/customer/tenant/third_party : الكلفة مستردّة من طرف خارجي →
+   *         مدين ذمة مدينة (1131)، دائن حساب صيانة المركبة (التعويض يقاصّ الكلفة).
+   * متوازن دائمًا · موسوم ببُعد vehicleId · idempotent عبر sourceKey/guardId. غياب
+   * costBearer ⇒ "company" (السلوك السابق محفوظ).
+   */
   async postMaintenanceGL(
     ctx: FleetGLContext,
-    maintenance: { id: number; vehicleId: number; totalCost: number; type?: string; description?: string }
+    maintenance: { id: number; vehicleId: number; totalCost: number; type?: string; description?: string; costBearer?: string }
   ) {
-    const [debitCode, creditCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_maintenance_expense", "debit", "5520"),
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1111"),
-    ]);
+    // مبدأ (٢): الحساب الفرعي للوحة أولًا (resolveVehicleAccountCode)، ثم الأب 5520.
+    const vehicleAccount = await this.resolveVehicleAccountCode(ctx.companyId, maintenance.vehicleId, "maintenance");
+    const maintCode = vehicleAccount
+      ?? await financialEngine.resolveAccountCode(ctx.companyId, "fleet_maintenance_expense", "debit", "5520");
+    const cashCode = await financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1111");
 
     const costCenterId = await resolveVehicleCostCenter(ctx.companyId, maintenance.vehicleId);
+
+    // مبدأ (١): التوجيه يقرّر الحساب. القائمة المستردّة تطابق postAccidentGL.
+    const costBearer = maintenance.costBearer ?? "company";
+    const recoverable = ["insurance", "customer", "tenant", "third_party"].includes(costBearer);
+    let lines: JournalEntryLine[];
+    if (recoverable) {
+      const arCode = await financialEngine.resolveAccountCode(ctx.companyId, "accounts_receivable", "debit", "1131");
+      lines = [
+        { accountCode: arCode, debit: maintenance.totalCost, credit: 0, description: `ذمة صيانة — ${costBearer}`, vehicleId: maintenance.vehicleId, costCenterId: costCenterId ?? undefined },
+        { accountCode: maintCode, debit: 0, credit: maintenance.totalCost, description: "تعويض صيانة المركبة", vehicleId: maintenance.vehicleId, costCenterId: costCenterId ?? undefined },
+      ];
+    } else {
+      // company / driver: الكلفة على حساب صيانة المركبة، دائن النقد.
+      lines = [
+        { accountCode: maintCode, debit: maintenance.totalCost, credit: 0, description: `صيانة — ${maintenance.type ?? "عامة"}`, vehicleId: maintenance.vehicleId, costCenterId: costCenterId ?? undefined },
+        { accountCode: cashCode, debit: 0, credit: maintenance.totalCost, vehicleId: maintenance.vehicleId, costCenterId: costCenterId ?? undefined },
+      ];
+    }
 
     return financialEngine.postJournalEntry({
       companyId: ctx.companyId,
@@ -95,10 +127,7 @@ class FleetEngineImpl implements DomainEngine {
       sourceKey: `fleet:maintenance:${maintenance.id}`,
       guardTable: "fleet_maintenance",
       guardId: maintenance.id,
-      lines: [
-        { accountCode: debitCode, debit: maintenance.totalCost, credit: 0, description: `صيانة — ${maintenance.type ?? "عامة"}`, vehicleId: maintenance.vehicleId, costCenterId: costCenterId ?? undefined },
-        { accountCode: creditCode, debit: 0, credit: maintenance.totalCost, vehicleId: maintenance.vehicleId, costCenterId: costCenterId ?? undefined },
-      ],
+      lines,
     });
   }
 
@@ -211,6 +240,16 @@ class FleetEngineImpl implements DomainEngine {
     return { reversed: true, accidentId: params.accidentId };
   }
 
+  /**
+   * البند ٤ شريحة ٣ — تأمين المركبة: قسطٌ مدفوع مقدمًا يُطفأ شهريًّا (مبدأ الاستحقاق).
+   *   (أ) قيد القسط: مدين «تأمينات مدفوعة مقدمًا» (1172، أصل) / دائن النقد — لا مصروفٌ
+   *       فوري. (ب) جدول إطفاء (prepaid_amortization_schedules) فيتولّى الكرون القائم
+   *       (runDueAmortizations) الاعتراف الشهري: مدين «تأمين المركبات»
+   *       (fleet_insurance_expense→5530 بالنيّة) / دائن المدفوع مقدمًا (1172)، موسومًا
+   *       ببُعد المركبة. لا محرّك إطفاء جديد — يُعاد استخدام محرّك #2247 (مبدأ إبراهيم:
+   *       حساب الأصل لكل لوحة + الاستحقاق الزمني). يُفتح الجدول مرّة واحدة لكل وثيقة
+   *       (idempotent على sourceType+sourceId) وفقط عند ترحيل قيد قسطٍ جديد.
+   */
   async postInsuranceGL(
     ctx: FleetGLContext,
     insurance: { id: number; vehicleId: number; premium: number; description?: string }
@@ -222,7 +261,7 @@ class FleetEngineImpl implements DomainEngine {
 
     const costCenterId = await resolveVehicleCostCenter(ctx.companyId, insurance.vehicleId);
 
-    return financialEngine.postJournalEntry({
+    const posted = await financialEngine.postJournalEntry({
       companyId: ctx.companyId,
       branchId: ctx.branchId,
       createdBy: ctx.createdBy,
@@ -239,6 +278,40 @@ class FleetEngineImpl implements DomainEngine {
         { accountCode: creditCode, debit: 0, credit: insurance.premium, vehicleId: insurance.vehicleId, costCenterId: costCenterId ?? undefined },
       ],
     });
+
+    // (ب) جدول الإطفاء الشهري — idempotent عبر فحص الوجود (sourceType+sourceId)؛ يُفتح
+    // مرّة واحدة، ويُداوي ذاتيًّا لو نجح قيد القسط وفشل فتح الجدول في محاولة سابقة.
+    if (insurance.premium > 0) {
+      const [policy] = await rawQuery<{ startDate: string | null; endDate: string | null }>(
+        `SELECT "startDate"::text AS "startDate", "endDate"::text AS "endDate"
+           FROM fleet_insurance WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [insurance.id, ctx.companyId],
+      );
+      if (policy?.startDate && policy?.endDate) {
+        const [existing] = await rawQuery<{ id: number }>(
+          `SELECT id FROM prepaid_amortization_schedules
+            WHERE "companyId"=$1 AND "sourceType"='vehicle_insurance' AND "sourceId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
+          [ctx.companyId, insurance.id],
+        );
+        if (!existing) {
+          const { computeMonthlySchedule } = await import("./prepaidAmortizationEngine.js");
+          const { months, monthlyAmount } = computeMonthlySchedule({
+            totalAmount: insurance.premium, startDate: policy.startDate, endDate: policy.endDate,
+          });
+          await rawExecute(
+            `INSERT INTO prepaid_amortization_schedules
+               ("companyId","branchId","sourceType","sourceId","prepaidAccountCode",
+                "expenseAccountPurpose","totalAmount","startDate","endDate","months",
+                "monthlyAmount","recognizedAmount",status,"vehicleId","costCenterId","currency")
+             VALUES ($1,$2,'vehicle_insurance',$3,$4,'fleet_insurance_expense',$5,$6,$7,$8,$9,0,'active',$10,$11,'SAR')`,
+            [ctx.companyId, ctx.branchId, insurance.id, debitCode, insurance.premium,
+             policy.startDate, policy.endDate, months, monthlyAmount, insurance.vehicleId, costCenterId ?? null],
+          );
+        }
+      }
+    }
+
+    return posted;
   }
 
   async postTrafficViolationGL(

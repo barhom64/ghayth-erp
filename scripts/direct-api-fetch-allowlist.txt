@@ -18,4 +18,5 @@ artifacts/ghayth-erp/src/pages/documents/documents-upload.tsx
 artifacts/ghayth-erp/src/pages/hr/self-onboarding-review.tsx
 artifacts/ghayth-erp/src/pages/login.tsx
 artifacts/ghayth-erp/src/pages/onboarding-self.tsx
+artifacts/ghayth-erp/src/pages/reset-password.tsx
 artifacts/ghayth-erp/src/pages/setup.tsx

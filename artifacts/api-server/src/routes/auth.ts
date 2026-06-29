@@ -581,7 +581,19 @@ router.post("/switch-assignment", authMiddleware, authedUserLimiter, async (req,
       throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     }
     const { assignmentId } = parsed.data;
-    if (!scope.allowedAssignments.includes(Number(assignmentId))) {
+    // Non-owner / non-GM users may only switch among assignments inside
+    // their CURRENT company — `scope.allowedAssignments` is company-local
+    // (buildScope filters it by the active company). Owners and
+    // general_managers legitimately span every company they hold an
+    // owner/GM assignment in: buildScope expands `scope.allowedCompanies`
+    // for them, so we let them past this pre-check and rely on the
+    // company-scoped DB lookup below (`ea."companyId" = ANY(allowedCompanies)`)
+    // as the authoritative entitlement gate — a foreign company they do
+    // NOT own simply returns no row → NotFoundError. Without this, the
+    // header company-switcher (switchToCompany → this route) 403s for an
+    // owner moving between their own companies.
+    const canCrossCompany = scope.isOwner || scope.role === "general_manager";
+    if (!scope.allowedAssignments.includes(Number(assignmentId)) && !canCrossCompany) {
       throw new ForbiddenError("غير مسموح بالتبديل إلى هذا التعيين");
     }
     // Join `branches` so we refuse to switch into an assignment whose

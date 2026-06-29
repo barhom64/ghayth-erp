@@ -8,7 +8,7 @@ import {
   getObjectAclPolicy,
   setObjectAclPolicy,
 } from "./objectAcl.js";
-import { getStorageAdapter } from "./storage/index.js";
+import { getStorageAdapter, StorageObjectNotFoundError } from "./storage/index.js";
 import { config } from "./config.js";
 
 const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
@@ -216,6 +216,123 @@ export class ObjectStorageService {
       objectFile,
       requestedPermission: requestedPermission ?? ObjectPermission.READ,
     });
+  }
+
+  /**
+   * Map an `/objects/<entityId>` reference to the configured adapter's
+   * objectKey. Local backend → a path relative to its root; the cloud (Replit)
+   * backend → "<bucket>/<object>" derived from PRIVATE_OBJECT_DIR.
+   */
+  objectKeyForEntity(entityId: string): string {
+    const clean = entityId.replace(/^\/+/, "");
+    const adapter = getStorageAdapter();
+    if (adapter.id !== "replit") {
+      return clean;
+    }
+    let dir = this.getPrivateObjectDir();
+    if (!dir.endsWith("/")) dir = `${dir}/`;
+    const { bucketName, objectName } = parseObjectPath(`${dir}${clean}`);
+    return `${bucketName}/${objectName}`;
+  }
+
+  /**
+   * Presigned upload URL for a caller-chosen `entityId` (so the file extension
+   * is preserved in the stored key). Cloud backends only — the local backend
+   * has no presigned-URL concept and uploads via the signed direct-upload
+   * route instead.
+   */
+  async getUploadUrlForEntity(entityId: string, ttlSec = 900): Promise<string> {
+    const adapter = getStorageAdapter();
+    if (!adapter.createUploadUrl) {
+      throw new Error(
+        `Storage adapter "${adapter.id}" does not support presigned upload URLs`,
+      );
+    }
+    return adapter.createUploadUrl(this.objectKeyForEntity(entityId), ttlSec);
+  }
+
+  /**
+   * Open a read stream + content metadata for an `/objects/...` reference,
+   * routing through the configured storage backend. Throws ObjectNotFoundError
+   * when the object is absent. The Replit path preserves the existing GCS
+   * behaviour; non-Replit backends stream via the StorageAdapter.
+   */
+  async openObjectStream(
+    objectPath: string,
+  ): Promise<{ stream: Readable; contentType: string; size?: number }> {
+    if (!objectPath.startsWith("/objects/")) {
+      throw new ObjectNotFoundError();
+    }
+    const adapter = getStorageAdapter();
+    if (adapter.id !== "replit") {
+      const entityId = objectPath.replace(/^\/objects\//, "");
+      if (!entityId) throw new ObjectNotFoundError();
+      try {
+        const { stream, info } = await adapter.read(
+          this.objectKeyForEntity(entityId),
+        );
+        return { stream, contentType: info.contentType, size: info.size };
+      } catch (err) {
+        if (err instanceof StorageObjectNotFoundError) {
+          throw new ObjectNotFoundError();
+        }
+        throw err;
+      }
+    }
+    const file = await this.getObjectEntityFile(objectPath);
+    const [metadata] = await file.getMetadata();
+    return {
+      stream: file.createReadStream() as unknown as Readable,
+      contentType:
+        (metadata.contentType as string) || "application/octet-stream",
+      size: metadata.size != null ? Number(metadata.size) : undefined,
+    };
+  }
+
+  /**
+   * Open a read stream for a public object, searching the configured public
+   * paths. Returns null when not found. Non-Replit backends resolve keys
+   * relative to their root; the Replit backend uses the existing GCS search.
+   */
+  async openPublicStream(
+    filePath: string,
+  ): Promise<{ stream: Readable; contentType: string; size?: number } | null> {
+    const adapter = getStorageAdapter();
+    if (adapter.id !== "replit") {
+      // Path-traversal guard: the public reader is unauthenticated, so a
+      // crafted `filePath` must never climb out of (or sideways from) the
+      // intended public subdir into private objects under the same storage
+      // root. Reject any `..` segment, absolute path, or backslash before the
+      // key is joined — the local adapter's own root guard alone would still
+      // allow sibling-namespace reads (e.g. `../uploads/<key>`).
+      const segments = filePath.split("/");
+      if (
+        filePath.startsWith("/") ||
+        filePath.includes("\\") ||
+        segments.some((s) => s === ".." || s === ".")
+      ) {
+        return null;
+      }
+      for (const searchPath of config.objectStorage.publicSearchPaths) {
+        const key = `${searchPath.replace(/^\/+/, "")}/${filePath}`;
+        try {
+          const { stream, info } = await adapter.read(key);
+          return { stream, contentType: info.contentType, size: info.size };
+        } catch (err) {
+          if (!(err instanceof StorageObjectNotFoundError)) throw err;
+        }
+      }
+      return null;
+    }
+    const file = await this.searchPublicObject(filePath);
+    if (!file) return null;
+    const [metadata] = await file.getMetadata();
+    return {
+      stream: file.createReadStream() as unknown as Readable,
+      contentType:
+        (metadata.contentType as string) || "application/octet-stream",
+      size: metadata.size != null ? Number(metadata.size) : undefined,
+    };
   }
 }
 

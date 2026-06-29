@@ -2805,7 +2805,7 @@ export async function processEmailQueue(): Promise<string> {
   // /admin/vendor-settings UI saves to and its test endpoints read.
   const pending = await rawQuery<Record<string, unknown>>(
     `SELECT oq.id, oq."companyId", oq.recipient AS "toEmail",
-            oq."recipientName", oq.subject, oq.body, oq.metadata
+            oq."recipientName", oq.subject, oq.body, oq."isHtml", oq.metadata
      FROM outbound_queue oq
      WHERE oq.status = 'pending' AND oq.channel = 'email'
        AND (oq."scheduledAt" IS NULL OR oq."scheduledAt" <= NOW())
@@ -2865,11 +2865,17 @@ export async function processEmailQueue(): Promise<string> {
       );
 
       const { createTransport } = await import("nodemailer");
+      const { wrapBrandedEmail } = await import("./emailLayout.js");
+      const rawBody = String(email.body ?? email.text ?? "");
       const mailOptions: Record<string, unknown> = {
         from: formatFromHeader(smtp),
         to: email.toEmail,
         subject: email.subject,
-        html: email.body ?? email.text,
+        html: wrapBrandedEmail(rawBody, {
+          subject: email.subject != null ? String(email.subject) : null,
+          recipientName: email.recipientName != null ? String(email.recipientName) : null,
+          isHtml: email.isHtml !== false,
+        }),
       };
       if (smtp.replyTo) mailOptions.replyTo = smtp.replyTo;
       const meta = (email.metadata as { attachments?: Array<{ filename: string; content: string; contentType: string; encoding?: string }> } | null) ?? null;

@@ -6,6 +6,37 @@ import { notifyRateLimited } from "./rate-limit-toast";
 import { useAppContextOptional } from "@/contexts/app-context";
 
 /**
+ * Pre-auth public pages legitimately have NO session: a user reaches them by
+ * clicking a password-reset / activation / onboarding link (or scanning a
+ * print-verify QR) with no cookie. Both the mount-time auth bootstrap
+ * (AuthProvider) and the 401 interceptor below must NOT force-redirect these
+ * routes to /login — doing so is exactly what made password-reset links land
+ * on the login page instead of the set-password form. Single source of truth
+ * shared by `lib/auth.tsx` and the interceptor so the two never drift.
+ */
+const PRE_AUTH_PATHS = [
+  "/login",
+  "/reset-password",
+  "/activate",
+  "/onboarding",
+  "/setup",
+  "/print/verify",
+];
+
+export function isPreAuthPath(): boolean {
+  if (typeof window === "undefined") return false;
+  const appBase = import.meta.env.BASE_URL.replace(/\/$/, "");
+  const rawPath = window.location.pathname;
+  const relPath =
+    appBase && rawPath.startsWith(appBase)
+      ? rawPath.slice(appBase.length) || "/"
+      : rawPath;
+  return PRE_AUTH_PATHS.some(
+    (p) => relPath === p || relPath.startsWith(`${p}/`),
+  );
+}
+
+/**
  * ApiError — P1.3 of the unification plan (docs/UNIFICATION_PLAN.md).
  *
  * The API server emits typed errors (P0.3: ValidationError / NotFoundError /
@@ -268,7 +299,12 @@ export async function apiFetch<T = any>(
       // at the SPA router base (import.meta.env.BASE_URL), same origin as the
       // app on web and native alike.
       const appBase = import.meta.env.BASE_URL.replace(/\/$/, "");
-      window.location.href = `${appBase}/login`;
+      // On pre-auth public pages a 401 is expected (no session by design):
+      // swallow it and let the page render its own session-less UI; only
+      // force-redirect to /login elsewhere. See isPreAuthPath() above.
+      if (!isPreAuthPath()) {
+        window.location.href = `${appBase}/login`;
+      }
       throw new Error("انتهت الجلسة، يرجى تسجيل الدخول مجدداً");
     }
   }
