@@ -1,14 +1,17 @@
 /**
- * تفاصيل السجل — عرض key-value مع ترجمة المفاتيح للعربية
+ * تفاصيل السجل — عرض key-value مع إجراءات القسم
  */
-import React from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Stack } from 'expo-router';
+import React, { useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { GCard, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { GCard, GEmptyState, GStatusBadge, GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
-import { statusBadge } from '@/lib/moduleSections';
+import { getSection, statusBadge, type SectionAction } from '@/lib/moduleSections';
 import { getRecord } from '@/lib/recordStore';
+import { apiFetch } from '@/hooks/useApi';
+import { useQueryClient } from '@tanstack/react-query';
 
 const LABELS: Record<string, string> = {
   id: 'المعرّف', ref: 'المرجع', status: 'الحالة', name: 'الاسم', title: 'العنوان',
@@ -50,23 +53,109 @@ function formatCurrency(val: unknown): string {
   return n.toLocaleString('ar-SA') + ' ر.س';
 }
 
+function isActionVisible(action: SectionAction, row: Record<string, unknown>): boolean {
+  if (!action.showWhenStatus) return true;
+  const statusField = action.statusField ?? 'status';
+  const val = String(row[statusField] ?? '');
+  return action.showWhenStatus.includes(val);
+}
+
 export default function RecordScreen() {
   const c = useColors();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
+  const qc = useQueryClient();
   const stored = getRecord();
   const title = stored?.title ?? 'تفاصيل';
   const row: Record<string, unknown> = stored?.row ?? {};
+  const [inFlight, setInFlight] = useState<string | null>(null);
+
+  const def = stored?.module && stored?.section
+    ? getSection(stored.module, stored.section)
+    : null;
+
+  const recordId = row[(def?.write?.idField ?? 'id')] ?? row.id;
+  const canEdit = !!def?.write?.editFields?.length && recordId !== undefined;
+  const canDelete = !!def?.write?.canDelete && recordId !== undefined;
+  const actions = (def?.write?.actions ?? []).filter(a => isActionVisible(a, row));
 
   const entries = Object.entries(row).filter(
     ([k, v]) => !HIDDEN.has(k) && v !== null && v !== undefined && v !== '' && typeof v !== 'object',
   );
+
+  const handleAction = async (action: SectionAction) => {
+    const id = recordId as string | number;
+    const doCall = async () => {
+      setInFlight(action.key);
+      try {
+        await apiFetch(action.path(id), {
+          method: action.method ?? 'POST',
+          body: action.body ? JSON.stringify(action.body) : undefined,
+        });
+        await qc.invalidateQueries({ queryKey: ['section', stored?.module, stored?.section] });
+        Alert.alert('تم', action.successText ?? `تم تنفيذ "${action.label}" بنجاح`);
+        router.back();
+      } catch (e: unknown) {
+        Alert.alert('خطأ', e instanceof Error ? e.message : 'تعذّر تنفيذ الإجراء');
+      } finally {
+        setInFlight(null);
+      }
+    };
+
+    if (action.confirm) {
+      Alert.alert('تأكيد', action.confirm, [
+        { text: 'إلغاء', style: 'cancel' },
+        { text: action.label, style: action.tone === 'danger' ? 'destructive' : 'default', onPress: doCall },
+      ]);
+    } else {
+      await doCall();
+    }
+  };
+
+  const handleDelete = () => {
+    Alert.alert('تأكيد الحذف', 'هل أنت متأكد من حذف هذا السجل؟', [
+      { text: 'إلغاء', style: 'cancel' },
+      {
+        text: 'حذف', style: 'destructive', onPress: async () => {
+          setInFlight('delete');
+          try {
+            const id = recordId as string | number;
+            const path = def!.write!.deletePath ? def!.write!.deletePath(id) : `${def!.endpoint}/${id}`;
+            await apiFetch(path, { method: 'DELETE' });
+            await qc.invalidateQueries({ queryKey: ['section', stored?.module, stored?.section] });
+            router.back();
+          } catch (e: unknown) {
+            Alert.alert('خطأ', e instanceof Error ? e.message : 'تعذّر الحذف');
+          } finally {
+            setInFlight(null);
+          }
+        },
+      },
+    ]);
+  };
 
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: c.bg }}
       contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 24 }]}
     >
-      <Stack.Screen options={{ title: title || 'تفاصيل' }} />
+      <Stack.Screen
+        options={{
+          title: title || 'تفاصيل',
+          headerRight: canEdit ? () => (
+            <Pressable
+              onPress={() => router.push({
+                pathname: '/m/[module]/[section]/form',
+                params: { module: stored!.module!, section: stored!.section!, id: String(recordId) },
+              })}
+              style={{ marginLeft: 12 }}
+            >
+              <Ionicons name="create-outline" size={22} color={c.brand} />
+            </Pressable>
+          ) : undefined,
+        }}
+      />
+
       {entries.length === 0 ? (
         <GEmptyState icon="document-outline" title="لا تفاصيل" description="لا توجد بيانات لعرضها لهذا السجل." />
       ) : (
@@ -108,6 +197,36 @@ export default function RecordScreen() {
           })}
         </GCard>
       )}
+
+      {/* إجراءات القسم */}
+      {actions.length > 0 && (
+        <View style={styles.actionsSection}>
+          {actions.map(action => (
+            <GButton
+              key={action.key}
+              title={action.label}
+              icon={action.icon}
+              variant={action.tone === 'danger' ? 'danger' : action.tone === 'secondary' ? 'secondary' : 'primary'}
+              loading={inFlight === action.key}
+              onPress={() => handleAction(action)}
+              style={{ marginBottom: 10 }}
+            />
+          ))}
+        </View>
+      )}
+
+      {/* حذف */}
+      {canDelete && (
+        <View style={{ marginTop: 8 }}>
+          <GButton
+            title="حذف السجل"
+            icon="trash-outline"
+            variant="danger"
+            loading={inFlight === 'delete'}
+            onPress={handleDelete}
+          />
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -117,4 +236,5 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10 },
   labelText: { fontSize: 13, fontWeight: '500', textAlign: 'right', minWidth: 100 },
   valueCell: { flex: 1, alignItems: 'flex-start', paddingRight: 12 },
+  actionsSection: { marginTop: 16 },
 });

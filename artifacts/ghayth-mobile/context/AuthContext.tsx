@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { getAccessToken, setTokens, clearTokens } from '@/lib/tokenStore';
-import { apiFetch } from '@/hooks/useApi';
+import { apiFetch, registerSessionExpiredHandler } from '@/hooks/useApi';
 import type { UserRole } from '@/lib/api';
 
 type AuthStatus = 'loading' | 'signedIn' | 'signedOut';
@@ -37,6 +37,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<UserProfile | null>(null);
 
+  const logout = async () => {
+    await clearTokens();
+    setToken(null);
+    setUser(null);
+    setStatus('signedOut');
+  };
+
+  // سجّل handler انتهاء الجلسة لـ useApi
+  useEffect(() => {
+    registerSessionExpiredHandler(() => {
+      setToken(null);
+      setUser(null);
+      setStatus('signedOut');
+    });
+  }, []);
+
   useEffect(() => {
     getAccessToken().then(async (t) => {
       if (!t) { setStatus('signedOut'); return; }
@@ -63,13 +79,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const enriched = { ...data.user, roles: (data.user.userRoles ?? []).map(r => r.roleKey) };
     setUser(enriched);
     setStatus('signedIn');
-  };
-
-  const logout = async () => {
-    await clearTokens();
-    setToken(null);
-    setUser(null);
-    setStatus('signedOut');
   };
 
   return (

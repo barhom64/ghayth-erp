@@ -1,18 +1,18 @@
 /**
- * قائمة سجلات قسم معين — generic list screen
+ * قائمة سجلات قسم معين — generic list screen مع ترقيم الصفحات
  */
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
-import { GLoadingState, GEmptyState, GListItem, GStatusBadge } from '@workspace/ui-native';
+import { GLoadingState, GEmptyState, GListItem, GStatusBadge, GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { apiFetch } from '@/hooks/useApi';
 import { getSection, pickField, statusBadge } from '@/lib/moduleSections';
 import { setRecord } from '@/lib/recordStore';
 
 type Row = Record<string, unknown>;
+const PAGE_SIZE = 30;
 
 function formatCurrency(val: unknown): string {
   const n = Number(val);
@@ -37,21 +37,96 @@ function asList<T>(data: unknown): T[] {
   return [];
 }
 
+function getTotal(data: unknown): number | null {
+  if (data && typeof data === 'object') {
+    const d = data as Record<string, unknown>;
+    for (const k of ['total', 'count', 'totalCount', 'pagination']) {
+      if (typeof d[k] === 'number') return d[k] as number;
+      if (d[k] && typeof d[k] === 'object') {
+        const p = d[k] as Record<string, unknown>;
+        if (typeof p.total === 'number') return p.total;
+      }
+    }
+  }
+  return null;
+}
+
 export default function SectionListScreen() {
   const c = useColors();
   const router = useRouter();
   const { module, section } = useLocalSearchParams<{ module: string; section: string }>();
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [allRows, setAllRows] = useState<Row[]>([]);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [isError, setIsError] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const isMounted = useRef(true);
 
   const def = getSection(module, section);
 
-  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
-    queryKey: ['section', module, section],
-    queryFn: () => apiFetch(def!.endpoint, { params: { page: 1, limit: 30 } }),
-    enabled: !!def,
-  });
+  const fetchPage = useCallback(async (p: number, reset = false) => {
+    if (!def) return;
+    if (p === 1) setIsLoading(true);
+    else setIsLoadingMore(true);
+    setIsError(false);
+    try {
+      const data = await apiFetch(def.endpoint, {
+        params: search
+          ? { page: p, limit: PAGE_SIZE, search }
+          : { page: p, limit: PAGE_SIZE },
+      });
+      if (!isMounted.current) return;
+      const rows = asList<Row>(data);
+      const total = getTotal(data);
+      if (reset || p === 1) {
+        setAllRows(rows);
+      } else {
+        setAllRows(prev => [...prev, ...rows]);
+      }
+      const loaded = (p - 1) * PAGE_SIZE + rows.length;
+      setHasMore(total !== null ? loaded < total : rows.length === PAGE_SIZE);
+    } catch (e: unknown) {
+      if (!isMounted.current) return;
+      setIsError(true);
+      setErrorMsg(e instanceof Error ? e.message : 'حدث خطأ');
+    } finally {
+      if (!isMounted.current) return;
+      setIsLoading(false);
+      setIsLoadingMore(false);
+    }
+  }, [def, search]);
 
-  useFocusEffect(useCallback(() => { if (def) refetch(); }, [def, refetch]));
+  // reset on focus or search change
+  useFocusEffect(useCallback(() => {
+    setPage(1);
+    fetchPage(1, true);
+  }, [fetchPage]));
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => { isMounted.current = false; };
+  }, []);
+
+  // search debounce
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onSearchChange = (text: string) => {
+    setSearch(text);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      setPage(1);
+      fetchPage(1, true);
+    }, 400);
+  };
+
+  const loadMore = () => {
+    if (isLoadingMore || !hasMore) return;
+    const next = page + 1;
+    setPage(next);
+    fetchPage(next);
+  };
 
   if (!def) {
     return (
@@ -61,11 +136,6 @@ export default function SectionListScreen() {
       </View>
     );
   }
-
-  const rows = asList<Row>(data);
-  const filtered = search
-    ? rows.filter(r => JSON.stringify(r).includes(search))
-    : rows;
 
   const buildSubtitle = (item: Row): string | undefined => {
     const parts: string[] = [];
@@ -100,7 +170,7 @@ export default function SectionListScreen() {
       <View style={[styles.searchBox, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
         <TextInput
           value={search}
-          onChangeText={setSearch}
+          onChangeText={onSearchChange}
           placeholder="بحث…"
           placeholderTextColor={c.textFaint}
           style={[styles.searchInput, { backgroundColor: c.inputBg, borderColor: c.inputBorder, color: c.text }]}
@@ -111,28 +181,55 @@ export default function SectionListScreen() {
       {isLoading ? (
         <GLoadingState text="جارٍ التحميل…" />
       ) : isError ? (
-        <GEmptyState icon="alert-circle-outline" title="حدث خطأ" description={String((error as Error)?.message ?? '')} actionLabel="إعادة المحاولة" onAction={refetch} />
+        <GEmptyState
+          icon="alert-circle-outline"
+          title="حدث خطأ"
+          description={errorMsg}
+          actionLabel="إعادة المحاولة"
+          onAction={() => { setPage(1); fetchPage(1, true); }}
+        />
       ) : (
         <FlatList
-          data={filtered}
+          data={allRows}
           keyExtractor={(r, i) => String(r.id ?? i)}
           contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
-          refreshing={isFetching}
-          onRefresh={refetch}
+          refreshing={isLoading}
+          onRefresh={() => { setPage(1); fetchPage(1, true); }}
           ListEmptyComponent={
-            <GEmptyState icon={def.icon as never ?? 'list-outline'} title="لا توجد بيانات" description={`لا توجد سجلات في ${def.label} بعد.`} />
+            <GEmptyState
+              icon={def.icon as never ?? 'list-outline'}
+              title="لا توجد بيانات"
+              description={`لا توجد سجلات في ${def.label} بعد.`}
+            />
+          }
+          ListFooterComponent={
+            hasMore && allRows.length > 0 ? (
+              <View style={{ padding: 16 }}>
+                <GButton
+                  title="تحميل المزيد"
+                  variant="secondary"
+                  loading={isLoadingMore}
+                  onPress={loadMore}
+                />
+              </View>
+            ) : allRows.length > 0 ? (
+              <Text style={{ textAlign: 'center', color: c.textFaint, fontSize: 12, padding: 16 }}>
+                {allRows.length} سجل
+              </Text>
+            ) : null
           }
           renderItem={({ item }) => {
-            const title = String(pickField(item, def.titleFields) ?? `#${item.id ?? ''}`);
+            const rowTitle = String(pickField(item, def.titleFields) ?? `#${item.id ?? ''}`);
             const st = def.statusField ? statusBadge(pickField(item, [def.statusField])) : null;
+            const noDetail = def.write?.noDetail;
             return (
               <GListItem
-                title={title}
+                title={rowTitle}
                 subtitle={buildSubtitle(item)}
                 leading={def.icon as never}
                 trailing={st ? <GStatusBadge status={st.label} size="sm" /> : undefined}
-                onPress={() => {
-                  setRecord({ title, row: item });
+                onPress={noDetail ? undefined : () => {
+                  setRecord({ title: rowTitle, row: item, module, section });
                   router.push('/record');
                 }}
               />

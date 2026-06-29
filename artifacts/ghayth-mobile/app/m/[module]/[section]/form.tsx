@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GCard, GButton, GInput, GSelect, GLoadingState } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { apiFetch } from '@/hooks/useApi';
+import { takePhoto } from '@/hooks/useNative';
 import {
   createEndpointFor,
   detailEndpointFor,
@@ -157,8 +158,14 @@ export default function RecordFormScreen() {
         if (f.refValueIsString) { body[f.name] = raw; }
         else { const n = Number(raw); body[f.name] = Number.isFinite(n) && String(n) === raw ? n : raw; }
       } else if (f.type === 'file') {
-        try { Object.assign(body, JSON.parse(raw) as Record<string, unknown>); }
-        catch { fieldErrs[f.name] = 'تعذّر رفع الملف، حاول مرة أخرى'; continue; }
+        // raw contains JSON like {"base64":"...","mimeType":"..."} set by FileField
+        try {
+          const parsed = JSON.parse(raw) as Record<string, unknown>;
+          Object.assign(body, parsed);
+        } catch {
+          fieldErrs[f.name] = 'يرجى اختيار ملف أولًا';
+          continue;
+        }
       } else {
         body[f.name] = raw;
       }
@@ -216,9 +223,60 @@ export default function RecordFormScreen() {
 
 // ─── مدخل حقل ─────────────────────────────────────────────────────────────────
 
+function FileField({ field, value, error, onChange }: {
+  field: FormFieldDef; value: string; error?: string; onChange: (v: string) => void;
+}) {
+  const c = useColors();
+  const [picking, setPicking] = useState(false);
+  let parsed: { mimeType?: string; base64?: string } | null = null;
+  try { parsed = value ? JSON.parse(value) as { mimeType?: string; base64?: string } : null; } catch { /* ignore */ }
+  const hasFile = !!parsed?.base64;
+
+  const pick = async () => {
+    setPicking(true);
+    try {
+      const result = await takePhoto();
+      if (result) {
+        onChange(JSON.stringify({ base64: result.base64, mimeType: result.mimeType }));
+      }
+    } finally {
+      setPicking(false);
+    }
+  };
+
+  return (
+    <View style={{ marginBottom: 12 }}>
+      <Text style={{ fontSize: 13, color: c.textMuted, marginBottom: 6, textAlign: 'right' }}>
+        {field.required ? `${field.label} *` : field.label}
+      </Text>
+      {hasFile ? (
+        <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 8 }}>
+          <Ionicons name="checkmark-circle" size={20} color="#22C55E" />
+          <Text style={{ color: c.text, fontSize: 13 }}>تم اختيار الملف</Text>
+          <Pressable onPress={() => onChange('')}>
+            <Ionicons name="close-circle-outline" size={18} color={c.danger} />
+          </Pressable>
+        </View>
+      ) : (
+        <GButton
+          title="اختر صورة / ملف"
+          icon="camera-outline"
+          variant="secondary"
+          loading={picking}
+          onPress={pick}
+        />
+      )}
+      {error ? <Text style={{ color: c.danger, fontSize: 12, marginTop: 4, textAlign: 'right' }}>{error}</Text> : null}
+    </View>
+  );
+}
+
 function FieldInput({ field, value, error, onChange }: {
   field: FormFieldDef; value: string; error?: string; onChange: (v: string) => void;
 }) {
+  if (field.type === 'file') {
+    return <FileField field={field} value={value} error={error} onChange={onChange} />;
+  }
   if (field.type === 'reference') {
     return <ReferenceField field={field} value={value} error={error} onChange={onChange} />;
   }

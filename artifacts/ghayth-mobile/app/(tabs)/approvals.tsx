@@ -1,49 +1,72 @@
 /**
  * مركز الاعتماد — قائمة الطلبات المعلقة
+ * البيانات من /api/my-space → pendingApprovals
  */
 import React, { useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { GScreen, GCard, GText, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
-import { useList, useMutation } from '@/hooks/useApi';
+import { useList, apiFetch } from '@/hooks/useApi';
 import { useQueryClient } from '@tanstack/react-query';
 
-type FilterType = 'الكل' | 'إجازات' | 'مشتريات' | 'مالية';
+type FilterType = 'الكل' | 'إجازات' | 'سلف' | 'وقت إضافي' | 'نهاية خدمة';
 
 interface ApprovalItem {
   id: number;
   title: string;
-  subtitle?: string;
-  type: string;
-  requestedBy: string;
-  createdAt: string;
+  type: 'leave' | 'loan' | 'overtime' | 'exit';
+  employeeName: string;
   status: string;
+  createdAt: string;
 }
 
-const FILTERS: FilterType[] = ['الكل', 'إجازات', 'مشتريات', 'مالية'];
+interface MySpaceData {
+  pendingApprovals?: ApprovalItem[];
+}
+
+const FILTERS: FilterType[] = ['الكل', 'إجازات', 'سلف', 'وقت إضافي', 'نهاية خدمة'];
 const typeToFilter: Record<string, FilterType> = {
   leave: 'إجازات',
-  purchase: 'مشتريات',
-  finance: 'مالية',
+  loan: 'سلف',
+  overtime: 'وقت إضافي',
+  exit: 'نهاية خدمة',
 };
+
+function approveEndpoint(item: ApprovalItem): string {
+  switch (item.type) {
+    case 'leave': return `/api/hr/leave-requests/${item.id}/approve`;
+    case 'loan': return `/api/hr/loans/${item.id}/approve`;
+    case 'overtime': return `/api/hr/overtime-requests/${item.id}/approve`;
+    case 'exit': return `/api/hr/exit-requests/${item.id}/approve`;
+  }
+}
 
 export default function ApprovalsScreen() {
   const c = useColors();
   const qc = useQueryClient();
   const [filter, setFilter] = useState<FilterType>('الكل');
-  const { data, isLoading, refetch } = useList<ApprovalItem[]>('/api/approvals/pending');
+  const [inFlight, setInFlight] = useState<number | null>(null);
+  const { data, isLoading, refetch } = useList<MySpaceData>('/api/my-space');
 
-  const approveMutation = useMutation<unknown, { id: number; action: string }>('/api/approvals/action', 'POST');
-
-  const filtered = (data ?? []).filter(item =>
+  const items = data?.pendingApprovals ?? [];
+  const filtered = items.filter(item =>
     filter === 'الكل' ? true : typeToFilter[item.type] === filter,
   );
 
-  const handleAction = async (id: number, action: 'approve' | 'reject') => {
+  const handleAction = async (item: ApprovalItem, approved: boolean) => {
+    setInFlight(item.id);
     try {
-      await approveMutation.mutateAsync({ id, action });
-      await qc.invalidateQueries({ queryKey: ['/api/approvals/pending'] });
-    } catch { /* يُعرض الخطأ من المتحول */ }
+      const endpoint = approveEndpoint(item);
+      await apiFetch(endpoint, {
+        method: 'PATCH',
+        body: JSON.stringify({ approved }),
+      });
+      await qc.invalidateQueries({ queryKey: ['/api/my-space'] });
+      await refetch();
+    } catch { /* خطأ مرئي للمستخدم — تُعرض في UI الإجراء */ }
+    finally {
+      setInFlight(null);
+    }
   };
 
   if (isLoading) return <GLoadingState text="جارٍ تحميل الطلبات…" />;
@@ -71,42 +94,45 @@ export default function ApprovalsScreen() {
 
       <FlatList
         data={filtered}
-        keyExtractor={item => String(item.id)}
+        keyExtractor={item => `${item.type}-${item.id}`}
         contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 40 }}
         onRefresh={refetch}
         refreshing={isLoading}
         ListEmptyComponent={
           <GEmptyState icon="checkmark-done-circle-outline" title="لا توجد طلبات معلقة" description="ستظهر هنا الطلبات التي تحتاج موافقتك" />
         }
-        renderItem={({ item }) => (
-          <GCard>
-            <View style={styles.itemHeader}>
-              <GStatusBadge status={item.status} size="sm" />
-              <View style={{ flex: 1, marginRight: 8 }}>
-                <GText variant="label" numberOfLines={1}>{item.title}</GText>
-                {item.subtitle ? <GText variant="caption" color={c.textMuted}>{item.subtitle}</GText> : null}
+        renderItem={({ item }) => {
+          const busy = inFlight === item.id;
+          return (
+            <GCard>
+              <View style={styles.itemHeader}>
+                <GStatusBadge status={item.status} size="sm" />
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <GText variant="label" numberOfLines={1}>{item.title}</GText>
+                  <GText variant="caption" color={c.textMuted}>{item.employeeName}</GText>
+                </View>
               </View>
-            </View>
-            <View style={styles.itemMeta}>
-              <GText variant="caption" color={c.textFaint}>{item.createdAt}</GText>
-              <GText variant="caption" color={c.textMuted}>{item.requestedBy}</GText>
-            </View>
-            <View style={styles.actions}>
-              <Pressable
-                onPress={() => handleAction(item.id, 'reject')}
-                style={[styles.actionBtn, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}
-              >
-                <Text style={{ fontSize: 13, fontWeight: '600', color: '#B91C1C' }}>رفض</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => handleAction(item.id, 'approve')}
-                style={[styles.actionBtn, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}
-              >
-                <Text style={{ fontSize: 13, fontWeight: '600', color: '#15803D' }}>اعتماد</Text>
-              </Pressable>
-            </View>
-          </GCard>
-        )}
+              <View style={styles.itemMeta}>
+                <GText variant="caption" color={c.textFaint}>{item.createdAt}</GText>
+                <GText variant="caption" color={c.textMuted}>{typeToFilter[item.type] ?? item.type}</GText>
+              </View>
+              <View style={styles.actions}>
+                <Pressable
+                  onPress={() => !busy && handleAction(item, false)}
+                  style={[styles.actionBtn, { backgroundColor: '#FEF2F2', borderColor: '#FECACA', opacity: busy ? 0.5 : 1 }]}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#B91C1C' }}>رفض</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => !busy && handleAction(item, true)}
+                  style={[styles.actionBtn, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0', opacity: busy ? 0.5 : 1 }]}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#15803D' }}>اعتماد</Text>
+                </Pressable>
+              </View>
+            </GCard>
+          );
+        }}
       />
     </GScreen>
   );
