@@ -10,7 +10,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { GCard, GButton, GInput, GSelect, GLoadingState } from '@workspace/ui-native';
+import { GCard, GButton, GInput, GSelect, GLoadingState, GEmptyState } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { apiFetch } from '@/hooks/useApi';
 import { takePhoto } from '@/hooks/useNative';
@@ -133,6 +133,15 @@ export default function RecordFormScreen() {
       <View style={{ flex: 1, backgroundColor: c.bg }}>
         <Stack.Screen options={{ title: 'تعديل' }} />
         <GLoadingState text="جارٍ تحميل البيانات…" />
+      </View>
+    );
+  }
+
+  if (isEdit && recordQuery.isError) {
+    return (
+      <View style={{ flex: 1, backgroundColor: c.bg }}>
+        <Stack.Screen options={{ title: 'تعديل' }} />
+        <GEmptyState icon="alert-circle-outline" title="تعذّر تحميل السجل" description="تحقق من اتصالك وحاول مجدداً" />
       </View>
     );
   }

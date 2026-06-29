@@ -5,7 +5,7 @@ import React, { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { GCard, GButton, GInput, GText, GLoadingState } from '@workspace/ui-native';
+import { GCard, GButton, GInput, GText } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
 import { useMutation } from '@/hooks/useApi';
