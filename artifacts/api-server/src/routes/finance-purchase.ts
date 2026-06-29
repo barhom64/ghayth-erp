@@ -1343,10 +1343,13 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
     // by (treatment-derived account + dimension signature) and emits
     // one DR per bucket. The VAT debit + GRNI credit stay header-level.
     const { financialEngine } = await import("../lib/engines/index.js");
-    const [vatAccount, grniAccount] = await Promise.all([
+    const { resolveCompanyInputVatAccount } = await import("../lib/taxCodes.js");
+    const [vatGeneral, grniAccount] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "purchase_grn_vat", "debit", "1180"),
       financialEngine.resolveAccountCode(scope.companyId, "purchase_grni", "credit", "2150"),
     ]);
+    // البند ٤ — ضريبة المدخلات على حساب الرمز القياسي للشركة إن هُيِّئ، وإلا العام.
+    const vatAccount = await resolveCompanyInputVatAccount(scope.companyId, vatGeneral);
 
     // Per-line DR routing uses the module-scope GRN_TREATMENT_PURPOSE map
     // (shared with the pre-flight gate above so they can never diverge).
@@ -3120,11 +3123,15 @@ purchaseRouter.post("/vendor-credits", authorize({ feature: "finance.purchase", 
     // F2 (audit follow-up): JE post + journalId stamp INSIDE the same
     // withTransaction. Same shape as customer-advances fix.
     const { financialEngine } = await import("../lib/engines/index.js");
-    const [apCode, returnsCode, vatInputCode] = await Promise.all([
+    const { resolveCompanyInputVatAccount } = await import("../lib/taxCodes.js");
+    const [apCode, returnsCode, vatInputGeneral] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2111"),
       financialEngine.resolveAccountCode(scope.companyId, "vendor_return_revenue", "credit", "5110"),
       financialEngine.resolveAccountCode(scope.companyId, "vat_input_reversal", "credit", "1180"),
     ]);
+    // البند ٤ — يُعكَس على نفس حساب رمز الشركة القياسي الذي حمّلته الفاتورة، وإلا
+    // العام؛ فتُغلق تسوية حساب ضريبة المدخلات صفرًا بين الفاتورة وإشعارها.
+    const vatInputCode = await resolveCompanyInputVatAccount(scope.companyId, vatInputGeneral);
 
     let memoId: number | null = null;
     let journalId: number | null = null;
@@ -3446,10 +3453,13 @@ purchaseRouter.post("/vendor-invoices", authorize({ feature: "finance.purchase",
     const { financialEngine } = await import("../lib/engines/index.js");
     const expenseCode = b.expenseAccountCode
       ?? await financialEngine.resolveAccountCode(scope.companyId, "vendor_invoice_expense", "debit", "5340");
-    const [vatInputCode, apCode] = await Promise.all([
+    const { resolveCompanyInputVatAccount } = await import("../lib/taxCodes.js");
+    const [vatInputGeneral, apCode] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "purchase_vat_input", "debit", "1180"),
       financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "credit", "2111"),
     ]);
+    // البند ٤ — ضريبة المدخلات على حساب الرمز القياسي للشركة إن هُيِّئ، وإلا العام.
+    const vatInputCode = await resolveCompanyInputVatAccount(scope.companyId, vatInputGeneral);
 
     let invoiceId: number | null = null;
     let journalId: number | null = null;
