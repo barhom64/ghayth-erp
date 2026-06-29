@@ -19,6 +19,8 @@ const MIGRATION_429_PATH = join(apiSrc, "migrations/429_fleet_trip_events.sql");
 const MIGRATION_429 = read(MIGRATION_429_PATH);
 const MIGRATION_430_PATH = join(apiSrc, "migrations/430_fleet_trip_events_weight_kind.sql");
 const MIGRATION_430 = read(MIGRATION_430_PATH);
+const MIGRATION_433_PATH = join(apiSrc, "migrations/433_fleet_trip_events_handover_driver.sql");
+const MIGRATION_433 = read(MIGRATION_433_PATH);
 const HELPER = read(join(apiSrc, "lib/transport/tripEvents.ts"));
 const BOOKINGS = read(join(apiSrc, "routes/transport-bookings.ts"));
 const PLANNING = read(join(apiSrc, "routes/transport-planning.ts"));
@@ -140,5 +142,45 @@ describe("اشتقاق صافي الوزن — summarizeTripWeights", () => {
   it("يشتقّ الصافي ولا يُخزّنه (المصدر الواحد)", () => {
     expect(TRIP_WEIGHT).toContain("export function summarizeTripWeights");
     expect(TRIP_WEIGHT).toMatch(/grossKg\s*-\s*tareKg/);
+  });
+});
+
+describe("شريحة 3 — عهدة تبديل السائق", () => {
+  it("هجرة 433 تضيف handoverToDriverId توسّعيًا (ADD COLUMN IF NOT EXISTS)", () => {
+    expect(existsSync(MIGRATION_433_PATH)).toBe(true);
+    expect(MIGRATION_433).toContain("@rollback");
+    expect(MIGRATION_433).toMatch(/ADD COLUMN IF NOT EXISTS "handoverToDriverId"/);
+  });
+
+  it("المنطق المشترك يُدرج handoverToDriverId ويُعيد إسناد أمر التوزيع ذرّيًا", () => {
+    expect(HELPER).toContain('"handoverToDriverId"');
+    expect(HELPER).toContain("reassignDispatchDriverId");
+    expect(HELPER).toMatch(/UPDATE transport_dispatch_orders SET "driverId"/);
+  });
+
+  it("endpoint العهدة: fleet.dispatch + ملكية + منع التسليم للنفس + يستدعي المنطق المشترك", () => {
+    expect(PLANNING).toContain('"/transport/dispatch-orders/:id/handover"');
+    expect(PLANNING).toMatch(/handover"[\s\S]{0,120}fleet\.dispatch/);
+    expect(PLANNING).toContain("لا يمكن تسليم العهدة لنفس السائق");
+    expect(PLANNING).toMatch(/reassignDispatchDriverId: b\.incomingDriverId/);
+  });
+
+  it("فحص أهلية المستلِم إلزامي (رخصة + راحة) قبل العهدة", () => {
+    const body = PLANNING.slice(PLANNING.indexOf('"/transport/dispatch-orders/:id/handover"'));
+    expect(body).toContain("assertDriverEligibility(");
+    expect(body).toContain("assertDriverRest(");
+  });
+
+  it("endpoint مرشّحي العهدة موجود (يستبعد السائق الحالي)", () => {
+    expect(PLANNING).toContain('"/transport/dispatch-orders/:id/handover-candidates"');
+    expect(PLANNING).toMatch(/FROM fleet_drivers[\s\S]+?id <> \$2/);
+  });
+
+  it("تطبيق السائق يعرض «تسليم العهدة» ويستدعي endpoint العهدة + المرشّحين", () => {
+    expect(DRIVER).toContain("تسليم العهدة");
+    expect(DRIVER).toContain("submitHandover");
+    expect(DRIVER).toMatch(/handover-candidates/);
+    expect(DRIVER).toMatch(/dispatch-orders\/\$\{session\.dispatchOrderId\}\/handover`/);
+    expect(DRIVER).toContain("incomingDriverId");
   });
 });
