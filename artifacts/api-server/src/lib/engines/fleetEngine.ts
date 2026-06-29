@@ -99,7 +99,7 @@ class FleetEngineImpl implements DomainEngine {
 
     // مبدأ (١): التوجيه يقرّر الحساب. القائمة المستردّة تطابق postAccidentGL.
     const costBearer = maintenance.costBearer ?? "company";
-    const recoverable = ["insurance", "customer", "tenant", "third_party"].includes(costBearer);
+    const recoverable = ["insurance", "warranty", "customer", "tenant", "third_party"].includes(costBearer);
     let lines: JournalEntryLine[];
     if (recoverable) {
       const arCode = await financialEngine.resolveAccountCode(ctx.companyId, "accounts_receivable", "debit", "1131");
@@ -170,7 +170,7 @@ class FleetEngineImpl implements DomainEngine {
     const cashCode = await financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1111");
     const costCenterId = await resolveVehicleCostCenter(ctx.companyId, accident.vehicleId);
 
-    const recoverable = ["insurance", "customer", "tenant", "third_party"].includes(accident.costBearer);
+    const recoverable = ["insurance", "warranty", "customer", "tenant", "third_party"].includes(accident.costBearer);
     let lines: JournalEntryLine[];
     if (recoverable) {
       // الكلفة مستردّة من طرف خارجي: مدين ذمة مدينة، دائن حساب المركبة.
