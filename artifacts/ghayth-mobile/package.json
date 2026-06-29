@@ -6,7 +6,9 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "export:web": "expo export -p web --output-dir dist-web && cp -r public/* dist-web/",
+    "export:web:offline": "EXPO_NO_TELEMETRY=1 EXPO_OFFLINE=1 expo export -p web --output-dir dist-web && cp -r public/* dist-web/"
   },
   "dependencies": {
     "@expo-google-fonts/ibm-plex-sans-arabic": "^0.2.0",

@@ -4,10 +4,12 @@
  */
 
 export interface UserRole {
-  id: number;
-  name: string;
+  id?: number;
+  roleKey: string;
+  label?: string;
   level?: number;
   modules?: string[];
+  is_primary?: boolean;
 }
 
 export interface ApiErrorBody {

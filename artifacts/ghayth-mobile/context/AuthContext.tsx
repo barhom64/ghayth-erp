@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { getAccessToken, setTokens, clearTokens } from '@/lib/tokenStore';
 import { apiFetch } from '@/hooks/useApi';
+import type { UserRole } from '@/lib/api';
 
 type AuthStatus = 'loading' | 'signedIn' | 'signedOut';
 
@@ -8,7 +9,17 @@ interface UserProfile {
   id: number;
   name: string;
   email: string;
+  empNumber?: string;
+  jobTitle?: string;
+  photoUrl?: string;
+  companyId?: number;
+  branchId?: number;
+  companyName?: string;
+  branchName?: string;
   role?: string;
+  userRoles?: UserRole[];
+  /** مشتقّ من userRoles لتسهيل الفلترة في visibleModules */
+  roles?: string[];
 }
 
 interface AuthContextValue {
@@ -32,7 +43,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken(t);
       try {
         const profile = await apiFetch<UserProfile>('/api/auth/me');
-        setUser(profile);
+        const enriched = { ...profile, roles: (profile.userRoles ?? []).map(r => r.roleKey) };
+        setUser(enriched);
         setStatus('signedIn');
       } catch {
         await clearTokens();
@@ -48,7 +60,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
     await setTokens(data.accessToken, data.refreshToken);
     setToken(data.accessToken);
-    setUser(data.user);
+    const enriched = { ...data.user, roles: (data.user.userRoles ?? []).map(r => r.roleKey) };
+    setUser(enriched);
     setStatus('signedIn');
   };
 

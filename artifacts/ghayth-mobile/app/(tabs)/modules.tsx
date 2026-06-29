@@ -15,7 +15,7 @@ export default function ModulesScreen() {
   const { user } = useAuth();
   const router = useRouter();
 
-  const modules = visibleModules(user?.roles);
+  const modules = visibleModules(user?.userRoles);
 
   const renderItem = ({ item }: { item: NavModule }) => (
     <Pressable

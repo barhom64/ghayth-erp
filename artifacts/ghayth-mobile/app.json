@@ -22,7 +22,12 @@
     "web": {
       "favicon": "./assets/images/icon.png",
       "bundler": "metro",
-      "output": "single"
+      "output": "single",
+      "themeColor": "#F97316",
+      "backgroundColor": "#ffffff",
+      "shortName": "غيث ERP",
+      "lang": "ar",
+      "dir": "rtl"
     },
     "plugins": [
       [

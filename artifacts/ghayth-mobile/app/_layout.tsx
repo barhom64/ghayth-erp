@@ -38,6 +38,10 @@ function AuthGate() {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       document.documentElement.dir = 'rtl';
       document.documentElement.lang = 'ar';
+      // تسجيل Service Worker للـ PWA
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(() => {/* غير حرج */});
+      }
     }
   }, []);
 
