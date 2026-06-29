@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { TripEventRecorder } from "@/components/shared/trip-event-recorder";
 
 // #1812 — driver in-app navigation screen. The user's mandate: "السائق
 // يفتح تطبيق غيث فقط، يستلم أمر التشغيل، يبدأ الملاحة، يتابع
@@ -320,6 +321,23 @@ export default function MeDriverNavigation() {
               </div>
             )}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* شريحة تطبيق السائق — تسجيل وقائع الرحلة (تحميل/خروج/وصول/فحص/تفريغ +
+          وزن + إثبات POD) على نفس سجل fleet_trip_events عبر المكوّن المشترك،
+          على endpoint السائق (مفلتر بملكية أمر التوزيع). */}
+      <Card className="mt-3">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">تسجيل وقائع الرحلة</CardTitle>
+        </CardHeader>
+        <CardContent className="p-3">
+          <TripEventRecorder
+            endpoint={`/transport/dispatch-orders/${session.dispatchOrderId}/trip-event`}
+            executable={!isFinished}
+            disabledHint="المهمة منتهية — لا يمكن تسجيل وقائع جديدة."
+            onRecorded={() => refetch()}
+          />
         </CardContent>
       </Card>
 
