@@ -2417,6 +2417,152 @@ async function dailyVehicleReplacementCheck(): Promise<string> {
   return `Vehicle replacement alerts: ${alerted}`;
 }
 
+/**
+ * Spec ملف 04 §تنبيهات الأسطول السبعة — تنبيه تقييم سائق:
+ *   «تقييم سائق أقل من 3 = اجتماع تقييم أداء»
+ *
+ * المواصفة على مقياس 1-5، بينما fleet_drivers.reputationScore على 0-100
+ * (محسوب 90 يومًا في driverReputation.ts). القرار الموثَّق: <3 من 5 =
+ * <60 من 100 (نفس النسبة المئوية).
+ *
+ * يعمل يوميًا (06:45، بعد dailyVehicleReplacementCheck بـ 15 دقيقة)
+ * ليصل التنبيه في اليوم نفسه الذي تنخفض فيه السمعة دون العتبة.
+ * idempotency عبر fleet_driver_evaluation_alerts (driverId, alertMonth):
+ * مرّة واحدة لكل سائق لكل شهر تقويمي حتى لا يتكرّر التنبيه يوميًا
+ * طوال الشهر إذا لم ترتفع السمعة.
+ *
+ * channel = email فقط (داخلي للمدير) — بلا in_app fan-out (درس Codex P2
+ * من شريحة ١).
+ */
+async function dailyDriverEvaluationCheck(): Promise<string> {
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
+  let alerted = 0;
+  for (const company of companies) {
+    const candidates = await rawQuery<Record<string, unknown>>(
+      `SELECT fd.id AS "driverId",
+              fd."branchId",
+              fd.name AS "driverName",
+              fd."reputationScore",
+              fd."reputationOnTimeRate",
+              fd."reputationCompletionRate",
+              fd."reputationTripsConsidered",
+              date_trunc('month', CURRENT_DATE)::date AS "alertMonth"
+         FROM fleet_drivers fd
+        WHERE fd."companyId" = $1
+          AND fd."deletedAt" IS NULL
+          AND fd."reputationScore" IS NOT NULL
+          AND fd."reputationScore" < 60
+          AND fd."reputationComputedAt" IS NOT NULL`,
+      [company.id]
+    );
+    for (const c of candidates) {
+      const driverId = Number(c.driverId);
+      const alertMonth = String(c.alertMonth).slice(0, 10);
+      const branchId = c.branchId != null ? Number(c.branchId) : null;
+
+      const existing = await rawQuery<Record<string, unknown>>(
+        `SELECT 1 FROM fleet_driver_evaluation_alerts
+          WHERE "driverId" = $1 AND "alertMonth" = $2::date LIMIT 1`,
+        [driverId, alertMonth]
+      );
+      if (existing.length > 0) continue;
+
+      // وجِّه عبر getManagerAssignmentId (branch_manager → hr_manager →
+      // general_manager → owner). fallback لمستوى الشركة لو الفرع بلا
+      // مدير. اجتماع التقييم يحتاج HR/مدير الفرع — لذلك ليس قانوني
+      // ولا CFO.
+      let managerAssignment: number | null = null;
+      let managerName = 'المدير';
+      try {
+        if (branchId) {
+          managerAssignment = await getManagerAssignmentId(company.id, branchId);
+        }
+        if (!managerAssignment) {
+          const [fallback] = await rawQuery<{ id: number; name: string }>(
+            `SELECT ea.id, e.name
+               FROM employee_assignments ea
+               LEFT JOIN employees e ON e.id = ea."employeeId"
+              WHERE ea."companyId" = $1 AND ea.status = 'active'
+                AND ea.role IN ('hr_manager','general_manager','owner')
+              ORDER BY CASE ea.role
+                         WHEN 'hr_manager' THEN 1
+                         WHEN 'general_manager' THEN 2
+                         ELSE 3
+                       END
+              LIMIT 1`,
+            [company.id]
+          );
+          if (fallback) { managerAssignment = fallback.id; managerName = fallback.name || managerName; }
+        } else {
+          const [resolved] = await rawQuery<{ name: string }>(
+            `SELECT e.name FROM employee_assignments ea
+              LEFT JOIN employees e ON e.id = ea."employeeId"
+              WHERE ea.id = $1`,
+            [managerAssignment]
+          );
+          if (resolved?.name) managerName = resolved.name;
+        }
+      } catch (e) {
+        logger.warn(e, `[cronScheduler] driver_evaluation: manager lookup failed (driverId=${driverId})`);
+      }
+
+      if (!managerAssignment) {
+        logger.info(`[cronScheduler] driver_evaluation: no manager found (company=${company.id}, driverId=${driverId}) — skipped`);
+        continue;
+      }
+
+      const score = Number(c.reputationScore);
+      const onTime = c.reputationOnTimeRate != null ? Number(c.reputationOnTimeRate) : null;
+      const completion = c.reputationCompletionRate != null ? Number(c.reputationCompletionRate) : null;
+      const trips = c.reputationTripsConsidered != null ? Number(c.reputationTripsConsidered) : 0;
+      // النافذة الحالية لحساب السمعة في driverReputation.ts = 90 يومًا.
+      // نعرضها كنص في الإشعار لتوضيح أن «<60» مبنية على آخر 90 يومًا
+      // لا على عمر السائق كله.
+      const periodLabel = 'آخر 90 يومًا';
+
+      try {
+        await dispatchNotification({
+          companyId: company.id,
+          eventCategory: "fleet.driver.evaluation_meeting",
+          title: "",
+          body: "",
+          channels: ["email" as const],
+          templateKey: "fleet.driver.evaluation_meeting",
+          templateVars: {
+            managerName: managerName,
+            driverName: String(c.driverName ?? '—'),
+            reputationScore: score.toFixed(2),
+            tripsConsidered: String(trips),
+            onTimeRate: onTime != null ? onTime.toFixed(1) : '—',
+            completionRate: completion != null ? completion.toFixed(1) : '—',
+            period: periodLabel,
+          },
+          assignmentId: managerAssignment,
+          refType: "fleet_driver",
+          refId: driverId,
+          priority: "high",
+        });
+      } catch (e) {
+        logger.warn(e, `[cronScheduler] driver_evaluation dispatch failed (driverId=${driverId})`);
+        continue;
+      }
+
+      // سجّل التنبيه بعد dispatch ناجح حتى يسمح فشل الإرسال بإعادة
+      // المحاولة غدًا (idempotency على مستوى الشهر لا اليوم).
+      await rawExecute(
+        `INSERT INTO fleet_driver_evaluation_alerts
+           ("driverId","alertMonth","companyId","branchId","reputationScoreAtAlert","alertedAssignmentId")
+         VALUES ($1,$2::date,$3,$4,$5,$6)
+         ON CONFLICT ("driverId","alertMonth") DO NOTHING`,
+        [driverId, alertMonth, company.id, branchId, score, managerAssignment]
+      ).catch((e) => logger.error(e, "[cronScheduler] fleet_driver_evaluation_alerts insert failed"));
+
+      alerted++;
+    }
+  }
+  return `Driver evaluation alerts: ${alerted}`;
+}
+
 async function weeklyCrmReport(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let sent = 0;
@@ -5745,6 +5891,10 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   // يومي صباحًا 06:30 ليصل اليوم الذي يقع فيه العطل الثالث (idempotent
   // عبر fleet_replacement_alerts: مرّة واحدة لكل مركبة لكل شهر تقويمي).
   { name: "daily_vehicle_replacement_check", description: "تنبيه استبدال محتمل (3+ أعطال/شهر)", schedule: "30 6 * * *", handler: dailyVehicleReplacementCheck },
+  // ملف 04 §تنبيهات الأسطول — تنبيه تقييم سائق (سمعة <60، يعادل <3/5).
+  // يومي صباحًا 06:45 (بعد replacement check بـ 15د). idempotent عبر
+  // fleet_driver_evaluation_alerts: مرّة واحدة لكل سائق لكل شهر تقويمي.
+  { name: "daily_driver_evaluation_check", description: "تنبيه تقييم سائق (سمعة <60، اجتماع تقييم)", schedule: "45 6 * * *", handler: dailyDriverEvaluationCheck },
   { name: "weekly_crm_report", description: "تقرير CRM الأسبوعي", schedule: "0 8 * * 0", handler: weeklyCrmReport },
   { name: "weekly_cash_flow", description: "فحص التدفق النقدي الأسبوعي", schedule: "0 9 * * 1", handler: weeklyCashFlowCheck },
   { name: "weekly_property_revenue", description: "إيرادات عقارية أسبوعية", schedule: "0 9 * * 1", handler: weeklyPropertyRevenue },
