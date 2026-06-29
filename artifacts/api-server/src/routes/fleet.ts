@@ -3788,6 +3788,48 @@ router.get("/fuel-logs/:id", authorize({ feature: "fleet.trips", action: "view" 
   } catch (err) { handleRouteError(err, res, "Fleet fuel detail error:"); }
 });
 
+// ─── GET /vehicles/:id/fuel-efficiency — كفاءة وقود المركبة + شذوذ الاستهلاك (ج-٣) ─
+// طبقة تحليلية للقراءة فقط: كم/لتر بين تعبئتين + وسم الشذوذ (انخفاض كفاءة/تراجع عدّاد/
+// قيمة غير معقولة). لا قيد ولا كتابة — يحمّل سطور تعبئة المركبة ويستدعي الدالة النقية.
+router.get(
+  "/vehicles/:id/fuel-efficiency",
+  authorize({ feature: "fleet.vehicles", action: "view", resource: { table: "fleet_vehicles", idParam: "id" } }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const vehicleId = parseId(req.params.id, "id");
+      const { dateFrom, dateTo } = req.query as Record<string, string | undefined>;
+      const params: unknown[] = [vehicleId, scope.companyId];
+      let where = `f."vehicleId" = $1 AND f."companyId" = $2 AND f."deletedAt" IS NULL`;
+      let idx = 3;
+      if (dateFrom) { where += ` AND f."fuelDate" >= $${idx}::date`; params.push(dateFrom); idx++; }
+      if (dateTo) { where += ` AND f."fuelDate" <= $${idx}::date`; params.push(dateTo); idx++; }
+      const rows = await rawQuery<{ id: number; fuelDate: string; liters: string; mileageAtFuel: number | null; totalCost: string }>(
+        `SELECT f.id, to_char(f."fuelDate", 'YYYY-MM-DD') AS "fuelDate", f.liters, f."mileageAtFuel", f."totalCost"
+           FROM fleet_fuel_logs f
+          WHERE ${where}
+          ORDER BY f."fuelDate" ASC, f.id ASC
+          LIMIT 2000`,
+        params,
+      );
+      const { computeFuelEfficiency } = await import("../lib/fleet/fuelEfficiency.js");
+      const report = computeFuelEfficiency(
+        vehicleId,
+        rows.map((r) => ({
+          id: Number(r.id),
+          fuelDate: r.fuelDate,
+          liters: Number(r.liters) || 0,
+          mileageAtFuel: r.mileageAtFuel != null ? Number(r.mileageAtFuel) : null,
+          totalCost: Number(r.totalCost) || 0,
+        })),
+      );
+      res.json(report);
+    } catch (err) {
+      handleRouteError(err, res, "vehicle fuel efficiency error:");
+    }
+  },
+);
+
 router.post("/fuel-logs", authorize({ feature: "fleet.trips", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
