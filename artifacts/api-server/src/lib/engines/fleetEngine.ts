@@ -5,7 +5,7 @@
 
 import { financialEngine } from "./financialEngine.js";
 import { eventBus } from "../eventBus.js";
-import { rawQuery, rawExecute } from "../rawdb.js";
+import { rawQuery } from "../rawdb.js";
 import { emitEvent } from "../businessHelpers.js";
 import type { DomainEngine } from "./domainEngineBase.js";
 import type { JournalEntryLine } from "../businessHelpers.js";
@@ -294,19 +294,15 @@ class FleetEngineImpl implements DomainEngine {
           [ctx.companyId, insurance.id],
         );
         if (!existing) {
-          const { computeMonthlySchedule } = await import("./prepaidAmortizationEngine.js");
-          const { months, monthlyAmount } = computeMonthlySchedule({
+          // ج-٧ — مُساعد مشترك (لا تكرار INSERT). الأسطول هنا per-policy (sourceId=وثيقة) + فحص الوجود أعلاه.
+          const { openPrepaidSchedule } = await import("./prepaidAmortizationEngine.js");
+          await openPrepaidSchedule({
+            companyId: ctx.companyId, branchId: ctx.branchId,
+            sourceType: "vehicle_insurance", sourceId: insurance.id,
+            prepaidAccountCode: debitCode, expenseAccountPurpose: "fleet_insurance_expense",
             totalAmount: insurance.premium, startDate: policy.startDate, endDate: policy.endDate,
+            dims: { vehicleId: insurance.vehicleId, costCenterId: costCenterId ?? null },
           });
-          await rawExecute(
-            `INSERT INTO prepaid_amortization_schedules
-               ("companyId","branchId","sourceType","sourceId","prepaidAccountCode",
-                "expenseAccountPurpose","totalAmount","startDate","endDate","months",
-                "monthlyAmount","recognizedAmount",status,"vehicleId","costCenterId","currency")
-             VALUES ($1,$2,'vehicle_insurance',$3,$4,'fleet_insurance_expense',$5,$6,$7,$8,$9,0,'active',$10,$11,'SAR')`,
-            [ctx.companyId, ctx.branchId, insurance.id, debitCode, insurance.premium,
-             policy.startDate, policy.endDate, months, monthlyAmount, insurance.vehicleId, costCenterId ?? null],
-          );
         }
       }
     }
