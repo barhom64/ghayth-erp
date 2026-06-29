@@ -3,9 +3,8 @@ import { useApiQuery } from "@/lib/api";
 import { SearchableSelect } from "@/components/shared/searchable-select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ProductCreateForm } from "@/components/shared/product-create-form";
+import { isStockItem } from "@/lib/item-type";
 
-// Item types with no stock balance — hidden from movement selectors.
-const NON_STOCK_ITEM_TYPES = new Set(["service", "digital", "asset"]);
 const FREE_VALUE = "_free";
 
 export interface ProductSelectProps {
@@ -46,7 +45,7 @@ export function ProductSelect({
   const { data: productsData, refetch } = useApiQuery<{ data: any[] }>(["warehouse-products-select"], "/warehouse/products?limit=500");
   const allProducts = productsData?.data || [];
   const products = stockableOnly
-    ? allProducts.filter((p: any) => !NON_STOCK_ITEM_TYPES.has(String(p.itemType ?? "product")))
+    ? allProducts.filter((p: any) => isStockItem(p.itemType))
     : allProducts;
 
   const options = [
