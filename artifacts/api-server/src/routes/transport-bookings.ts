@@ -468,6 +468,13 @@ transportBookingsRouter.get(
           ORDER BY "occurredAt" ASC, id ASC`,
         [id, scope.companyId],
       );
+      // شريحة 4 — مرشّحات خصم النقص/التأخير (تشغيلية؛ القيد في المالية).
+      const deductions = await rawQuery<Record<string, unknown>>(
+        `SELECT * FROM transport_deduction_candidates
+          WHERE "bookingId" = $1 AND "companyId" = $2
+          ORDER BY "createdAt" DESC`,
+        [id, scope.companyId],
+      );
       // #1812 source context (operational review feedback: "النظام لا
       // يستفيد بما يكفي من العمرة / CRM / العقود / المشاريع / الأوقاف /
       // التقويم"). Resolve the upstream entity referenced by the
@@ -480,7 +487,7 @@ transportBookingsRouter.get(
         "fleet.bookings.cancelPolicy", scope.companyId, scope.branchId ?? undefined,
       );
       const cancelPolicy = rawCancelPolicy === "cascade" ? "cascade" : "guard";
-      res.json(maskFields(req, { data: { ...booking, lines, dispatchOrders, tripEvents, sourceContext, cancelPolicy } }));
+      res.json(maskFields(req, { data: { ...booking, lines, dispatchOrders, tripEvents, deductions, sourceContext, cancelPolicy } }));
     } catch (err) {
       handleRouteError(err, res, "Get transport booking error:");
     }
@@ -645,6 +652,92 @@ transportBookingsRouter.post(
       res.status(201).json({ data: { id: insertId, derivedStatus } });
     } catch (err) {
       handleRouteError(err, res, "Record trip event error:");
+    }
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────
+// شريحة 4 — خصم نقص الوزن/التأخير (مرشّح خصم، تشغيلي بحت — لا قيد هنا).
+// النقل يُنشئ المرشّح (الحقيقة التشغيلية)؛ المالية تُصدر منه إشعارًا دائنًا
+// (تخفيض إيراد العميل) عبر تدفّقها المُختبَر — قفل الحدود: لا يرحّل النقل الدفتر.
+// ─────────────────────────────────────────────────────────────────────────
+const deductionCandidateSchema = z.object({
+  basis: z.enum(["weight_shortage", "delay"]),
+  shortageKg: z.coerce.number().min(0).optional(),
+  delayHours: z.coerce.number().min(0).optional(),
+  amount: z.coerce.number().positive(),
+  reason: z.string().min(1).max(2000),
+  invoiceId: z.coerce.number().int().positive().optional(),
+});
+
+transportBookingsRouter.get(
+  "/transport/bookings/:id/deductions",
+  authorize({ feature: "fleet.bookings", action: "view" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const rows = await rawQuery<Record<string, unknown>>(
+        `SELECT * FROM transport_deduction_candidates
+          WHERE "bookingId" = $1 AND "companyId" = $2
+          ORDER BY "createdAt" DESC`,
+        [id, scope.companyId],
+      );
+      res.json(maskFields(req, { data: rows }));
+    } catch (err) {
+      handleRouteError(err, res, "List deduction candidates error:");
+    }
+  },
+);
+
+transportBookingsRouter.post(
+  "/transport/bookings/:id/deductions",
+  authorize({ feature: "fleet.bookings", action: "update" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const b = zodParse(deductionCandidateSchema.safeParse(req.body));
+      const [booking] = await rawQuery<Record<string, unknown>>(
+        `SELECT id FROM transport_bookings WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!booking) throw new NotFoundError("الحجز غير موجود");
+      if (b.basis === "weight_shortage" && b.shortageKg == null) {
+        throw new ValidationError("نقص الوزن (كغم) مطلوب", { field: "shortageKg" });
+      }
+      if (b.basis === "delay" && b.delayHours == null) {
+        throw new ValidationError("ساعات التأخّر مطلوبة", { field: "delayHours" });
+      }
+      // الفاتورة (إن رُبطت) يجب أن تخصّ الشركة — يقرأ فقط، لا يكتب الدفتر.
+      if (b.invoiceId != null) {
+        const [inv] = await rawQuery<Record<string, unknown>>(
+          `SELECT id FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+          [b.invoiceId, scope.companyId],
+        );
+        if (!inv) throw new ValidationError("الفاتورة غير موجودة", { field: "invoiceId" });
+      }
+      const { insertId } = await rawExecute(
+        `INSERT INTO transport_deduction_candidates
+           ("companyId", "branchId", "bookingId", "invoiceId", basis,
+            "shortageKg", "delayHours", amount, reason,
+            "recordedByAssignmentId", "createdBy")
+         VALUES ($1,$2,$3,$4,$5, $6,$7,$8,$9, $10,$11)`,
+        [
+          scope.companyId, scope.branchId ?? null, id, b.invoiceId ?? null, b.basis,
+          b.shortageKg ?? null, b.delayHours ?? null, b.amount, b.reason,
+          scope.activeAssignmentId ?? null, scope.userId,
+        ],
+      );
+      assertInsert(insertId, "transport_deduction_candidates");
+      createAuditLog({
+        companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+        action: "deduction_candidate_created", entity: "transport_bookings", entityId: id,
+        after: { deductionCandidateId: insertId, basis: b.basis, amount: b.amount },
+      }).catch((e) => logger.error(e, "deduction candidate audit failed"));
+      res.status(201).json({ data: { id: insertId } });
+    } catch (err) {
+      handleRouteError(err, res, "Create deduction candidate error:");
     }
   },
 );
