@@ -1,12 +1,12 @@
 /**
  * تفاصيل السجل — عرض key-value مع إجراءات القسم
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { GCard, GEmptyState, GStatusBadge, GButton } from '@workspace/ui-native';
+import { GCard, GEmptyState, GStatusBadge, GButton, GLoadingState } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { getSection, statusBadge, type SectionAction } from '@/lib/moduleSections';
 import { getRecord } from '@/lib/recordStore';
@@ -67,14 +67,33 @@ export default function RecordScreen() {
   const qc = useQueryClient();
   const stored = getRecord();
   const title = stored?.title ?? 'تفاصيل';
-  const row: Record<string, unknown> = stored?.row ?? {};
+  const initialRow: Record<string, unknown> = stored?.row ?? {};
+  const [row, setRow] = useState<Record<string, unknown>>(initialRow);
   const [inFlight, setInFlight] = useState<string | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   const def = stored?.module && stored?.section
     ? getSection(stored.module, stored.section)
     : null;
 
-  const recordId = row[(def?.write?.idField ?? 'id')] ?? row.id;
+  const recordId = initialRow[(def?.write?.idField ?? 'id')] ?? initialRow.id;
+
+  // إذا كانت البيانات منقوصة (من إشعار مثلًا) نجلب التفاصيل من الخادم
+  useEffect(() => {
+    if (!recordId || !def?.write?.detailPath) return;
+    const keys = Object.keys(initialRow).filter(k => k !== 'id');
+    if (keys.length > 0) return; // البيانات كافية
+    setDetailLoading(true);
+    apiFetch<Record<string, unknown>>(def.write.detailPath(recordId as string | number))
+      .then(data => {
+        const record = (data && typeof data === 'object' && 'data' in data && data.data)
+          ? data.data as Record<string, unknown>
+          : data;
+        setRow(record);
+      })
+      .catch(() => {/* استمر بالبيانات المتاحة */})
+      .finally(() => setDetailLoading(false));
+  }, []);
   const canEdit = !!def?.write?.editFields?.length && recordId !== undefined;
   const canDelete = !!def?.write?.canDelete && recordId !== undefined;
   const actions = (def?.write?.actions ?? []).filter(a => isActionVisible(a, row));
@@ -133,6 +152,8 @@ export default function RecordScreen() {
       },
     ]);
   };
+
+  if (detailLoading) return <GLoadingState text="جارٍ تحميل التفاصيل…" />;
 
   return (
     <ScrollView
