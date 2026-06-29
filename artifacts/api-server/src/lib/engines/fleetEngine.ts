@@ -240,6 +240,16 @@ class FleetEngineImpl implements DomainEngine {
     return { reversed: true, accidentId: params.accidentId };
   }
 
+  /**
+   * البند ٤ شريحة ٣ — تأمين المركبة: قسطٌ مدفوع مقدمًا يُطفأ شهريًّا (مبدأ الاستحقاق).
+   *   (أ) قيد القسط: مدين «تأمينات مدفوعة مقدمًا» (1172، أصل) / دائن النقد — لا مصروفٌ
+   *       فوري. (ب) جدول إطفاء (prepaid_amortization_schedules) فيتولّى الكرون القائم
+   *       (runDueAmortizations) الاعتراف الشهري: مدين «تأمين المركبات»
+   *       (fleet_insurance_expense→5530 بالنيّة) / دائن المدفوع مقدمًا (1172)، موسومًا
+   *       ببُعد المركبة. لا محرّك إطفاء جديد — يُعاد استخدام محرّك #2247 (مبدأ إبراهيم:
+   *       حساب الأصل لكل لوحة + الاستحقاق الزمني). يُفتح الجدول مرّة واحدة لكل وثيقة
+   *       (idempotent على sourceType+sourceId) وفقط عند ترحيل قيد قسطٍ جديد.
+   */
   async postInsuranceGL(
     ctx: FleetGLContext,
     insurance: { id: number; vehicleId: number; premium: number; description?: string }
@@ -251,7 +261,7 @@ class FleetEngineImpl implements DomainEngine {
 
     const costCenterId = await resolveVehicleCostCenter(ctx.companyId, insurance.vehicleId);
 
-    return financialEngine.postJournalEntry({
+    const posted = await financialEngine.postJournalEntry({
       companyId: ctx.companyId,
       branchId: ctx.branchId,
       createdBy: ctx.createdBy,
@@ -268,6 +278,40 @@ class FleetEngineImpl implements DomainEngine {
         { accountCode: creditCode, debit: 0, credit: insurance.premium, vehicleId: insurance.vehicleId, costCenterId: costCenterId ?? undefined },
       ],
     });
+
+    // (ب) جدول الإطفاء الشهري — idempotent عبر فحص الوجود (sourceType+sourceId)؛ يُفتح
+    // مرّة واحدة، ويُداوي ذاتيًّا لو نجح قيد القسط وفشل فتح الجدول في محاولة سابقة.
+    if (insurance.premium > 0) {
+      const [policy] = await rawQuery<{ startDate: string | null; endDate: string | null }>(
+        `SELECT "startDate"::text AS "startDate", "endDate"::text AS "endDate"
+           FROM fleet_insurance WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [insurance.id, ctx.companyId],
+      );
+      if (policy?.startDate && policy?.endDate) {
+        const [existing] = await rawQuery<{ id: number }>(
+          `SELECT id FROM prepaid_amortization_schedules
+            WHERE "companyId"=$1 AND "sourceType"='vehicle_insurance' AND "sourceId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
+          [ctx.companyId, insurance.id],
+        );
+        if (!existing) {
+          const { computeMonthlySchedule } = await import("./prepaidAmortizationEngine.js");
+          const { months, monthlyAmount } = computeMonthlySchedule({
+            totalAmount: insurance.premium, startDate: policy.startDate, endDate: policy.endDate,
+          });
+          await rawExecute(
+            `INSERT INTO prepaid_amortization_schedules
+               ("companyId","branchId","sourceType","sourceId","prepaidAccountCode",
+                "expenseAccountPurpose","totalAmount","startDate","endDate","months",
+                "monthlyAmount","recognizedAmount",status,"vehicleId","costCenterId","currency")
+             VALUES ($1,$2,'vehicle_insurance',$3,$4,'fleet_insurance_expense',$5,$6,$7,$8,$9,0,'active',$10,$11,'SAR')`,
+            [ctx.companyId, ctx.branchId, insurance.id, debitCode, insurance.premium,
+             policy.startDate, policy.endDate, months, monthlyAmount, insurance.vehicleId, costCenterId ?? null],
+          );
+        }
+      }
+    }
+
+    return posted;
   }
 
   async postTrafficViolationGL(

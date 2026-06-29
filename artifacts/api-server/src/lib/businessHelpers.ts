@@ -1596,6 +1596,10 @@ export const MAPPING_INTENT: Record<string, { type: string; keywords: string[] }
   cargo_freight_cost:            { type: "expense", keywords: ["تكاليف نقل وشحن", "نقل وشحن", "شحن", "نقل"] },
   fleet_maintenance_expense:     { type: "expense", keywords: ["صيانة وإصلاح المركبات", "صيانة المركبات", "صيانة"] },
   fleet_fuel_expense:            { type: "expense", keywords: ["الوقود", "وقود", "fuel"] },
+  // مصروف تأمين المركبات (طرف الإطفاء الشهري لقسط التأمين المدفوع مقدمًا → 5530).
+  // كلمات محدّدة فقط («تأمين المركبات/السيارات») تجنّبًا لمطابقة تأمينات GOSI (5250)
+  // أو التأمين العام (5930) أو المدفوع مقدمًا (1172) عند البحث بالنيّة.
+  fleet_insurance_expense:       { type: "expense", keywords: ["تأمين المركبات", "تأمين السيارات"] },
   fleet_fines_expense:           { type: "expense", keywords: ["مخالفات مرورية", "مخالفات"] },
   fleet_depreciation:            { type: "expense", keywords: ["إهلاك المركبات", "إهلاك"] },
   property_depreciation:         { type: "expense", keywords: ["إهلاك المباني", "إهلاك"] },
