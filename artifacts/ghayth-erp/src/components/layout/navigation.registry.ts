@@ -589,6 +589,8 @@ export const allNavSections: NavSection[] = [
           // أُعيدت بعد سقوطها من المجموعة في إعادة تنظيم الأسطول، إذ اختفت قائمة
           // المركبات وزر الإضافة من القائمة رغم بقاء الصفحة قائمةً تعمل.
           { label: "المركبات", path: "/fleet", icon: Car, perm: "fleet.vehicles:list" },
+          // البند ٤ — «تسجيل واقعة مركبة» الموحّدة (الكيان يقود: وقود/صيانة/تأمين معًا).
+          { label: "تسجيل واقعة مركبة", path: "/fleet/record-event", icon: ClipboardCheck, perm: "fleet.vehicles:update" },
           { label: "السائقين", path: "/fleet/drivers", icon: User, perm: "fleet.vehicles:list" },
           { label: "فحوص المركبات", path: "/fleet/inspections", icon: ClipboardCheck, perm: "fleet.vehicles:list" },
           { label: "الرحلات", path: "/fleet/trips", icon: Navigation, perm: "fleet.trips:list" },
