@@ -12,9 +12,10 @@ import { join } from "node:path";
  * subsidiary code. The control-account currentBalance still rolls up
  * because the parent/child link in chart_of_accounts is preserved.
  *
- * OFF BY DEFAULT (gated by system_settings.gl_subsidiary_substitution)
- * because tenants whose reports were built assuming parent posting
- * would silently shift on switch-over. UI surfaces the toggle.
+ * ON BY DEFAULT (البند ٤ — إذن إبراهيم «نعم حساب خاص»): every track posts to the
+ * entity's own subsidiary automatically; a company opts OUT explicitly via
+ * system_settings.gl_subsidiary_substitution='false'. Parent rollups are
+ * unaffected (the CoA parent/child link is preserved). UI surfaces the toggle.
  */
 
 const ENRICHER = readFileSync(
@@ -93,9 +94,9 @@ describe("substituteSubsidiaryAccountCodes — control-account swap", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 2. Feature flag — OFF by default
+// 2. Feature flag — ON by default (البند ٤), opt-out only
 // ─────────────────────────────────────────────────────────────────────────────
-describe("isSubsidiarySubstitutionEnabled — feature flag, off by default", () => {
+describe("isSubsidiarySubstitutionEnabled — feature flag, ON by default", () => {
   it("reads from system_settings key 'gl_subsidiary_substitution'", () => {
     expect(ENRICHER).toMatch(/key = 'gl_subsidiary_substitution'/);
   });
@@ -105,12 +106,13 @@ describe("isSubsidiarySubstitutionEnabled — feature flag, off by default", () 
     expect(ENRICHER).toMatch(/ORDER BY \("companyId" IS NULL\) ASC/);
   });
 
-  it("accepts 'true' / '1' / boolean true (string flexibility for ops UI)", () => {
-    expect(ENRICHER).toMatch(/raw === "true" \|\| raw === "1" \|\| raw === true/);
+  it("enabled by default; disabled ONLY by an explicit opt-out ('false'/'0'/false)", () => {
+    expect(ENRICHER).toMatch(/raw === "false" \|\| raw === "0" \|\| \(raw as unknown\) === false/);
+    expect(ENRICHER).toMatch(/return !disabled;/);
   });
 
-  it("returns false on read errors — substitution NEVER fails the JE post", () => {
-    expect(ENRICHER).toMatch(/} catch \{\s*return false;\s*\}/);
+  it("returns TRUE (default-on) on read errors — substitution NEVER fails the JE post", () => {
+    expect(ENRICHER).toMatch(/} catch \{[\s\S]*?return true;\s*\}/);
   });
 
   it("cached PER-PROCESS — flag is ops-flipped-once, single SELECT is enough", () => {
