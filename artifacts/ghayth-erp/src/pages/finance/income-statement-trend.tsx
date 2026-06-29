@@ -247,7 +247,7 @@ export default function IncomeStatementTrendPage() {
   return (
     <PageShell
       title="قائمة الدخل — اتجاه شهري متعدد الفترات"
-      subtitle="آخر N شهر جنباً إلى جنب، مع month-over-month % لكل بند — لاكتشاف الاتجاهات والقفزات غير الطبيعية"
+      subtitle="آخر N شهر جنباً إلى جنب، مع نسبة التغيّر الشهري لكل بند — لاكتشاف الاتجاهات والقفزات غير الطبيعية"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
         { href: "/finance/reports", label: "التقارير" },

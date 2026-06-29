@@ -651,7 +651,7 @@ export default function GLPostingQueuePage() {
   return (
     <PageShell
       title="قائمة الانتظار للترحيل المحاسبي"
-      subtitle="السجلات الجاهزة للترحيل إلى الأستاذ العام — Mudad، شطب الدفعات، إعادة تقييم FX، الجرد الدوري"
+      subtitle="السجلات الجاهزة للترحيل إلى الأستاذ العام — مدد، شطب الدفعات، إعادة تقييم الصرف الأجنبي، الجرد الدوري"
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "قائمة الترحيل" }]}
       actions={
         <PrintButton
