@@ -109,6 +109,28 @@ export const EVENT_CATALOG: EventDefinition[] = [
     sideEffects: ["gl_post", "audit"],
     critical: true,
   },
+  // سندا القبض/الصرف عبر مسار السندات القديم (finance-journal `voucher.${type}`).
+  // **غير حرجين**: الأثر المحاسبي (AR/AP + gl_post) يجري عبر الحدثين الحرجين
+  // finance.payment.received/sent، وهذان informational/أثرٌ فقط — يُسجَّلان هنا
+  // ليُعرَّفا في الفهرس (لا حدث مجهول في eventBus) دون مستهلكين أو ترحيل مزدوج.
+  {
+    name: "voucher.receipt",
+    label: "سند قبض",
+    domain: "finance",
+    description: "تُصدر عند تسجيل سند قبض عبر مسار السندات (أثرٌ فقط — التحصيل/AR عبر finance.payment.received)",
+    payload: { voucherId: "number", amount: "number", method: "string" },
+    consumers: [],
+    sideEffects: ["audit"],
+  },
+  {
+    name: "voucher.payment",
+    label: "سند صرف",
+    domain: "finance",
+    description: "تُصدر عند تسجيل سند صرف عبر مسار السندات (أثرٌ فقط — الصرف/AP عبر finance.payment.sent)",
+    payload: { voucherId: "number", amount: "number", method: "string" },
+    consumers: [],
+    sideEffects: ["audit"],
+  },
   {
     name: "finance.purchase_order.created",
     label: "إنشاء أمر شراء",
