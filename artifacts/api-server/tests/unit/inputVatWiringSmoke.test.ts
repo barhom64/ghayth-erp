@@ -17,18 +17,27 @@ const TAXCODES = readFileSync(
   "utf8",
 );
 
-describe("ضريبة المدخلات — توصيل المواضع الثلاثة بحساب الرمز القياسي", () => {
-  it("المُساعد resolveCompanyInputVatAccount مُعرَّف ويستعمل القرار المثبَّت", () => {
+describe("ضريبة المدخلات — توصيل المواضع الثلاثة بحساب رمز الوثيقة ثم القياسي", () => {
+  it("المُساعد resolveCompanyInputVatAccount مُعرَّف (الرمز القياسي للشركة)", () => {
     expect(TAXCODES).toContain("export async function resolveCompanyInputVatAccount");
     expect(TAXCODES).toContain("getDefaultTaxCode(companyId)");
     expect(TAXCODES).toContain("getInputVatAccountCode(companyId, def.code)");
     expect(TAXCODES).toContain("resolveVatLegAccount(specific, fallbackAccount)");
   });
 
-  it("المواضع الثلاثة تستدعي resolveCompanyInputVatAccount مع الاحتياطي العام", () => {
-    // ثلاث استدعاءات: GRN + فاتورة مورد + إشعار دائن مورد.
-    const calls = PURCHASE.match(/resolveCompanyInputVatAccount\(scope\.companyId,/g) ?? [];
+  it("المُساعد resolveInputVatAccount يُطبّق الترتُّب: رمز الوثيقة ← القياسي ← العام", () => {
+    expect(TAXCODES).toContain("export async function resolveInputVatAccount");
+    // رمز الوثيقة أولًا، ثم الارتداد للرمز القياسي للشركة.
+    expect(TAXCODES).toContain("getInputVatAccountCode(companyId, code)");
+    expect(TAXCODES).toContain("return resolveCompanyInputVatAccount(companyId, fallbackAccount)");
+  });
+
+  it("المواضع الثلاثة تستدعي resolveInputVatAccount برمز الوثيقة + الاحتياطي العام", () => {
+    // ثلاث استدعاءات: GRN (po.taxCode) + فاتورة مورد (b.taxCode) + إشعار دائن (b.taxCode).
+    const calls = PURCHASE.match(/resolveInputVatAccount\(scope\.companyId,/g) ?? [];
     expect(calls.length).toBe(3);
+    expect(PURCHASE).toContain("resolveInputVatAccount(scope.companyId, po.taxCode as string | null, vatGeneral)");
+    expect(PURCHASE).toContain("resolveInputVatAccount(scope.companyId, b.taxCode, vatInputGeneral)");
   });
 
   it("الاحتياطيات العامة الثلاثة لا تزال تُحلّ (ارتداد مطابق للسابق)", () => {

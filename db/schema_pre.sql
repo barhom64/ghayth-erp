@@ -16628,6 +16628,7 @@ CREATE TABLE public.purchase_orders (
     "exchangeRate" numeric(18,8) DEFAULT 1,
     "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
     "paidAmount" numeric(12,2) DEFAULT 0 NOT NULL,
+    "taxCode" text,
     CONSTRAINT chk_purchase_orders_status CHECK (((status)::text = ANY (ARRAY['draft'::text, 'pending'::text, 'pending_approval'::text, 'approved'::text, 'rejected'::text, 'returned'::text, 'received'::text, 'partially_received'::text, 'cancelled'::text, 'confirmed'::text, 'sent'::text, 'paid'::text, 'payment_scheduled'::text, 'invoice_matched'::text, 'invoice_mismatch'::text, 'completed'::text, 'ordered'::text, 'delivered'::text])))
 );
 
@@ -21676,7 +21677,8 @@ CREATE TABLE public.vendor_invoices (
     "sourceKey" character varying(128),
     "createdBy" integer,
     "createdAt" timestamp without time zone DEFAULT now(),
-    "deletedAt" timestamp without time zone
+    "deletedAt" timestamp without time zone,
+    "taxCode" text
 );
 
 

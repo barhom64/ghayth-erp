@@ -235,6 +235,9 @@ const createPurchaseOrderSchema = z.object({
   expectedDelivery: z.string().optional(),
   branchId: z.coerce.number().optional().nullable(),
   companyId: z.coerce.number().optional().nullable(),
+  // البند ٤ (هجرة 430) — رمز ضريبة رأس أمر الشراء: يحدّد حساب ضريبة المدخلات
+  // عند الاستلام (GRN). اختياري؛ غيابه ⇒ الرمز القياسي للشركة (سلوك #3084).
+  taxCode: z.string().optional(),
   items: z.array(z.any()).optional(),
 });
 
@@ -320,6 +323,10 @@ const createVendorCreditSchema = z.object({
   reason: z.string().min(3, "سبب الإشعار الدائن مطلوب"),
   memoDate: z.string().optional(),
   vatIncluded: z.boolean().optional(),
+  // البند ٤ (هجرة 430) — رمز ضريبة الإشعار: يُمرَّر مساويًا لرمز الفاتورة التي
+  // يعكسها كي يقع العكس على نفس حساب المدخلات (تسوية صفر). اختياري؛ غيابه ⇒
+  // الرمز القياسي للشركة (#3084).
+  taxCode: z.string().optional(),
 });
 
 const applyVendorCreditSchema = z.object({
@@ -880,7 +887,7 @@ purchaseRouter.post("/purchase-orders", authorize({ feature: "finance.purchase",
 
 
     // as-any-reason: justified-pragmatic - zodParse inferred type is widened so subsequent destructure/index accesses do not require explicit per-field generics; behavior unchanged
-    const { supplierId, totalAmount, vatAmount, notes, expectedDelivery, branchId, companyId: bodyCompanyId, items } = zodParse(createPurchaseOrderSchema.safeParse(req.body)) as any;
+    const { supplierId, totalAmount, vatAmount, notes, expectedDelivery, branchId, companyId: bodyCompanyId, taxCode, items } = zodParse(createPurchaseOrderSchema.safeParse(req.body)) as any;
 
     if (!totalAmount || Number(totalAmount) <= 0) { throw new ValidationError("المبلغ الإجمالي مطلوب"); return; }
     const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies?.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
@@ -910,9 +917,9 @@ purchaseRouter.post("/purchase-orders", authorize({ feature: "finance.purchase",
         expectedTiming: "on_draft",
       });
       const result = await rawExecute(
-        `INSERT INTO purchase_orders ("companyId","branchId",ref,status,"totalAmount","supplierId",notes,"expectedDelivery","createdBy")
-         VALUES ($1,$2,$3,'pending_approval',$4,$5,$6,$7,$8)`,
-        [effectiveCompanyId, effectiveBranchId, issued.number, Number(totalAmount), supplierId, notes ?? null, expectedDelivery ?? null, scope.userId]
+        `INSERT INTO purchase_orders ("companyId","branchId",ref,status,"totalAmount","supplierId",notes,"expectedDelivery","createdBy","taxCode")
+         VALUES ($1,$2,$3,'pending_approval',$4,$5,$6,$7,$8,$9)`,
+        [effectiveCompanyId, effectiveBranchId, issued.number, Number(totalAmount), supplierId, notes ?? null, expectedDelivery ?? null, scope.userId, taxCode ?? null]
       );
       assertInsert(result.insertId, "purchase_orders");
       await rawExecute(
@@ -1343,13 +1350,14 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
     // by (treatment-derived account + dimension signature) and emits
     // one DR per bucket. The VAT debit + GRNI credit stay header-level.
     const { financialEngine } = await import("../lib/engines/index.js");
-    const { resolveCompanyInputVatAccount } = await import("../lib/taxCodes.js");
+    const { resolveInputVatAccount } = await import("../lib/taxCodes.js");
     const [vatGeneral, grniAccount] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "purchase_grn_vat", "debit", "1180"),
       financialEngine.resolveAccountCode(scope.companyId, "purchase_grni", "credit", "2150"),
     ]);
-    // البند ٤ — ضريبة المدخلات على حساب الرمز القياسي للشركة إن هُيِّئ، وإلا العام.
-    const vatAccount = await resolveCompanyInputVatAccount(scope.companyId, vatGeneral);
+    // البند ٤ — حساب رمز ضريبة رأس أمر الشراء إن حمله (هجرة 430)، وإلا الرمز
+    // القياسي للشركة (#3084)، وإلا العام. po.taxCode = null حتى تُرسله الواجهة.
+    const vatAccount = await resolveInputVatAccount(scope.companyId, po.taxCode as string | null, vatGeneral);
 
     // Per-line DR routing uses the module-scope GRN_TREATMENT_PURPOSE map
     // (shared with the pre-flight gate above so they can never diverge).
@@ -3123,15 +3131,16 @@ purchaseRouter.post("/vendor-credits", authorize({ feature: "finance.purchase", 
     // F2 (audit follow-up): JE post + journalId stamp INSIDE the same
     // withTransaction. Same shape as customer-advances fix.
     const { financialEngine } = await import("../lib/engines/index.js");
-    const { resolveCompanyInputVatAccount } = await import("../lib/taxCodes.js");
+    const { resolveInputVatAccount } = await import("../lib/taxCodes.js");
     const [apCode, returnsCode, vatInputGeneral] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2111"),
       financialEngine.resolveAccountCode(scope.companyId, "vendor_return_revenue", "credit", "5110"),
       financialEngine.resolveAccountCode(scope.companyId, "vat_input_reversal", "credit", "1180"),
     ]);
-    // البند ٤ — يُعكَس على نفس حساب رمز الشركة القياسي الذي حمّلته الفاتورة، وإلا
-    // العام؛ فتُغلق تسوية حساب ضريبة المدخلات صفرًا بين الفاتورة وإشعارها.
-    const vatInputCode = await resolveCompanyInputVatAccount(scope.companyId, vatInputGeneral);
+    // البند ٤ — يُعكَس على حساب رمز ضريبة الإشعار إن مُرِّر (هجرة 430، مساويًا
+    // لرمز الفاتورة)، وإلا الرمز القياسي للشركة (#3084)، وإلا العام؛ فتُغلق تسوية
+    // حساب ضريبة المدخلات صفرًا بين الفاتورة وإشعارها.
+    const vatInputCode = await resolveInputVatAccount(scope.companyId, b.taxCode, vatInputGeneral);
 
     let memoId: number | null = null;
     let journalId: number | null = null;
@@ -3401,6 +3410,9 @@ const createVendorInvoiceSchema = z.object({
   costCenterId: z.coerce.number().optional(),
   projectId: z.coerce.number().optional(),
   departmentId: z.coerce.number().optional(),
+  // البند ٤ (هجرة 430) — رمز ضريبة فاتورة المورد: يحدّد حساب ضريبة المدخلات.
+  // اختياري؛ غيابه ⇒ الرمز القياسي للشركة (سلوك #3084).
+  taxCode: z.string().optional(),
 });
 
 // POST /vendor-invoices — create a supplier-issued invoice (AP).
@@ -3453,13 +3465,14 @@ purchaseRouter.post("/vendor-invoices", authorize({ feature: "finance.purchase",
     const { financialEngine } = await import("../lib/engines/index.js");
     const expenseCode = b.expenseAccountCode
       ?? await financialEngine.resolveAccountCode(scope.companyId, "vendor_invoice_expense", "debit", "5340");
-    const { resolveCompanyInputVatAccount } = await import("../lib/taxCodes.js");
+    const { resolveInputVatAccount } = await import("../lib/taxCodes.js");
     const [vatInputGeneral, apCode] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "purchase_vat_input", "debit", "1180"),
       financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "credit", "2111"),
     ]);
-    // البند ٤ — ضريبة المدخلات على حساب الرمز القياسي للشركة إن هُيِّئ، وإلا العام.
-    const vatInputCode = await resolveCompanyInputVatAccount(scope.companyId, vatInputGeneral);
+    // البند ٤ — حساب رمز ضريبة الفاتورة إن حملته (هجرة 430)، وإلا الرمز القياسي
+    // للشركة (#3084)، وإلا العام. b.taxCode = null حتى تُرسله الواجهة لاحقًا.
+    const vatInputCode = await resolveInputVatAccount(scope.companyId, b.taxCode, vatInputGeneral);
 
     let invoiceId: number | null = null;
     let journalId: number | null = null;
@@ -3467,10 +3480,10 @@ purchaseRouter.post("/vendor-invoices", authorize({ feature: "finance.purchase",
     await withTransaction(async (client: any) => {
       try {
         const ins = await client.query(
-          `INSERT INTO vendor_invoices ("companyId","branchId","supplierId",ref,"invoiceDate","dueDate","poId",subtotal,"vatAmount",total,"paidAmount",description,"createdBy",status,"sourceKey")
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,0,$11,$12,'approved',$13) RETURNING id`,
+          `INSERT INTO vendor_invoices ("companyId","branchId","supplierId",ref,"invoiceDate","dueDate","poId",subtotal,"vatAmount",total,"paidAmount",description,"createdBy",status,"sourceKey","taxCode")
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,0,$11,$12,'approved',$13,$14) RETURNING id`,
           [scope.companyId, scope.branchId, b.supplierId, b.ref, b.invoiceDate, b.dueDate ?? null,
-           b.poId ?? null, subtotal, vatAmount, total, b.description ?? null, scope.activeAssignmentId, sourceKey]
+           b.poId ?? null, subtotal, vatAmount, total, b.description ?? null, scope.activeAssignmentId, sourceKey, b.taxCode ?? null]
         );
         invoiceId = ins.rows[0].id;
       } catch (e: any) {
@@ -3495,7 +3508,8 @@ purchaseRouter.post("/vendor-invoices", authorize({ feature: "finance.purchase",
                "sourceKey" VARCHAR(128),
                "createdBy" INTEGER,
                "createdAt" TIMESTAMP DEFAULT NOW(),
-               "deletedAt" TIMESTAMP
+               "deletedAt" TIMESTAMP,
+               "taxCode" TEXT
              );
              CREATE UNIQUE INDEX IF NOT EXISTS idx_vendor_invoices_source_key
                ON vendor_invoices ("companyId", "sourceKey")
@@ -3505,10 +3519,10 @@ purchaseRouter.post("/vendor-invoices", authorize({ feature: "finance.purchase",
                WHERE "deletedAt" IS NULL;`
           );
           const ins2 = await client.query(
-            `INSERT INTO vendor_invoices ("companyId","branchId","supplierId",ref,"invoiceDate","dueDate","poId",subtotal,"vatAmount",total,"paidAmount",description,"createdBy",status,"sourceKey")
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,0,$11,$12,'approved',$13) RETURNING id`,
+            `INSERT INTO vendor_invoices ("companyId","branchId","supplierId",ref,"invoiceDate","dueDate","poId",subtotal,"vatAmount",total,"paidAmount",description,"createdBy",status,"sourceKey","taxCode")
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,0,$11,$12,'approved',$13,$14) RETURNING id`,
             [scope.companyId, scope.branchId, b.supplierId, b.ref, b.invoiceDate, b.dueDate ?? null,
-             b.poId ?? null, subtotal, vatAmount, total, b.description ?? null, scope.activeAssignmentId, sourceKey]
+             b.poId ?? null, subtotal, vatAmount, total, b.description ?? null, scope.activeAssignmentId, sourceKey, b.taxCode ?? null]
           );
           invoiceId = ins2.rows[0].id;
         } else {

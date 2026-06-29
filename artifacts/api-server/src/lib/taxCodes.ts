@@ -235,6 +235,25 @@ export async function resolveCompanyInputVatAccount(
 }
 
 /**
+ * البند ٤ (دقّة لكل وثيقة شراء — هجرة 430) — حساب ضريبة المدخلات لوثيقة بعينها.
+ * تَرتُّب الاشتقاق: **رمز ضريبة الوثيقة** (إن حملته وكان حسابه مُهيّأً) ← **الرمز
+ * القياسي للشركة** ← **الاحتياطي العام**. فوثيقة برمز غير قياسي تُرحّل ضريبتها
+ * إلى حساب رمزها، والوثائق بلا رمز تبقى على سلوك #3084 (الرمز القياسي) مطابقًا.
+ */
+export async function resolveInputVatAccount(
+  companyId: number,
+  docTaxCode: string | null | undefined,
+  fallbackAccount: string,
+): Promise<string> {
+  const code = typeof docTaxCode === "string" ? docTaxCode.trim() : "";
+  if (code) {
+    const specific = await getInputVatAccountCode(companyId, code);
+    if (specific) return specific;
+  }
+  return resolveCompanyInputVatAccount(companyId, fallbackAccount);
+}
+
+/**
  * Validate that a tax code is usable in a given direction. Throws if
  * the code is exempt/out-of-scope but the caller is trying to compute
  * VAT, or if the code has no account configured.
