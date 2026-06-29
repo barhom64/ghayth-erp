@@ -235,7 +235,7 @@ const createPurchaseOrderSchema = z.object({
   expectedDelivery: z.string().optional(),
   branchId: z.coerce.number().optional().nullable(),
   companyId: z.coerce.number().optional().nullable(),
-  // البند ٤ (هجرة 430) — رمز ضريبة رأس أمر الشراء: يحدّد حساب ضريبة المدخلات
+  // البند ٤ (هجرة 431) — رمز ضريبة رأس أمر الشراء: يحدّد حساب ضريبة المدخلات
   // عند الاستلام (GRN). اختياري؛ غيابه ⇒ الرمز القياسي للشركة (سلوك #3084).
   taxCode: z.string().optional(),
   items: z.array(z.any()).optional(),
@@ -323,7 +323,7 @@ const createVendorCreditSchema = z.object({
   reason: z.string().min(3, "سبب الإشعار الدائن مطلوب"),
   memoDate: z.string().optional(),
   vatIncluded: z.boolean().optional(),
-  // البند ٤ (هجرة 430) — رمز ضريبة الإشعار: يُمرَّر مساويًا لرمز الفاتورة التي
+  // البند ٤ (هجرة 431) — رمز ضريبة الإشعار: يُمرَّر مساويًا لرمز الفاتورة التي
   // يعكسها كي يقع العكس على نفس حساب المدخلات (تسوية صفر). اختياري؛ غيابه ⇒
   // الرمز القياسي للشركة (#3084).
   taxCode: z.string().optional(),
@@ -1355,7 +1355,7 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
       financialEngine.resolveAccountCode(scope.companyId, "purchase_grn_vat", "debit", "1180"),
       financialEngine.resolveAccountCode(scope.companyId, "purchase_grni", "credit", "2150"),
     ]);
-    // البند ٤ — حساب رمز ضريبة رأس أمر الشراء إن حمله (هجرة 430)، وإلا الرمز
+    // البند ٤ — حساب رمز ضريبة رأس أمر الشراء إن حمله (هجرة 431)، وإلا الرمز
     // القياسي للشركة (#3084)، وإلا العام. po.taxCode = null حتى تُرسله الواجهة.
     const vatAccount = await resolveInputVatAccount(scope.companyId, po.taxCode as string | null, vatGeneral);
 
@@ -3137,7 +3137,7 @@ purchaseRouter.post("/vendor-credits", authorize({ feature: "finance.purchase", 
       financialEngine.resolveAccountCode(scope.companyId, "vendor_return_revenue", "credit", "5110"),
       financialEngine.resolveAccountCode(scope.companyId, "vat_input_reversal", "credit", "1180"),
     ]);
-    // البند ٤ — يُعكَس على حساب رمز ضريبة الإشعار إن مُرِّر (هجرة 430، مساويًا
+    // البند ٤ — يُعكَس على حساب رمز ضريبة الإشعار إن مُرِّر (هجرة 431، مساويًا
     // لرمز الفاتورة)، وإلا الرمز القياسي للشركة (#3084)، وإلا العام؛ فتُغلق تسوية
     // حساب ضريبة المدخلات صفرًا بين الفاتورة وإشعارها.
     const vatInputCode = await resolveInputVatAccount(scope.companyId, b.taxCode, vatInputGeneral);
@@ -3410,7 +3410,7 @@ const createVendorInvoiceSchema = z.object({
   costCenterId: z.coerce.number().optional(),
   projectId: z.coerce.number().optional(),
   departmentId: z.coerce.number().optional(),
-  // البند ٤ (هجرة 430) — رمز ضريبة فاتورة المورد: يحدّد حساب ضريبة المدخلات.
+  // البند ٤ (هجرة 431) — رمز ضريبة فاتورة المورد: يحدّد حساب ضريبة المدخلات.
   // اختياري؛ غيابه ⇒ الرمز القياسي للشركة (سلوك #3084).
   taxCode: z.string().optional(),
 });
@@ -3470,7 +3470,7 @@ purchaseRouter.post("/vendor-invoices", authorize({ feature: "finance.purchase",
       financialEngine.resolveAccountCode(scope.companyId, "purchase_vat_input", "debit", "1180"),
       financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "credit", "2111"),
     ]);
-    // البند ٤ — حساب رمز ضريبة الفاتورة إن حملته (هجرة 430)، وإلا الرمز القياسي
+    // البند ٤ — حساب رمز ضريبة الفاتورة إن حملته (هجرة 431)، وإلا الرمز القياسي
     // للشركة (#3084)، وإلا العام. b.taxCode = null حتى تُرسله الواجهة لاحقًا.
     const vatInputCode = await resolveInputVatAccount(scope.companyId, b.taxCode, vatInputGeneral);
 

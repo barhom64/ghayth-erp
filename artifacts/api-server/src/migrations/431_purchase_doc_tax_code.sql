@@ -1,4 +1,4 @@
--- Migration 430 — رمز ضريبة على رأس وثائق الشراء (دقّة حساب ضريبة المدخلات)
+-- Migration 431 — رمز ضريبة على رأس وثائق الشراء (دقّة حساب ضريبة المدخلات)
 --
 -- @rollback: Fully additive. To undo:
 --   ALTER TABLE purchase_orders DROP COLUMN IF EXISTS "taxCode";
