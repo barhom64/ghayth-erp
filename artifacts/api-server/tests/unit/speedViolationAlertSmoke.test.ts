@@ -130,12 +130,17 @@ describe("Vehicle speed-violation alert (daily) — spec ملف 04", () => {
     expect(cron).toMatch(/fdp\.speed\s*>\s*\(el\."limitKph"\s*\+\s*el\."toleranceKph"\)/);
   });
 
-  it("the cron scans the PREVIOUS calendar day window", () => {
-    // Daily granularity: yesterday's full window only.
-    expect(cron).toMatch(/fdp\."occurredAt"\s*>=\s*\(CURRENT_DATE - INTERVAL '1 day'\)/);
-    expect(cron).toMatch(/fdp\."occurredAt"\s*<\s*CURRENT_DATE/);
-    // And violationDate = yesterday.
-    expect(cron).toMatch(/\(CURRENT_DATE - INTERVAL '1 day'\)::date AS "violationDate"/);
+  it("the cron scans the PREVIOUS calendar day window (timezone-aware bounds)", () => {
+    // Daily granularity: yesterday's full window only. After the Codex
+    // P2 fix the bounds are computed in the scheduler timezone via
+    // day_bounds CTE — see the dedicated tz test for the parameterized
+    // tz form. Here we just confirm the window is "yesterday" and
+    // explicitly named.
+    expect(cron).toMatch(/AS "violationDate"/);
+    expect(cron).toMatch(/INTERVAL '1 day'/);
+    // The position bounds come from db.startTs/endTs after the fix.
+    expect(cron).toMatch(/fdp\."occurredAt"\s*>=\s*db\."startTs"/);
+    expect(cron).toMatch(/fdp\."occurredAt"\s*<\s*db\."endTs"/);
   });
 
   it("the cron aggregates with MAX(speed) + COUNT per vehicle", () => {
@@ -191,5 +196,56 @@ describe("Vehicle speed-violation alert (daily) — spec ملف 04", () => {
   it("slice 7 is ADDITIVE — slices 5+6 crons still wired", () => {
     expect(SRC).toContain('"daily_vehicle_replacement_check"');
     expect(SRC).toContain('"daily_driver_evaluation_check"');
+  });
+
+  // ── Codex review fixes ──────────────────────────────────────────────────
+  it("Codex P1 — dispatch passes recipientEmail (looked up from assignmentId)", () => {
+    // dispatchNotification only sends email when payload.recipientEmail
+    // is set; assignmentId alone is in-app routing/preferences. Without
+    // recipientEmail every speeding alert silently produced no email
+    // and then the idempotency row suppressed retries forever.
+    expect(cron).toContain('SELECT e.name, e.email FROM employee_assignments');
+    const block = cron.slice(cron.indexOf('eventCategory: "fleet.speed.violation"'));
+    expect(block.slice(0, 3000)).toMatch(/recipientEmail: managerEmail/);
+    expect(block.slice(0, 3000)).toMatch(/recipientName: managerName/);
+  });
+
+  it("Codex P2 — daily window uses the scheduler timezone (not bare CURRENT_DATE)", () => {
+    // The cron schedules in getSystemTimezone() (default Asia/Riyadh)
+    // but the DB session may be UTC. Bare CURRENT_DATE measured the
+    // wrong calendar day. The fix passes tz as a parameter and
+    // converts occurredAt via AT TIME ZONE before comparing.
+    expect(cron).toContain('getSystemTimezone()');
+    expect(cron).toContain('NOW() AT TIME ZONE $2');
+    expect(cron).toMatch(/fdp\."occurredAt"\s*>=\s*db\."startTs"/);
+    expect(cron).toMatch(/fdp\."occurredAt"\s*<\s*db\."endTs"/);
+    // Bare CURRENT_DATE bounds must be gone in the position window —
+    // they would re-introduce the timezone bug.
+    expect(cron).not.toMatch(/fdp\."occurredAt"\s*>=\s*\(CURRENT_DATE - INTERVAL/);
+  });
+
+  it("Codex P2 — driver lookup is constrained to the violation day (not 'latest trip')", () => {
+    // A latest-by-createdAt lookup names whoever was assigned LAST,
+    // even if that's a trip created the morning the cron runs for a
+    // different driver. We filter trips to startTime inside the
+    // violation-day window in the scheduler timezone.
+    const lookup = cron.slice(cron.indexOf('FROM fleet_trips ft'));
+    expect(lookup.slice(0, 2000)).toMatch(/ft\."startTime"\s*>=\s*\(\$3::date\)::timestamp AT TIME ZONE \$4/);
+    expect(lookup.slice(0, 2000)).toMatch(/ft\."startTime"\s*<\s*\(\$3::date \+ 1\)::timestamp AT TIME ZONE \$4/);
+    // Ordering must NOT be by createdAt (the bug) — we want the latest
+    // trip THAT DAY, broken by startTime so we pick the most recent
+    // actual drive on that calendar date.
+    expect(lookup.slice(0, 2000)).toMatch(/ORDER BY ft\."startTime" DESC/);
+    expect(lookup.slice(0, 2000)).not.toMatch(/ORDER BY ft\."createdAt"/);
+  });
+
+  it("Codex P1 (cross-slice) — slices 5 and 6 also now pass recipientEmail", () => {
+    // Same dispatchNotification bug was present in slices 5 and 6
+    // (vehicle replacement, driver evaluation). Fix them in the same
+    // PR so they actually deliver email in production.
+    const slice5 = SRC.slice(SRC.indexOf('eventCategory: "fleet.breakdown.replacement_candidate"'));
+    expect(slice5.slice(0, 3000)).toMatch(/recipientEmail: managerEmail/);
+    const slice6 = SRC.slice(SRC.indexOf('eventCategory: "fleet.driver.evaluation_meeting"'));
+    expect(slice6.slice(0, 3000)).toMatch(/recipientEmail: managerEmail/);
   });
 });

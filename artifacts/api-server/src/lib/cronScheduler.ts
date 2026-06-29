@@ -2352,14 +2352,6 @@ async function dailyVehicleReplacementCheck(): Promise<string> {
             [company.id]
           );
           if (fallback) { managerAssignment = fallback.id; managerName = fallback.name || managerName; }
-        } else {
-          const [byBranch] = await rawQuery<{ name: string }>(
-            `SELECT e.name FROM employee_assignments ea
-              LEFT JOIN employees e ON e.id = ea."employeeId"
-              WHERE ea.id = $1`,
-            [managerAssignment]
-          );
-          if (byBranch?.name) managerName = byBranch.name;
         }
       } catch (e) {
         logger.warn(e, `[cronScheduler] vehicle_replacement: manager lookup failed (vehicleId=${vehicleId})`);
@@ -2368,6 +2360,26 @@ async function dailyVehicleReplacementCheck(): Promise<string> {
       if (!managerAssignment) {
         logger.info(`[cronScheduler] vehicle_replacement: no manager found (company=${company.id}, vehicleId=${vehicleId}) — skipped`);
         continue;
+      }
+
+      // Codex P1 (شريحة 7 PR): dispatchNotification يُرسل البريد فقط حين
+      // يُمرَّر recipientEmail (assignmentId يُستعمل للتفضيلات/in-app
+      // routing لا لاستنباط البريد). نستخرج اسم + بريد المدير من
+      // employees قبل dispatch.
+      let managerEmail: string | null = null;
+      try {
+        const [mgrInfo] = await rawQuery<{ name: string; email: string | null }>(
+          `SELECT e.name, e.email FROM employee_assignments ea
+             JOIN employees e ON e.id = ea."employeeId"
+            WHERE ea.id = $1`,
+          [managerAssignment]
+        );
+        if (mgrInfo) {
+          if (mgrInfo.name) managerName = mgrInfo.name;
+          managerEmail = mgrInfo.email ?? null;
+        }
+      } catch (e) {
+        logger.warn(e, `[cronScheduler] vehicle_replacement: manager email lookup failed (vehicleId=${vehicleId})`);
       }
 
       const categoriesArr = Array.isArray(c.categories)
@@ -2393,6 +2405,8 @@ async function dailyVehicleReplacementCheck(): Promise<string> {
             categories: categoriesText,
           },
           assignmentId: managerAssignment,
+          recipientEmail: managerEmail ?? undefined,
+          recipientName: managerName,
           refType: "fleet_vehicle",
           refId: vehicleId,
           priority: "high",
@@ -2493,14 +2507,6 @@ async function dailyDriverEvaluationCheck(): Promise<string> {
             [company.id]
           );
           if (fallback) { managerAssignment = fallback.id; managerName = fallback.name || managerName; }
-        } else {
-          const [resolved] = await rawQuery<{ name: string }>(
-            `SELECT e.name FROM employee_assignments ea
-              LEFT JOIN employees e ON e.id = ea."employeeId"
-              WHERE ea.id = $1`,
-            [managerAssignment]
-          );
-          if (resolved?.name) managerName = resolved.name;
         }
       } catch (e) {
         logger.warn(e, `[cronScheduler] driver_evaluation: manager lookup failed (driverId=${driverId})`);
@@ -2509,6 +2515,25 @@ async function dailyDriverEvaluationCheck(): Promise<string> {
       if (!managerAssignment) {
         logger.info(`[cronScheduler] driver_evaluation: no manager found (company=${company.id}, driverId=${driverId}) — skipped`);
         continue;
+      }
+
+      // Codex P1 (شريحة 7 PR): dispatchNotification يحتاج recipientEmail
+      // ليُرسل البريد فعلًا. استخرج اسم + بريد المدير من employees بعد
+      // حلّ assignmentId.
+      let managerEmail: string | null = null;
+      try {
+        const [mgrInfo] = await rawQuery<{ name: string; email: string | null }>(
+          `SELECT e.name, e.email FROM employee_assignments ea
+             JOIN employees e ON e.id = ea."employeeId"
+            WHERE ea.id = $1`,
+          [managerAssignment]
+        );
+        if (mgrInfo) {
+          if (mgrInfo.name) managerName = mgrInfo.name;
+          managerEmail = mgrInfo.email ?? null;
+        }
+      } catch (e) {
+        logger.warn(e, `[cronScheduler] driver_evaluation: manager email lookup failed (driverId=${driverId})`);
       }
 
       const score = Number(c.reputationScore);
@@ -2538,6 +2563,8 @@ async function dailyDriverEvaluationCheck(): Promise<string> {
             period: periodLabel,
           },
           assignmentId: managerAssignment,
+          recipientEmail: managerEmail ?? undefined,
+          recipientName: managerName,
           refType: "fleet_driver",
           refId: driverId,
           priority: "high",
@@ -2584,6 +2611,11 @@ async function dailyDriverEvaluationCheck(): Promise<string> {
  */
 async function dailySpeedViolationCheck(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
+  // Codex P2 (شريحة 7 PR): cron يُجدول في منطقة getSystemTimezone (افتراضي
+  // Asia/Riyadh)؛ لو DB على UTC و schedule 07:00 Riyadh، فإن CURRENT_DATE
+  // في الاستعلام تشير لـ 03:00→03:00 Riyadh وليس 00:00→00:00 المرتقب.
+  // نمرّر المنطقة الزمنية كمعامل ونحوّل occurredAt إليها قبل المقارنة.
+  const tz = await getSystemTimezone();
   let alerted = 0;
   for (const company of companies) {
     const candidates = await rawQuery<Record<string, unknown>>(
@@ -2600,6 +2632,12 @@ async function dailySpeedViolationCheck(): Promise<string> {
             AND vsl_d."vehicleId" IS NULL
           WHERE fv."companyId" = $1
             AND fv."deletedAt" IS NULL
+       ),
+       day_bounds AS (
+         SELECT
+           ((NOW() AT TIME ZONE $2)::date - INTERVAL '1 day')::date AS "violationDate",
+           ((((NOW() AT TIME ZONE $2)::date - INTERVAL '1 day')::date)::timestamp AT TIME ZONE $2) AS "startTs",
+           ((((NOW() AT TIME ZONE $2)::date)::timestamp                            AT TIME ZONE $2) ) AS "endTs"
        )
        SELECT fdp."vehicleId",
               el."limitKph",
@@ -2609,18 +2647,19 @@ async function dailySpeedViolationCheck(): Promise<string> {
               fv."branchId",
               MAX(fdp.speed) AS "maxSpeedKph",
               COUNT(*)::int AS "violationCount",
-              (CURRENT_DATE - INTERVAL '1 day')::date AS "violationDate"
+              db."violationDate"
          FROM fleet_device_positions fdp
          JOIN effective_limits el ON el."vehicleId" = fdp."vehicleId"
          JOIN fleet_vehicles fv ON fv.id = fdp."vehicleId"
+         CROSS JOIN day_bounds db
         WHERE fdp."companyId" = $1
-          AND fdp."occurredAt" >= (CURRENT_DATE - INTERVAL '1 day')
-          AND fdp."occurredAt" <  CURRENT_DATE
+          AND fdp."occurredAt" >= db."startTs"
+          AND fdp."occurredAt" <  db."endTs"
           AND fdp.speed > (el."limitKph" + el."toleranceKph")
           AND fv."deletedAt" IS NULL
         GROUP BY fdp."vehicleId", el."limitKph", el."toleranceKph",
-                 fv."plateNumber", fv.make, fv.model, fv."branchId"`,
-      [company.id]
+                 fv."plateNumber", fv.make, fv.model, fv."branchId", db."violationDate"`,
+      [company.id, tz]
     );
     for (const c of candidates) {
       const vehicleId = Number(c.vehicleId);
@@ -2638,9 +2677,10 @@ async function dailySpeedViolationCheck(): Promise<string> {
       );
       if (existing.length > 0) continue;
 
-      // اختر اسم السائق من آخر رحلة قبل/خلال يوم التجاوز — قد لا يوجد
-      // (بيانات قديمة)، فنستعمل placeholder. الرحلة تربط vehicle بـ
-      // driver بشكل صريح.
+      // Codex P2 (شريحة 7 PR): اختر السائق من رحلة فعّالة خلال يوم
+      // التجاوز نفسه — لا «آخر رحلة مطلقًا» (التي قد تكون رحلة لاحقة
+      // مُنشأة قبل تشغيل cron الصباحي). نُطابق ضمن نافذة يوم التجاوز
+      // في المنطقة الزمنية المضبوطة.
       let driverName = '—';
       try {
         const [trip] = await rawQuery<{ name: string | null }>(
@@ -2648,9 +2688,11 @@ async function dailySpeedViolationCheck(): Promise<string> {
              LEFT JOIN fleet_drivers fd ON fd.id = ft."driverId"
             WHERE ft."companyId" = $1 AND ft."vehicleId" = $2
               AND ft."deletedAt" IS NULL
-            ORDER BY ft."createdAt" DESC
+              AND ft."startTime" >= ($3::date)::timestamp AT TIME ZONE $4
+              AND ft."startTime" <  ($3::date + 1)::timestamp AT TIME ZONE $4
+            ORDER BY ft."startTime" DESC
             LIMIT 1`,
-          [company.id, vehicleId]
+          [company.id, vehicleId, violationDate, tz]
         );
         if (trip?.name) driverName = trip.name;
       } catch (e) {
@@ -2681,14 +2723,6 @@ async function dailySpeedViolationCheck(): Promise<string> {
             [company.id]
           );
           if (fallback) { managerAssignment = fallback.id; managerName = fallback.name || managerName; }
-        } else {
-          const [resolved] = await rawQuery<{ name: string }>(
-            `SELECT e.name FROM employee_assignments ea
-              LEFT JOIN employees e ON e.id = ea."employeeId"
-              WHERE ea.id = $1`,
-            [managerAssignment]
-          );
-          if (resolved?.name) managerName = resolved.name;
         }
       } catch (e) {
         logger.warn(e, `[cronScheduler] speed_violation: manager lookup failed (vehicleId=${vehicleId})`);
@@ -2697,6 +2731,26 @@ async function dailySpeedViolationCheck(): Promise<string> {
       if (!managerAssignment) {
         logger.info(`[cronScheduler] speed_violation: no manager (company=${company.id}, vehicleId=${vehicleId}) — skipped`);
         continue;
+      }
+
+      // Codex P1 (شريحة 7 PR): dispatchNotification يحتاج recipientEmail
+      // ليُرسل البريد فعلًا (assignmentId يُستعمل للتفضيلات وin-app
+      // routing لا لاستنباط البريد). نستخرج اسم + بريد المدير بعد حلّ
+      // assignmentId ونمرّرهما كي لا يُسقَط البريد بصمت.
+      let managerEmail: string | null = null;
+      try {
+        const [mgrInfo] = await rawQuery<{ name: string; email: string | null }>(
+          `SELECT e.name, e.email FROM employee_assignments ea
+             JOIN employees e ON e.id = ea."employeeId"
+            WHERE ea.id = $1`,
+          [managerAssignment]
+        );
+        if (mgrInfo) {
+          if (mgrInfo.name) managerName = mgrInfo.name;
+          managerEmail = mgrInfo.email ?? null;
+        }
+      } catch (e) {
+        logger.warn(e, `[cronScheduler] speed_violation: manager email lookup failed (vehicleId=${vehicleId})`);
       }
 
       try {
@@ -2719,6 +2773,8 @@ async function dailySpeedViolationCheck(): Promise<string> {
             violationDate: violationDate,
           },
           assignmentId: managerAssignment,
+          recipientEmail: managerEmail ?? undefined,
+          recipientName: managerName,
           refType: "fleet_vehicle",
           refId: vehicleId,
           priority: "high",
