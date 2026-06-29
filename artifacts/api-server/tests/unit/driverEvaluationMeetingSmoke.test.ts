@@ -17,11 +17,11 @@
  *   who need intervention, not just the worst.
  *
  * This test pins:
- *   1. Migration 427 seeds `fleet.driver.evaluation_meeting` (ar+en
+ *   1. Migration 430 seeds `fleet.driver.evaluation_meeting` (ar+en
  *      email) as a GLOBAL default (companyId IS NULL).
  *   2. The template explains the < 60 threshold to the reader so the
  *      policy is visible (per ghayth-constitution transparency rule).
- *   3. Migration 428 creates `fleet_driver_evaluation_alerts` with the
+ *   3. Migration 431 creates `fleet_driver_evaluation_alerts` with the
  *      right PK (driverId, alertMonth) and the < 60 score check.
  *   4. The cron filters fleet_drivers on `reputationScore < 60` AND
  *      requires `reputationComputedAt IS NOT NULL` (so we don't alarm
@@ -44,11 +44,11 @@ const SRC = readFileSync(
   "utf8",
 );
 const TMPL_MIG = readFileSync(
-  join(import.meta.dirname!, "..", "..", "src", "migrations", "427_seed_driver_evaluation_meeting_template.sql"),
+  join(import.meta.dirname!, "..", "..", "src", "migrations", "430_seed_driver_evaluation_meeting_template.sql"),
   "utf8",
 );
 const TBL_MIG = readFileSync(
-  join(import.meta.dirname!, "..", "..", "src", "migrations", "428_driver_evaluation_alerts_table.sql"),
+  join(import.meta.dirname!, "..", "..", "src", "migrations", "431_driver_evaluation_alerts_table.sql"),
   "utf8",
 );
 
@@ -60,29 +60,29 @@ function section(marker: string, len = 8000): string {
 describe("Driver evaluation-meeting alert (reputation < 60) — spec ملف 04", () => {
   const cron = section("async function dailyDriverEvaluationCheck");
 
-  it("migration 427 seeds the template as ar+en email, GLOBAL default", () => {
+  it("migration 430 seeds the template as ar+en email, GLOBAL default", () => {
     const key = "'fleet.driver.evaluation_meeting'";
     const count = TMPL_MIG.split(key).length - 1;
-    expect(count, "template should appear ≥2× (ar+en) in 427").toBeGreaterThanOrEqual(2);
+    expect(count, "template should appear ≥2× (ar+en) in 430").toBeGreaterThanOrEqual(2);
     expect(TMPL_MIG).toContain("WHERE NOT EXISTS");
     expect(TMPL_MIG).toMatch(/SELECT\s+NULL::int,\s+t\."templateKey"/);
     expect(TMPL_MIG).toContain('nt."companyId" IS NULL');
   });
 
-  it("migration 427 has the 7 placeholders the cron sends", () => {
+  it("migration 430 has the 7 placeholders the cron sends", () => {
     for (const ph of ["managerName", "driverName", "reputationScore", "tripsConsidered", "onTimeRate", "completionRate", "period"]) {
       expect(TMPL_MIG, `template missing placeholder {{${ph}}}`).toContain(`{{${ph}}}`);
     }
   });
 
-  it("migration 427 documents the < 60 (= 3/5) threshold transparently", () => {
+  it("migration 430 documents the < 60 (= 3/5) threshold transparently", () => {
     // ghayth-constitution: business decisions must be documented at the
     // decision site. The < 60 mapping must surface in the body so anyone
     // reading the alert understands WHY the driver was flagged.
     expect(TMPL_MIG).toMatch(/أقل من 60|below 60/);
   });
 
-  it("migration 427 ONLY uses email channel (no in_app / sms / whatsapp for managers)", () => {
+  it("migration 430 ONLY uses email channel (no in_app / sms / whatsapp for managers)", () => {
     // Slice-1 Codex lesson: internal-manager templates must be email-only.
     expect(TMPL_MIG).not.toMatch(/'fleet\.driver\.evaluation_meeting',\s*'in_app'/);
     expect(TMPL_MIG).not.toMatch(/'fleet\.driver\.evaluation_meeting',\s*'sms'/);
@@ -91,7 +91,7 @@ describe("Driver evaluation-meeting alert (reputation < 60) — spec ملف 04",
     expect(TMPL_MIG).toMatch(/'fleet\.driver\.evaluation_meeting',\s*'email',\s*'en'/);
   });
 
-  it("migration 428 creates fleet_driver_evaluation_alerts with the right PK + score check", () => {
+  it("migration 431 creates fleet_driver_evaluation_alerts with the right PK + score check", () => {
     expect(TBL_MIG).toMatch(/CREATE TABLE IF NOT EXISTS fleet_driver_evaluation_alerts/);
     expect(TBL_MIG).toMatch(/PRIMARY KEY\s*\(\s*"driverId",\s*"alertMonth"\s*\)/);
     // Score check enforces the 0..<60 invariant so a buggy cron can't
