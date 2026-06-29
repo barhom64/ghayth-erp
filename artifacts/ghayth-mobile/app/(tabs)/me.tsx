@@ -27,8 +27,8 @@ interface QuickAction { label: string; icon: IoniconName; route: string }
 const QUICK_ACTIONS: QuickAction[] = [
   { label: 'تسجيل الحضور', icon: 'finger-print-outline',      route: '/hr/attendance' },
   { label: 'طلب إجازة',     icon: 'calendar-outline',          route: '/hr/leave-new' },
-  { label: 'طلبات الإجازة', icon: 'list-outline',              route: '/hr/leaves' },
-  { label: 'كشف الراتب',    icon: 'document-text-outline',     route: '/m/hr/payslips' },
+  { label: 'طلبات الإجازة', icon: 'list-outline',              route: '/m/hr/leave-requests' },
+  { label: 'كشف الراتب',    icon: 'document-text-outline',     route: '/m/hr/payroll' },
 ];
 
 export default function MeScreen() {

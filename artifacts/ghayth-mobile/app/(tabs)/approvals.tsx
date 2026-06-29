@@ -3,7 +3,7 @@
  */
 import React, { useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import { GScreen, GCard, GText, GLoadingState, GEmptyState, GStatusBadge, GBadge } from '@workspace/ui-native';
+import { GScreen, GCard, GText, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList, useMutation } from '@/hooks/useApi';
 import { useQueryClient } from '@tanstack/react-query';

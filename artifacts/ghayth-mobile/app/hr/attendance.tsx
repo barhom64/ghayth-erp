@@ -11,8 +11,15 @@ import { useColors } from '@/hooks/useColors';
 import { useList, useMutation } from '@/hooks/useApi';
 import { useCurrentPosition, takePhoto } from '@/hooks/useNative';
 
+interface TodayRecord {
+  status: string;
+  checkIn?: string;
+  checkOut?: string;
+  id?: number;
+}
 interface AttendanceStatus {
-  today?: { status: string; checkIn?: string; checkOut?: string; id?: number } | null;
+  today?: TodayRecord | null;
+  attendance?: TodayRecord | null;
 }
 
 export default function AttendanceScreen() {
@@ -26,7 +33,7 @@ export default function AttendanceScreen() {
   const checkInMutation = useMutation('/api/hr/attendance/check-in', 'POST');
   const checkOutMutation = useMutation('/api/hr/attendance/check-out', 'POST');
 
-  const today = (data as any)?.attendance ?? data?.today;
+  const today = data?.attendance ?? data?.today;
   const checkedIn = today?.status === 'present' && !today?.checkOut;
   const checkedOut = !!today?.checkOut;
 
