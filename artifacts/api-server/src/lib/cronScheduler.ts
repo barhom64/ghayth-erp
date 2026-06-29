@@ -2563,6 +2563,186 @@ async function dailyDriverEvaluationCheck(): Promise<string> {
   return `Driver evaluation alerts: ${alerted}`;
 }
 
+/**
+ * Spec ملف 04 §تنبيهات الأسطول السبعة — تنبيه تجاوز السرعة:
+ *   «تجاوز السرعة → تنبيه»
+ *
+ * يفحص cron يوميًا (07:00) قراءات اليوم السابق في fleet_device_positions
+ * مقارنةً بـ vehicle_speed_limits (شريحة ٧، migration 433):
+ *   - effective limit = COALESCE(per-vehicle override, per-company default, 120 km/h)
+ *   - violation = position.speed > effective_limit + tolerance
+ *
+ * التجميع يومي: مرّة تنبيه واحدة لكل مركبة لكل يوم تقويمي (idempotent عبر
+ * fleet_speed_violation_alerts على (vehicleId, violationDate)).
+ *
+ * channel = email فقط (داخلي للمدير) — بلا in_app fan-out (درس Codex P2
+ * من شريحة ١). توجيه: getManagerAssignmentId (السرعة سلوك سائق يومي،
+ * يخصّ branch_manager/HR لا GM/legal).
+ *
+ * استبدل دالة smartAlerts.checkSpeedViolation المعطّلة (التي كانت تبحث
+ * في currentSpeed غير الموجود على fleet_trips).
+ */
+async function dailySpeedViolationCheck(): Promise<string> {
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
+  let alerted = 0;
+  for (const company of companies) {
+    const candidates = await rawQuery<Record<string, unknown>>(
+      `WITH effective_limits AS (
+         SELECT fv.id AS "vehicleId",
+                COALESCE(vsl_v."speedLimitKph", vsl_d."speedLimitKph", 120) AS "limitKph",
+                COALESCE(vsl_v."toleranceKph", vsl_d."toleranceKph", 10)    AS "toleranceKph"
+           FROM fleet_vehicles fv
+           LEFT JOIN vehicle_speed_limits vsl_v
+             ON vsl_v."companyId" = fv."companyId"
+            AND vsl_v."vehicleId" = fv.id
+           LEFT JOIN vehicle_speed_limits vsl_d
+             ON vsl_d."companyId" = fv."companyId"
+            AND vsl_d."vehicleId" IS NULL
+          WHERE fv."companyId" = $1
+            AND fv."deletedAt" IS NULL
+       )
+       SELECT fdp."vehicleId",
+              el."limitKph",
+              el."toleranceKph",
+              fv."plateNumber",
+              CONCAT_WS(' ', fv.make, fv.model) AS "vehicleName",
+              fv."branchId",
+              MAX(fdp.speed) AS "maxSpeedKph",
+              COUNT(*)::int AS "violationCount",
+              (CURRENT_DATE - INTERVAL '1 day')::date AS "violationDate"
+         FROM fleet_device_positions fdp
+         JOIN effective_limits el ON el."vehicleId" = fdp."vehicleId"
+         JOIN fleet_vehicles fv ON fv.id = fdp."vehicleId"
+        WHERE fdp."companyId" = $1
+          AND fdp."occurredAt" >= (CURRENT_DATE - INTERVAL '1 day')
+          AND fdp."occurredAt" <  CURRENT_DATE
+          AND fdp.speed > (el."limitKph" + el."toleranceKph")
+          AND fv."deletedAt" IS NULL
+        GROUP BY fdp."vehicleId", el."limitKph", el."toleranceKph",
+                 fv."plateNumber", fv.make, fv.model, fv."branchId"`,
+      [company.id]
+    );
+    for (const c of candidates) {
+      const vehicleId = Number(c.vehicleId);
+      const violationDate = String(c.violationDate).slice(0, 10);
+      const branchId = c.branchId != null ? Number(c.branchId) : null;
+      const limitKph = Number(c.limitKph);
+      const toleranceKph = Number(c.toleranceKph);
+      const maxSpeedKph = Number(c.maxSpeedKph);
+      const violationCount = Number(c.violationCount);
+
+      const existing = await rawQuery<Record<string, unknown>>(
+        `SELECT 1 FROM fleet_speed_violation_alerts
+          WHERE "vehicleId" = $1 AND "violationDate" = $2::date LIMIT 1`,
+        [vehicleId, violationDate]
+      );
+      if (existing.length > 0) continue;
+
+      // اختر اسم السائق من آخر رحلة قبل/خلال يوم التجاوز — قد لا يوجد
+      // (بيانات قديمة)، فنستعمل placeholder. الرحلة تربط vehicle بـ
+      // driver بشكل صريح.
+      let driverName = '—';
+      try {
+        const [trip] = await rawQuery<{ name: string | null }>(
+          `SELECT fd.name FROM fleet_trips ft
+             LEFT JOIN fleet_drivers fd ON fd.id = ft."driverId"
+            WHERE ft."companyId" = $1 AND ft."vehicleId" = $2
+              AND ft."deletedAt" IS NULL
+            ORDER BY ft."createdAt" DESC
+            LIMIT 1`,
+          [company.id, vehicleId]
+        );
+        if (trip?.name) driverName = trip.name;
+      } catch (e) {
+        logger.warn(e, `[cronScheduler] speed_violation: driver lookup failed (vehicleId=${vehicleId})`);
+      }
+
+      // المدير: branch_manager للسرعة (سلوك يومي تشغيلي).
+      let managerAssignment: number | null = null;
+      let managerName = 'المدير';
+      try {
+        if (branchId) {
+          managerAssignment = await getManagerAssignmentId(company.id, branchId);
+        }
+        if (!managerAssignment) {
+          const [fallback] = await rawQuery<{ id: number; name: string }>(
+            `SELECT ea.id, e.name
+               FROM employee_assignments ea
+               LEFT JOIN employees e ON e.id = ea."employeeId"
+              WHERE ea."companyId" = $1 AND ea.status = 'active'
+                AND ea.role IN ('branch_manager','hr_manager','general_manager','owner')
+              ORDER BY CASE ea.role
+                         WHEN 'branch_manager' THEN 1
+                         WHEN 'hr_manager' THEN 2
+                         WHEN 'general_manager' THEN 3
+                         ELSE 4
+                       END
+              LIMIT 1`,
+            [company.id]
+          );
+          if (fallback) { managerAssignment = fallback.id; managerName = fallback.name || managerName; }
+        } else {
+          const [resolved] = await rawQuery<{ name: string }>(
+            `SELECT e.name FROM employee_assignments ea
+              LEFT JOIN employees e ON e.id = ea."employeeId"
+              WHERE ea.id = $1`,
+            [managerAssignment]
+          );
+          if (resolved?.name) managerName = resolved.name;
+        }
+      } catch (e) {
+        logger.warn(e, `[cronScheduler] speed_violation: manager lookup failed (vehicleId=${vehicleId})`);
+      }
+
+      if (!managerAssignment) {
+        logger.info(`[cronScheduler] speed_violation: no manager (company=${company.id}, vehicleId=${vehicleId}) — skipped`);
+        continue;
+      }
+
+      try {
+        await dispatchNotification({
+          companyId: company.id,
+          eventCategory: "fleet.speed.violation",
+          title: "",
+          body: "",
+          channels: ["email" as const],
+          templateKey: "fleet.speed.violation",
+          templateVars: {
+            managerName: managerName,
+            driverName: driverName,
+            plateNumber: String(c.plateNumber ?? '—'),
+            vehicleName: String(c.vehicleName ?? '—'),
+            maxSpeedKph: maxSpeedKph.toFixed(1),
+            limitKph: String(limitKph),
+            toleranceKph: String(toleranceKph),
+            violationCount: String(violationCount),
+            violationDate: violationDate,
+          },
+          assignmentId: managerAssignment,
+          refType: "fleet_vehicle",
+          refId: vehicleId,
+          priority: "high",
+        });
+      } catch (e) {
+        logger.warn(e, `[cronScheduler] speed_violation dispatch failed (vehicleId=${vehicleId})`);
+        continue;
+      }
+
+      await rawExecute(
+        `INSERT INTO fleet_speed_violation_alerts
+           ("vehicleId","violationDate","companyId","branchId",
+            "maxSpeedKphAtAlert","limitKphAtAlert","violationCount","alertedAssignmentId")
+         VALUES ($1,$2::date,$3,$4,$5,$6,$7,$8)
+         ON CONFLICT ("vehicleId","violationDate") DO NOTHING`,
+        [vehicleId, violationDate, company.id, branchId, maxSpeedKph, limitKph, violationCount, managerAssignment]
+      ).catch((e) => logger.error(e, "[cronScheduler] fleet_speed_violation_alerts insert failed"));
+
+      alerted++;
+    }
+  }
+  return `Speed violation alerts: ${alerted}`;
+}
+
 async function weeklyCrmReport(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let sent = 0;
@@ -5895,6 +6075,10 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   // يومي صباحًا 06:45 (بعد replacement check بـ 15د). idempotent عبر
   // fleet_driver_evaluation_alerts: مرّة واحدة لكل سائق لكل شهر تقويمي.
   { name: "daily_driver_evaluation_check", description: "تنبيه تقييم سائق (سمعة <60، اجتماع تقييم)", schedule: "45 6 * * *", handler: dailyDriverEvaluationCheck },
+  // ملف 04 §تنبيهات الأسطول — تجاوز السرعة (مقارنة بـ vehicle_speed_limits).
+  // يومي 07:00 يفحص قراءات اليوم السابق. idempotent يومي عبر
+  // fleet_speed_violation_alerts: مرّة واحدة لكل مركبة لكل يوم تقويمي.
+  { name: "daily_speed_violation_check", description: "تنبيه تجاوز السرعة (يومي، حسب vehicle_speed_limits)", schedule: "0 7 * * *", handler: dailySpeedViolationCheck },
   { name: "weekly_crm_report", description: "تقرير CRM الأسبوعي", schedule: "0 8 * * 0", handler: weeklyCrmReport },
   { name: "weekly_cash_flow", description: "فحص التدفق النقدي الأسبوعي", schedule: "0 9 * * 1", handler: weeklyCashFlowCheck },
   { name: "weekly_property_revenue", description: "إيرادات عقارية أسبوعية", schedule: "0 9 * * 1", handler: weeklyPropertyRevenue },
