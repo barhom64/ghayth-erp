@@ -25,6 +25,11 @@ const MIGRATION = read(MIGRATION_PATH);
 const ROUTES = read(join(apiSrc, "routes/transport-bookings.ts"));
 const DETAIL = read(join(spaSrc, "pages/fleet/transport-booking-detail.tsx"));
 
+// شريحة 2 — الوزن.
+const MIGRATION_430_PATH = join(apiSrc, "migrations/430_fleet_trip_events_weight_kind.sql");
+const MIGRATION_430 = read(MIGRATION_430_PATH);
+const TRIP_WEIGHT = read(join(spaSrc, "lib/trip-weight.ts"));
+
 describe("شريحة 1 — هجرة fleet_trip_events", () => {
   it("الملف موجود ويلتزم نمط الهجرات (BEGIN/COMMIT + @rollback)", () => {
     expect(existsSync(MIGRATION_PATH)).toBe(true);
@@ -138,5 +143,38 @@ describe("شريحة 1 — تجربة تسجيل الواقعة (الواجهة)
 
   it("تُخفي أزرار التسجيل خارج حالات التنفيذ", () => {
     expect(DETAIL).toContain("TRIP_EVENT_EXECUTABLE.has(b.status)");
+  });
+});
+
+describe("شريحة 2 — الوزن (فارغ/محمّل/صافي)", () => {
+  it("هجرة 430 تضيف weightKind بـCHECK idempotent (DROP IF EXISTS قبل ADD)", () => {
+    expect(existsSync(MIGRATION_430_PATH)).toBe(true);
+    expect(MIGRATION_430).toContain("BEGIN;");
+    expect(MIGRATION_430).toContain("COMMIT;");
+    expect(MIGRATION_430).toContain("@rollback");
+    expect(MIGRATION_430).toMatch(/ADD COLUMN IF NOT EXISTS "weightKind"/);
+    expect(MIGRATION_430).toContain("DROP CONSTRAINT IF EXISTS fleet_trip_events_weight_kind_check");
+    for (const k of ["tare", "gross", "axle", "other"]) {
+      expect(MIGRATION_430, `weightKind ${k} missing`).toContain(`'${k}'`);
+    }
+  });
+
+  it("المسار يقبل weightKind ويشترط قيمة الوزن معه ويُدرجه", () => {
+    const body = routeBody("post", "/transport/bookings/:id/events");
+    expect(ROUTES).toContain('weightKind: z.enum(["tare", "gross", "axle", "other"])');
+    expect(body).toContain("حدّد قيمة الوزن (كغم) عند اختيار نوع الوزن");
+    expect(body).toContain('"weightKind"');
+  });
+
+  it("مُساعد summarizeTripWeights يشتقّ الصافي ولا يُخزّنه", () => {
+    expect(TRIP_WEIGHT).toContain("export function summarizeTripWeights");
+    expect(TRIP_WEIGHT).toMatch(/grossKg\s*-\s*tareKg/);
+  });
+
+  it("الواجهة تعرض منتقي نوع الوزن + ملخّص الصافي وتُرسل weightKind", () => {
+    expect(DETAIL).toContain("summarizeTripWeights");
+    expect(DETAIL).toContain("setEventWeightKind");
+    expect(DETAIL).toContain("صافي الحمولة");
+    expect(DETAIL).toContain("weightKind: eventWeightKind");
   });
 });

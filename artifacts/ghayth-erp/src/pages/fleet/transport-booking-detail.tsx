@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useRoute, useLocation, Link } from "wouter";
 import { useApiQuery, useApiMutation, apiFetch, getErrorMessage } from "@/lib/api";
+import { summarizeTripWeights, TRIP_WEIGHT_KIND_LABEL } from "@/lib/trip-weight";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -112,6 +113,7 @@ interface TripEvent {
   lat: number | null;
   lng: number | null;
   weightKg: number | null;
+  weightKind: string | null;
   proofObjectPaths: string[] | null;
   notes: string | null;
 }
@@ -323,12 +325,13 @@ export default function TransportBookingDetail() {
   const [activeEvent, setActiveEvent] = useState<string | null>(null);
   const [eventNotes, setEventNotes] = useState("");
   const [eventWeight, setEventWeight] = useState("");
+  const [eventWeightKind, setEventWeightKind] = useState("");
   const [eventPhotos, setEventPhotos] = useState<string[]>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [recordingEvent, setRecordingEvent] = useState(false);
 
   const resetEventForm = () => {
-    setEventNotes(""); setEventWeight(""); setEventPhotos([]);
+    setEventNotes(""); setEventWeight(""); setEventWeightKind(""); setEventPhotos([]);
   };
 
   // رفع صورة الإثبات بنفس تدفّق التخزين القائم (request-url → PUT → objectPath).
@@ -372,6 +375,7 @@ export default function TransportBookingDetail() {
           eventType: activeEvent,
           ...(coords ? { lat: coords.lat, lng: coords.lng } : {}),
           ...(eventWeight ? { weightKg: Number(eventWeight) } : {}),
+          ...(eventWeight && eventWeightKind ? { weightKind: eventWeightKind } : {}),
           ...(eventPhotos.length ? { proofObjectPaths: eventPhotos } : {}),
           ...(eventNotes.trim() ? { notes: eventNotes.trim() } : {}),
         }),
@@ -813,6 +817,22 @@ export default function TransportBookingDetail() {
                   onChange={(e) => setEventWeight(e.target.value)}
                   className="w-32 h-8" placeholder="اختياري"
                 />
+                {eventWeight && (
+                  <div className="flex flex-wrap gap-1">
+                    {(["tare", "gross", "axle", "other"] as const).map((k) => (
+                      <Button
+                        key={k}
+                        type="button"
+                        size="sm"
+                        variant={eventWeightKind === k ? "default" : "outline"}
+                        className="h-7 px-2 text-xs"
+                        onClick={() => setEventWeightKind(eventWeightKind === k ? "" : k)}
+                      >
+                        {TRIP_WEIGHT_KIND_LABEL[k]}
+                      </Button>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <label className="text-xs text-muted-foreground w-24">الإثبات</label>
@@ -842,6 +862,19 @@ export default function TransportBookingDetail() {
             </div>
           )}
 
+          {/* شريحة 2 — ملخّص الوزن (مشتقّ من الوقائع: صافي = محمّل − فارغ). */}
+          {(() => {
+            const w = summarizeTripWeights(b.tripEvents);
+            if (w.tareKg == null && w.grossKg == null) return null;
+            return (
+              <div className="flex flex-wrap gap-3 text-xs border rounded-md p-2 bg-muted/20">
+                <span>الوزن الفارغ: <strong>{w.tareKg != null ? `${w.tareKg} كغم` : "—"}</strong></span>
+                <span>الوزن المحمّل: <strong>{w.grossKg != null ? `${w.grossKg} كغم` : "—"}</strong></span>
+                <span>صافي الحمولة: <strong>{w.netKg != null ? `${w.netKg} كغم` : "—"}</strong></span>
+              </div>
+            );
+          })()}
+
           {b.tripEvents.length === 0 ? (
             <div className="text-center py-4 text-muted-foreground text-sm">لا توجد وقائع مسجّلة بعد.</div>
           ) : (
@@ -850,7 +883,9 @@ export default function TransportBookingDetail() {
                 <li key={ev.id} className="flex flex-wrap items-center gap-2 text-sm border-b pb-1.5 last:border-0">
                   <Badge variant="outline" className="shrink-0">{TRIP_EVENT_LABEL[ev.eventType] ?? ev.eventType}</Badge>
                   <span className="text-muted-foreground text-xs">{new Date(ev.occurredAt).toLocaleString("ar")}</span>
-                  {ev.weightKg != null && <span className="text-xs">· {ev.weightKg} كغم</span>}
+                  {ev.weightKg != null && (
+                    <span className="text-xs">· {ev.weightKg} كغم{ev.weightKind ? ` (${TRIP_WEIGHT_KIND_LABEL[ev.weightKind] ?? ev.weightKind})` : ""}</span>
+                  )}
                   {ev.proofObjectPaths && ev.proofObjectPaths.length > 0 && (
                     <span className="text-xs">· {ev.proofObjectPaths.length} صورة</span>
                   )}
