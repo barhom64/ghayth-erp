@@ -64,6 +64,7 @@ interface BookingDetail {
   createdAt: string;
   lines: BookingLine[];
   dispatchOrders: DispatchOrder[];
+  tripEvents: TripEvent[];
   // #2475-follow-up — resolved booking-cancel policy (guard|cascade), used by
   // the confirmation/preview dialog. Defaults to "guard" when absent.
   cancelPolicy?: "guard" | "cascade";
@@ -102,6 +103,38 @@ interface DispatchOrder {
   scheduledEndAt: string;
   status: string;
 }
+
+// شريحة 1 — واقعة الرحلة (تسجيل واقعة). سجل append-only يشتقّ منه الحالة والـPOD.
+interface TripEvent {
+  id: number;
+  eventType: string;
+  occurredAt: string;
+  lat: number | null;
+  lng: number | null;
+  weightKg: number | null;
+  proofObjectPaths: string[] | null;
+  notes: string | null;
+}
+
+// تعريف الوقائع القابلة للتسجيل (الترتيب = تدفّق الرحلة الطبيعي).
+const TRIP_EVENT_DEFS: { type: string; label: string; closing?: boolean }[] = [
+  { type: "load", label: "تحميل" },
+  { type: "depart", label: "خروج من المصدر" },
+  { type: "arrive", label: "وصول" },
+  { type: "inspect", label: "فحص" },
+  { type: "unload", label: "تفريغ", closing: true },
+  { type: "deliver", label: "تسليم", closing: true },
+];
+const TRIP_EVENT_LABEL: Record<string, string> = {
+  ...Object.fromEntries(TRIP_EVENT_DEFS.map((e) => [e.type, e.label])),
+  handover: "تسليم عهدة",
+};
+// وقائع الإغلاق التشغيلي — تتطلب صورة إثبات (POD).
+const TRIP_EVENT_CLOSING = new Set(["unload", "deliver"]);
+// الحالات التي يجوز فيها تسجيل واقعة (تطابق الخادم).
+const TRIP_EVENT_EXECUTABLE = new Set([
+  "approved", "scheduled", "dispatched", "in_progress",
+]);
 
 const SERVICE_TYPE_LABEL: Record<string, string> = {
   cargo_load: "نقل حمولة",
@@ -283,6 +316,76 @@ export default function TransportBookingDetail() {
     [["transport-booking", id || ""], ["transport-bookings"]],
     { successMessage: "تم رفض الحجز" },
   );
+
+  // ── شريحة 1 — تسجيل واقعة الرحلة (الكيان يقود التجربة) ──
+  // السائق/المنسّق يختار ما حدث، يرفق الإثبات (عبر تدفّق الرفع القائم)،
+  // والنظام يشتقّ حالة الحجز. واقعة الإغلاق (تفريغ/تسليم) تتطلب صورة POD.
+  const [activeEvent, setActiveEvent] = useState<string | null>(null);
+  const [eventNotes, setEventNotes] = useState("");
+  const [eventWeight, setEventWeight] = useState("");
+  const [eventPhotos, setEventPhotos] = useState<string[]>([]);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [recordingEvent, setRecordingEvent] = useState(false);
+
+  const resetEventForm = () => {
+    setEventNotes(""); setEventWeight(""); setEventPhotos([]);
+  };
+
+  // رفع صورة الإثبات بنفس تدفّق التخزين القائم (request-url → PUT → objectPath).
+  async function uploadEventPhoto(file: File) {
+    setUploadingPhoto(true);
+    try {
+      const { uploadURL, objectPath } = await apiFetch<{ uploadURL: string; objectPath: string }>(
+        "/storage/uploads/request-url",
+        { method: "POST", body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }) },
+      );
+      const put = await fetch(uploadURL, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
+      if (!put.ok) throw new Error("فشل رفع الصورة إلى التخزين");
+      setEventPhotos((p) => [...p, objectPath]);
+      toast({ title: "تم رفع الصورة" });
+    } catch (e) {
+      toast({ variant: "destructive", title: "تعذّر رفع الصورة", description: getErrorMessage(e) });
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
+
+  async function recordEvent() {
+    if (!activeEvent || !id) return;
+    const closing = TRIP_EVENT_CLOSING.has(activeEvent);
+    if (closing && eventPhotos.length === 0) {
+      toast({ variant: "destructive", title: "صورة الإثبات مطلوبة", description: "واقعة الإغلاق (تفريغ/تسليم) تتطلب صورة POD." });
+      return;
+    }
+    setRecordingEvent(true);
+    // التقاط موقع GPS (أفضل-جهد — اختياري؛ يُتجاهل عند الرفض/التعذّر).
+    let coords: { lat: number; lng: number } | null = null;
+    try {
+      const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
+        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000, maximumAge: 60000 }));
+      coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    } catch { /* الموقع اختياري */ }
+    try {
+      await apiFetch(`/transport/bookings/${id}/events`, {
+        method: "POST",
+        body: JSON.stringify({
+          eventType: activeEvent,
+          ...(coords ? { lat: coords.lat, lng: coords.lng } : {}),
+          ...(eventWeight ? { weightKg: Number(eventWeight) } : {}),
+          ...(eventPhotos.length ? { proofObjectPaths: eventPhotos } : {}),
+          ...(eventNotes.trim() ? { notes: eventNotes.trim() } : {}),
+        }),
+      });
+      toast({ title: "تم تسجيل الواقعة" });
+      setActiveEvent(null);
+      resetEventForm();
+      refetch();
+    } catch (e) {
+      toast({ variant: "destructive", title: "تعذّر تسجيل الواقعة", description: getErrorMessage(e) });
+    } finally {
+      setRecordingEvent(false);
+    }
+  }
 
   if (isLoading) return <LoadingSpinner />;
   if (isError || !b) return <ErrorState />;
@@ -665,6 +768,96 @@ export default function TransportBookingDetail() {
               data={b.dispatchOrders}
               emptyMessage="لا توجد أوامر توزيع"
             />
+          )}
+        </CardContent>
+      </Card>
+
+      {/* شريحة 1 — وقائع الرحلة (تسجيل واقعة): سجّل ما حدث وارفق الإثبات،
+          والنظام يشتقّ حالة الحجز. الإغلاق التشغيلي (تفريغ/تسليم) يتطلب POD. */}
+      <Card className="mt-4">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">وقائع الرحلة ({b.tripEvents.length})</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {TRIP_EVENT_EXECUTABLE.has(b.status) ? (
+            <div className="flex flex-wrap gap-2">
+              {TRIP_EVENT_DEFS.map((e) => (
+                <Button
+                  key={e.type}
+                  size="sm"
+                  variant={activeEvent === e.type ? "default" : "outline"}
+                  onClick={() => {
+                    setActiveEvent(activeEvent === e.type ? null : e.type);
+                    resetEventForm();
+                  }}
+                >
+                  {e.label}
+                </Button>
+              ))}
+            </div>
+          ) : (
+            <div className="text-xs text-muted-foreground">
+              تسجيل الوقائع متاح بعد اعتماد الحجز وجدولته (الحالة الحالية: {ALL_STATUS_LABELS[b.status] ?? b.status}).
+            </div>
+          )}
+
+          {activeEvent && (
+            <div className="border rounded-md p-3 space-y-2 bg-muted/30">
+              <div className="text-sm font-medium">
+                تسجيل واقعة: {TRIP_EVENT_LABEL[activeEvent] ?? activeEvent}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="text-xs text-muted-foreground w-24">الوزن (كغم)</label>
+                <Input
+                  type="number" min="0" value={eventWeight}
+                  onChange={(e) => setEventWeight(e.target.value)}
+                  className="w-32 h-8" placeholder="اختياري"
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="text-xs text-muted-foreground w-24">الإثبات</label>
+                <input
+                  type="file" accept="image/*" capture="environment"
+                  disabled={uploadingPhoto}
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadEventPhoto(f); e.currentTarget.value = ""; }}
+                  className="text-xs"
+                />
+                <span className="text-xs text-muted-foreground">
+                  {uploadingPhoto ? "جاري الرفع…" : `${eventPhotos.length} صورة`}
+                  {TRIP_EVENT_CLOSING.has(activeEvent) && eventPhotos.length === 0 ? " — مطلوبة للإغلاق" : ""}
+                </span>
+              </div>
+              <Input
+                value={eventNotes} onChange={(e) => setEventNotes(e.target.value)}
+                placeholder="ملاحظة (اختياري)" className="h-8 text-sm"
+              />
+              <div className="flex gap-2">
+                <Button size="sm" onClick={recordEvent} disabled={recordingEvent || uploadingPhoto}>
+                  {recordingEvent ? "جاري التسجيل…" : "تسجيل الواقعة"}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => { setActiveEvent(null); resetEventForm(); }}>
+                  إلغاء
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {b.tripEvents.length === 0 ? (
+            <div className="text-center py-4 text-muted-foreground text-sm">لا توجد وقائع مسجّلة بعد.</div>
+          ) : (
+            <ol className="space-y-1.5">
+              {b.tripEvents.map((ev) => (
+                <li key={ev.id} className="flex flex-wrap items-center gap-2 text-sm border-b pb-1.5 last:border-0">
+                  <Badge variant="outline" className="shrink-0">{TRIP_EVENT_LABEL[ev.eventType] ?? ev.eventType}</Badge>
+                  <span className="text-muted-foreground text-xs">{new Date(ev.occurredAt).toLocaleString("ar")}</span>
+                  {ev.weightKg != null && <span className="text-xs">· {ev.weightKg} كغم</span>}
+                  {ev.proofObjectPaths && ev.proofObjectPaths.length > 0 && (
+                    <span className="text-xs">· {ev.proofObjectPaths.length} صورة</span>
+                  )}
+                  {ev.notes && <span className="text-xs text-muted-foreground truncate max-w-[40%]">· {ev.notes}</span>}
+                </li>
+              ))}
+            </ol>
           )}
         </CardContent>
       </Card>
