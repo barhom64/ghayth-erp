@@ -5736,8 +5736,15 @@ router.post(
       const driverId = b.driverId != null && Number.isInteger(Number(b.driverId)) && Number(b.driverId) > 0 ? Number(b.driverId) : null;
       // costBearer: مَن يتحمّل التكلفة — شركة (تشغيلي، الافتراض) أو سائق/موظف… (→ ذمته عبر م٥).
       const costBearer = typeof b.costBearer === "string" && b.costBearer.trim() ? b.costBearer.trim() : "company";
+      // ج-٤: طريقة الدفع — نقدًا (الافتراض) أو آجلًا على ذمة مورّد محطة الوقود. الآجل يستلزم مورّدًا
+      // معتمدًا (suppliers.id) يُربط به الالتزام (لا تَدِين «لا أحد»).
+      const paymentMethod = b.paymentMethod === "credit" ? "credit" : "cash";
+      const supplierId = b.supplierId != null && Number.isInteger(Number(b.supplierId)) && Number(b.supplierId) > 0 ? Number(b.supplierId) : null;
       if (liters <= 0 || costPerLiter <= 0) {
         throw new ValidationError("اللترات وسعر اللتر مطلوبان وموجبان", { field: "liters" });
+      }
+      if (paymentMethod === "credit" && !supplierId) {
+        throw new ValidationError("الشراء الآجل يستلزم تحديد مورّد الوقود", { field: "supplierId" });
       }
       const [veh] = await rawQuery<{ id: number }>(
         `SELECT id FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
@@ -5749,10 +5756,14 @@ router.post(
       // حلّ الحسابات عبر محرّك المالية (عقد خدمة): حساب وقود المركبة + مصدر النقد + ضريبة المدخلات.
       const { financialEngine } = await import("../lib/engines/financialEngine.js");
       // أوراق قابلة للترحيل (الدستور م١٧ / check:postable-fallbacks): fleet_fuel_expense→5510
-      // (وقود الأسطول، postable)؛ vat_input→1180؛ fleet_cash_source→1111. الـenricher
-      // يستبدل 5510 بحساب الوقود الفرعي للوحة عند الترحيل حسب بُعد vehicleId.
+      // (وقود الأسطول، postable)؛ vat_input→1180؛ fleet_cash_source→1111؛ purchase_vendor_ap→2111.
+      // الـenricher يستبدل 5510 بحساب الوقود الفرعي للوحة (بُعد vehicleId)، و2111 بالحساب
+      // الفرعي للمورّد (بُعد vendorId) عند الترحيل — الحساب الخاص لكل كيان.
       const fuelAccount = await financialEngine.resolveAccountCode(scope.companyId, "fleet_fuel_expense", "debit", "5510");
-      const cashAccount = await financialEngine.resolveAccountCode(scope.companyId, "fleet_cash_source", "credit", "1111");
+      // ج-٤: ساق الدائن — نقدًا (مصدر نقد الأسطول) أو آجلًا على ذمة المورّد (شراء آجل).
+      const creditAccount = paymentMethod === "credit"
+        ? await financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "credit", "2111")
+        : await financialEngine.resolveAccountCode(scope.companyId, "fleet_cash_source", "credit", "1111");
       const vatAccount = vatRatePercent > 0 ? await financialEngine.resolveAccountCode(scope.companyId, "vat_input", "debit", "1180") : null;
 
       // الترحيل عبر محرّك م٥ المُختبَر (idempotent على sourceKey): يحلّ الحساب الفرعي للوحة + يفرّع costBearer.
@@ -5764,10 +5775,12 @@ router.post(
         createdBy: scope.userId ?? 0,
         documentKind: "expense",
         direction: "payment",
-        cashAccountCode: cashAccount,
+        cashAccountCode: creditAccount,
         vatAccountCode: vatAccount,
+        // ج-٤: عند الآجل اختِم vendorId على ساق ذمة المورّد (ربط الالتزام + الحساب الفرعي للمورّد).
+        ...(paymentMethod === "credit" && supplierId ? { cashAccountDims: { vendorId: supplierId } } : {}),
         ref: `FUEL-${vehicleId}-${fuelDate}`,
-        description: `وقود المركبة — ${liters} لتر`,
+        description: `وقود المركبة — ${liters} لتر${paymentMethod === "credit" ? " (آجل)" : ""}`,
         sourceKey,
         postingDate: fuelDate,
         rawLines: [
@@ -5819,10 +5832,10 @@ router.post(
         action: "fleet.fuel_event.posted",
         entity: "fleet_vehicles",
         entityId: vehicleId,
-        after: { journalId: posted.journalId, fuelLogId, liters, costPerLiter, costBearer, alreadyExists: posted.alreadyExists },
+        after: { journalId: posted.journalId, fuelLogId, liters, costPerLiter, costBearer, paymentMethod, supplierId, alreadyExists: posted.alreadyExists },
       }).catch((e) => logger.error(e, "fuel event audit failed"));
 
-      res.status(201).json({ ok: true, journalId: posted.journalId, fuelLogId, costBearer });
+      res.status(201).json({ ok: true, journalId: posted.journalId, fuelLogId, costBearer, paymentMethod, supplierId });
     } catch (err) {
       handleRouteError(err, res, "vehicle fuel event error:");
     }
