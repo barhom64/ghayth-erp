@@ -27,6 +27,12 @@ interface DataTableWrapperProps {
   pageSize?: number;
   total?: number;
   onPageChange?: (page: number) => void;
+  /**
+   * عدد صفوف الهيكل العظمي أثناء التحميل. الافتراض ٥ (السلوك القديم). يمرّر
+   * DataTable حجم الصفحة الفعلي هنا فيحجز التحميل ارتفاع صفحة بيانات كاملة،
+   * فلا «تطلع وتنزل» الصفحة عند وصول البيانات (شكوى «الجداول طالعة نازلة»).
+   */
+  skeletonRows?: number;
 }
 
 /**
@@ -62,11 +68,13 @@ export function DataTableWrapper({
   pageSize = 20,
   total,
   onPageChange,
+  skeletonRows = 5,
 }: DataTableWrapperProps) {
   if (isLoading) {
+    const rowCount = Math.max(1, Math.floor(skeletonRows) || 5);
     return (
       <TableBody>
-        {[...Array(5)].map((_, i) => (
+        {[...Array(rowCount)].map((_, i) => (
           <TableRow key={i}>
             {[...Array(colCount)].map((_, j) => (
               <TableCell key={j}>

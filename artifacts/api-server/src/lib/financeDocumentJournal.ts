@@ -55,6 +55,13 @@ export type DocJournalHeader = {
   cashAccountCode: string;
   /** VAT account: input (payment) or output (receipt). Required only when VAT > 0. */
   vatAccountCode?: string | null;
+  /**
+   * ج-٤ — أبعاد تُختَم على ساق المال/الطرف (الدائن في الصرف، المدين في القبض). حين
+   * يكون الطرف ذمة مورّد (شراء آجل: cashAccountCode = purchase_vendor_ap) نمرّر
+   * `{ vendorId }` فيُربط الالتزام بالمورّد، ويستبدله enricher الأبعاد لاحقًا بالحساب
+   * الفرعي للمورّد (الحساب الخاص لكل كيان). غيابه = ساق مال بلا بُعد (السلوك السابق).
+   */
+  cashAccountDims?: Record<string, unknown> | null;
 };
 
 export type JournalLeg = {
@@ -152,11 +159,16 @@ export function buildDocumentJournalLegs(
   }
 
   // cash leg (single, the gross money movement): payment → cash credit; receipt → cash debit.
+  // ج-٤: حين يكون الطرف ذمة مورّد (شراء آجل) نختِم cashAccountDims (vendorId) على الساق.
   const gross = round2(totalNet + totalVat);
   legs.push({
     accountCode: header.cashAccountCode,
     debit: isReceipt ? gross : 0,
     credit: isReceipt ? 0 : gross,
+    dims:
+      header.cashAccountDims && Object.keys(header.cashAccountDims).length > 0
+        ? header.cashAccountDims
+        : undefined,
   });
 
   // balance assertion (defensive)

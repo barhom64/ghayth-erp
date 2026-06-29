@@ -176,6 +176,49 @@ export function amortizationSourceKey(scheduleId: number, ym: string): string {
   return `prepaid:${scheduleId}:${ym}`;
 }
 
+/**
+ * البند ٤ ج-٧ — مُساعد مشترك لفتح صفّ إطفاء (DRY): يحسب المدّة (computeMonthlySchedule)
+ * ويُدرج الصفّ بالشكل الموحّد ذي الأبعاد الكاملة. مالك الجدول هو هذا المحرّك، فيستدعيه
+ * تأمينُ الأسطول (fleetEngine) والعقاري/الطبي (insuranceEngine) بدل تكرار الـINSERT.
+ * لا فحص وجود هنا — دلالات الـidempotency تخصّ المُستدعي (الأسطول per-policy بفحص+مداواة،
+ * التأمين per-entity). ج-٨: توحيد القيد + الجدول في معاملة واحدة يحتاج تمرير client إلى
+ * postJournalEntry (تحسين لاحق)؛ المداواة الذاتية في الأسطول تُغطّي النافذة الانتقالية.
+ */
+export async function openPrepaidSchedule(opts: {
+  companyId: number;
+  branchId?: number | null;
+  sourceType: string;
+  sourceId: number;
+  prepaidAccountCode: string;
+  expenseAccountPurpose: string;
+  totalAmount: number;
+  startDate: string | Date;
+  endDate: string | Date;
+  dims?: { vehicleId?: number | null; propertyId?: number | null; employeeId?: number | null; projectId?: number | null; costCenterId?: number | null };
+  currency?: string;
+}): Promise<{ scheduleId: number; months: number; monthlyAmount: number }> {
+  const { months, monthlyAmount } = computeMonthlySchedule({
+    totalAmount: opts.totalAmount, startDate: opts.startDate, endDate: opts.endDate,
+  });
+  const d = opts.dims ?? {};
+  const [row] = await rawQuery<{ id: number }>(
+    `INSERT INTO prepaid_amortization_schedules
+       ("companyId","branchId","sourceType","sourceId","prepaidAccountCode",
+        "expenseAccountPurpose","totalAmount","startDate","endDate","months",
+        "monthlyAmount","recognizedAmount",status,
+        "vehicleId","propertyId","employeeId","projectId","costCenterId","currency")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,0,'active',$12,$13,$14,$15,$16,$17)
+     RETURNING id`,
+    [
+      opts.companyId, opts.branchId ?? null, opts.sourceType, opts.sourceId, opts.prepaidAccountCode,
+      opts.expenseAccountPurpose, opts.totalAmount, opts.startDate, opts.endDate, months, monthlyAmount,
+      d.vehicleId ?? null, d.propertyId ?? null, d.employeeId ?? null, d.projectId ?? null, d.costCenterId ?? null,
+      opts.currency ?? "SAR",
+    ],
+  );
+  return { scheduleId: row!.id, months, monthlyAmount };
+}
+
 // ─── DB-bound runner ──────────────────────────────────────────────────────────
 
 export interface RunResult {
