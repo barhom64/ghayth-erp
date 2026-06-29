@@ -36,6 +36,7 @@
 import { rawQuery, rawExecute } from "../rawdb.js";
 import { logger } from "../logger.js";
 import { config } from "../config.js";
+import { haversineMeters } from "../algorithms.js";
 import {
   googleEstimateRoute, googleGeocode, googleReverseGeocode, googleHealthCheck,
 } from "./mapsGoogleProvider.js";
@@ -166,26 +167,9 @@ export async function updatePlanningSettings(
 }
 
 // ── Haversine distance (manual_only baseline) ────────────────────────
-
-const EARTH_RADIUS_METERS = 6_371_000;
-
-function toRadians(deg: number): number {
-  return (deg * Math.PI) / 180;
-}
-
-export function haversineMeters(
-  lat1: number, lng1: number, lat2: number, lng2: number,
-): number {
-  const dLat = toRadians(lat2 - lat1);
-  const dLng = toRadians(lng2 - lng1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRadians(lat1)) *
-      Math.cos(toRadians(lat2)) *
-      Math.sin(dLng / 2) ** 2;
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return Math.round(EARTH_RADIUS_METERS * c);
-}
+// Single shared impl in ../algorithms (deduped — was a second copy here). Used
+// by manualEstimate below; re-exported so callers/tests keep importing it here.
+export { haversineMeters };
 
 // ── Cache layer ──────────────────────────────────────────────────────
 

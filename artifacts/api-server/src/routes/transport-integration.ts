@@ -375,8 +375,8 @@ transportIntegrationRouter.get(
         "X-WR-CALNAME:حجوزات النقل — غيث",
       ];
       for (const r of rows) {
-        const dtStart = r.scheduledStart ?? (r.requestedPickupDate ? `${r.requestedPickupDate}T08:00:00Z` : null);
-        const dtEnd   = r.scheduledEnd   ?? (r.requestedPickupDate ? `${r.requestedPickupDate}T10:00:00Z` : null);
+        const dtStart = r.scheduledStart ?? (r.requestedPickupDate ? `${r.requestedPickupDate}T08:00:00+03:00` : null);
+        const dtEnd   = r.scheduledEnd   ?? (r.requestedPickupDate ? `${r.requestedPickupDate}T10:00:00+03:00` : null);
         if (!dtStart) continue;
         const summary = `حجز #${r.bookingNumber} — ${r.customerName ?? r.transportServiceType}`;
         const description = [
@@ -501,13 +501,15 @@ transportIntegrationRouter.post(
             continue;
           }
 
-          // Compute the window. Default to the requested pickup date +
-          // a 2h block if no explicit window is set.
+          // Compute the window. Default to the requested pickup date + a 2h
+          // block (08:00–10:00 Riyadh, +03:00) if no explicit window is set —
+          // matching the توقيت-موحّد convention in transport-bookings (was a
+          // UTC `Z` literal here, i.e. 11:00 Riyadh — a 3-hour drift).
           let startAt = bk.pickupWindowStart ?? bk.fixedAppointmentTime;
           let endAt   = bk.pickupWindowEnd   ?? bk.fixedAppointmentTime;
           if (!startAt && bk.requestedPickupDate) {
-            startAt = `${bk.requestedPickupDate}T08:00:00Z`;
-            endAt   = `${bk.requestedPickupDate}T10:00:00Z`;
+            startAt = `${bk.requestedPickupDate}T08:00:00+03:00`;
+            endAt   = `${bk.requestedPickupDate}T10:00:00+03:00`;
           }
           if (!startAt || !endAt) {
             results.push({ bookingId, outcome: "no_candidate", reason: "لا توجد نافذة زمنية محددة" });
