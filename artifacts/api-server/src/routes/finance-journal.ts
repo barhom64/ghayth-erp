@@ -1893,7 +1893,11 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
     });
     markIdempotencyReplay(req, res, alreadyExists);
 
-    emitEvent({ companyId: effectiveCompanyId, userId: scope.userId, action: "expense.created", entity: "expenses", entityId: journalId, details: JSON.stringify({ ref, accountCode, amount: baseAmount, vatAmount: computedVat, totalWithVat, sourceAccountCode: sourceAcct, approvalRequired: approvalResult.requiresApproval, operationType, expenseType, relatedEntityType, relatedEntityId }) }).catch((e) => logger.error(e, "finance-journal background task failed"));
+    // id/name مطلوبان في عقد expense.created بالكتالوج (eventCatalog.ts) لأثر
+    // Audit/Event سليم. تُوضَع في `after` تحديدًا لأن emitEvent يعيد بناء حمولة
+    // eventBus.emit من قائمة بيضاء تشمل after دون الحقول العلوية المخصّصة؛
+    // والمدقّق يقرأ payload.after?.[field]. id = قيد المصروف، name = مرجعه (EXP-…).
+    emitEvent({ companyId: effectiveCompanyId, userId: scope.userId, action: "expense.created", entity: "expenses", entityId: journalId, after: { id: journalId, name: ref }, details: JSON.stringify({ ref, accountCode, amount: baseAmount, vatAmount: computedVat, totalWithVat, sourceAccountCode: sourceAcct, approvalRequired: approvalResult.requiresApproval, operationType, expenseType, relatedEntityType, relatedEntityId }) }).catch((e) => logger.error(e, "finance-journal background task failed"));
 
     const [createdExpense] = await rawQuery<Record<string, unknown>>(
       `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit)) AS lines
