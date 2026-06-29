@@ -55,6 +55,7 @@ import { assertDriverEligibility } from "../lib/fleet/driverEligibility.js";
 import { assertDriverRest } from "../lib/fleet/driverRest.js";
 import { suggestAssignments } from "../lib/fleet/assignmentSuggestionEngine.js";
 import { fleetEngine } from "../lib/engines/index.js";
+import { recordTripEventSchema, recordBookingTripEvent } from "../lib/transport/tripEvents.js";
 
 export const transportBookingsRouter = Router();
 transportBookingsRouter.use(authMiddleware);
@@ -599,41 +600,10 @@ transportBookingsRouter.get(
   },
 );
 
-// ─────────────────────────────────────────────────────────────────────────
-// شريحة 1 — وقائع الرحلة (الكيان يقود التجربة / تسجيل واقعة)
-// المنسّق/السائق يسجّل «ما حدث» (تحميل/خروج/وصول/فحص/تفريغ/تسليم) ويرفق
-// الإثبات (POD)، والنظام يشتقّ خلفيًا انتقال حالة الحجز:
-//   أي واقعة تنفيذ على حجز (approved/scheduled/dispatched) → in_progress
-//   واقعة إغلاق (unload/deliver) + إثبات → completed (إغلاق تشغيلي)
-// append-only: لا تعديل على الواقعة؛ التصحيح = إبطال ناعم + واقعة جديدة.
-// الإغلاق المالي منفصل (مرشّح الفوترة → المالية) — لا يُلمس هنا.
-// ─────────────────────────────────────────────────────────────────────────
-const TRIP_EVENT_TYPES = [
-  "load", "depart", "arrive", "inspect", "unload", "handover", "deliver",
-] as const;
-// وقائع الإغلاق التشغيلي — تتطلب إثبات POD وتنقل الحجز إلى «مكتمل».
-const TRIP_EVENT_CLOSING_TYPES = new Set<string>(["unload", "deliver"]);
-// الحالات التي يجوز فيها تسجيل واقعة (تنفيذ قائم أو ممكن).
-const TRIP_EVENT_EXECUTABLE_STATUSES = new Set<string>([
-  "approved", "scheduled", "dispatched", "in_progress",
-]);
-// حالات «ما قبل التنفيذ» — أول واقعة تنفيذ تنقلها إلى in_progress.
-const TRIP_EVENT_PRE_EXECUTION_STATUSES = new Set<string>([
-  "approved", "scheduled", "dispatched",
-]);
-
-const recordTripEventSchema = z.object({
-  eventType: z.enum(TRIP_EVENT_TYPES),
-  dispatchOrderId: z.coerce.number().int().positive().optional(),
-  occurredAt: z.string().datetime({ offset: true }).optional(),
-  lat: z.coerce.number().min(-90).max(90).optional(),
-  lng: z.coerce.number().min(-180).max(180).optional(),
-  weightKg: z.coerce.number().min(0).optional(),
-  // شريحة 2 — تصنيف قراءة الوزن (فارغ/محمّل/محور/أخرى) ليُشتقّ الصافي.
-  weightKind: z.enum(["tare", "gross", "axle", "other"]).optional(),
-  proofObjectPaths: z.array(z.string().min(1).max(512)).max(20).optional(),
-  notes: z.string().max(2000).optional(),
-});
+// شريحة وقائع الرحلة (الكيان يقود التجربة / تسجيل واقعة):
+// الثوابت والمخطّط والمنطق المشترك في lib/transport/tripEvents.ts — يُستعمل من
+// سطح المشغّل هنا، ومن سطح السائق في transport-planning (نفس السجل، لا منطق مزدوج).
+// تشغيلي بحت — الإغلاق المالي يبقى منفصلًا (مرشّح الفوترة → المالية).
 
 // GET /transport/bookings/:id/events — الجدول الزمني لوقائع الرحلة.
 transportBookingsRouter.get(
@@ -670,92 +640,8 @@ transportBookingsRouter.post(
       const scope = req.scope!;
       const id = parseId(req.params.id, "id");
       const b = zodParse(recordTripEventSchema.safeParse(req.body));
-
-      const [booking] = await rawQuery<Record<string, unknown>>(
-        `SELECT id, status FROM transport_bookings
-          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-        [id, scope.companyId],
-      );
-      if (!booking) throw new NotFoundError("الحجز غير موجود");
-      const status = String(booking.status);
-      if (!TRIP_EVENT_EXECUTABLE_STATUSES.has(status)) {
-        throw new ValidationError(
-          "لا يمكن تسجيل واقعة على حجز في هذه الحالة",
-          { field: "status" },
-        );
-      }
-      // واقعة الإغلاق التشغيلي تتطلب إثبات POD (صورة تفريغ/تسليم).
-      if (
-        TRIP_EVENT_CLOSING_TYPES.has(b.eventType) &&
-        (!b.proofObjectPaths || b.proofObjectPaths.length === 0)
-      ) {
-        throw new ValidationError(
-          "واقعة الإغلاق تتطلب صورة إثبات (POD)",
-          { field: "proofObjectPaths" },
-        );
-      }
-      // أمر التوزيع (إن مُرّر) يجب أن يخصّ هذا الحجز ونفس الشركة.
-      if (b.dispatchOrderId != null) {
-        const [d] = await rawQuery<Record<string, unknown>>(
-          `SELECT id FROM transport_dispatch_orders
-            WHERE id = $1 AND "bookingId" = $2 AND "companyId" = $3`,
-          [b.dispatchOrderId, id, scope.companyId],
-        );
-        if (!d) {
-          throw new ValidationError(
-            "أمر التوزيع غير مرتبط بهذا الحجز",
-            { field: "dispatchOrderId" },
-          );
-        }
-      }
-      // شريحة 2 — نوع الوزن بلا قيمة وزن لا معنى له (الصافي يُشتقّ من القيم).
-      if (b.weightKind != null && b.weightKg == null) {
-        throw new ValidationError(
-          "حدّد قيمة الوزن (كغم) عند اختيار نوع الوزن",
-          { field: "weightKg" },
-        );
-      }
-
-      // اشتقاق حالة الحجز (تشغيلي، للأمام فقط — لا رجوع، لا مساس بالدفتر).
-      let derivedStatus: string | null = null;
-      if (TRIP_EVENT_CLOSING_TYPES.has(b.eventType)) {
-        derivedStatus = "completed";
-      } else if (TRIP_EVENT_PRE_EXECUTION_STATUSES.has(status)) {
-        derivedStatus = "in_progress";
-      }
-      // الواقعة + الحالة المشتقّة تُكتبان ذرّيًا (إمّا معًا أو لا شيء):
-      // rawExecute داخل withTransaction ينضمّ لـtxStore فيبقى الكل ذرّيًا.
-      const insertId = await withTransaction(async () => {
-        const ins = await rawExecute(
-          `INSERT INTO fleet_trip_events
-             ("companyId", "branchId", "bookingId", "dispatchOrderId", "eventType",
-              "occurredAt", "lat", "lng", "weightKg", "weightKind", "proofObjectPaths", "notes",
-              "recordedByAssignmentId", "createdBy")
-           VALUES ($1,$2,$3,$4,$5, COALESCE($6::timestamptz, NOW()), $7,$8,$9,$10,$11,$12, $13,$14)`,
-          [
-            scope.companyId, scope.branchId ?? null, id, b.dispatchOrderId ?? null, b.eventType,
-            b.occurredAt ?? null, b.lat ?? null, b.lng ?? null, b.weightKg ?? null, b.weightKind ?? null,
-            b.proofObjectPaths ?? null, b.notes ?? null,
-            scope.activeAssignmentId ?? null, scope.userId,
-          ],
-        );
-        assertInsert(ins.insertId, "fleet_trip_events");
-        if (derivedStatus && derivedStatus !== status) {
-          await rawExecute(
-            `UPDATE transport_bookings SET status = $1, "updatedAt" = NOW()
-              WHERE id = $2 AND "companyId" = $3`,
-            [derivedStatus, id, scope.companyId],
-          );
-        }
-        return ins.insertId;
-      });
-
-      createAuditLog({
-        companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
-        action: "trip_event_recorded", entity: "transport_bookings", entityId: id,
-        after: { tripEventId: insertId, eventType: b.eventType, derivedStatus },
-      }).catch((e) => logger.error(e, "trip event audit failed"));
-
+      // سطح المشغّل: الصلاحية fleet.bookings:update تكفي للملكية (مفلتر بالشركة).
+      const { insertId, derivedStatus } = await recordBookingTripEvent(scope, id, b);
       res.status(201).json({ data: { id: insertId, derivedStatus } });
     } catch (err) {
       handleRouteError(err, res, "Record trip event error:");

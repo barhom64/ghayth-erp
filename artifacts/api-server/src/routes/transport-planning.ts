@@ -43,6 +43,7 @@ import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 import { rawQuery, rawExecute, assertInsert, withTransaction } from "../lib/rawdb.js";
+import { recordTripEventSchema, recordBookingTripEvent } from "../lib/transport/tripEvents.js";
 import {
   MapsService, loadPlanningSettings, updatePlanningSettings,
 } from "../lib/fleet/mapsService.js";
@@ -1300,6 +1301,41 @@ transportPlanningRouter.post(
       res.json({ ok: true, status: m.status });
     } catch (err) {
       handleRouteError(err, res, "Navigation event error:");
+    }
+  },
+);
+
+// شريحة تطبيق السائق — السائق يسجّل واقعة رحلة (تحميل/خروج/وصول/فحص/تفريغ +
+// وزن + POD) على حجزه المُسنَد، عبر نفس سجل fleet_trip_events ومنطقه المشترك
+// (recordBookingTripEvent) — لا سجل مواز ولا منطق مزدوج.
+// الملكية: أمر التوزيع مُسنَد لسائق المستخدم الحالي. `fleet_drivers.employeeId`
+// مفتاح أجنبي إلى الموظف، فالمطابقة الصحيحة scope.employeeId (لا userId).
+transportPlanningRouter.post(
+  "/transport/dispatch-orders/:id/trip-event",
+  authorize({ feature: "fleet.dispatch", action: "update" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const dispatchOrderId = parseId(req.params.id, "id");
+      const b = zodParse(recordTripEventSchema.safeParse(req.body));
+      const [d] = await rawQuery<{ bookingId: number }>(
+        `SELECT d."bookingId"
+           FROM transport_dispatch_orders d
+          WHERE d.id = $1 AND d."companyId" = $2
+            AND d."driverId" IN (
+              SELECT fd.id FROM fleet_drivers fd
+               WHERE fd."employeeId" = $3 AND fd."companyId" = $2 AND fd."deletedAt" IS NULL
+            )`,
+        [dispatchOrderId, scope.companyId, scope.employeeId],
+      );
+      if (!d) throw new NotFoundError("أمر التوزيع غير مُسنَد إليك");
+      // dispatchOrderId يُفرض من المسار (لا من الجسم) ويُربط بالواقعة.
+      const { insertId, derivedStatus } = await recordBookingTripEvent(
+        scope, d.bookingId, { ...b, dispatchOrderId },
+      );
+      res.status(201).json({ data: { id: insertId, derivedStatus } });
+    } catch (err) {
+      handleRouteError(err, res, "Driver trip event error:");
     }
   },
 );
