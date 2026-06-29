@@ -823,7 +823,7 @@ export default function TransportBookingDetail() {
                   className="text-xs"
                 />
                 <span className="text-xs text-muted-foreground">
-                  {uploadingPhoto ? "جارٍ الرفع…" : `${eventPhotos.length} صورة`}
+                  {uploadingPhoto ? "جاري الرفع…" : `${eventPhotos.length} صورة`}
                   {TRIP_EVENT_CLOSING.has(activeEvent) && eventPhotos.length === 0 ? " — مطلوبة للإغلاق" : ""}
                 </span>
               </div>
@@ -833,7 +833,7 @@ export default function TransportBookingDetail() {
               />
               <div className="flex gap-2">
                 <Button size="sm" onClick={recordEvent} disabled={recordingEvent || uploadingPhoto}>
-                  {recordingEvent ? "جارٍ التسجيل…" : "تسجيل الواقعة"}
+                  {recordingEvent ? "جاري التسجيل…" : "تسجيل الواقعة"}
                 </Button>
                 <Button size="sm" variant="ghost" onClick={() => { setActiveEvent(null); resetEventForm(); }}>
                   إلغاء
