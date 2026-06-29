@@ -17,6 +17,8 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { GLoadingState } from '@workspace/ui-native';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
+import { registerPushNotifications } from '@/hooks/useNative';
+import { apiFetch } from '@/hooks/useApi';
 
 // إجبار RTL على كل المنصات
 I18nManager.allowRTL(true);
@@ -75,6 +77,18 @@ function AuthGate() {
       router.replace('/(tabs)');
     }
   }, [status, segments, router]);
+
+  // تسجيل توكن الإشعارات عند تسجيل الدخول
+  useEffect(() => {
+    if (status !== 'signedIn') return;
+    registerPushNotifications().then((token) => {
+      if (!token) return;
+      apiFetch('/api/notifications/push-token', {
+        method: 'POST',
+        body: JSON.stringify({ token: token.token, platform: token.platform }),
+      }).catch(() => {/* غير حرج */});
+    });
+  }, [status]);
 
   if (status === 'loading') return <GLoadingState text="جارٍ تحميل غيث…" />;
 

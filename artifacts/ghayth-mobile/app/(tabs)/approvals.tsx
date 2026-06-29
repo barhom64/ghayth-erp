@@ -33,12 +33,12 @@ const typeToFilter: Record<string, FilterType> = {
   exit: 'نهاية خدمة',
 };
 
-function approveEndpoint(item: ApprovalItem): string {
+function approveEndpoint(item: ApprovalItem, approved: boolean): string {
   switch (item.type) {
-    case 'leave': return `/api/hr/leave-requests/${item.id}/approve`;
-    case 'loan': return `/api/hr/loans/${item.id}/approve`;
-    case 'overtime': return `/api/hr/overtime-requests/${item.id}/approve`;
-    case 'exit': return `/api/hr/exit-requests/${item.id}/approve`;
+    case 'leave':    return `/api/hr/leave-requests/${item.id}/approve`;
+    case 'loan':     return `/api/hr/loans/${item.id}/approve`;
+    case 'overtime': return `/api/hr/overtime/${item.id}/${approved ? 'approve' : 'reject'}`;
+    case 'exit':     return `/api/hr/transfers/${item.id}/approve`;
   }
 }
 
@@ -57,7 +57,7 @@ export default function ApprovalsScreen() {
   const handleAction = async (item: ApprovalItem, approved: boolean) => {
     setInFlight(item.id);
     try {
-      const endpoint = approveEndpoint(item);
+      const endpoint = approveEndpoint(item, approved);
       await apiFetch(endpoint, {
         method: 'PATCH',
         body: JSON.stringify({ approved }),
