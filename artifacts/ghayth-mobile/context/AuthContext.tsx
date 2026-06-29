@@ -30,6 +30,8 @@ interface UserProfile {
   role?: string;
   userRoles?: UserRole[];
   roles?: string[];
+  preferredCalendar?: 'gregorian' | 'hijri';
+  preferredLocale?: string;
 }
 
 interface AuthContextValue {
