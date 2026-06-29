@@ -3453,13 +3453,15 @@ purchaseRouter.post("/vendor-invoices", authorize({ feature: "finance.purchase",
     const { financialEngine } = await import("../lib/engines/index.js");
     const expenseCode = b.expenseAccountCode
       ?? await financialEngine.resolveAccountCode(scope.companyId, "vendor_invoice_expense", "debit", "5340");
-    const { resolveCompanyInputVatAccount } = await import("../lib/taxCodes.js");
-    const [vatInputGeneral, apCode] = await Promise.all([
+    // ⚠️ مسار مظلَّل (shadowed): journalRouter.post("/vendor-invoices")
+    // (finance-journal:2123) مركَّب قبل purchaseRouter فيلتقط POST
+    // /finance/vendor-invoices دائمًا — هذا المعالج لا تصله الواجهة. توصيل دقّة
+    // رمز ضريبة الوثيقة على المعالج الحقيقي (resolveVendorInvoicePlan، #3087)؛
+    // لا تربط حساب رمز الضريبة هنا (أُزيل توصيل #3084 الخامل — تنظيف).
+    const [vatInputCode, apCode] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "purchase_vat_input", "debit", "1180"),
       financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "credit", "2111"),
     ]);
-    // البند ٤ — ضريبة المدخلات على حساب الرمز القياسي للشركة إن هُيِّئ، وإلا العام.
-    const vatInputCode = await resolveCompanyInputVatAccount(scope.companyId, vatInputGeneral);
 
     let invoiceId: number | null = null;
     let journalId: number | null = null;
