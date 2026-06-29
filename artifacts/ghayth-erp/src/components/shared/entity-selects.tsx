@@ -791,6 +791,10 @@ export const BuildingSelect = buildEntitySelect({
   createTitle: "إضافة مبنى",
   createLabel: "+ مبنى جديد",
   createApiPath: "/properties/buildings",
+  // B1-b (توجيه إبراهيم «أ») — «+ مبنى جديد» يفتح النموذج الكامل المعتمد
+  // (نوع المبنى/الصك/المالك/العنوان الوطني/الإحداثيات) عبر AllowCreateDrawer،
+  // لا الإضافة المبتورة [اسم، مدينة]. createFields يبقى احتياطًا.
+  createEntityKind: "building",
   createFields: [
     { key: "name", label: "اسم المبنى", required: true },
     { key: "city", label: "المدينة" },
