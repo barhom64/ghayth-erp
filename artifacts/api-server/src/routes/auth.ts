@@ -550,6 +550,54 @@ router.post("/mobile/refresh", refreshLimiter, async (req, res) => {
   }
 });
 
+// Mobile variant of switch-assignment: returns tokens in body (no Set-Cookie)
+router.post("/mobile/switch-assignment", authMiddleware, authedUserLimiter, async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const parsed = switchAssignmentSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    }
+    const { assignmentId } = parsed.data;
+    if (!scope.allowedAssignments.includes(Number(assignmentId))) {
+      throw new ForbiddenError("غير مسموح بالتبديل إلى هذا التعيين");
+    }
+    const [assignment] = await rawQuery<AssignmentSwitchRow>(
+      `SELECT ea.id, ea."companyId", ea."branchId", ea.role
+         FROM employee_assignments ea
+         LEFT JOIN branches b ON b.id = ea."branchId" AND b."companyId" = ea."companyId"
+        WHERE ea.id = $1
+          AND ea."companyId" = ANY($2::int[])
+          AND ea.status = 'active'
+          AND (b.id IS NULL OR COALESCE(b.status, 'active') = 'active')`,
+      [assignmentId, scope.allowedCompanies]
+    );
+    if (!assignment) {
+      throw new NotFoundError("التعيين غير موجود أو الفرع غير نشط");
+    }
+
+    const session = await createUserSession({
+      userId: scope.userId,
+      assignmentId: Number(assignmentId),
+      role: assignment.role,
+      userAgent: req.headers["user-agent"] ?? null,
+      ipAddress: req.ip ?? null,
+    });
+
+    emitEvent({ companyId: assignment.companyId, userId: scope.userId, action: "auth.switch_assignment", entity: "user_assignments", entityId: Number(assignmentId) }).catch((e) => logger.error(e, "auth background task failed"));
+    createAuditLog({ companyId: assignment.companyId, userId: scope.userId, action: "update", entity: "employee_assignments", entityId: Number(assignmentId), after: { switchedTo: assignmentId, role: assignment.role, channel: "mobile" } }).catch((e) => logger.error(e, "auth background task failed"));
+    res.json({
+      tokenType: session.tokenType,
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+      accessTokenExpiresIn: session.accessTokenExpiresIn,
+      refreshTokenExpiresIn: session.refreshTokenExpiresIn,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Mobile switch assignment error:");
+  }
+});
+
 router.post("/logout", authMiddleware, authedUserLimiter, async (req, res) => {
   try {
     const scope = req.scope!;

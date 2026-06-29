@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
+import { Platform } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
 import { getAccessToken, getRefreshToken, setTokens, clearTokens } from '@/lib/tokenStore';
 import { apiFetch, registerSessionExpiredHandler } from '@/hooks/useApi';
 import type { UserRole } from '@/lib/api';
@@ -48,23 +50,40 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 const ASSIGNMENTS_KEY = 'gh_assignments';
+const isWeb = Platform.OS === 'web';
 
-function storeAssignments(list: Assignment[]) {
+async function storeAssignments(list: Assignment[]): Promise<void> {
+  const json = JSON.stringify(list);
   try {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(ASSIGNMENTS_KEY, JSON.stringify(list));
+    if (isWeb) {
+      if (typeof localStorage !== 'undefined') localStorage.setItem(ASSIGNMENTS_KEY, json);
+    } else {
+      await SecureStore.setItemAsync(ASSIGNMENTS_KEY, json);
     }
   } catch { /* ignore */ }
 }
 
-function loadAssignments(): Assignment[] {
+async function loadAssignments(): Promise<Assignment[]> {
   try {
-    if (typeof localStorage !== 'undefined') {
-      const raw = localStorage.getItem(ASSIGNMENTS_KEY);
-      if (raw) return JSON.parse(raw) as Assignment[];
+    let raw: string | null = null;
+    if (isWeb) {
+      if (typeof localStorage !== 'undefined') raw = localStorage.getItem(ASSIGNMENTS_KEY);
+    } else {
+      raw = await SecureStore.getItemAsync(ASSIGNMENTS_KEY);
     }
+    if (raw) return JSON.parse(raw) as Assignment[];
   } catch { /* ignore */ }
   return [];
+}
+
+async function clearAssignments(): Promise<void> {
+  try {
+    if (isWeb) {
+      if (typeof localStorage !== 'undefined') localStorage.removeItem(ASSIGNMENTS_KEY);
+    } else {
+      await SecureStore.deleteItemAsync(ASSIGNMENTS_KEY);
+    }
+  } catch { /* ignore */ }
 }
 
 function enrichUser(profile: UserProfile): UserProfile {
@@ -85,7 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } finally {
       await clearTokens();
-      try { if (typeof localStorage !== 'undefined') localStorage.removeItem(ASSIGNMENTS_KEY); } catch { /* ignore */ }
+      await clearAssignments();
       setToken(null);
       setUser(null);
       setAssignments([]);
@@ -110,10 +129,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Boot: restore session from stored tokens
   useEffect(() => {
-    getAccessToken().then(async (t) => {
+    (async () => {
+      const t = await getAccessToken();
       if (!t) { setStatus('signedOut'); return; }
       setToken(t);
-      setAssignments(loadAssignments());
+      setAssignments(await loadAssignments());
       try {
         const profile = await fetchMe();
         setUser(profile);
@@ -122,7 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await clearTokens();
         setStatus('signedOut');
       }
-    });
+    })();
   }, [fetchMe]);
 
   const login = useCallback(async (email: string, password: string) => {
@@ -141,7 +161,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const list = data.assignments ?? [];
     setAssignments(list);
-    storeAssignments(list);
+    await storeAssignments(list);
 
     // Fetch full profile via /me now that we have a valid token
     const profile = await fetchMe();
@@ -151,7 +171,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const switchAssignment = useCallback(async (assignmentId: number) => {
     const data = await apiFetch<{ accessToken: string; refreshToken: string }>(
-      '/api/auth/switch-assignment',
+      '/api/auth/mobile/switch-assignment',
       { method: 'POST', body: JSON.stringify({ assignmentId }) },
     );
     await setTokens(data.accessToken, data.refreshToken);
