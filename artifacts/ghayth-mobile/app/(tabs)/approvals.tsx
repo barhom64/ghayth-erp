@@ -36,7 +36,7 @@ const typeToFilter: Record<string, FilterType> = {
 function approveEndpoint(item: ApprovalItem, approved: boolean): string {
   switch (item.type) {
     case 'leave':    return `/api/hr/leave-requests/${item.id}/approve`;
-    case 'loan':     return `/api/hr/loans/${item.id}/approve`;
+    case 'loan':     return `/api/hr/loans/${item.id}/${approved ? 'approve' : 'reject'}`;
     case 'overtime': return `/api/hr/overtime/${item.id}/${approved ? 'approve' : 'reject'}`;
     case 'exit':     return `/api/hr/transfers/${item.id}/approve`;
   }

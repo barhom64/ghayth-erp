@@ -315,7 +315,25 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
-      { key: "overtime", label: "العمل الإضافي", icon: "alarm-outline", endpoint: "/api/hr/overtime", titleFields: ["requestNumber"], subtitleFields: ["employeeName", "empNumber"], statusField: "status", amountFields: ["totalAmount"], dateFields: ["overtimeDate"] },
+      {
+        key: "overtime", label: "العمل الإضافي", icon: "alarm-outline", endpoint: "/api/hr/overtime",
+        titleFields: ["requestNumber"], subtitleFields: ["employeeName", "empNumber"], statusField: "status", amountFields: ["totalAmount"], dateFields: ["overtimeDate"],
+        write: {
+          moduleKey: "hr",
+          createEndpoint: "/api/hr/overtime",
+          createFields: [
+            { name: "overtimeDate", label: "التاريخ", type: "date", required: true },
+            { name: "startTime", label: "وقت البداية", type: "text", required: true, placeholder: "08:00" },
+            { name: "endTime", label: "وقت الانتهاء", type: "text", required: true, placeholder: "11:00" },
+            { name: "hours", label: "عدد الساعات", type: "number", required: true },
+            { name: "reason", label: "السبب", type: "textarea" },
+          ],
+          actions: [
+            { key: "approve", label: "اعتماد الطلب", icon: "checkmark-circle-outline", method: "PATCH", path: (id) => `/api/hr/overtime/${id}/approve`, body: { approved: true }, confirm: "هل تريد اعتماد طلب الوقت الإضافي؟", successText: "تم اعتماد الطلب", showWhenStatus: ["pending"] },
+            { key: "reject", label: "رفض الطلب", icon: "close-circle-outline", method: "PATCH", path: (id) => `/api/hr/overtime/${id}/reject`, body: { approved: false }, confirm: "هل تريد رفض طلب الوقت الإضافي؟", successText: "تم رفض الطلب", tone: "danger", showWhenStatus: ["pending"] },
+          ],
+        },
+      },
       { key: "exit", label: "إنهاء الخدمة", icon: "exit-outline", endpoint: "/api/hr/transfers", titleFields: ["transferNumber", "exitNumber"], subtitleFields: ["employeeName", "exitType"], statusField: "status", amountFields: ["netSettlement"], dateFields: ["requestDate"] },
       {
         key: "contracts", label: "عقود الموظفين", icon: "document-text-outline", endpoint: "/api/hr/contracts",
