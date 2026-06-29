@@ -3,7 +3,7 @@
  * البيانات من /api/my-space → pendingApprovals
  */
 import React, { useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { GScreen, GCard, GText, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList, apiFetch } from '@/hooks/useApi';
@@ -64,7 +64,9 @@ export default function ApprovalsScreen() {
       });
       await qc.invalidateQueries({ queryKey: ['/api/my-space'] });
       await refetch();
-    } catch { /* خطأ مرئي للمستخدم — تُعرض في UI الإجراء */ }
+    } catch (e: unknown) {
+      Alert.alert('خطأ', e instanceof Error ? e.message : 'تعذّر تنفيذ الإجراء');
+    }
     finally {
       setInFlight(null);
     }
