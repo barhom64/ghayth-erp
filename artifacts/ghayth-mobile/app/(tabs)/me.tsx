@@ -206,7 +206,14 @@ export default function MeScreen() {
             <Ionicons name="id-card-outline" size={15} color={c.textFaint} />
           </View>
         ) : null}
-        {user?.role ? (
+        {(user?.userRoles?.length ?? 0) > 0 ? (
+          <View style={[styles.infoRow, { borderTopWidth: 1, borderTopColor: c.border }]}>
+            <Text style={{ fontSize: 13, color: c.text, textAlign: 'right', flex: 1 }} numberOfLines={2}>
+              {user!.userRoles!.map(r => r.label ?? r.roleKey).join(' · ')}
+            </Text>
+            <Ionicons name="shield-checkmark-outline" size={15} color={c.textFaint} />
+          </View>
+        ) : user?.role ? (
           <View style={[styles.infoRow, { borderTopWidth: 1, borderTopColor: c.border }]}>
             <Text style={{ fontSize: 13, color: c.text, textAlign: 'right' }}>{user.role}</Text>
             <Ionicons name="shield-checkmark-outline" size={15} color={c.textFaint} />
