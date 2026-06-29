@@ -6,7 +6,7 @@ import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { GScreen, GText, GLoadingState, GEmptyState } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
-import { useList, useMutation } from '@/hooks/useApi';
+import { apiFetch, useList, useMutation } from '@/hooks/useApi';
 import { useQueryClient } from '@tanstack/react-query';
 
 type Tab = 'unread' | 'read';
@@ -15,26 +15,76 @@ interface NotificationItem {
   id: number;
   title: string;
   body?: string;
+  type?: string;
+  priority?: string;
+  isRead: boolean;
   createdAt: string;
-  read: boolean;
-  icon?: string;
+  refType?: string;
+  refId?: number;
+  actionUrl?: string;
 }
+
+interface NotifResponse {
+  data?: NotificationItem[];
+  total?: number;
+}
+
+function formatTime(val: string): string {
+  try {
+    const d = new Date(val);
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1) return 'الآن';
+    if (diffMin < 60) return `منذ ${diffMin} دقيقة`;
+    const diffH = Math.floor(diffMin / 60);
+    if (diffH < 24) return `منذ ${diffH} ساعة`;
+    const diffD = Math.floor(diffH / 24);
+    if (diffD < 7) return `منذ ${diffD} يوم`;
+    return d.toLocaleDateString('ar-SA', { year: 'numeric', month: 'short', day: 'numeric' });
+  } catch {
+    return val;
+  }
+}
+
+const TYPE_ICON: Record<string, string> = {
+  leave: 'calendar-outline',
+  loan: 'cash-outline',
+  payroll: 'card-outline',
+  maintenance: 'construct-outline',
+  invoice: 'receipt-outline',
+  task: 'checkbox-outline',
+  alert: 'alert-circle-outline',
+  approval: 'checkmark-done-circle-outline',
+  system: 'settings-outline',
+};
 
 export default function NotificationsScreen() {
   const c = useColors();
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>('unread');
+  const [markingId, setMarkingId] = useState<number | null>(null);
 
-  const { data, isLoading, refetch } = useList<NotificationItem[]>('/api/notifications');
+  const { data: raw, isLoading, refetch } = useList<NotifResponse>('/api/notifications', { pageSize: 50 });
   const markAllMutation = useMutation<unknown, object>('/api/notifications/mark-all-read', 'PATCH');
 
-  const unread = (data ?? []).filter(n => !n.read);
-  const read = (data ?? []).filter(n => n.read);
+  const all: NotificationItem[] = raw?.data ?? [];
+  const unread = all.filter(n => !n.isRead);
+  const read = all.filter(n => n.isRead);
   const items = tab === 'unread' ? unread : read;
+
+  const handleMarkOne = async (id: number) => {
+    setMarkingId(id);
+    try {
+      await apiFetch(`/api/notifications/${id}/read`, { method: 'PATCH' });
+      await qc.invalidateQueries({ queryKey: ['/api/notifications'] });
+    } catch { /* silent */ }
+    finally { setMarkingId(null); }
+  };
 
   const handleMarkAll = async () => {
     await markAllMutation.mutateAsync({});
-    qc.invalidateQueries({ queryKey: ['/api/notifications'] });
+    await qc.invalidateQueries({ queryKey: ['/api/notifications'] });
   };
 
   if (isLoading) return <GLoadingState text="جارٍ تحميل الإشعارات…" />;
@@ -45,8 +95,10 @@ export default function NotificationsScreen() {
       <View style={[styles.header, { borderBottomColor: c.border, backgroundColor: c.surface }]}>
         <View style={styles.titleRow}>
           {unread.length > 0 ? (
-            <Pressable onPress={handleMarkAll}>
-              <Text style={{ fontSize: 13, color: c.brand, fontWeight: '600' }}>تحديد الكل كمقروء</Text>
+            <Pressable onPress={handleMarkAll} disabled={markAllMutation.isPending}>
+              <Text style={{ fontSize: 13, color: c.brand, fontWeight: '600', opacity: markAllMutation.isPending ? 0.5 : 1 }}>
+                تحديد الكل كمقروء
+              </Text>
             </Pressable>
           ) : <View />}
           <GText variant="heading">الإشعارات</GText>
@@ -70,25 +122,32 @@ export default function NotificationsScreen() {
       <FlatList
         data={items}
         keyExtractor={item => String(item.id)}
-        contentContainerStyle={{ paddingVertical: 8, paddingBottom: 40 }}
+        contentContainerStyle={{ paddingVertical: 8, paddingBottom: 40, flexGrow: 1 }}
         onRefresh={refetch}
         refreshing={isLoading}
         ListEmptyComponent={
-          <GEmptyState icon="notifications-off-outline" title="لا توجد إشعارات" />
+          <GEmptyState icon="notifications-off-outline" title="لا توجد إشعارات" description={tab === 'unread' ? 'ليس لديك إشعارات جديدة' : 'لا توجد إشعارات مقروءة'} />
         }
-        renderItem={({ item }) => (
-          <View style={[styles.notifRow, { backgroundColor: item.read ? c.bg : c.surface, borderBottomColor: c.border }]}>
-            {!item.read && <View style={[styles.unreadDot, { backgroundColor: c.brand }]} />}
-            <View style={styles.notifBody}>
-              <Text style={[styles.notifTitle, { color: c.text }]}>{item.title}</Text>
-              {item.body ? <Text style={[styles.notifBody2, { color: c.textMuted }]}>{item.body}</Text> : null}
-              <Text style={[styles.notifTime, { color: c.textFaint }]}>{item.createdAt}</Text>
-            </View>
-            <View style={[styles.notifIcon, { backgroundColor: c.surfaceAlt }]}>
-              <Ionicons name={(item.icon as never) ?? 'notifications-outline'} size={20} color={c.brand} />
-            </View>
-          </View>
-        )}
+        renderItem={({ item }) => {
+          const icon = TYPE_ICON[item.type ?? ''] ?? 'notifications-outline';
+          const busy = markingId === item.id;
+          return (
+            <Pressable
+              onPress={() => !item.isRead && !busy && handleMarkOne(item.id)}
+              style={[styles.notifRow, { backgroundColor: item.isRead ? c.bg : c.surface, borderBottomColor: c.border, opacity: busy ? 0.6 : 1 }]}
+            >
+              {!item.isRead && <View style={[styles.unreadDot, { backgroundColor: c.brand }]} />}
+              <View style={styles.notifContent}>
+                <Text style={[styles.notifTitle, { color: c.text }]}>{item.title}</Text>
+                {item.body ? <Text style={[styles.notifBodyText, { color: c.textMuted }]} numberOfLines={2}>{item.body}</Text> : null}
+                <Text style={[styles.notifTime, { color: c.textFaint }]}>{formatTime(item.createdAt)}</Text>
+              </View>
+              <View style={[styles.notifIcon, { backgroundColor: item.isRead ? c.surfaceAlt : c.primary + '18' }]}>
+                <Ionicons name={icon as never} size={20} color={c.brand} />
+              </View>
+            </Pressable>
+          );
+        }}
       />
     </GScreen>
   );
@@ -100,10 +159,10 @@ const styles = StyleSheet.create({
   tabs: { flexDirection: 'row' },
   tabBtn: { flex: 1, alignItems: 'center', paddingVertical: 10, borderBottomColor: 'transparent', borderBottomWidth: 2 },
   notifRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 14, paddingHorizontal: 16, borderBottomWidth: 1 },
-  unreadDot: { width: 8, height: 8, borderRadius: 4, marginTop: 6, marginLeft: 8 },
-  notifBody: { flex: 1, marginRight: 12 },
-  notifBody2: { fontSize: 13, marginTop: 2, lineHeight: 18, textAlign: 'right' },
+  unreadDot: { width: 8, height: 8, borderRadius: 4, marginTop: 6, marginLeft: 10, flexShrink: 0 },
+  notifContent: { flex: 1, marginRight: 12 },
+  notifBodyText: { fontSize: 13, marginTop: 2, lineHeight: 18, textAlign: 'right' },
   notifTitle: { fontSize: 14, fontWeight: '600', textAlign: 'right' },
   notifTime: { fontSize: 11, marginTop: 4, textAlign: 'right' },
-  notifIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  notifIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
 });

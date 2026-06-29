@@ -9,6 +9,7 @@ import { GScreen, GCard, GAvatar, GText, GLoadingState, GStatusBadge } from '@wo
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { useAuth } from '@/context/AuthContext';
+import { statusBadge } from '@/lib/moduleSections';
 import type { ComponentProps } from 'react';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -62,7 +63,7 @@ export default function MeScreen() {
         {/* حضور اليوم */}
         <GCard style={{ flex: 1 }}>
           <GText variant="caption" color={c.textMuted}>حضور اليوم</GText>
-          {att ? <GStatusBadge status={att.status} size="sm" /> : <GText variant="caption" color={c.textFaint}>—</GText>}
+          {att ? <GStatusBadge status={statusBadge(att.status)?.label ?? att.status} size="sm" /> : <GText variant="caption" color={c.textFaint}>—</GText>}
           {att?.checkIn ? <GText variant="caption" color={c.textMuted} style={{ marginTop: 4 }}>دخول: {att.checkIn}</GText> : null}
         </GCard>
         {/* رصيد الإجازات */}

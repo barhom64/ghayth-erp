@@ -8,6 +8,7 @@ import { GScreen, GCard, GText, GLoadingState, GEmptyState, GStatusBadge } from 
 import { useColors } from '@/hooks/useColors';
 import { useList, apiFetch } from '@/hooks/useApi';
 import { useQueryClient } from '@tanstack/react-query';
+import { statusBadge } from '@/lib/moduleSections';
 
 type FilterType = 'الكل' | 'إجازات' | 'سلف' | 'وقت إضافي' | 'نهاية خدمة';
 
@@ -106,7 +107,7 @@ export default function ApprovalsScreen() {
           return (
             <GCard>
               <View style={styles.itemHeader}>
-                <GStatusBadge status={item.status} size="sm" />
+                <GStatusBadge status={statusBadge(item.status)?.label ?? item.status} size="sm" />
                 <View style={{ flex: 1, marginRight: 8 }}>
                   <GText variant="label" numberOfLines={1}>{item.title}</GText>
                   <GText variant="caption" color={c.textMuted}>{item.employeeName}</GText>

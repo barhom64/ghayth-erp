@@ -11,6 +11,7 @@ import { useList, useMutation } from '@/hooks/useApi';
 
 interface LeaveType { id: number; name: string; annualDays?: number }
 interface LeaveBalance { leaveTypeId: number; remaining: number; name: string }
+interface PagedResponse<T> { data?: T[]; total?: number }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -19,12 +20,11 @@ export default function LeaveNewScreen() {
   const router = useRouter();
   const qc = useQueryClient();
 
-  const { data: leaveTypes, isLoading: typesLoading } = useList<LeaveType[]>('/api/hr/leave-types');
-  const { data: balances } = useList<{ data?: LeaveBalance[] } | LeaveBalance[]>('/api/hr/leave-balance');
+  const { data: typesResp, isLoading: typesLoading } = useList<PagedResponse<LeaveType>>('/api/hr/leave-types');
+  const { data: balancesResp } = useList<PagedResponse<LeaveBalance>>('/api/hr/leave-balance');
 
-  const balanceList: LeaveBalance[] = Array.isArray(balances)
-    ? balances
-    : (balances as { data?: LeaveBalance[] })?.data ?? [];
+  const leaveTypes: LeaveType[] = typesResp?.data ?? [];
+  const balanceList: LeaveBalance[] = balancesResp?.data ?? [];
 
   const [leaveTypeId, setLeaveTypeId] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -34,7 +34,7 @@ export default function LeaveNewScreen() {
 
   const mutation = useMutation('/api/hr/leave-requests', 'POST');
 
-  const leaveOptions = (Array.isArray(leaveTypes) ? leaveTypes : []).map(t => ({
+  const leaveOptions = leaveTypes.map(t => ({
     value: String(t.id),
     label: t.name,
   }));
