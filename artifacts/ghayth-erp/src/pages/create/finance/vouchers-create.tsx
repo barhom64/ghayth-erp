@@ -551,6 +551,7 @@ export default function VouchersCreate() {
             label="الفرع"
             required
             error={fieldErrors.branchId}
+            autoSelectOwnBranch
           />
           <DepartmentSelect
             value={form.departmentId}

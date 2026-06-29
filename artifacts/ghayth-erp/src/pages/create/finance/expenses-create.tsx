@@ -850,6 +850,7 @@ export default function ExpensesCreate() {
               value={form.branchId}
               onChange={(v) => setForm({ ...form, branchId: v })}
               label="الفرع"
+              autoSelectOwnBranch
             />
             <DepartmentSelect
               value={form.departmentId}

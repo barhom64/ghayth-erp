@@ -179,6 +179,7 @@ export default function PurchaseOrdersCreate() {
           label="الفرع"
           required
           error={fieldErrors.branchId}
+          autoSelectOwnBranch
         />
         <CostCenterSelect
           value={form.costCenter}

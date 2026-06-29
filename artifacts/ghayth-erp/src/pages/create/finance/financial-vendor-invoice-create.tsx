@@ -209,7 +209,7 @@ export default function FinancialVendorInvoiceCreate() {
                 <AccountSelect value={sourceAccountCode} onChange={setSourceAccountCode} label="مصدر الصرف (الخزنة / البنك)" required placeholder="اختر الخزنة أو البنك..." filter={(a: any) => isMoneyAccount(a)} />
               </div>
             )}
-            <BranchSelect value={branchId} onChange={(v) => setBranchId(String(v ?? ""))} label="الفرع" allowCreate={false} />
+            <BranchSelect value={branchId} onChange={(v) => setBranchId(String(v ?? ""))} label="الفرع" allowCreate={false} autoSelectOwnBranch />
           </div>
 
           <LineItemsTable

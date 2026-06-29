@@ -126,6 +126,7 @@ export default function JournalManualCreatePage() {
                 onChange={(v) => setForm(f => ({ ...f, branchId: String(v ?? "") }))}
                 label="الفرع"
                 allowCreate={false}
+                autoSelectOwnBranch
               />
               <CostCenterSelect
                 value={form.costCenter}
