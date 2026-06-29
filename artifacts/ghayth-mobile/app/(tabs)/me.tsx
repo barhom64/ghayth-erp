@@ -6,7 +6,7 @@ import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'rea
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { GScreen, GCard, GAvatar, GText, GLoadingState, GStatusBadge } from '@workspace/ui-native';
+import { GScreen, GCard, GAvatar, GText, GLoadingState, GStatusBadge, GEmptyState } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { useAuth, type Assignment } from '@/context/AuthContext';
@@ -75,12 +75,13 @@ export default function MeScreen() {
   const { user, assignments, logout, switchAssignment } = useAuth();
   const router = useRouter();
   const qc = useQueryClient();
-  const { data, isLoading } = useList<MySpaceData>('/api/my-space');
+  const { data, isLoading, isError } = useList<MySpaceData>('/api/my-space');
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [switching, setSwitching] = useState(false);
   const isManager = canApprove(user?.userRoles);
 
   if (isLoading) return <GLoadingState text="جارٍ التحميل…" />;
+  if (isError) return <GEmptyState icon="alert-circle-outline" title="تعذّر تحميل بياناتك" description="تحقق من اتصالك وحاول مجدداً" />;
 
   const att = data?.attendance;
   const annualLeave = data?.leaveBalances?.find(b =>

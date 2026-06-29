@@ -42,13 +42,14 @@ export default function DashboardScreen() {
   const c = useColors();
   const { user } = useAuth();
   const router = useRouter();
-  const { data, isLoading } = useList<DashboardData>('/api/dashboard/summary');
+  const { data, isLoading, isError } = useList<DashboardData>('/api/dashboard/summary');
   const isManager = canApprove(user?.userRoles);
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'صباح الخير' : hour < 17 ? 'مساء الخير' : 'مساء النور';
 
   if (isLoading) return <GLoadingState text="جارٍ التحميل…" />;
+  if (isError) return <GEmptyState icon="alert-circle-outline" title="تعذّر تحميل لوحة التحكم" description="تحقق من اتصالك وحاول مجدداً" />;
 
   return (
     <GScreen scrollable>

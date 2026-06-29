@@ -48,7 +48,7 @@ export default function MyRequestsScreen() {
   const c = useColors();
   const [filter, setFilter] = useState<FilterType>('الكل');
 
-  const { data: resp, isLoading, refetch } = useList<MyRequestsResp>('/api/my-space/requests');
+  const { data: resp, isLoading, isError, refetch } = useList<MyRequestsResp>('/api/my-space/requests');
 
   const leaveItems: RequestItem[] = (resp?.leaveRequests ?? []).map(r => ({ ...r, requestType: 'leave' }));
   const workflowItems: RequestItem[] = (resp?.data ?? []);
@@ -64,10 +64,10 @@ export default function MyRequestsScreen() {
     return true;
   });
 
-  const loading = isLoading;
   const doRefetch = () => { refetch(); };
 
-  if (loading) return <GLoadingState text="جارٍ تحميل طلباتك…" />;
+  if (isLoading) return <GLoadingState text="جارٍ تحميل طلباتك…" />;
+  if (isError) return <GEmptyState icon="alert-circle-outline" title="تعذّر تحميل الطلبات" description="تحقق من اتصالك وحاول مجدداً" />;
 
   return (
     <GScreen>
@@ -94,7 +94,7 @@ export default function MyRequestsScreen() {
         keyExtractor={(item, i) => `${item.requestType ?? 'req'}-${item.id}-${i}`}
         contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 40 }}
         onRefresh={doRefetch}
-        refreshing={loading}
+        refreshing={isLoading}
         ListEmptyComponent={
           <GEmptyState
             icon="file-tray-outline"

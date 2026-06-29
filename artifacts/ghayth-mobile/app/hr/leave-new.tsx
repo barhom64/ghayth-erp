@@ -5,7 +5,7 @@ import React, { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { GCard, GButton, GInput, GSelect, GText, GLoadingState } from '@workspace/ui-native';
+import { GCard, GButton, GInput, GSelect, GText, GLoadingState, GEmptyState } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList, useMutation } from '@/hooks/useApi';
 
@@ -20,7 +20,7 @@ export default function LeaveNewScreen() {
   const qc = useQueryClient();
 
   // استخدام بيانات مساحتي (الأرصدة) كمصدر لأنواع الإجازة المتاحة للموظف
-  const { data: mySpace, isLoading: typesLoading } = useList<MySpaceData>('/api/my-space');
+  const { data: mySpace, isLoading: typesLoading, isError: typesError } = useList<MySpaceData>('/api/my-space');
 
   const balanceList: LeaveBalance[] = mySpace?.leaveBalances ?? [];
 
@@ -62,6 +62,7 @@ export default function LeaveNewScreen() {
   };
 
   if (typesLoading) return <GLoadingState text="جارٍ تحميل أنواع الإجازات…" />;
+  if (typesError) return <GEmptyState icon="alert-circle-outline" title="تعذّر تحميل البيانات" description="تحقق من اتصالك وحاول مجدداً" />;
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>

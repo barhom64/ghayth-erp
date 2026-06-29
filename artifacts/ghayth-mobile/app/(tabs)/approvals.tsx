@@ -48,7 +48,7 @@ export default function ApprovalsScreen() {
   const qc = useQueryClient();
   const [filter, setFilter] = useState<FilterType>('الكل');
   const [inFlight, setInFlight] = useState<number | null>(null);
-  const { data, isLoading, refetch } = useList<MySpaceData>('/api/my-space');
+  const { data, isLoading, isError, refetch } = useList<MySpaceData>('/api/my-space');
 
   const items = data?.pendingApprovals ?? [];
   const filtered = items.filter(item =>
@@ -78,6 +78,7 @@ export default function ApprovalsScreen() {
   };
 
   if (isLoading) return <GLoadingState text="جارٍ تحميل الطلبات…" />;
+  if (isError) return <GEmptyState icon="alert-circle-outline" title="تعذّر تحميل الطلبات" description="تحقق من اتصالك وحاول مجدداً" />;
 
   return (
     <GScreen>

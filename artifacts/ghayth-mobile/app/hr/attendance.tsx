@@ -6,7 +6,7 @@ import React, { useState } from 'react';
 import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
-import { GScreen, GCard, GText, GButton, GLoadingState } from '@workspace/ui-native';
+import { GScreen, GCard, GText, GButton, GLoadingState, GEmptyState } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList, useMutation } from '@/hooks/useApi';
 import { useCurrentPosition, takePhoto } from '@/hooks/useNative';
@@ -25,7 +25,7 @@ interface AttendanceStatus {
 export default function AttendanceScreen() {
   const c = useColors();
   const router = useRouter();
-  const { data, isLoading, refetch } = useList<AttendanceStatus>('/api/my-space');
+  const { data, isLoading, isError, refetch } = useList<AttendanceStatus>('/api/my-space');
   const { position, loading: gpsLoading, error: gpsError, refresh: fetchGPS } = useCurrentPosition();
   const [photo, setPhoto] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -74,6 +74,7 @@ export default function AttendanceScreen() {
   };
 
   if (isLoading) return <GLoadingState text="جارٍ التحميل…" />;
+  if (isError) return <GEmptyState icon="alert-circle-outline" title="تعذّر تحميل بيانات الحضور" description="تحقق من اتصالك وحاول مجدداً" />;
 
   return (
     <GScreen scrollable>
