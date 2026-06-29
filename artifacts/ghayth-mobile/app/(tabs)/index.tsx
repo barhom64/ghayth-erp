@@ -33,7 +33,7 @@ interface QuickLink { label: string; icon: IoniconName; route: string; managerOn
 const QUICK_LINKS: QuickLink[] = [
   { label: 'تسجيل الحضور', icon: 'finger-print-outline',           route: '/hr/attendance' },
   { label: 'طلب إجازة',     icon: 'calendar-outline',              route: '/hr/leave-new' },
-  { label: 'طلبات الإجازة', icon: 'list-outline',                  route: '/m/hr/leave-requests' },
+  { label: 'طلباتي',         icon: 'list-outline',                  route: '/hr/my-requests' },
   { label: 'مركز الاعتماد', icon: 'checkmark-done-circle-outline', route: '/(tabs)/approvals', managerOnly: true },
   { label: 'الإشعارات',     icon: 'notifications-outline',         route: '/(tabs)/notifications' },
 ];

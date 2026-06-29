@@ -5,6 +5,7 @@ import React, { useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { GScreen, GCard, GAvatar, GText, GLoadingState, GStatusBadge } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
@@ -26,7 +27,7 @@ interface QuickAction { label: string; icon: IoniconName; route: string }
 const QUICK_ACTIONS: QuickAction[] = [
   { label: 'تسجيل الحضور', icon: 'finger-print-outline',      route: '/hr/attendance' },
   { label: 'طلب إجازة',     icon: 'calendar-outline',          route: '/hr/leave-new' },
-  { label: 'طلبات الإجازة',  icon: 'list-outline',              route: '/m/hr/leave-requests' },
+  { label: 'طلباتي',          icon: 'list-outline',              route: '/hr/my-requests' },
   { label: 'وقت إضافي',     icon: 'alarm-outline',             route: '/hr/overtime-new' },
   { label: 'كشف الراتب',    icon: 'document-text-outline',     route: '/hr/payslip' },
 ];
@@ -72,6 +73,7 @@ export default function MeScreen() {
   const c = useColors();
   const { user, assignments, logout, switchAssignment } = useAuth();
   const router = useRouter();
+  const qc = useQueryClient();
   const { data, isLoading } = useList<MySpaceData>('/api/my-space');
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [switching, setSwitching] = useState(false);
@@ -88,6 +90,8 @@ export default function MeScreen() {
     setSwitching(true);
     try {
       await switchAssignment(assignmentId);
+      // مسح كامل لكاش البيانات بعد تبديل الشركة لضمان تحميل بيانات الشركة الجديدة
+      qc.clear();
     } catch (e: unknown) {
       Alert.alert('خطأ', e instanceof Error ? e.message : 'تعذّر تبديل الشركة');
     } finally {
