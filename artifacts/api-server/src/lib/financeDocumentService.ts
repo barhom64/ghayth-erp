@@ -44,6 +44,8 @@ export type FinancialDocumentInput = {
   direction: "receipt" | "payment";
   cashAccountCode: string;
   vatAccountCode?: string | null;
+  /** ج-٤ — أبعاد ساق المال/الطرف (مثل { vendorId } للشراء الآجل على ذمة المورّد). */
+  cashAccountDims?: Record<string, unknown> | null;
   ref: string;
   description: string;
   /** idempotency key (replay returns the existing journal without re-inserting) */
@@ -183,6 +185,7 @@ export async function postFinancialDocument(
     direction: input.direction,
     cashAccountCode: input.cashAccountCode,
     vatAccountCode: input.vatAccountCode ?? null,
+    cashAccountDims: input.cashAccountDims ?? null,
   };
   const { financialEngine } = await import("./engines/index.js");
   // م٥ — حُلّ حساب ذمة الطرف لكل توزيع متحمِّله ≠ الشركة قبل بناء الخطة (§١٠).
