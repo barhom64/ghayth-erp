@@ -429,7 +429,7 @@ export default function FinancialImportGateway() {
               <FormFieldWrapper label="التاريخ" required>
                 <DatePicker value={date} onChange={setDate} />
               </FormFieldWrapper>
-              <BranchSelect value={branchId} onChange={(v) => setBranchId(String(v ?? ""))} label="الفرع" allowCreate={false} />
+              <BranchSelect value={branchId} onChange={(v) => setBranchId(String(v ?? ""))} label="الفرع" allowCreate={false} autoSelectOwnBranch />
               <AccountSelect
                 value={cashAccountCode}
                 onChange={setCashAccountCode}

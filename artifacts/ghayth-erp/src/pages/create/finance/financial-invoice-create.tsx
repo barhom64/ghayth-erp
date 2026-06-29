@@ -139,7 +139,7 @@ export default function FinancialInvoiceCreate() {
             <ClientSelect value={form.clientId} onChange={(v) => setForm((f) => ({ ...f, clientId: String(v ?? "") }))} label="العميل" required allowCreate={false} />
             <FormFieldWrapper label="التاريخ"><DatePicker value={form.date} onChange={(v) => setForm((f) => ({ ...f, date: v }))} /></FormFieldWrapper>
             <FormFieldWrapper label="تاريخ الاستحقاق" required><DatePicker value={form.dueDate} onChange={(v) => setForm((f) => ({ ...f, dueDate: v }))} /></FormFieldWrapper>
-            <BranchSelect value={form.branchId} onChange={(v) => setForm((f) => ({ ...f, branchId: String(v ?? "") }))} label="الفرع" allowCreate={false} />
+            <BranchSelect value={form.branchId} onChange={(v) => setForm((f) => ({ ...f, branchId: String(v ?? "") }))} label="الفرع" allowCreate={false} autoSelectOwnBranch />
           </div>
 
           <LineItemsTable

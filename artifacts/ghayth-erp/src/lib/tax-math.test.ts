@@ -20,7 +20,7 @@
  * production code.
  */
 import { describe, it, expect } from "vitest";
-import { amountTaxSplit, lineTaxSplit } from "./tax-math";
+import { amountTaxSplit, lineTaxSplit, resolveDefaultTaxCode } from "./tax-math";
 
 describe("amountTaxSplit", () => {
   it("exclusive: adds VAT on top (net stays the amount)", () => {
@@ -70,5 +70,54 @@ describe("lineTaxSplit", () => {
   it("rounds qty*unitPrice FIRST so float error never enters the tax base", () => {
     // 3 * 0.1 = 0.30000000000000004 in IEEE-754; must be treated as 0.30
     expect(lineTaxSplit(3, 0.1, 0, false)).toEqual({ net: 0.3, vat: 0, gross: 0.3 });
+  });
+});
+
+/**
+ * resolveDefaultTaxCode — B3 (توجيه إبراهيم): «ليش تقول بدون وهي موجودة استاندر؟».
+ * الافتراضي يجب أن يحسم على الكود القياسي المفعّل لا «بدون». الثابت المزروع
+ * "VAT15" في الشاشة كان يسقط بصمت إلى «— بدون —» متى زُرع الكود القياسي برمز
+ * مختلف لدى الشركة؛ هذا المُساعد يصلح ذلك بحسم الافتراضي من البيانات الحقيقية.
+ */
+describe("resolveDefaultTaxCode (B3)", () => {
+  const STD = { code: "VAT15", taxType: "standard", isActive: true };
+  const ZERO = { code: "VAT0", taxType: "zero", isActive: true };
+  const EXEMPT = { code: "EXEMPT", taxType: "exempt", isActive: true };
+
+  it("picks the standard code when no current value is set (the core fix)", () => {
+    // order deliberately puts non-standard first to prove it scans by taxType
+    expect(resolveDefaultTaxCode([ZERO, EXEMPT, STD])).toBe("VAT15");
+  });
+
+  it("picks the standard code even when the company seeded it under a custom code", () => {
+    const custom = { code: "S-KSA", taxType: "standard", isActive: true };
+    expect(resolveDefaultTaxCode([ZERO, custom])).toBe("S-KSA");
+  });
+
+  it("keeps a valid current selection (respects the user / a copied invoice)", () => {
+    expect(resolveDefaultTaxCode([STD, ZERO], "VAT0")).toBe("VAT0");
+  });
+
+  it("replaces a stale current code that is no longer among the active codes", () => {
+    // "VAT15" is the classic stale hardcoded default → falls back to standard
+    expect(resolveDefaultTaxCode([ZERO, EXEMPT, STD], "GONE")).toBe("VAT15");
+  });
+
+  it("falls back to the first active code when none is marked standard", () => {
+    expect(resolveDefaultTaxCode([ZERO, EXEMPT])).toBe("VAT0");
+  });
+
+  it("ignores inactive codes (an inactive standard is not chosen)", () => {
+    const inactiveStd = { code: "OLD", taxType: "standard", isActive: false };
+    expect(resolveDefaultTaxCode([inactiveStd, ZERO])).toBe("VAT0");
+  });
+
+  it("ignores blank codes and returns undefined when nothing usable remains", () => {
+    expect(resolveDefaultTaxCode([{ code: "", taxType: "standard", isActive: true }])).toBeUndefined();
+    expect(resolveDefaultTaxCode([])).toBeUndefined();
+  });
+
+  it("treats a missing isActive flag as active (defensive on partial rows)", () => {
+    expect(resolveDefaultTaxCode([{ code: "VAT15", taxType: "standard" }])).toBe("VAT15");
   });
 });

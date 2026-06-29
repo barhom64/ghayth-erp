@@ -697,19 +697,15 @@ export async function createJournalEntry(params: {
     // SELECT SUM(...) WHERE costCenterId = X just works.
     await enrichJournalLines(client, params.lines, params.companyId, params.branchId);
 
-    // Step 3 — subsidiary code substitution. OFF BY DEFAULT (gated by
-    // `system_settings.gl_subsidiary_substitution`). When ON, a line
-    // posting to a control account like 1121 (سلفة الموظفين) with
-    // employeeId=42 gets its accountCode swapped to '1121-0042' — the
-    // employee's subsidiary code. Reports that aggregate by
-    // chart_of_accounts.parentId still work because the parent
-    // currentBalance is unchanged by the swap (the rollup is via the
-    // CoA tree, not the literal accountCode).
-    //
-    // Adopting this on an existing tenant is a one-line setting flip,
-    // but it's NOT default-on because tenants whose reports were
-    // built assuming parent posting would silently shift. The dim-
-    // routing page surfaces the toggle so the operator can opt in.
+    // Step 3 — subsidiary code substitution. ON BY DEFAULT (البند ٤ — إذن إبراهيم
+    // «نعم حساب خاص»): a line posting to a control account like 1121 (سلفة
+    // الموظفين) with employeeId=42 gets its accountCode swapped to '1121-0042' —
+    // the employee's own subsidiary code (مبدأ «حساب خاص لكل أصل/كيان، تلقائيًّا»).
+    // Reports that aggregate by chart_of_accounts.parentId still work because the
+    // parent currentBalance is unchanged by the swap (the rollup is via the CoA
+    // tree, not the literal accountCode). A company opts OUT explicitly via
+    // `system_settings.gl_subsidiary_substitution='false'` (the dim-routing page
+    // surfaces the toggle) — for tenants whose reports read literal leaf codes.
     await substituteSubsidiaryAccountCodes(client, params.lines, params.companyId);
 
     // FIN-INTEGRITY-CONTRACT (#2246 SLICE 1) — عقد صدق دفتر الأستاذ المركزي بعد
@@ -1596,6 +1592,10 @@ export const MAPPING_INTENT: Record<string, { type: string; keywords: string[] }
   cargo_freight_cost:            { type: "expense", keywords: ["تكاليف نقل وشحن", "نقل وشحن", "شحن", "نقل"] },
   fleet_maintenance_expense:     { type: "expense", keywords: ["صيانة وإصلاح المركبات", "صيانة المركبات", "صيانة"] },
   fleet_fuel_expense:            { type: "expense", keywords: ["الوقود", "وقود", "fuel"] },
+  // مصروف تأمين المركبات (طرف الإطفاء الشهري لقسط التأمين المدفوع مقدمًا → 5530).
+  // كلمات محدّدة فقط («تأمين المركبات/السيارات») تجنّبًا لمطابقة تأمينات GOSI (5250)
+  // أو التأمين العام (5930) أو المدفوع مقدمًا (1172) عند البحث بالنيّة.
+  fleet_insurance_expense:       { type: "expense", keywords: ["تأمين المركبات", "تأمين السيارات"] },
   fleet_fines_expense:           { type: "expense", keywords: ["مخالفات مرورية", "مخالفات"] },
   fleet_depreciation:            { type: "expense", keywords: ["إهلاك المركبات", "إهلاك"] },
   property_depreciation:         { type: "expense", keywords: ["إهلاك المباني", "إهلاك"] },

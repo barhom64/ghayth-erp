@@ -13,6 +13,7 @@ export const companies = pgTable("companies", {
   currency: text("currency").default("SAR"),
   timezone: text("timezone").default("Asia/Riyadh"),
   status: text("status").default("active"),
+  parentCompanyId: integer("parentCompanyId"),
   createdAt: timestamp("createdAt").defaultNow(),
 });
 

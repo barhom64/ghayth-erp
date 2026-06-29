@@ -168,6 +168,7 @@ export default function JournalCreate() {
           onChange={(v) => setForm((f) => ({ ...f, branchId: String(v ?? "") }))}
           label="الفرع"
           allowCreate={false}
+          autoSelectOwnBranch
         />
         <TextField label="الوصف" value={form.description} onChange={(v) => setForm((f) => ({ ...f, description: v }))} className="md:col-span-2" />
       </div>

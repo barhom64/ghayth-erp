@@ -44,6 +44,8 @@ export type FinancialDocumentInput = {
   direction: "receipt" | "payment";
   cashAccountCode: string;
   vatAccountCode?: string | null;
+  /** ج-٤ — أبعاد ساق المال/الطرف (مثل { vendorId } للشراء الآجل على ذمة المورّد). */
+  cashAccountDims?: Record<string, unknown> | null;
   ref: string;
   description: string;
   /** idempotency key (replay returns the existing journal without re-inserting) */
@@ -145,10 +147,39 @@ async function resolveCostBearerAccounts(
 }
 
 /**
+ * ج-١ — مُعرِّف بُعد الطرف لكل نوع متحمِّل يحمل طرفًا محدَّدًا (سائق/موظف). الباقي
+ * (insurance/customer/tenant/third_party/supplier) أطرافٌ خارجية تُتابَع على كيان
+ * التوزيع نفسه (لا مُعرِّف طرف داخلي في الأبعاد).
+ */
+const COST_BEARER_PARTY_DIM: Record<string, string> = {
+  driver: "driverId",
+  employee: "employeeId",
+};
+
+/**
+ * ج-١ — حُلّ الطرف الذي تُربط به مطالبة الاسترداد. حين يحمل التوزيع مُعرِّف الطرف
+ * المطابق لنوع المتحمِّل (سائق→driverId، موظف→employeeId) نربط الالتزام بذلك الطرف
+ * **بعينه** (لا بكيان التوزيع العام، مثلاً المركبة). وإلا نسقط لكيان التوزيع — أدقّ
+ * مرجع متاح، وهو السلوك السابق. دالة نقية — مُصدَّرة للاختبار.
+ */
+export function resolveObligationParty(
+  costBearer: string,
+  allocation: { entityType: string; entityId: number; dims?: Record<string, unknown> | null },
+): { entityType: string; entityId: number } {
+  const dimKey = COST_BEARER_PARTY_DIM[costBearer];
+  if (dimKey) {
+    const raw = (allocation.dims ?? {})[dimKey];
+    const id = typeof raw === "number" && Number.isInteger(raw) && raw > 0 ? raw : null;
+    if (id) return { entityType: costBearer, entityId: id };
+  }
+  return { entityType: allocation.entityType, entityId: allocation.entityId };
+}
+
+/**
  * م٥-ب — لكل توزيع متحمِّله ≠ الشركة: سجّل **التزامًا متابَعًا** (مطالبة استرداد)
- * عبر obligationsEngine (docs/25 §١٠ «متابعة حتى التسوية»). يُربط بكيان التوزيع
- * (أدقّ مرجع متاح؛ ربط طرفٍ محدّد لاحقًا حين يحمل costBearer مُعرِّف طرف). أفضل-جهد
- * بعد ترحيل القيد (لا يُفشِل المستند المُرحَّل)، وidempotent عبر dedupeKey.
+ * عبر obligationsEngine (docs/25 §١٠ «متابعة حتى التسوية»). يُربط بالطرف المحدّد
+ * (سائق/موظف عبر resolveObligationParty — ج-١) وإلا بكيان التوزيع. أفضل-جهد بعد
+ * ترحيل القيد (لا يُفشِل المستند المُرحَّل)، وidempotent عبر dedupeKey.
  */
 async function registerCostBearerObligations(input: FinancialDocumentInput, journalId: number): Promise<void> {
   const parties = input.rawLines.flatMap((line) =>
@@ -162,16 +193,19 @@ async function registerCostBearerObligations(input: FinancialDocumentInput, jour
   due.setDate(due.getDate() + 30); // متابعة بعد ٣٠ يومًا
   const dueAt = due.toISOString().slice(0, 10);
   for (const { line, a } of parties) {
+    // ج-١ — اربط الالتزام بالطرف المحدّد (سائق/موظف) حين يحمله التوزيع، لا بكيان التوزيع
+    // العام؛ ويبقى كيان التوزيع موثّقًا في metadata.allocationEntity للتتبّع.
+    const party = resolveObligationParty(a.costBearer as string, a);
     await registerObligation({
       companyId: input.companyId,
       branchId: input.branchId,
-      entityType: a.entityType,
-      entityId: a.entityId,
+      entityType: party.entityType,
+      entityId: party.entityId,
       obligationType: "follow_up",
-      title: `مطالبة استرداد (${a.costBearer}) على ${a.entityType}#${a.entityId} — ${input.ref}`,
+      title: `مطالبة استرداد (${a.costBearer}) على ${party.entityType}#${party.entityId} — ${input.ref}`,
       dueAt,
-      dedupeKey: `costbearer:${input.sourceKey}:${line.lineNo}:${a.entityType}:${a.entityId}:${a.costBearer}`,
-      metadata: { journalId, costBearer: a.costBearer, ref: input.ref, reason: a.reason ?? null, documentKind: input.documentKind },
+      dedupeKey: `costbearer:${input.sourceKey}:${line.lineNo}:${party.entityType}:${party.entityId}:${a.costBearer}`,
+      metadata: { journalId, costBearer: a.costBearer, ref: input.ref, reason: a.reason ?? null, documentKind: input.documentKind, allocationEntity: { type: a.entityType, id: a.entityId } },
     }).catch((e) => logger.error(e, "م٥ obligation registration failed for one allocation"));
   }
 }
@@ -183,6 +217,7 @@ export async function postFinancialDocument(
     direction: input.direction,
     cashAccountCode: input.cashAccountCode,
     vatAccountCode: input.vatAccountCode ?? null,
+    cashAccountDims: input.cashAccountDims ?? null,
   };
   const { financialEngine } = await import("./engines/index.js");
   // م٥ — حُلّ حساب ذمة الطرف لكل توزيع متحمِّله ≠ الشركة قبل بناء الخطة (§١٠).

@@ -774,6 +774,10 @@ export function DataTable<T>({
             emptyMessage={emptyMessage}
             emptyIcon={emptyIcon}
             emptyAction={emptyAction}
+            // «الجداول طالعة نازلة» — يحجز التحميل ارتفاع صفحة بيانات كاملة
+            // (حجم الصفحة الفعلي، بحدّ ٢٠) بدل ٥ صفوف ثابتة، فلا تقفز الصفحة
+            // لأسفل عند وصول البيانات. صفحة بلا ترقيم (0) → ٨ كحدّ معقول.
+            skeletonRows={pageSizeState > 0 ? Math.min(pageSizeState, 20) : 8}
           >
             {groupBy
               ? (() => {

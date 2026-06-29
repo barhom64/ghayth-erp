@@ -11,7 +11,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, AutoField, CreationDateField } from "@workspace/ui-core";
 import { formatCurrency, roundMoney, todayLocal } from "@/lib/formatters";
-import { lineTaxSplit } from "@/lib/tax-math";
+import { lineTaxSplit, resolveDefaultTaxCode } from "@/lib/tax-math";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
@@ -114,6 +114,17 @@ export default function InvoicesCreate() {
     const m = new Map<string, TaxCode>();
     for (const t of taxCodes) m.set(t.code, t);
     return m;
+  }, [taxCodes]);
+  // B3 (توجيه إبراهيم) — رمز الضريبة الافتراضي = القياسي لا «بدون». الثابت
+  // "VAT15" أعلاه يسقط بصمت إلى «— بدون —» متى زُرع/خُصِّص الكود القياسي لدى
+  // الشركة برمز مختلف. فبمجرد تحميل الأكواد الفعّالة نحسم الافتراضي على الكود
+  // القياسي الحقيقي عبر المُساعد النقي resolveDefaultTaxCode (وحدة قابلة للاختبار).
+  useEffect(() => {
+    if (!taxCodes.length) return;
+    setForm((f) => {
+      const next = resolveDefaultTaxCode(taxCodes, f.taxCode);
+      return next && next !== f.taxCode ? { ...f, taxCode: next } : f;
+    });
   }, [taxCodes]);
   const [copied, setCopied] = useState(false);
   const { fieldErrors, validate, setApiError } = useFieldErrors();
@@ -488,6 +499,8 @@ export default function InvoicesCreate() {
           payload={{
             clientId: Number(form.clientId),
             taxRate: Number(form.vatRate),
+            // البند ٤ — أرسل رمز الضريبة كي تعرض المعاينة حساب الرمز الفعلي.
+            taxCode: form.taxCode || undefined,
             lines: lines.map((l) => ({
               quantity: Number(l.quantity || 0),
               unitPrice: Number(l.unitPrice || 0),

@@ -110,7 +110,7 @@ export default function CustomerCollectionPanel() {
           <NumberField label="المبلغ المستلم" required min={0} value={amount || ""} onChange={(v) => { setAmount(Number(v) || 0); setPreview(null); }} placeholder="0.00" />
           <AccountSelect value={cashAccountCode} onChange={setCashAccountCode} label="وجهة المال (الخزنة / البنك)" required placeholder="اختر الخزنة أو البنك..." filter={(a: any) => isMoneyAccount(a)} />
           <FormFieldWrapper label="التاريخ"><DatePicker value={date} onChange={setDate} /></FormFieldWrapper>
-          <BranchSelect value={branchId} onChange={(v) => setBranchId(String(v ?? ""))} label="الفرع" allowCreate={false} />
+          <BranchSelect value={branchId} onChange={(v) => setBranchId(String(v ?? ""))} label="الفرع" allowCreate={false} autoSelectOwnBranch />
           <TextField label="رقم المرجع (اختياري)" value={reference} onChange={setReference} placeholder="رقم الشيك / الحوالة" />
         </div>
 

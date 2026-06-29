@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageShell, DataTable, type DataTableColumn, AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { useToast } from "@/hooks/use-toast";
@@ -27,6 +28,7 @@ type Status = "pending" | "materialized" | "rejected";
 interface Candidate {
   id: number;
   sourceType: string;
+  costBearer?: string | null; // البند ٤ ج-٥ — اختيار المُكمِل (افتراض حوار المادْيَلة).
   sourceRef: string | null;
   customerName: string | null;
   serviceType: string | null;
@@ -66,13 +68,15 @@ export default function FinanceIntakeCenter() {
   const [revenue, setRevenue] = useState("");
   const [cost, setCost] = useState("");
   const [reason, setReason] = useState("");
+  // البند ٤ شريحة ٢ — مَن يتحمّل صيانة المركبة (المحاسب يقرّره عند المادْيَلة).
+  const [costBearer, setCostBearer] = useState("company");
 
   const { data, isLoading, isError, refetch } = useApiQuery<ListResp>(
     ["transport-billing-candidates", filters.status],
     `/finance/transport-billing-candidates${filters.status ? `?status=${filters.status}` : ""}`,
   );
 
-  const materializeMut = useApiMutation<any, { id: number; freightRevenue?: number; freightCost?: number }>(
+  const materializeMut = useApiMutation<any, { id: number; freightRevenue?: number; freightCost?: number; costBearer?: string }>(
     (b) => `/finance/transport-billing-candidates/${b.id}/materialize`,
     "POST",
     [["transport-billing-candidates", status]],
@@ -86,6 +90,7 @@ export default function FinanceIntakeCenter() {
   const openMaterialize = (row: Candidate) => {
     setRevenue(row.suggestedRevenue != null ? String(row.suggestedRevenue) : "");
     setCost(row.suggestedCost != null ? String(row.suggestedCost) : "");
+    setCostBearer(row.costBearer ?? "company"); // افتراض من اختيار المُكمِل (ج-٥)، يبقى تجاوز المحاسب.
     setDialog({ mode: "materialize", row });
   };
   const openReject = (row: Candidate) => { setReason(""); setDialog({ mode: "reject", row }); };
@@ -98,6 +103,8 @@ export default function FinanceIntakeCenter() {
         id: dialog.row.id,
         freightRevenue: revenue !== "" ? Number(revenue) : undefined,
         freightCost: cost !== "" ? Number(cost) : undefined,
+        // costBearer يخصّ ترشيح الصيانة فقط (الخلفية تتجاهله لغيره) — مبدأ إبراهيم ١.
+        ...(dialog.row.sourceType === "maintenance" ? { costBearer } : {}),
       });
       toast({ title: "تم ترحيل العملية وإنشاء القيد" });
       closeDialog();
@@ -202,6 +209,26 @@ export default function FinanceIntakeCenter() {
                     <Input dir="ltr" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="0.00" />
                   </div>
                 </div>
+                {dialog.row.sourceType === "maintenance" && (
+                  <div>
+                    <Label className="text-xs">مَن يتحمّل التكلفة</Label>
+                    <Select value={costBearer} onValueChange={setCostBearer}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="company">الشركة (مصروف صيانة المركبة)</SelectItem>
+                        <SelectItem value="driver">السائق (يُسترَدّ بخصم الراتب)</SelectItem>
+                        <SelectItem value="insurance">التأمين (ذمة مدينة مستردّة)</SelectItem>
+                        <SelectItem value="warranty">الضمان (ذمة مدينة مستردّة)</SelectItem>
+                        <SelectItem value="third_party">طرف ثالث (ذمة مدينة مستردّة)</SelectItem>
+                        <SelectItem value="customer">العميل (ذمة مدينة مستردّة)</SelectItem>
+                        <SelectItem value="tenant">المستأجر (ذمة مدينة مستردّة)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      يُوجّه القيد (مبدأ إبراهيم): الشركة/السائق → حساب صيانة المركبة · تأمين/طرف ثالث/عميل/مستأجر → ذمة مدينة مستردّة.
+                    </p>
+                  </div>
+                )}
                 <p className="text-xs text-muted-foreground">القيم مقترحة من التشغيل — يمكنك تعديلها قبل الترحيل.</p>
               </div>
               <DialogFooter>

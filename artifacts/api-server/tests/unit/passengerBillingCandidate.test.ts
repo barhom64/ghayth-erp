@@ -48,48 +48,47 @@ describe("#2079 TA-T18-01 — engine: createPassengerBillingCandidate signature"
   });
 });
 
-describe("#2079 TA-T18-01 — engine: idempotent INSERT shape mirrors cargo + rental", () => {
-  const block = ENGINE.slice(
-    ENGINE.indexOf("createPassengerBillingCandidate"),
-    ENGINE.indexOf("postCargoDeliveryGL"),
+describe("#2079 TA-T18-01 — idempotent shape via the shared writer + passenger mapper", () => {
+  // The six creators now delegate to ONE createBillingCandidate writer; the
+  // idempotency anchor lives there, the per-source field mapping in each mapper.
+  const WRITER = ENGINE.slice(
+    ENGINE.indexOf("async createBillingCandidate("),
+    ENGINE.indexOf("async createCargoBillingCandidate("),
   );
+  const PAX = ENGINE.slice(ENGINE.indexOf("async createPassengerBillingCandidate("));
+  const paxBody = PAX.slice(0, PAX.indexOf("\n  }") + 4);
 
-  it("uses ON CONFLICT (companyId, sourceType, sourceId) DO NOTHING + UNION-ALL existed-detection", () => {
-    expect(block).toMatch(/ON CONFLICT \("companyId", "sourceType", "sourceId"\) DO NOTHING/);
-    expect(block).toMatch(/SELECT id, TRUE AS existed/);
-    expect(block).toMatch(/NOT EXISTS \(SELECT 1 FROM ins\)/);
+  it("the shared writer uses ON CONFLICT (companyId, sourceType, sourceId) DO NOTHING + UNION-ALL existed-detection", () => {
+    expect(WRITER).toMatch(/ON CONFLICT \("companyId", "sourceType", "sourceId"\) DO NOTHING/);
+    expect(WRITER).toMatch(/SELECT id, TRUE AS existed/);
+    expect(WRITER).toMatch(/NOT EXISTS \(SELECT 1 FROM ins\)/);
   });
 
-  it("sourceType = 'transport_booking_passenger' (new bucket, not cargo_manifest)", () => {
-    expect(block).toMatch(/'transport_booking_passenger'/);
+  it("passenger mapper sets sourceType = transport_booking_passenger (new bucket, not cargo_manifest)", () => {
+    expect(paxBody).toMatch(/sourceType: "transport_booking_passenger"/);
   });
 
-  it("serviceType = 'passenger', operationalStatus = 'completed'", () => {
-    expect(block).toMatch(/'passenger'/);
-    expect(block).toMatch(/'completed'/);
+  it("passenger mapper sets serviceType = passenger, operationalStatus = completed", () => {
+    expect(paxBody).toMatch(/serviceType: "passenger"/);
+    expect(paxBody).toMatch(/operationalStatus: "completed"/);
   });
 
-  it("quantity = passengerCount, unitOfMeasure = 'pax' (head-count billing)", () => {
-    expect(block).toMatch(/quantity, "unitOfMeasure"/);
-    expect(block).toMatch(/'pax'/);
-    expect(block).toMatch(/\$10, 'pax'/);
+  it("quantity = passengerCount, unitOfMeasure = pax (head-count billing)", () => {
+    expect(paxBody).toMatch(/quantity: pax/);
+    expect(paxBody).toMatch(/unitOfMeasure: "pax"/);
   });
 
   it("does NOT set suggestedRevenue — passenger pricing is rule-driven downstream", () => {
-    // Confirmed by absence of suggestedRevenue in the INSERT column list
-    // (the rental version sets it from totalAmount + overageAmount; the
-    // passenger version intentionally leaves pricing to transport_price_rules).
-    const insertCols = block.slice(block.indexOf("INSERT INTO"), block.indexOf("VALUES"));
-    expect(insertCols).not.toMatch(/suggestedRevenue/);
+    expect(paxBody).not.toMatch(/suggestedRevenue/);
   });
 
-  it("notes carry بsection-route وعدد الركاب for the accountant's first-pass review", () => {
-    expect(block).toMatch(/نقل ركاب — حجز/);
-    expect(block).toMatch(/راكب على المسار/);
+  it("notes carry route + passenger count for the accountant's first-pass review", () => {
+    expect(paxBody).toMatch(/نقل ركاب — حجز/);
+    expect(paxBody).toMatch(/راكب على المسار/);
   });
 
-  it("emits fleet.passenger.billing_candidate.created only on fresh insert", () => {
-    expect(block).toMatch(/if \(!row\.existed\)[\s\S]{0,200}fleet\.passenger\.billing_candidate\.created/);
+  it("emits fleet.passenger.billing_candidate.created only on a fresh insert", () => {
+    expect(paxBody).toMatch(/if \(r\?\.created\)[\s\S]{0,200}fleet\.passenger\.billing_candidate\.created/);
   });
 });
 
@@ -139,15 +138,18 @@ describe("#2079 TA-T18-01 — boundary intact (no JE from transport surface)", (
   });
 });
 
-describe("#2079 TA-T18-01 — symmetry with cargo + rental (canon respected)", () => {
-  it("all six candidate creators share the same ON CONFLICT key shape", () => {
-    // cargo / passenger / rental billing + maintenance / fuel / insurance
-    // expense (#TA-T18 finance-boundary — transport never posts GL directly).
-    expect(ENGINE.match(/ON CONFLICT \("companyId", "sourceType", "sourceId"\) DO NOTHING/g)?.length).toBe(6);
+describe("#2079 TA-T18-01 — symmetry by construction (one writer, six mappers)", () => {
+  it("the ON CONFLICT idempotency anchor lives exactly once (in createBillingCandidate)", () => {
+    // Was six copy-pasted blocks; one shared writer now guarantees the symmetry
+    // structurally instead of by a hand-maintained count of six.
+    expect(ENGINE.match(/ON CONFLICT \("companyId", "sourceType", "sourceId"\) DO NOTHING/g)?.length).toBe(1);
   });
-  it("the three sourceType strings are present and distinct", () => {
-    expect(ENGINE).toContain("'cargo_manifest'");
-    expect(ENGINE).toContain("'fleet_rental_contract'");
-    expect(ENGINE).toContain("'transport_booking_passenger'");
+  it("all six candidate creators delegate to this.createBillingCandidate", () => {
+    expect(ENGINE.match(/this\.createBillingCandidate\(/g)?.length).toBe(6);
+  });
+  it("the three billing sourceType strings are present and distinct", () => {
+    expect(ENGINE).toContain('"cargo_manifest"');
+    expect(ENGINE).toContain('"fleet_rental_contract"');
+    expect(ENGINE).toContain('"transport_booking_passenger"');
   });
 });

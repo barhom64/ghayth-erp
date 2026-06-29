@@ -44,7 +44,7 @@ export interface GenericCreateConfig {
  * union — and the registry below — one entry per migration batch, inside the
  * owner module. Selectors opt in via `EntitySelectConfig.createEntityKind`.
  */
-export type EntityKind = "department" | "branch" | "project" | "client" | "driver" | "vehicle" | "account" | "vendor" | "cost-center" | "employee";
+export type EntityKind = "department" | "branch" | "project" | "client" | "driver" | "vehicle" | "account" | "vendor" | "cost-center" | "employee" | "building" | "property-owner" | "unit";
 
 interface RegistryEntry {
   /** Drawer header (Arabic, user-facing). */
@@ -150,6 +150,33 @@ const ENTITY_CREATE_FORMS: Record<EntityKind, RegistryEntry> = {
     Form: lazy(() =>
       import("@/pages/create/employee-create-form").then((m) => ({
         default: m.EmployeeCreateDrawerForm as ComponentType<EmbeddedCreateFormProps>,
+      })),
+    ),
+  },
+  building: {
+    title: "إضافة مبنى جديد",
+    fullPagePath: "/properties/buildings/create",
+    Form: lazy(() =>
+      import("@/pages/create/properties/building-form").then((m) => ({
+        default: m.BuildingForm as ComponentType<EmbeddedCreateFormProps>,
+      })),
+    ),
+  },
+  "property-owner": {
+    title: "إضافة مالك عقار",
+    fullPagePath: "/properties/owners/create",
+    Form: lazy(() =>
+      import("@/pages/create/properties/owner-form").then((m) => ({
+        default: m.OwnerForm as ComponentType<EmbeddedCreateFormProps>,
+      })),
+    ),
+  },
+  unit: {
+    title: "إضافة وحدة عقارية",
+    fullPagePath: "/properties/create",
+    Form: lazy(() =>
+      import("@/pages/create/properties/unit-form").then((m) => ({
+        default: m.UnitForm as ComponentType<EmbeddedCreateFormProps>,
       })),
     ),
   },
