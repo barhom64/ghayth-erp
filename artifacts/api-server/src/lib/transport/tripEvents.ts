@@ -41,7 +41,11 @@ export const recordTripEventSchema = z.object({
   notes: z.string().max(2000).optional(),
 });
 
-export type RecordTripEventInput = z.infer<typeof recordTripEventSchema>;
+export type RecordTripEventInput = z.infer<typeof recordTripEventSchema> & {
+  // شريحة 3 — يُضبط داخليًا في endpoint العهدة فقط (ليس من المخطّط العام):
+  // مرجع السائق المستلِم في واقعة handover.
+  handoverToDriverId?: number | null;
+};
 
 export interface TripEventScope {
   companyId: number;
@@ -53,12 +57,17 @@ export interface TripEventScope {
 /**
  * يسجّل واقعة رحلة على حجز ويشتقّ حالته (للأمام فقط). يفترض أنّ المستدعي قد
  * تحقّق من الصلاحية وملكية الحجز/المهمة. ذرّي: الواقعة + الحالة المشتقّة
- * تُكتبان معًا أو لا شيء. يرمي NotFoundError/ValidationError عند الخلل.
+ * (+ إعادة إسناد أمر التوزيع عند العهدة) تُكتب معًا أو لا شيء. يرمي
+ * NotFoundError/ValidationError عند الخلل.
+ *
+ * opts.reassignDispatchDriverId (شريحة 3): عند العهدة، يُعاد إسناد
+ * `transport_dispatch_orders.driverId` للسائق المستلِم ذرّيًا مع الواقعة.
  */
 export async function recordBookingTripEvent(
   scope: TripEventScope,
   bookingId: number,
   input: RecordTripEventInput,
+  opts: { reassignDispatchDriverId?: number } = {},
 ): Promise<{ insertId: number; derivedStatus: string | null }> {
   const [booking] = await rawQuery<Record<string, unknown>>(
     `SELECT id, status FROM transport_bookings
@@ -119,13 +128,13 @@ export async function recordBookingTripEvent(
       `INSERT INTO fleet_trip_events
          ("companyId", "branchId", "bookingId", "dispatchOrderId", "eventType",
           "occurredAt", "lat", "lng", "weightKg", "weightKind", "proofObjectPaths", "notes",
-          "recordedByAssignmentId", "createdBy")
-       VALUES ($1,$2,$3,$4,$5, COALESCE($6::timestamptz, NOW()), $7,$8,$9,$10,$11,$12, $13,$14)`,
+          "recordedByAssignmentId", "createdBy", "handoverToDriverId")
+       VALUES ($1,$2,$3,$4,$5, COALESCE($6::timestamptz, NOW()), $7,$8,$9,$10,$11,$12, $13,$14,$15)`,
       [
         scope.companyId, scope.branchId ?? null, bookingId, input.dispatchOrderId ?? null, input.eventType,
         input.occurredAt ?? null, input.lat ?? null, input.lng ?? null, input.weightKg ?? null, input.weightKind ?? null,
         input.proofObjectPaths ?? null, input.notes ?? null,
-        scope.activeAssignmentId ?? null, scope.userId,
+        scope.activeAssignmentId ?? null, scope.userId, input.handoverToDriverId ?? null,
       ],
     );
     assertInsert(ins.insertId, "fleet_trip_events");
@@ -134,6 +143,14 @@ export async function recordBookingTripEvent(
         `UPDATE transport_bookings SET status = $1, "updatedAt" = NOW()
           WHERE id = $2 AND "companyId" = $3`,
         [derivedStatus, bookingId, scope.companyId],
+      );
+    }
+    // شريحة 3 — عند العهدة: إعادة إسناد أمر التوزيع للسائق المستلِم ذرّيًا.
+    if (opts.reassignDispatchDriverId != null && input.dispatchOrderId != null) {
+      await rawExecute(
+        `UPDATE transport_dispatch_orders SET "driverId" = $1, "updatedAt" = NOW()
+          WHERE id = $2 AND "companyId" = $3`,
+        [opts.reassignDispatchDriverId, input.dispatchOrderId, scope.companyId],
       );
     }
     return ins.insertId;
