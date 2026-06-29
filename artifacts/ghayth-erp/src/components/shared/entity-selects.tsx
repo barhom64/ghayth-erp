@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { AllowCreateDrawer, type EntityKind } from "./allow-create-drawer";
+import { useAppContextOptional } from "@/contexts/app-context";
 
 interface QuickCreateField {
   key: string;
@@ -151,6 +152,9 @@ interface EntitySelectProps {
   filter?: (item: any) => boolean;
   /** Visually hide the label (sr-only) for dense inline/toolbar contexts. */
   hideLabel?: boolean;
+  /** Render the picker locked (read-only). Used by BranchSelect's
+   *  autoSelectOwnBranch lock; also available to any caller that needs it. */
+  disabled?: boolean;
 }
 
 function buildEntitySelect(config: EntitySelectConfig) {
@@ -168,6 +172,7 @@ function buildEntitySelect(config: EntitySelectConfig) {
     allowCreate = config.allowCreateDefault ?? true,
     filter,
     hideLabel,
+    disabled,
   }: EntitySelectProps) {
     const [showCreate, setShowCreate] = useState(false);
     // #2134 — entities created from «+ جديد» are appended locally so they
@@ -233,6 +238,7 @@ function buildEntitySelect(config: EntitySelectConfig) {
           required={required}
           error={error}
           hideLabel={hideLabel}
+          disabled={disabled}
           options={options}
           value={value}
           onValueChange={onChange}
@@ -240,7 +246,7 @@ function buildEntitySelect(config: EntitySelectConfig) {
           searchPlaceholder={config.searchPlaceholder}
           emptyText={`لا توجد نتائج`}
           fieldClassName={className}
-          onCreateNew={allowCreate ? () => setShowCreate(true) : undefined}
+          onCreateNew={allowCreate && !disabled ? () => setShowCreate(true) : undefined}
           createNewLabel={config.createLabel}
           onSearchChange={config.serverSearch ? setSearchText : undefined}
         />
@@ -372,7 +378,7 @@ export const DriverSelect = buildEntitySelect({
   getSublabel: (r) => r?.licenseNumber || r?.phone || "",
 });
 
-export const BranchSelect = buildEntitySelect({
+const BranchSelectBase = buildEntitySelect({
   queryKey: "branches-list",
   endpoint: "/settings/branches",
   defaultLabel: "الفرع",
@@ -391,6 +397,69 @@ export const BranchSelect = buildEntitySelect({
   getName: (r) => r?.name || `#${r?.id}`,
   getSublabel: (r) => r?.city || "",
 });
+
+interface BranchSelectProps extends EntitySelectProps {
+  /**
+   * B2 (توجيه إبراهيم) — «الفرع مقفل يختار فرعي تلقائيًا، فرع الإدخال تلقائي».
+   * تفعيل اختياري لشاشات الإدخال فقط (لا المرشِّحات / الشاشات عبر-الفروع):
+   *  - يُهيّئ القيمة تلقائيًّا بفرع المستخدم الفعّال (`selectedBranchId`) متى كان
+   *    الحقل فارغًا.
+   *  - يقفل المنتقي (read-only) متى كان للمستخدم فرع واحد متاح فقط — فلا خيار
+   *    فعليًّا، والقفل يمنع إدخالًا خاطئًا على فرع لا يملكه.
+   * المستخدم متعدّد الفروع يحصل على تهيئة تلقائية قابلة للتغيير (لا قفل).
+   */
+  autoSelectOwnBranch?: boolean;
+}
+
+export interface OwnBranchDecision {
+  /** القيمة التي يجب تثبيتها تلقائيًّا (مرة واحدة)، أو null لا تفعل شيئًا. */
+  autoSelectTo: string | null;
+  /** اقفل المنتقي (خيار وحيد فعليًّا). */
+  locked: boolean;
+}
+
+/**
+ * B2 — القرار النقي خلف `autoSelectOwnBranch` (وحدة قابلة للاختبار بمعزل عن React):
+ *  - معطّل ⇒ لا تهيئة ولا قفل.
+ *  - الفرع الفعّال = `selectedBranchId` إن وُجد، وإلا الفرع الوحيد المتاح، وإلا «».
+ *  - يُهيّئ فقط متى كان الحقل فارغًا (لا يدوس على نسخ/تعديل قائم).
+ *  - يقفل فقط متى فرع واحد متاح والقيمة مُثبّتة (لا قفل عند تعدّد الفروع).
+ */
+export function decideOwnBranch(opts: {
+  enabled?: boolean;
+  value: string;
+  selectedBranchId: number | null | undefined;
+  branches: { id: number }[];
+}): OwnBranchDecision {
+  const { enabled, value, selectedBranchId, branches } = opts;
+  if (!enabled) return { autoSelectTo: null, locked: false };
+  const own =
+    selectedBranchId != null
+      ? String(selectedBranchId)
+      : branches.length === 1
+        ? String(branches[0].id)
+        : "";
+  return {
+    autoSelectTo: !value && own ? own : null,
+    locked: branches.length === 1 && !!value,
+  };
+}
+
+export function BranchSelect({ autoSelectOwnBranch, value, onChange, disabled, ...rest }: BranchSelectProps) {
+  const ctx = useAppContextOptional();
+  const { autoSelectTo, locked } = decideOwnBranch({
+    enabled: autoSelectOwnBranch,
+    value,
+    selectedBranchId: ctx?.selectedBranchId,
+    branches: ctx?.branches ?? [],
+  });
+
+  useEffect(() => {
+    if (autoSelectTo) onChange(autoSelectTo);
+  }, [autoSelectTo, onChange]);
+
+  return <BranchSelectBase value={value} onChange={onChange} disabled={disabled || locked} {...rest} />;
+}
 
 export const DepartmentSelect = buildEntitySelect({
   queryKey: "departments-list",

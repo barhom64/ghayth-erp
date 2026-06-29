@@ -246,7 +246,7 @@ export default function VendorInvoiceCreate() {
             <h3 className="font-semibold text-sm text-muted-foreground">بيانات الفاتورة</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <SupplierSelect value={supplierId} onChange={setSupplierId} label="المورد" required />
-              <BranchSelect value={branchId} onChange={setBranchId} label="الفرع" required />
+              <BranchSelect value={branchId} onChange={setBranchId} label="الفرع" required autoSelectOwnBranch />
               <TextField label="رقم الفاتورة" value={invoiceNo} onChange={setInvoiceNo} placeholder="رقم فاتورة المورد" />
               <FormFieldWrapper label="تاريخ الفاتورة" required>
                 <DatePicker value={invoiceDate} onChange={setInvoiceDate} />

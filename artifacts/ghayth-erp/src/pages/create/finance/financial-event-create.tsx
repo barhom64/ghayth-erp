@@ -203,7 +203,7 @@ export default function FinancialEventCreate() {
             <FormFieldWrapper label="التاريخ" required>
               <DatePicker value={form.date} onChange={(v) => setForm((f) => ({ ...f, date: v }))} />
             </FormFieldWrapper>
-            <BranchSelect value={form.branchId} onChange={(v) => setForm((f) => ({ ...f, branchId: String(v ?? "") }))} label="الفرع" allowCreate={false} />
+            <BranchSelect value={form.branchId} onChange={(v) => setForm((f) => ({ ...f, branchId: String(v ?? "") }))} label="الفرع" allowCreate={false} autoSelectOwnBranch />
             <AccountSelect
               value={form.cashAccountCode}
               onChange={(v) => setForm((f) => ({ ...f, cashAccountCode: v }))}

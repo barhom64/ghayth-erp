@@ -44,7 +44,7 @@ vi.mock("@/lib/api", () => ({
   useApiMutation: () => ({ mutate: mutateSpy, isPending: false }),
 }));
 
-import { ClientSelect, UmrahAgentSelect, mergeEntityOptions } from "./entity-selects";
+import { ClientSelect, UmrahAgentSelect, mergeEntityOptions, decideOwnBranch } from "./entity-selects";
 
 function Harness() {
   const [clientId, setClientId] = useState("");
@@ -140,5 +140,49 @@ describe("generic field-driven quick-create via unified drawer (#2134)", () => {
     await user.click(screen.getByRole("combobox"));
     const matches = await screen.findAllByText(hasText("وكيل لحظي"));
     expect(matches.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+/**
+ * decideOwnBranch — B2 (توجيه إبراهيم): «الفرع مقفل يختار فرعي تلقائيًا، فرع
+ * الإدخال تلقائي». القرار النقي خلف BranchSelect.autoSelectOwnBranch: يُهيّئ
+ * الحقل الفارغ بفرع المستخدم الفعّال، ويقفله متى كان له فرع واحد فقط.
+ */
+describe("decideOwnBranch (B2)", () => {
+  const B1 = { id: 1 }, B2 = { id: 2 };
+
+  it("disabled when not enabled — no auto-select, no lock (filters/cross-branch screens)", () => {
+    expect(decideOwnBranch({ enabled: false, value: "", selectedBranchId: 1, branches: [B1] }))
+      .toEqual({ autoSelectTo: null, locked: false });
+  });
+
+  it("auto-selects the active branch into an empty field (فرع الإدخال تلقائي)", () => {
+    expect(decideOwnBranch({ enabled: true, value: "", selectedBranchId: 2, branches: [B1, B2] }))
+      .toEqual({ autoSelectTo: "2", locked: false });
+  });
+
+  it("locks to the only branch a single-branch user has (مقفل) once the value is set", () => {
+    expect(decideOwnBranch({ enabled: true, value: "1", selectedBranchId: 1, branches: [B1] }))
+      .toEqual({ autoSelectTo: null, locked: true });
+  });
+
+  it("single-branch + empty field: auto-selects that branch (lock follows once value lands)", () => {
+    expect(decideOwnBranch({ enabled: true, value: "", selectedBranchId: null, branches: [B1] }))
+      .toEqual({ autoSelectTo: "1", locked: false });
+  });
+
+  it("never overrides an existing value (نسخ فاتورة / تعديل) — only fills when empty", () => {
+    expect(decideOwnBranch({ enabled: true, value: "2", selectedBranchId: 1, branches: [B1, B2] }))
+      .toEqual({ autoSelectTo: null, locked: false });
+  });
+
+  it("multi-branch with no active selection: no auto-select and no lock (ambiguous → leave to user)", () => {
+    expect(decideOwnBranch({ enabled: true, value: "", selectedBranchId: null, branches: [B1, B2] }))
+      .toEqual({ autoSelectTo: null, locked: false });
+  });
+
+  it("no branches at all: safe no-op", () => {
+    expect(decideOwnBranch({ enabled: true, value: "", selectedBranchId: null, branches: [] }))
+      .toEqual({ autoSelectTo: null, locked: false });
   });
 });
