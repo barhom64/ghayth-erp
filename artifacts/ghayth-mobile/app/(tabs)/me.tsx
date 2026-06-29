@@ -11,6 +11,7 @@ import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { useAuth, type Assignment } from '@/context/AuthContext';
 import { statusBadge } from '@/lib/moduleSections';
+import { canApprove } from '@/lib/modules';
 import type { ComponentProps } from 'react';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -22,13 +23,13 @@ interface MySpaceData {
   lastPayslip?: { netSalary?: number; period?: string; currency?: string } | null;
 }
 
-interface QuickAction { label: string; icon: IoniconName; route: string }
+interface QuickAction { label: string; icon: IoniconName; route: string; managerOnly?: boolean }
 
 const QUICK_ACTIONS: QuickAction[] = [
   { label: 'تسجيل الحضور', icon: 'finger-print-outline',      route: '/hr/attendance' },
   { label: 'طلب إجازة',     icon: 'calendar-outline',          route: '/hr/leave-new' },
   { label: 'طلباتي',          icon: 'list-outline',              route: '/hr/my-requests' },
-  { label: 'وقت إضافي',     icon: 'alarm-outline',             route: '/hr/overtime-new' },
+  { label: 'وقت إضافي',     icon: 'alarm-outline',             route: '/hr/overtime-new', managerOnly: true },
   { label: 'كشف الراتب',    icon: 'document-text-outline',     route: '/hr/payslip' },
 ];
 
@@ -77,6 +78,7 @@ export default function MeScreen() {
   const { data, isLoading } = useList<MySpaceData>('/api/my-space');
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [switching, setSwitching] = useState(false);
+  const isManager = canApprove(user?.userRoles);
 
   if (isLoading) return <GLoadingState text="جارٍ التحميل…" />;
 
@@ -172,14 +174,14 @@ export default function MeScreen() {
       {/* الاختصارات */}
       <GText variant="subheading" style={{ paddingHorizontal: 16, marginTop: 8, marginBottom: 8 }}>اختصارات</GText>
       <GCard style={{ marginHorizontal: 16 }}>
-        {QUICK_ACTIONS.map((qa, i) => (
+        {QUICK_ACTIONS.filter(qa => !qa.managerOnly || isManager).map((qa, i, arr) => (
           <Pressable
             key={qa.label}
             onPress={() => router.push(qa.route as never)}
             style={({ pressed }) => [
               styles.actionRow,
               { backgroundColor: pressed ? c.surfaceAlt : 'transparent' },
-              i < QUICK_ACTIONS.length - 1 && { borderBottomWidth: 1, borderBottomColor: c.border },
+              i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: c.border },
             ]}
           >
             <Ionicons name="chevron-back" size={16} color={c.textFaint} />

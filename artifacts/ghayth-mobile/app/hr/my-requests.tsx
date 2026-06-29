@@ -25,8 +25,7 @@ interface RequestItem {
 }
 
 interface MyRequestsResp {
-  leaveRows?: RequestItem[];
-  rows?: RequestItem[];
+  leaveRequests?: RequestItem[];
   data?: RequestItem[];
 }
 
@@ -50,13 +49,9 @@ export default function MyRequestsScreen() {
   const [filter, setFilter] = useState<FilterType>('الكل');
 
   const { data: resp, isLoading, refetch } = useList<MyRequestsResp>('/api/my-space/requests');
-  const { data: leaveResp, isLoading: leaveLoading, refetch: refetchLeave } = useList<{ data?: RequestItem[] }>(
-    '/api/hr/leave-requests',
-    { limit: 50 },
-  );
 
-  const leaveItems: RequestItem[] = (resp?.leaveRows ?? leaveResp?.data ?? []).map(r => ({ ...r, requestType: 'leave' }));
-  const workflowItems: RequestItem[] = (resp?.rows ?? resp?.data ?? []);
+  const leaveItems: RequestItem[] = (resp?.leaveRequests ?? []).map(r => ({ ...r, requestType: 'leave' }));
+  const workflowItems: RequestItem[] = (resp?.data ?? []);
   const allItems = [...leaveItems, ...workflowItems].sort((a, b) =>
     new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
@@ -69,8 +64,8 @@ export default function MyRequestsScreen() {
     return true;
   });
 
-  const loading = isLoading || leaveLoading;
-  const doRefetch = () => { refetch(); refetchLeave(); };
+  const loading = isLoading;
+  const doRefetch = () => { refetch(); };
 
   if (loading) return <GLoadingState text="جارٍ تحميل طلباتك…" />;
 
