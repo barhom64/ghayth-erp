@@ -3,15 +3,25 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "peerDependencies": {
-    "react": ">=18",
-    "react-native": "*",
     "@expo/vector-icons": "*",
     "expo-haptics": "*",
+    "react": ">=18",
+    "react-native": "*",
     "react-native-safe-area-context": "*"
   },
   "dependencies": {
     "@workspace/tokens": "workspace:*"
+  },
+  "devDependencies": {
+    "@expo/vector-icons": "^14.1.0",
+    "@types/react": "catalog:",
+    "expo-haptics": "~14.1.4",
+    "react": "catalog:",
+    "react-native": "0.79.5",
+    "react-native-safe-area-context": "4.14.1"
   }
 }

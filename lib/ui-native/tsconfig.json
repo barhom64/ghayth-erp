@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-native",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "react": ["../../artifacts/ghayth-mobile/node_modules/react"],
+      "react-native": ["../../artifacts/ghayth-mobile/node_modules/react-native"],
+      "react-native/*": ["../../artifacts/ghayth-mobile/node_modules/react-native/*"],
+      "@expo/vector-icons": ["../../artifacts/ghayth-mobile/node_modules/@expo/vector-icons"],
+      "@expo/vector-icons/*": ["../../artifacts/ghayth-mobile/node_modules/@expo/vector-icons/*"],
+      "expo-haptics": ["../../artifacts/ghayth-mobile/node_modules/expo-haptics"],
+      "react-native-safe-area-context": ["../../artifacts/ghayth-mobile/node_modules/react-native-safe-area-context"],
+      "@workspace/tokens": ["../tokens/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*"]
+}

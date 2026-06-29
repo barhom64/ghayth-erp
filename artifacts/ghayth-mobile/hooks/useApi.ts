@@ -4,7 +4,8 @@
 import { useQuery, useMutation as useRQMutation, type UseQueryOptions } from '@tanstack/react-query';
 import { getAccessToken } from '@/lib/tokenStore';
 
-const API_BASE = (process.env.EXPO_PUBLIC_API_URL ?? 'https://hr.door.sa').replace(/\/$/, '');
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const API_BASE = (((globalThis as any).process?.env?.EXPO_PUBLIC_API_URL) ?? 'https://hr.door.sa').replace(/\/$/, '');
 
 export async function apiFetch<T = unknown>(
   path: string,
