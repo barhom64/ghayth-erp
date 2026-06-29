@@ -316,7 +316,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
         },
       },
       { key: "overtime", label: "العمل الإضافي", icon: "alarm-outline", endpoint: "/api/hr/overtime", titleFields: ["requestNumber"], subtitleFields: ["employeeName", "empNumber"], statusField: "status", amountFields: ["totalAmount"], dateFields: ["overtimeDate"] },
-      { key: "exit", label: "إنهاء الخدمة", icon: "exit-outline", endpoint: "/api/hr/exit", titleFields: ["exitNumber"], subtitleFields: ["employeeName", "exitType"], statusField: "status", amountFields: ["netSettlement"], dateFields: ["requestDate"] },
+      { key: "exit", label: "إنهاء الخدمة", icon: "exit-outline", endpoint: "/api/hr/transfers", titleFields: ["transferNumber", "exitNumber"], subtitleFields: ["employeeName", "exitType"], statusField: "status", amountFields: ["netSettlement"], dateFields: ["requestDate"] },
       {
         key: "contracts", label: "عقود الموظفين", icon: "document-text-outline", endpoint: "/api/hr/contracts",
         titleFields: ["ref"], subtitleFields: ["employeeName", "contractType"], statusField: "approvalStatus", amountFields: ["salary"], dateFields: ["startDate"],
