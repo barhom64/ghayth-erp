@@ -41,7 +41,8 @@ interface AuthContextValue {
   token: string | null;
   user: UserProfile | null;
   assignments: Assignment[];
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<{ twoFactorRequired: true; pendingToken: string } | void>;
+  loginWith2fa: (pendingToken: string, token: string) => Promise<void>;
   logout: () => Promise<void>;
   switchAssignment: (assignmentId: number) => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -145,15 +146,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })();
   }, [fetchMe]);
 
-  const login = useCallback(async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string): Promise<{ twoFactorRequired: true; pendingToken: string } | void> => {
+    const data = await apiFetch<{
+      accessToken?: string;
+      refreshToken?: string;
+      assignments?: Assignment[];
+      userRoles?: UserRole[];
+      twoFactorRequired?: boolean;
+      pendingToken?: string;
+    }>('/api/auth/mobile/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+
+    if (data.twoFactorRequired && data.pendingToken) {
+      return { twoFactorRequired: true, pendingToken: data.pendingToken };
+    }
+
+    await setTokens(data.accessToken!, data.refreshToken!);
+    setToken(data.accessToken!);
+
+    const list = data.assignments ?? [];
+    setAssignments(list);
+    await storeAssignments(list);
+
+    const profile = await fetchMe();
+    setUser(profile);
+    setStatus('signedIn');
+  }, [fetchMe]);
+
+  const loginWith2fa = useCallback(async (pendingToken: string, token: string) => {
     const data = await apiFetch<{
       accessToken: string;
       refreshToken: string;
       assignments?: Assignment[];
-      userRoles?: UserRole[];
-    }>('/api/auth/mobile/login', {
+    }>('/api/auth/mobile/2fa/verify-login', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ pendingToken, token }),
     });
 
     await setTokens(data.accessToken, data.refreshToken);
@@ -163,7 +192,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAssignments(list);
     await storeAssignments(list);
 
-    // Fetch full profile via /me now that we have a valid token
     const profile = await fetchMe();
     setUser(profile);
     setStatus('signedIn');
@@ -186,7 +214,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [fetchMe]);
 
   return (
-    <AuthContext.Provider value={{ status, token, user, assignments, login, logout, switchAssignment, refreshUser }}>
+    <AuthContext.Provider value={{ status, token, user, assignments, login, loginWith2fa, logout, switchAssignment, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

@@ -4,6 +4,7 @@ import React from 'react';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
 import { canApprove } from '@/lib/modules';
+import { useList } from '@/hooks/useApi';
 import type { ComponentProps } from 'react';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -16,18 +17,22 @@ interface TabDef {
   requiresApproval?: boolean;
 }
 
+interface NotifResponse { data?: { isRead: boolean }[]; total?: number }
+
 const TABS: TabDef[] = [
-  { name: 'index',         title: 'لوحة القيادة', icon: 'grid-outline',                 iconFocused: 'grid' },
-  { name: 'me',            title: 'مساحتي',        icon: 'person-circle-outline',        iconFocused: 'person-circle' },
+  { name: 'index',         title: 'لوحة القيادة', icon: 'grid-outline',                  iconFocused: 'grid' },
+  { name: 'me',            title: 'مساحتي',        icon: 'person-circle-outline',         iconFocused: 'person-circle' },
   { name: 'approvals',     title: 'الاعتماد',       icon: 'checkmark-done-circle-outline', iconFocused: 'checkmark-done-circle', requiresApproval: true },
-  { name: 'notifications', title: 'الإشعارات',     icon: 'notifications-outline',        iconFocused: 'notifications' },
-  { name: 'modules',       title: 'الوحدات',        icon: 'apps-outline',                 iconFocused: 'apps' },
+  { name: 'notifications', title: 'الإشعارات',     icon: 'notifications-outline',         iconFocused: 'notifications' },
+  { name: 'modules',       title: 'الوحدات',        icon: 'apps-outline',                  iconFocused: 'apps' },
 ];
 
 export default function TabsLayout() {
   const c = useColors();
   const { user } = useAuth();
   const hasApproval = canApprove(user?.userRoles);
+  const { data: notifData } = useList<NotifResponse>('/api/notifications', { pageSize: 50 });
+  const unreadCount = (notifData?.data ?? []).filter(n => !n.isRead).length;
 
   return (
     <Tabs
@@ -46,6 +51,7 @@ export default function TabsLayout() {
           options={{
             title: tab.title,
             href: tab.requiresApproval && !hasApproval ? null : undefined,
+            tabBarBadge: tab.name === 'notifications' && unreadCount > 0 ? unreadCount : undefined,
             tabBarIcon: ({ focused, color, size }) => (
               <Ionicons name={focused ? tab.iconFocused : tab.icon} size={size} color={color} />
             ),
