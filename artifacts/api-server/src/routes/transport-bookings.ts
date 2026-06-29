@@ -316,6 +316,39 @@ const dispatchOrderRescheduleSchema = z.object({
   { message: "يجب إرسال حقل واحد على الأقل من: driverId / vehicleId / scheduledStartAt / scheduledEndAt" },
 );
 
+// The driver/vehicle time-window overlap check, shared by dispatch-create and
+// reschedule (was copy-pasted in both). Builds the SQL + params — the duplicated
+// part — and each caller executes with its own executor (rawQuery on create; the
+// tx client on the FOR-UPDATE reschedule path). `excludeId` skips the order being
+// rescheduled (omit on create — there is no self row yet). Declined/cancelled
+// orders don't reserve resources, so they're excluded.
+function dispatchConflictQuery(
+  companyId: number,
+  driverId: number,
+  vehicleId: number,
+  startAt: string,
+  endAt: string,
+  excludeId?: number,
+): { sql: string; params: unknown[] } {
+  const ex = excludeId != null ? " AND id <> $6" : "";
+  const sql =
+    `SELECT id, 'driver' AS kind FROM transport_dispatch_orders
+        WHERE "companyId" = $1 AND "driverId" = $2${ex}
+          AND status NOT IN ('declined', 'cancelled')
+          AND tstzrange("scheduledStartAt", "scheduledEndAt", '[)')
+              && tstzrange($3::timestamptz, $4::timestamptz, '[)')
+     UNION
+     SELECT id, 'vehicle' AS kind FROM transport_dispatch_orders
+        WHERE "companyId" = $1 AND "vehicleId" = $5${ex}
+          AND status NOT IN ('declined', 'cancelled')
+          AND tstzrange("scheduledStartAt", "scheduledEndAt", '[)')
+              && tstzrange($3::timestamptz, $4::timestamptz, '[)')`;
+  const params = excludeId != null
+    ? [companyId, driverId, startAt, endAt, vehicleId, excludeId]
+    : [companyId, driverId, startAt, endAt, vehicleId];
+  return { sql, params };
+}
+
 const createLocationSchema = z.object({
   code: z.string().max(32).optional(),
   name: z.string().min(1).max(255),
@@ -1257,20 +1290,8 @@ transportBookingsRouter.post(
       // 2) Conflict detection — driver / vehicle already booked in
       //    the window. Excludes declined / cancelled orders since they
       //    don't reserve resources.
-      const conflicts = await rawQuery<{ id: number; kind: string }>(
-        `SELECT id, 'driver' AS kind FROM transport_dispatch_orders
-          WHERE "companyId" = $1 AND "driverId" = $2
-            AND status NOT IN ('declined', 'cancelled')
-            AND tstzrange("scheduledStartAt", "scheduledEndAt", '[)')
-                && tstzrange($3::timestamptz, $4::timestamptz, '[)')
-         UNION
-         SELECT id, 'vehicle' AS kind FROM transport_dispatch_orders
-          WHERE "companyId" = $1 AND "vehicleId" = $5
-            AND status NOT IN ('declined', 'cancelled')
-            AND tstzrange("scheduledStartAt", "scheduledEndAt", '[)')
-                && tstzrange($3::timestamptz, $4::timestamptz, '[)')`,
-        [scope.companyId, b.driverId, b.scheduledStartAt, b.scheduledEndAt, b.vehicleId],
-      );
+      const cq = dispatchConflictQuery(scope.companyId, b.driverId, b.vehicleId, b.scheduledStartAt, b.scheduledEndAt);
+      const conflicts = await rawQuery<{ id: number; kind: string }>(cq.sql, cq.params);
       if (conflicts.length > 0 && !b.overrideReason) {
         const kinds = [...new Set(conflicts.map((c) => c.kind))].join("+");
         throw new ConflictError(
@@ -1524,20 +1545,8 @@ transportBookingsRouter.post(
 
         // 2) Re-run time-window conflict detection EXCLUDING this row
         //    itself (otherwise an unchanged window reads as a conflict).
-        const conflicts = await tx.query<{ id: number; kind: string }>(
-          `SELECT id, 'driver' AS kind FROM transport_dispatch_orders
-            WHERE "companyId" = $1 AND "driverId" = $2 AND id <> $6
-              AND status NOT IN ('declined', 'cancelled')
-              AND tstzrange("scheduledStartAt", "scheduledEndAt", '[)')
-                  && tstzrange($3::timestamptz, $4::timestamptz, '[)')
-           UNION
-           SELECT id, 'vehicle' AS kind FROM transport_dispatch_orders
-            WHERE "companyId" = $1 AND "vehicleId" = $5 AND id <> $6
-              AND status NOT IN ('declined', 'cancelled')
-              AND tstzrange("scheduledStartAt", "scheduledEndAt", '[)')
-                  && tstzrange($3::timestamptz, $4::timestamptz, '[)')`,
-          [scope.companyId, targetDriverId, targetStart, targetEnd, targetVehicleId, id],
-        );
+        const cq = dispatchConflictQuery(scope.companyId, targetDriverId, targetVehicleId, targetStart, targetEnd, id);
+        const conflicts = await tx.query<{ id: number; kind: string }>(cq.sql, cq.params);
         if (conflicts.rows.length > 0 && !b.overrideReason) {
           const kinds = [...new Set(conflicts.rows.map((c) => c.kind))].join("+");
           throw new ConflictError(
