@@ -81,7 +81,7 @@ export default function NotificationsScreen() {
   const [tab, setTab] = useState<Tab>('unread');
   const [markingId, setMarkingId] = useState<number | null>(null);
 
-  const { data: raw, isLoading, refetch } = useList<NotifResponse>('/api/notifications', { pageSize: 50 });
+  const { data: raw, isLoading, isError, refetch } = useList<NotifResponse>('/api/notifications', { pageSize: 50 });
   const markAllMutation = useMutation<unknown, object>('/api/notifications/mark-all-read', 'PATCH');
 
   const all: NotificationItem[] = raw?.data ?? [];
@@ -121,6 +121,7 @@ export default function NotificationsScreen() {
   };
 
   if (isLoading) return <GLoadingState text="جارٍ تحميل الإشعارات…" />;
+  if (isError) return <GEmptyState icon="alert-circle-outline" title="تعذّر تحميل الإشعارات" description="تحقق من اتصالك وحاول مجدداً" />;
 
   return (
     <GScreen>
