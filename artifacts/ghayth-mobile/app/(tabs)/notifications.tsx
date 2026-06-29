@@ -4,10 +4,12 @@
 import React, { useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { GScreen, GText, GLoadingState, GEmptyState } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { apiFetch, useList, useMutation } from '@/hooks/useApi';
 import { useQueryClient } from '@tanstack/react-query';
+import { setRecord } from '@/lib/recordStore';
 
 type Tab = 'unread' | 'read';
 
@@ -59,9 +61,23 @@ const TYPE_ICON: Record<string, string> = {
   system: 'settings-outline',
 };
 
+// refType → { module, section } للتنقل لصفحة السجل
+const REF_NAV: Record<string, { module: string; section: string }> = {
+  leave: { module: 'hr', section: 'leave-requests' },
+  loan: { module: 'hr', section: 'loans' },
+  overtime: { module: 'hr', section: 'overtime' },
+  payroll: { module: 'hr', section: 'payroll' },
+  invoice: { module: 'finance', section: 'invoices' },
+  purchase_order: { module: 'finance', section: 'purchase-orders' },
+  task: { module: 'projects', section: 'tasks' },
+  maintenance: { module: 'fleet', section: 'maintenance' },
+  ticket: { module: 'support', section: 'tickets' },
+};
+
 export default function NotificationsScreen() {
   const c = useColors();
   const qc = useQueryClient();
+  const router = useRouter();
   const [tab, setTab] = useState<Tab>('unread');
   const [markingId, setMarkingId] = useState<number | null>(null);
 
@@ -72,6 +88,23 @@ export default function NotificationsScreen() {
   const unread = all.filter(n => !n.isRead);
   const read = all.filter(n => n.isRead);
   const items = tab === 'unread' ? unread : read;
+
+  const handleTap = async (item: NotificationItem) => {
+    if (!item.isRead && markingId !== item.id) {
+      setMarkingId(item.id);
+      try {
+        await apiFetch(`/api/notifications/${item.id}/read`, { method: 'PATCH' });
+        await qc.invalidateQueries({ queryKey: ['/api/notifications'] });
+      } catch { /* silent */ }
+      finally { setMarkingId(null); }
+    }
+    // التنقل للسجل المرتبط
+    const nav = item.refType ? REF_NAV[item.refType] : null;
+    if (nav && item.refId) {
+      setRecord({ title: item.title, row: { id: item.refId }, module: nav.module, section: nav.section });
+      router.push('/record');
+    }
+  };
 
   const handleMarkOne = async (id: number) => {
     setMarkingId(id);
@@ -133,7 +166,7 @@ export default function NotificationsScreen() {
           const busy = markingId === item.id;
           return (
             <Pressable
-              onPress={() => !item.isRead && !busy && handleMarkOne(item.id)}
+              onPress={() => !busy && handleTap(item)}
               style={[styles.notifRow, { backgroundColor: item.isRead ? c.bg : c.surface, borderBottomColor: c.border, opacity: busy ? 0.6 : 1 }]}
             >
               {!item.isRead && <View style={[styles.unreadDot, { backgroundColor: c.brand }]} />}

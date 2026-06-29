@@ -78,7 +78,9 @@ export default function MeScreen() {
   if (isLoading) return <GLoadingState text="جارٍ التحميل…" />;
 
   const att = data?.attendance;
-  const annualLeave = data?.leaveBalances?.find(b => b.entitled >= 15) ?? data?.leaveBalances?.[0];
+  const annualLeave = data?.leaveBalances?.find(b =>
+    b.name?.includes('سنو') || b.name?.includes('سنوي') || b.name?.toLowerCase().includes('annual')
+  ) ?? data?.leaveBalances?.find(b => b.entitled >= 15) ?? data?.leaveBalances?.[0];
   const salary = data?.lastPayslip;
 
   const handleSwitch = async (assignmentId: number) => {

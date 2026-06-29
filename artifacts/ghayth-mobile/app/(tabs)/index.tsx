@@ -9,6 +9,7 @@ import { GScreen, GCard, GText, GLoadingState, GEmptyState } from '@workspace/ui
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { useAuth } from '@/context/AuthContext';
+import { canApprove } from '@/lib/modules';
 import type { ComponentProps } from 'react';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -27,13 +28,14 @@ interface DashboardData {
   vehicles?: { total: number; active: number };
 }
 
-interface QuickLink { label: string; icon: IoniconName; route: string }
+interface QuickLink { label: string; icon: IoniconName; route: string; managerOnly?: boolean }
 
 const QUICK_LINKS: QuickLink[] = [
-  { label: 'تسجيل الحضور', icon: 'finger-print-outline', route: '/hr/attendance' },
-  { label: 'طلب إجازة',     icon: 'calendar-outline',    route: '/hr/leave-new' },
-  { label: 'مركز الاعتماد', icon: 'checkmark-done-circle-outline', route: '/(tabs)/approvals' },
-  { label: 'الإشعارات',     icon: 'notifications-outline', route: '/(tabs)/notifications' },
+  { label: 'تسجيل الحضور', icon: 'finger-print-outline',           route: '/hr/attendance' },
+  { label: 'طلب إجازة',     icon: 'calendar-outline',              route: '/hr/leave-new' },
+  { label: 'طلبات الإجازة', icon: 'list-outline',                  route: '/m/hr/leave-requests' },
+  { label: 'مركز الاعتماد', icon: 'checkmark-done-circle-outline', route: '/(tabs)/approvals', managerOnly: true },
+  { label: 'الإشعارات',     icon: 'notifications-outline',         route: '/(tabs)/notifications' },
 ];
 
 export default function DashboardScreen() {
@@ -41,6 +43,7 @@ export default function DashboardScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const { data, isLoading } = useList<DashboardData>('/api/dashboard/summary');
+  const isManager = canApprove(user?.userRoles);
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'صباح الخير' : hour < 17 ? 'مساء الخير' : 'مساء النور';
@@ -85,7 +88,7 @@ export default function DashboardScreen() {
         الوصول السريع
       </GText>
       <View style={styles.quickGrid}>
-        {QUICK_LINKS.map(ql => (
+        {QUICK_LINKS.filter(ql => !ql.managerOnly || isManager).map(ql => (
           <Pressable
             key={ql.label}
             onPress={() => router.push(ql.route as never)}
