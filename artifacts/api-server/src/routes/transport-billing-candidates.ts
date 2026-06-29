@@ -53,6 +53,10 @@ const materializeSchema = z.object({
   // freightRevenue / freightCost are just defaults.
   freightRevenue: z.number().nonnegative().optional(),
   freightCost: z.number().nonnegative().optional(),
+  // البند ٤ شريحة ٢ — مَن يتحمّل صيانة المركبة (مبدأ إبراهيم ١). المحاسب يقرّره عند
+  // المادْيَلة (المالية هي السلطة على المال — حدّ TA-T18). الغياب ⇒ company (شركة).
+  // النوع canonical يطابق مخطّط تقييم الحادث في fleet.ts.
+  costBearer: z.enum(["company", "driver", "insurance", "customer", "tenant", "third_party"]).optional(),
 });
 
 // ─── GET /transport-billing-candidates ─────────────────────────────────
@@ -196,6 +200,7 @@ transportBillingCandidatesRouter.post(
           journal = await fleetEngine.postMaintenanceGL(glCtx, {
             id: candidate.sourceId, vehicleId: candidate.vehicleId ?? 0,
             totalCost: cost, description: candidate.sourceRef ?? undefined,
+            costBearer: overrides.costBearer,
           });
         } else if (candidate.sourceType === "fuel") {
           journal = await fleetEngine.postFuelExpenseGL(glCtx, {

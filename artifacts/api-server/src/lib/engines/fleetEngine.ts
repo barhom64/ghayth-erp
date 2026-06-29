@@ -72,16 +72,48 @@ class FleetEngineImpl implements DomainEngine {
     });
   }
 
+  /**
+   * البند ٤ شريحة ٢ — صيانة المركبة → قيد حسب التوجيه (مبدآ إبراهيم). يُرحَّل عند
+   * **مادْيَلة** ترشيح المحاسب (حدّ TA-T18: النقل لا يمسّ الدفتر؛ المالية هي السلطة).
+   *   • مبدأ (٢) حساب الأصل: نُفضّل الحساب الفرعي للوحة (صيانة) المفتوح تلقائيًّا عند
+   *     إضافة المركبة، ونسقط للحساب الأب المتخصّص `fleet_maintenance_expense`→5520.
+   *   • مبدأ (١) مَن يتحمّل (costBearer) — يطابق postAccidentGL المعتمد تمامًا:
+   *       - company/driver : مدين حساب صيانة المركبة، دائن النقد. (استرداد السائق يتم
+   *         بخصم الراتب عبر الحدث، لا في هذا القيد.)
+   *       - insurance/customer/tenant/third_party : الكلفة مستردّة من طرف خارجي →
+   *         مدين ذمة مدينة (1131)، دائن حساب صيانة المركبة (التعويض يقاصّ الكلفة).
+   * متوازن دائمًا · موسوم ببُعد vehicleId · idempotent عبر sourceKey/guardId. غياب
+   * costBearer ⇒ "company" (السلوك السابق محفوظ).
+   */
   async postMaintenanceGL(
     ctx: FleetGLContext,
-    maintenance: { id: number; vehicleId: number; totalCost: number; type?: string; description?: string }
+    maintenance: { id: number; vehicleId: number; totalCost: number; type?: string; description?: string; costBearer?: string }
   ) {
-    const [debitCode, creditCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_maintenance_expense", "debit", "5520"),
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1111"),
-    ]);
+    // مبدأ (٢): الحساب الفرعي للوحة أولًا (resolveVehicleAccountCode)، ثم الأب 5520.
+    const vehicleAccount = await this.resolveVehicleAccountCode(ctx.companyId, maintenance.vehicleId, "maintenance");
+    const maintCode = vehicleAccount
+      ?? await financialEngine.resolveAccountCode(ctx.companyId, "fleet_maintenance_expense", "debit", "5520");
+    const cashCode = await financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1111");
 
     const costCenterId = await resolveVehicleCostCenter(ctx.companyId, maintenance.vehicleId);
+
+    // مبدأ (١): التوجيه يقرّر الحساب. القائمة المستردّة تطابق postAccidentGL.
+    const costBearer = maintenance.costBearer ?? "company";
+    const recoverable = ["insurance", "customer", "tenant", "third_party"].includes(costBearer);
+    let lines: JournalEntryLine[];
+    if (recoverable) {
+      const arCode = await financialEngine.resolveAccountCode(ctx.companyId, "accounts_receivable", "debit", "1131");
+      lines = [
+        { accountCode: arCode, debit: maintenance.totalCost, credit: 0, description: `ذمة صيانة — ${costBearer}`, vehicleId: maintenance.vehicleId, costCenterId: costCenterId ?? undefined },
+        { accountCode: maintCode, debit: 0, credit: maintenance.totalCost, description: "تعويض صيانة المركبة", vehicleId: maintenance.vehicleId, costCenterId: costCenterId ?? undefined },
+      ];
+    } else {
+      // company / driver: الكلفة على حساب صيانة المركبة، دائن النقد.
+      lines = [
+        { accountCode: maintCode, debit: maintenance.totalCost, credit: 0, description: `صيانة — ${maintenance.type ?? "عامة"}`, vehicleId: maintenance.vehicleId, costCenterId: costCenterId ?? undefined },
+        { accountCode: cashCode, debit: 0, credit: maintenance.totalCost, vehicleId: maintenance.vehicleId, costCenterId: costCenterId ?? undefined },
+      ];
+    }
 
     return financialEngine.postJournalEntry({
       companyId: ctx.companyId,
@@ -95,10 +127,7 @@ class FleetEngineImpl implements DomainEngine {
       sourceKey: `fleet:maintenance:${maintenance.id}`,
       guardTable: "fleet_maintenance",
       guardId: maintenance.id,
-      lines: [
-        { accountCode: debitCode, debit: maintenance.totalCost, credit: 0, description: `صيانة — ${maintenance.type ?? "عامة"}`, vehicleId: maintenance.vehicleId, costCenterId: costCenterId ?? undefined },
-        { accountCode: creditCode, debit: 0, credit: maintenance.totalCost, vehicleId: maintenance.vehicleId, costCenterId: costCenterId ?? undefined },
-      ],
+      lines,
     });
   }
 
