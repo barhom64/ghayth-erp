@@ -458,6 +458,15 @@ transportBookingsRouter.get(
           ORDER BY d."scheduledStartAt" ASC`,
         [id],
       );
+      // شريحة 1 — وقائع الرحلة (تسجيل واقعة): الجدول الزمني التشغيلي
+      // (تحميل/خروج/وصول/فحص/تفريغ/تسليم) الذي تُشتقّ منه حالة الحجز والـPOD.
+      // المُبطَلة (voidedAt) تُستبعد من العرض التشغيلي.
+      const tripEvents = await rawQuery<Record<string, unknown>>(
+        `SELECT * FROM fleet_trip_events
+          WHERE "bookingId" = $1 AND "companyId" = $2 AND "voidedAt" IS NULL
+          ORDER BY "occurredAt" ASC, id ASC`,
+        [id, scope.companyId],
+      );
       // #1812 source context (operational review feedback: "النظام لا
       // يستفيد بما يكفي من العمرة / CRM / العقود / المشاريع / الأوقاف /
       // التقويم"). Resolve the upstream entity referenced by the
@@ -470,7 +479,7 @@ transportBookingsRouter.get(
         "fleet.bookings.cancelPolicy", scope.companyId, scope.branchId ?? undefined,
       );
       const cancelPolicy = rawCancelPolicy === "cascade" ? "cascade" : "guard";
-      res.json(maskFields(req, { data: { ...booking, lines, dispatchOrders, sourceContext, cancelPolicy } }));
+      res.json(maskFields(req, { data: { ...booking, lines, dispatchOrders, tripEvents, sourceContext, cancelPolicy } }));
     } catch (err) {
       handleRouteError(err, res, "Get transport booking error:");
     }
@@ -586,6 +595,161 @@ transportBookingsRouter.get(
       }));
     } catch (err) {
       handleRouteError(err, res, "Get transport booking confirmation error:");
+    }
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────
+// شريحة 1 — وقائع الرحلة (الكيان يقود التجربة / تسجيل واقعة)
+// المنسّق/السائق يسجّل «ما حدث» (تحميل/خروج/وصول/فحص/تفريغ/تسليم) ويرفق
+// الإثبات (POD)، والنظام يشتقّ خلفيًا انتقال حالة الحجز:
+//   أي واقعة تنفيذ على حجز (approved/scheduled/dispatched) → in_progress
+//   واقعة إغلاق (unload/deliver) + إثبات → completed (إغلاق تشغيلي)
+// append-only: لا تعديل على الواقعة؛ التصحيح = إبطال ناعم + واقعة جديدة.
+// الإغلاق المالي منفصل (مرشّح الفوترة → المالية) — لا يُلمس هنا.
+// ─────────────────────────────────────────────────────────────────────────
+const TRIP_EVENT_TYPES = [
+  "load", "depart", "arrive", "inspect", "unload", "handover", "deliver",
+] as const;
+// وقائع الإغلاق التشغيلي — تتطلب إثبات POD وتنقل الحجز إلى «مكتمل».
+const TRIP_EVENT_CLOSING_TYPES = new Set<string>(["unload", "deliver"]);
+// الحالات التي يجوز فيها تسجيل واقعة (تنفيذ قائم أو ممكن).
+const TRIP_EVENT_EXECUTABLE_STATUSES = new Set<string>([
+  "approved", "scheduled", "dispatched", "in_progress",
+]);
+// حالات «ما قبل التنفيذ» — أول واقعة تنفيذ تنقلها إلى in_progress.
+const TRIP_EVENT_PRE_EXECUTION_STATUSES = new Set<string>([
+  "approved", "scheduled", "dispatched",
+]);
+
+const recordTripEventSchema = z.object({
+  eventType: z.enum(TRIP_EVENT_TYPES),
+  dispatchOrderId: z.coerce.number().int().positive().optional(),
+  occurredAt: z.string().datetime({ offset: true }).optional(),
+  lat: z.coerce.number().min(-90).max(90).optional(),
+  lng: z.coerce.number().min(-180).max(180).optional(),
+  weightKg: z.coerce.number().min(0).optional(),
+  proofObjectPaths: z.array(z.string().min(1).max(512)).max(20).optional(),
+  notes: z.string().max(2000).optional(),
+});
+
+// GET /transport/bookings/:id/events — الجدول الزمني لوقائع الرحلة.
+transportBookingsRouter.get(
+  "/transport/bookings/:id/events",
+  authorize({ feature: "fleet.bookings", action: "view" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const [booking] = await rawQuery<Record<string, unknown>>(
+        `SELECT id FROM transport_bookings WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!booking) throw new NotFoundError("الحجز غير موجود");
+      const events = await rawQuery<Record<string, unknown>>(
+        `SELECT * FROM fleet_trip_events
+          WHERE "bookingId" = $1 AND "companyId" = $2 AND "voidedAt" IS NULL
+          ORDER BY "occurredAt" ASC, id ASC`,
+        [id, scope.companyId],
+      );
+      res.json(maskFields(req, { data: events }));
+    } catch (err) {
+      handleRouteError(err, res, "List trip events error:");
+    }
+  },
+);
+
+// POST /transport/bookings/:id/events — تسجيل واقعة رحلة + اشتقاق الحالة.
+transportBookingsRouter.post(
+  "/transport/bookings/:id/events",
+  authorize({ feature: "fleet.bookings", action: "update" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const b = zodParse(recordTripEventSchema.safeParse(req.body));
+
+      const [booking] = await rawQuery<Record<string, unknown>>(
+        `SELECT id, status FROM transport_bookings
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!booking) throw new NotFoundError("الحجز غير موجود");
+      const status = String(booking.status);
+      if (!TRIP_EVENT_EXECUTABLE_STATUSES.has(status)) {
+        throw new ValidationError(
+          "لا يمكن تسجيل واقعة على حجز في هذه الحالة",
+          { field: "status" },
+        );
+      }
+      // واقعة الإغلاق التشغيلي تتطلب إثبات POD (صورة تفريغ/تسليم).
+      if (
+        TRIP_EVENT_CLOSING_TYPES.has(b.eventType) &&
+        (!b.proofObjectPaths || b.proofObjectPaths.length === 0)
+      ) {
+        throw new ValidationError(
+          "واقعة الإغلاق تتطلب صورة إثبات (POD)",
+          { field: "proofObjectPaths" },
+        );
+      }
+      // أمر التوزيع (إن مُرّر) يجب أن يخصّ هذا الحجز ونفس الشركة.
+      if (b.dispatchOrderId != null) {
+        const [d] = await rawQuery<Record<string, unknown>>(
+          `SELECT id FROM transport_dispatch_orders
+            WHERE id = $1 AND "bookingId" = $2 AND "companyId" = $3`,
+          [b.dispatchOrderId, id, scope.companyId],
+        );
+        if (!d) {
+          throw new ValidationError(
+            "أمر التوزيع غير مرتبط بهذا الحجز",
+            { field: "dispatchOrderId" },
+          );
+        }
+      }
+
+      // اشتقاق حالة الحجز (تشغيلي، للأمام فقط — لا رجوع، لا مساس بالدفتر).
+      let derivedStatus: string | null = null;
+      if (TRIP_EVENT_CLOSING_TYPES.has(b.eventType)) {
+        derivedStatus = "completed";
+      } else if (TRIP_EVENT_PRE_EXECUTION_STATUSES.has(status)) {
+        derivedStatus = "in_progress";
+      }
+      // الواقعة + الحالة المشتقّة تُكتبان ذرّيًا (إمّا معًا أو لا شيء):
+      // rawExecute داخل withTransaction ينضمّ لـtxStore فيبقى الكل ذرّيًا.
+      const insertId = await withTransaction(async () => {
+        const ins = await rawExecute(
+          `INSERT INTO fleet_trip_events
+             ("companyId", "branchId", "bookingId", "dispatchOrderId", "eventType",
+              "occurredAt", "lat", "lng", "weightKg", "proofObjectPaths", "notes",
+              "recordedByAssignmentId", "createdBy")
+           VALUES ($1,$2,$3,$4,$5, COALESCE($6::timestamptz, NOW()), $7,$8,$9,$10,$11, $12,$13)`,
+          [
+            scope.companyId, scope.branchId ?? null, id, b.dispatchOrderId ?? null, b.eventType,
+            b.occurredAt ?? null, b.lat ?? null, b.lng ?? null, b.weightKg ?? null,
+            b.proofObjectPaths ?? null, b.notes ?? null,
+            scope.activeAssignmentId ?? null, scope.userId,
+          ],
+        );
+        assertInsert(ins.insertId, "fleet_trip_events");
+        if (derivedStatus && derivedStatus !== status) {
+          await rawExecute(
+            `UPDATE transport_bookings SET status = $1, "updatedAt" = NOW()
+              WHERE id = $2 AND "companyId" = $3`,
+            [derivedStatus, id, scope.companyId],
+          );
+        }
+        return ins.insertId;
+      });
+
+      createAuditLog({
+        companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+        action: "trip_event_recorded", entity: "transport_bookings", entityId: id,
+        after: { tripEventId: insertId, eventType: b.eventType, derivedStatus },
+      }).catch((e) => logger.error(e, "trip event audit failed"));
+
+      res.status(201).json({ data: { id: insertId, derivedStatus } });
+    } catch (err) {
+      handleRouteError(err, res, "Record trip event error:");
     }
   },
 );
