@@ -14,10 +14,17 @@ import type { ComponentProps } from 'react';
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
 interface DashboardData {
-  todayAttendance?: { checkedIn: boolean; checkInTime?: string };
-  pendingApprovals?: number;
-  openTasks?: number;
-  recentActivity?: Array<{ id: number; title: string; subtitle?: string; time: string }>;
+  totalEmployees?: number;
+  totalClients?: number;
+  totalRevenue?: number;
+  pendingInvoices?: number;
+  activeTasksToday?: number;
+  presentToday?: number;
+  pendingLeaveRequests?: number;
+  warehouseAlerts?: number;
+  projects?: { total: number; active: number };
+  tickets?: { open: number; breached: number };
+  vehicles?: { total: number; active: number };
 }
 
 interface QuickLink { label: string; icon: IoniconName; route: string }
@@ -33,7 +40,7 @@ export default function DashboardScreen() {
   const c = useColors();
   const { user } = useAuth();
   const router = useRouter();
-  const { data, isLoading } = useList<DashboardData>('/api/dashboard');
+  const { data, isLoading } = useList<DashboardData>('/api/dashboard/summary');
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'صباح الخير' : hour < 17 ? 'مساء الخير' : 'مساء النور';
@@ -52,21 +59,21 @@ export default function DashboardScreen() {
       <View style={styles.statsRow}>
         <StatCard
           label="حضور اليوم"
-          value={data?.todayAttendance?.checkedIn ? 'مسجل' : 'غير مسجل'}
+          value={String(data?.presentToday ?? 0)}
           icon="finger-print-outline"
-          tone={data?.todayAttendance?.checkedIn ? 'success' : 'warning'}
+          tone="success"
           c={c}
         />
         <StatCard
-          label="طلبات معلقة"
-          value={String(data?.pendingApprovals ?? 0)}
+          label="إجازات معلقة"
+          value={String(data?.pendingLeaveRequests ?? 0)}
           icon="time-outline"
           tone="warning"
           c={c}
         />
         <StatCard
-          label="مهام مفتوحة"
-          value={String(data?.openTasks ?? 0)}
+          label="مهام اليوم"
+          value={String(data?.activeTasksToday ?? 0)}
           icon="checkbox-outline"
           tone="info"
           c={c}
@@ -90,28 +97,15 @@ export default function DashboardScreen() {
         ))}
       </View>
 
-      {/* آخر الأنشطة */}
+      {/* مؤشرات إضافية */}
       <GText variant="subheading" style={{ paddingHorizontal: 16, marginTop: 8, marginBottom: 8 }}>
-        آخر الأنشطة
+        لمحة عامة
       </GText>
-      {data?.recentActivity?.length ? (
-        <GCard style={{ marginHorizontal: 16 }}>
-          {data.recentActivity.map((act, i) => (
-            <View
-              key={act.id}
-              style={[styles.actRow, i < (data.recentActivity?.length ?? 0) - 1 && { borderBottomWidth: 1, borderBottomColor: c.border }]}
-            >
-              <Text style={{ fontSize: 11, color: c.textFaint }}>{act.time}</Text>
-              <View style={{ flex: 1, marginRight: 12 }}>
-                <Text style={{ fontSize: 14, color: c.text, textAlign: 'right' }}>{act.title}</Text>
-                {act.subtitle ? <Text style={{ fontSize: 12, color: c.textMuted, textAlign: 'right' }}>{act.subtitle}</Text> : null}
-              </View>
-            </View>
-          ))}
-        </GCard>
-      ) : (
-        <GEmptyState icon="pulse-outline" title="لا توجد أنشطة حديثة" style={{ minHeight: 120 }} />
-      )}
+      <View style={styles.statsRow}>
+        <StatCard label="الموظفون" value={String(data?.totalEmployees ?? 0)} icon="people-outline" tone="default" c={c} />
+        <StatCard label="فواتير معلقة" value={String(data?.pendingInvoices ?? 0)} icon="receipt-outline" tone="warning" c={c} />
+        <StatCard label="تنبيهات مخزن" value={String(data?.warehouseAlerts ?? 0)} icon="warning-outline" tone="danger" c={c} />
+      </View>
     </GScreen>
   );
 }

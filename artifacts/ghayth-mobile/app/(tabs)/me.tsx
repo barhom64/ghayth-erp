@@ -13,11 +13,13 @@ import type { ComponentProps } from 'react';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
+interface LeaveBalance { name: string; entitled: number; used: number; remaining: number }
 interface MySpaceData {
-  employee?: { name: string; jobTitle?: string; company?: string; department?: string };
-  attendance?: { status: string; checkInTime?: string; checkOutTime?: string };
-  leaveBalance?: { annual: number; used: number; remaining: number };
-  lastSalary?: { amount: number; month: string; currency?: string };
+  attendance?: { status: string; checkIn?: string; checkOut?: string } | null;
+  leaveBalances?: LeaveBalance[];
+  lastPayslip?: { netSalary?: number; period?: string; currency?: string } | null;
+  todayTasks?: Array<{ id: number; title: string; status: string }>;
+  openRequests?: Array<{ id: number; type: string; title: string; status: string }>;
 }
 
 interface QuickAction { label: string; icon: IoniconName; route: string }
@@ -33,25 +35,24 @@ export default function MeScreen() {
   const c = useColors();
   const { user, logout } = useAuth();
   const router = useRouter();
-  const { data, isLoading } = useList<MySpaceData>('/api/me/summary');
+  const { data, isLoading } = useList<MySpaceData>('/api/my-space');
 
   if (isLoading) return <GLoadingState text="جارٍ التحميل…" />;
 
-  const emp = data?.employee;
   const att = data?.attendance;
-  const leave = data?.leaveBalance;
-  const salary = data?.lastSalary;
+  const annualLeave = data?.leaveBalances?.find(b => b.entitled >= 15) ?? data?.leaveBalances?.[0];
+  const salary = data?.lastPayslip;
 
   return (
     <GScreen scrollable>
       {/* بطاقة الموظف */}
       <GCard style={[styles.empCard, { backgroundColor: c.primary }]}>
         <View style={styles.empRow}>
-          <GAvatar name={emp?.name ?? user?.name} size="lg" />
+          <GAvatar name={user?.name} size="lg" />
           <View style={styles.empInfo}>
-            <GText variant="heading" color={c.onPrimary}>{emp?.name ?? user?.name ?? '—'}</GText>
-            {emp?.jobTitle ? <GText variant="label" color={c.onPrimary + 'CC'}>{emp.jobTitle}</GText> : null}
-            {emp?.company ? <GText variant="caption" color={c.onPrimary + '99'} style={{ marginTop: 2 }}>{emp.company}</GText> : null}
+            <GText variant="heading" color={c.onPrimary}>{user?.name ?? '—'}</GText>
+            {user?.jobTitle ? <GText variant="label" color={c.onPrimary + 'CC'}>{user.jobTitle}</GText> : null}
+            {user?.companyName ? <GText variant="caption" color={c.onPrimary + '99'} style={{ marginTop: 2 }}>{user.companyName}</GText> : null}
           </View>
         </View>
       </GCard>
@@ -62,12 +63,12 @@ export default function MeScreen() {
         <GCard style={{ flex: 1 }}>
           <GText variant="caption" color={c.textMuted}>حضور اليوم</GText>
           {att ? <GStatusBadge status={att.status} size="sm" /> : <GText variant="caption" color={c.textFaint}>—</GText>}
-          {att?.checkInTime ? <GText variant="caption" color={c.textMuted} style={{ marginTop: 4 }}>دخول: {att.checkInTime}</GText> : null}
+          {att?.checkIn ? <GText variant="caption" color={c.textMuted} style={{ marginTop: 4 }}>دخول: {att.checkIn}</GText> : null}
         </GCard>
         {/* رصيد الإجازات */}
         <GCard style={{ flex: 1 }}>
           <GText variant="caption" color={c.textMuted}>رصيد الإجازة</GText>
-          <GText variant="subheading" style={{ marginTop: 4 }}>{leave?.remaining ?? '—'}</GText>
+          <GText variant="subheading" style={{ marginTop: 4 }}>{annualLeave?.remaining ?? '—'}</GText>
           <GText variant="caption" color={c.textFaint}>يوم متبقٍ</GText>
         </GCard>
         {/* آخر راتب */}
@@ -75,8 +76,8 @@ export default function MeScreen() {
           <GText variant="caption" color={c.textMuted}>آخر راتب</GText>
           {salary ? (
             <>
-              <GText variant="subheading" style={{ marginTop: 4 }}>{salary.amount.toLocaleString('ar-SA')}</GText>
-              <GText variant="caption" color={c.textFaint}>{salary.currency ?? 'ر.س'} — {salary.month}</GText>
+              <GText variant="subheading" style={{ marginTop: 4 }}>{Number(salary.netSalary ?? 0).toLocaleString('ar-SA')}</GText>
+              <GText variant="caption" color={c.textFaint}>{salary.currency ?? 'ر.س'} — {salary.period ?? '—'}</GText>
             </>
           ) : <GText variant="caption" color={c.textFaint}>—</GText>}
         </GCard>

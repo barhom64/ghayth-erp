@@ -38,6 +38,27 @@ function AuthGate() {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       document.documentElement.dir = 'rtl';
       document.documentElement.lang = 'ar';
+      // PWA manifest
+      if (!document.querySelector('link[rel="manifest"]')) {
+        const link = document.createElement('link');
+        link.rel = 'manifest';
+        link.href = '/manifest.json';
+        document.head.appendChild(link);
+      }
+      // Apple touch icon
+      if (!document.querySelector('link[rel="apple-touch-icon"]')) {
+        const link = document.createElement('link');
+        link.rel = 'apple-touch-icon';
+        link.href = '/apple-touch-icon.png';
+        document.head.appendChild(link);
+      }
+      // meta theme-color
+      if (!document.querySelector('meta[name="theme-color"]')) {
+        const meta = document.createElement('meta');
+        meta.name = 'theme-color';
+        meta.content = '#F97316';
+        document.head.appendChild(meta);
+      }
       // تسجيل Service Worker للـ PWA
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js').catch(() => {/* غير حرج */});
@@ -73,6 +94,8 @@ function AuthGate() {
       <Stack.Screen name="m/[module]/[section]" options={{ title: 'القائمة' }} />
       <Stack.Screen name="m/[module]/[section]/form" options={{ title: 'نموذج' }} />
       <Stack.Screen name="record" options={{ title: 'تفاصيل' }} />
+      <Stack.Screen name="hr/attendance" options={{ title: 'تسجيل الحضور' }} />
+      <Stack.Screen name="hr/leave-new" options={{ title: 'طلب إجازة' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
   );
