@@ -158,7 +158,7 @@ export default function SectionListScreen() {
       <Stack.Screen
         options={{
           title: def.label,
-          headerRight: def.write?.createEndpoint ? () => (
+          headerRight: (def.write?.createFields?.length ?? 0) > 0 ? () => (
             <Pressable
               onPress={() => router.push({ pathname: '/m/[module]/[section]/form', params: { module, section } })}
               style={{ marginLeft: 12 }}

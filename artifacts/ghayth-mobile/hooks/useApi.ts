@@ -84,11 +84,19 @@ export async function apiFetch<T = unknown>(
 
   if (!res.ok) {
     let msg = `خطأ ${res.status}`;
+    let fieldErrors: Record<string, string> | undefined;
     try {
-      const body = await res.json();
-      msg = body?.message ?? body?.error ?? msg;
+      const body = await res.json() as Record<string, unknown>;
+      msg = (body?.message ?? body?.error ?? msg) as string;
+      if (body?.fieldErrors && typeof body.fieldErrors === 'object') {
+        fieldErrors = body.fieldErrors as Record<string, string>;
+      } else if (body?.errors && typeof body.errors === 'object' && !Array.isArray(body.errors)) {
+        fieldErrors = body.errors as Record<string, string>;
+      }
     } catch { /* ignore */ }
-    throw new Error(msg);
+    const err = new Error(msg) as Error & { fieldErrors?: Record<string, string> };
+    if (fieldErrors) err.fieldErrors = fieldErrors;
+    throw err;
   }
 
   // 204 No Content
