@@ -56,7 +56,7 @@ const materializeSchema = z.object({
   // البند ٤ شريحة ٢ — مَن يتحمّل صيانة المركبة (مبدأ إبراهيم ١). المحاسب يقرّره عند
   // المادْيَلة (المالية هي السلطة على المال — حدّ TA-T18). الغياب ⇒ company (شركة).
   // النوع canonical يطابق مخطّط تقييم الحادث في fleet.ts.
-  costBearer: z.enum(["company", "driver", "insurance", "customer", "tenant", "third_party"]).optional(),
+  costBearer: z.enum(["company", "driver", "insurance", "warranty", "customer", "tenant", "third_party"]).optional(),
 });
 
 // ─── GET /transport-billing-candidates ─────────────────────────────────

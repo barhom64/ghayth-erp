@@ -311,7 +311,7 @@ const cancelTripSchema = z.object({
 const completeMaintenanceSchema = z.object({
   cost: z.coerce.number().nonnegative().optional(),
   // البند ٤ ج-٥ — مَن يتحمّل الصيانة (يلتقطه المُكمِل ويُحمَل على ترشيح المحاسب كافتراض).
-  costBearer: z.enum(["company", "driver", "insurance", "customer", "tenant", "third_party"]).optional(),
+  costBearer: z.enum(["company", "driver", "insurance", "warranty", "customer", "tenant", "third_party"]).optional(),
 });
 
 const updateTripSchema = z.object({
@@ -1240,7 +1240,7 @@ router.get("/accidents", authorize({ feature: "fleet.vehicles", action: "list" }
 // PATCH /accidents/:id/assess — المشرف يقيّم الحادث: يحدّد المتحمّل والكلفة فيُرحَّل
 // القيد حسب السياسة المعتمدة (الدفعة C2). يمسّ الدفتر — محروس بـfleet.vehicles.
 const assessAccidentSchema = z.object({
-  costBearer: z.enum(["company", "driver", "insurance", "customer", "tenant", "third_party"]),
+  costBearer: z.enum(["company", "driver", "insurance", "warranty", "customer", "tenant", "third_party"]),
   estimatedCost: z.coerce.number().nonnegative("الكلفة يجب ألا تكون سالبة"),
   assessmentNotes: z.string().optional(),
 });
