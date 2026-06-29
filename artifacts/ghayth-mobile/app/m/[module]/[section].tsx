@@ -64,6 +64,7 @@ export default function SectionListScreen() {
   const [errorMsg, setErrorMsg] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const isMounted = useRef(true);
+  const searchRef = useRef('');
 
   const def = getSection(module, section);
 
@@ -72,10 +73,11 @@ export default function SectionListScreen() {
     if (p === 1) setIsLoading(true);
     else setIsLoadingMore(true);
     setIsError(false);
+    const q = searchRef.current;
     try {
       const data = await apiFetch(def.endpoint, {
-        params: search
-          ? { page: p, limit: PAGE_SIZE, search }
+        params: q
+          ? { page: p, limit: PAGE_SIZE, search: q }
           : { page: p, limit: PAGE_SIZE },
       });
       if (!isMounted.current) return;
@@ -97,7 +99,7 @@ export default function SectionListScreen() {
       setIsLoading(false);
       setIsLoadingMore(false);
     }
-  }, [def, search]);
+  }, [def]);
 
   // reset on focus or search change
   useFocusEffect(useCallback(() => {
@@ -113,10 +115,11 @@ export default function SectionListScreen() {
     };
   }, []);
 
-  // search debounce
+  // search debounce — searchRef keeps current text so fetchPage always reads latest
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onSearchChange = (text: string) => {
     setSearch(text);
+    searchRef.current = text;
     if (searchTimer.current) clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(() => {
       setPage(1);
