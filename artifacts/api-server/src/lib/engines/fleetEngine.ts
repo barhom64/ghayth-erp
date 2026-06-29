@@ -594,6 +594,89 @@ class FleetEngineImpl implements DomainEngine {
   }
 
   /**
+   * #TA-T18 finance-boundary — the SINGLE idempotent writer for a transport
+   * Accounting Candidate. The six create*Candidate methods below are thin
+   * mappers over this generator (one INSERT … ON CONFLICT instead of six
+   * copy-pasted blocks). Transport NEVER posts GL: it enqueues a candidate the
+   * accountant reviews + materialises from the finance side. Idempotent on
+   * (companyId, sourceType, sourceId). Skip-conditions and events stay in each
+   * mapper. Unused columns are passed NULL — equivalent to omitting them, since
+   * every varying column is nullable with no non-NULL default (quantity
+   * DEFAULT 0 is always supplied).
+   */
+  async createBillingCandidate(
+    ctx: FleetGLContext,
+    c: {
+      sourceType: string;
+      sourceId: number;
+      sourceRef: string;
+      serviceType: string;
+      serviceDate?: string | null;
+      operationalStatus: string;
+      quantity: number;
+      unitOfMeasure: string;
+      customerId?: number | null;
+      routeFrom?: string | null;
+      routeTo?: string | null;
+      vehicleId?: number | null;
+      driverId?: number | null;
+      suggestedRevenue?: number | null;
+      suggestedCost?: number | null;
+      notes?: string | null;
+    }
+  ): Promise<{ id: number; created: boolean } | null> {
+    const rows = await rawQuery<{ id: number; existed: boolean }>(
+      `WITH ins AS (
+         INSERT INTO transport_billing_candidates (
+           "companyId", "branchId",
+           "sourceType", "sourceId", "sourceRef",
+           "customerId", "serviceType", "serviceDate",
+           "routeFrom", "routeTo",
+           "vehicleId", "driverId",
+           quantity, "unitOfMeasure",
+           "operationalStatus",
+           "suggestedRevenue", "suggestedCost",
+           notes, "createdBy"
+         )
+         VALUES (
+           $1, $2,
+           $3, $4, $5,
+           $6, $7, COALESCE($8::date, CURRENT_DATE),
+           $9, $10,
+           $11, $12,
+           $13, $14,
+           $15,
+           $16, $17,
+           $18, $19
+         )
+         ON CONFLICT ("companyId", "sourceType", "sourceId") DO NOTHING
+         RETURNING id, FALSE AS existed
+       )
+       SELECT id, existed FROM ins
+       UNION ALL
+       SELECT id, TRUE AS existed
+         FROM transport_billing_candidates
+        WHERE "companyId" = $1 AND "sourceType" = $3 AND "sourceId" = $4
+          AND NOT EXISTS (SELECT 1 FROM ins)
+       LIMIT 1`,
+      [
+        ctx.companyId, ctx.branchId || null,
+        c.sourceType, c.sourceId, c.sourceRef,
+        c.customerId ?? null, c.serviceType, c.serviceDate ?? null,
+        c.routeFrom ?? null, c.routeTo ?? null,
+        c.vehicleId ?? null, c.driverId ?? null,
+        c.quantity, c.unitOfMeasure,
+        c.operationalStatus,
+        c.suggestedRevenue ?? null, c.suggestedCost ?? null,
+        c.notes ?? null, ctx.createdBy,
+      ]
+    );
+    const row = rows[0];
+    if (!row) return null;
+    return { id: row.id, created: !row.existed };
+  }
+
+  /**
    * #1733 — transport never posts to GL. After the operational close
    * (`delivered` transition), we insert a pending row into
    * `transport_billing_candidates` that the accountant reviews and
@@ -627,70 +710,24 @@ class FleetEngineImpl implements DomainEngine {
     // (internal transfer, sample run) — no handoff needed.
     if (revenue <= 0 && cost <= 0) return null;
 
-    const rows = await rawQuery<{ id: number; existed: boolean }>(
-      `WITH ins AS (
-         INSERT INTO transport_billing_candidates (
-           "companyId", "branchId",
-           "sourceType", "sourceId", "sourceRef",
-           "customerId", "serviceType", "serviceDate",
-           "routeFrom", "routeTo",
-           "vehicleId", "driverId",
-           quantity, "unitOfMeasure",
-           "operationalStatus",
-           "suggestedRevenue", "suggestedCost",
-           notes,
-           "createdBy"
-         )
-         VALUES (
-           $1, $2,
-           'cargo_manifest', $3, $4,
-           $5, 'freight', COALESCE($6::date, CURRENT_DATE),
-           $7, $8,
-           $9, $10,
-           $11, 'kg',
-           'delivered',
-           $12, $13,
-           $14,
-           $15
-         )
-         ON CONFLICT ("companyId", "sourceType", "sourceId") DO NOTHING
-         RETURNING id, FALSE AS existed
-       )
-       SELECT id, existed FROM ins
-       UNION ALL
-       SELECT id, TRUE AS existed
-         FROM transport_billing_candidates
-        WHERE "companyId" = $1 AND "sourceType" = 'cargo_manifest' AND "sourceId" = $3
-          AND NOT EXISTS (SELECT 1 FROM ins)
-       LIMIT 1`,
-      [
-        ctx.companyId,
-        ctx.branchId || null,
-        manifest.id,
-        manifest.manifestNumber,
-        manifest.customerId ?? null,
-        manifest.deliveryDate ?? null,
-        manifest.fromLocation ?? null,
-        manifest.toLocation ?? null,
-        manifest.vehicleId ?? null,
-        manifest.driverId ?? null,
-        Number(manifest.totalWeight) || 0,
-        revenue > 0 ? revenue : null,
-        cost > 0 ? cost : null,
-        manifest.notes ?? null,
-        ctx.createdBy,
-      ]
-    );
-    const row = rows[0];
-    if (!row) return null;
-    if (!row.existed) {
+    const r = await this.createBillingCandidate(ctx, {
+      sourceType: "cargo_manifest", sourceId: manifest.id, sourceRef: manifest.manifestNumber,
+      serviceType: "freight", serviceDate: manifest.deliveryDate ?? null, operationalStatus: "delivered",
+      quantity: Number(manifest.totalWeight) || 0, unitOfMeasure: "kg",
+      customerId: manifest.customerId ?? null,
+      routeFrom: manifest.fromLocation ?? null, routeTo: manifest.toLocation ?? null,
+      vehicleId: manifest.vehicleId ?? null, driverId: manifest.driverId ?? null,
+      suggestedRevenue: revenue > 0 ? revenue : null, suggestedCost: cost > 0 ? cost : null,
+      notes: manifest.notes ?? null,
+    });
+    if (r?.created) {
       eventBus.emit("fleet.cargo.billing_candidate.created", {
         companyId: ctx.companyId,
         manifestId: manifest.id,
-        candidateId: row.id,
+        candidateId: r.id,
       });
     }
-    return { id: row.id, created: !row.existed };
+    return r;
   }
 
   /**
@@ -708,54 +745,14 @@ class FleetEngineImpl implements DomainEngine {
   ): Promise<{ id: number; created: boolean } | null> {
     const cost = Number(maintenance.cost) || 0;
     if (cost <= 0) return null;
-    const rows = await rawQuery<{ id: number; existed: boolean }>(
-      `WITH ins AS (
-         INSERT INTO transport_billing_candidates (
-           "companyId", "branchId",
-           "sourceType", "sourceId", "sourceRef",
-           "serviceType", "serviceDate",
-           "vehicleId",
-           quantity, "unitOfMeasure",
-           "operationalStatus",
-           "suggestedRevenue", "suggestedCost",
-           notes,
-           "createdBy"
-         )
-         VALUES (
-           $1, $2,
-           'maintenance', $3, $4,
-           'maintenance', CURRENT_DATE,
-           $5,
-           1, 'service',
-           'completed',
-           NULL, $6,
-           $7,
-           $8
-         )
-         ON CONFLICT ("companyId", "sourceType", "sourceId") DO NOTHING
-         RETURNING id, FALSE AS existed
-       )
-       SELECT id, existed FROM ins
-       UNION ALL
-       SELECT id, TRUE AS existed
-         FROM transport_billing_candidates
-        WHERE "companyId" = $1 AND "sourceType" = 'maintenance' AND "sourceId" = $3
-          AND NOT EXISTS (SELECT 1 FROM ins)
-       LIMIT 1`,
-      [
-        ctx.companyId,
-        ctx.branchId || null,
-        maintenance.id,
-        maintenance.sourceRef ?? `MAINT-${maintenance.id}`,
-        maintenance.vehicleId,
-        cost,
-        maintenance.description ?? null,
-        ctx.createdBy,
-      ]
-    );
-    const row = rows[0];
-    if (!row) return null;
-    return { id: row.id, created: !row.existed };
+    return this.createBillingCandidate(ctx, {
+      sourceType: "maintenance", sourceId: maintenance.id,
+      sourceRef: maintenance.sourceRef ?? `MAINT-${maintenance.id}`,
+      serviceType: "maintenance", operationalStatus: "completed",
+      quantity: 1, unitOfMeasure: "service",
+      vehicleId: maintenance.vehicleId,
+      suggestedCost: cost, notes: maintenance.description ?? null,
+    });
   }
 
   /**
@@ -769,35 +766,12 @@ class FleetEngineImpl implements DomainEngine {
   ): Promise<{ id: number; created: boolean } | null> {
     const cost = Number(fuel.cost) || 0;
     if (cost <= 0) return null;
-    const rows = await rawQuery<{ id: number; existed: boolean }>(
-      `WITH ins AS (
-         INSERT INTO transport_billing_candidates (
-           "companyId", "branchId", "sourceType", "sourceId", "sourceRef",
-           "serviceType", "serviceDate", "vehicleId",
-           quantity, "unitOfMeasure", "operationalStatus",
-           "suggestedRevenue", "suggestedCost", notes, "createdBy"
-         )
-         VALUES (
-           $1, $2, 'fuel', $3, $4,
-           'fuel', CURRENT_DATE, $5,
-           1, 'service', 'completed',
-           NULL, $6, $7, $8
-         )
-         ON CONFLICT ("companyId", "sourceType", "sourceId") DO NOTHING
-         RETURNING id, FALSE AS existed
-       )
-       SELECT id, existed FROM ins
-       UNION ALL
-       SELECT id, TRUE AS existed
-         FROM transport_billing_candidates
-        WHERE "companyId" = $1 AND "sourceType" = 'fuel' AND "sourceId" = $3
-          AND NOT EXISTS (SELECT 1 FROM ins)
-       LIMIT 1`,
-      [ctx.companyId, ctx.branchId || null, fuel.id, fuel.sourceRef ?? `FUEL-${fuel.id}`, fuel.vehicleId, cost, fuel.description ?? null, ctx.createdBy]
-    );
-    const row = rows[0];
-    if (!row) return null;
-    return { id: row.id, created: !row.existed };
+    return this.createBillingCandidate(ctx, {
+      sourceType: "fuel", sourceId: fuel.id, sourceRef: fuel.sourceRef ?? `FUEL-${fuel.id}`,
+      serviceType: "fuel", operationalStatus: "completed",
+      quantity: 1, unitOfMeasure: "service",
+      vehicleId: fuel.vehicleId, suggestedCost: cost, notes: fuel.description ?? null,
+    });
   }
 
   /**
@@ -811,35 +785,12 @@ class FleetEngineImpl implements DomainEngine {
   ): Promise<{ id: number; created: boolean } | null> {
     const cost = Number(insurance.cost) || 0;
     if (cost <= 0) return null;
-    const rows = await rawQuery<{ id: number; existed: boolean }>(
-      `WITH ins AS (
-         INSERT INTO transport_billing_candidates (
-           "companyId", "branchId", "sourceType", "sourceId", "sourceRef",
-           "serviceType", "serviceDate", "vehicleId",
-           quantity, "unitOfMeasure", "operationalStatus",
-           "suggestedRevenue", "suggestedCost", notes, "createdBy"
-         )
-         VALUES (
-           $1, $2, 'insurance', $3, $4,
-           'insurance', CURRENT_DATE, $5,
-           1, 'policy', 'completed',
-           NULL, $6, $7, $8
-         )
-         ON CONFLICT ("companyId", "sourceType", "sourceId") DO NOTHING
-         RETURNING id, FALSE AS existed
-       )
-       SELECT id, existed FROM ins
-       UNION ALL
-       SELECT id, TRUE AS existed
-         FROM transport_billing_candidates
-        WHERE "companyId" = $1 AND "sourceType" = 'insurance' AND "sourceId" = $3
-          AND NOT EXISTS (SELECT 1 FROM ins)
-       LIMIT 1`,
-      [ctx.companyId, ctx.branchId || null, insurance.id, insurance.sourceRef ?? `INS-${insurance.id}`, insurance.vehicleId, cost, insurance.description ?? null, ctx.createdBy]
-    );
-    const row = rows[0];
-    if (!row) return null;
-    return { id: row.id, created: !row.existed };
+    return this.createBillingCandidate(ctx, {
+      sourceType: "insurance", sourceId: insurance.id, sourceRef: insurance.sourceRef ?? `INS-${insurance.id}`,
+      serviceType: "insurance", operationalStatus: "completed",
+      quantity: 1, unitOfMeasure: "policy",
+      vehicleId: insurance.vehicleId, suggestedCost: cost, notes: insurance.description ?? null,
+    });
   }
 
   /**
@@ -897,65 +848,22 @@ class FleetEngineImpl implements DomainEngine {
       (overage > 0 ? ` — يشمل زائد إرجاع ${overage} (بند منفصل مقترح)` : "") +
       (contract.notes ? `\n${contract.notes}` : "");
 
-    const rows = await rawQuery<{ id: number; existed: boolean }>(
-      `WITH ins AS (
-         INSERT INTO transport_billing_candidates (
-           "companyId", "branchId",
-           "sourceType", "sourceId", "sourceRef",
-           "customerId", "serviceType", "serviceDate",
-           "vehicleId", "driverId",
-           quantity, "unitOfMeasure",
-           "operationalStatus",
-           "suggestedRevenue",
-           notes,
-           "createdBy"
-         )
-         VALUES (
-           $1, $2,
-           'fleet_rental_contract', $3, $4,
-           $5, 'rental', COALESCE($6::date, CURRENT_DATE),
-           $7, $8,
-           $9, 'day',
-           'returned',
-           $10,
-           $11,
-           $12
-         )
-         ON CONFLICT ("companyId", "sourceType", "sourceId") DO NOTHING
-         RETURNING id, FALSE AS existed
-       )
-       SELECT id, existed FROM ins
-       UNION ALL
-       SELECT id, TRUE AS existed
-         FROM transport_billing_candidates
-        WHERE "companyId" = $1 AND "sourceType" = 'fleet_rental_contract' AND "sourceId" = $3
-          AND NOT EXISTS (SELECT 1 FROM ins)
-       LIMIT 1`,
-      [
-        ctx.companyId,
-        ctx.branchId || null,
-        contract.id,
-        contract.ref ?? `RENT-${contract.id}`,
-        contract.clientId,
-        contract.actualEndDate,
-        contract.vehicleId,
-        contract.driverId ?? null,
-        rentalDays,
-        revenue,
-        periodNote,
-        ctx.createdBy,
-      ]
-    );
-    const row = rows[0];
-    if (!row) return null;
-    if (!row.existed) {
+    const r = await this.createBillingCandidate(ctx, {
+      sourceType: "fleet_rental_contract", sourceId: contract.id, sourceRef: contract.ref ?? `RENT-${contract.id}`,
+      serviceType: "rental", serviceDate: contract.actualEndDate, operationalStatus: "returned",
+      quantity: rentalDays, unitOfMeasure: "day",
+      customerId: contract.clientId,
+      vehicleId: contract.vehicleId, driverId: contract.driverId ?? null,
+      suggestedRevenue: revenue, notes: periodNote,
+    });
+    if (r?.created) {
       eventBus.emit("fleet.rental.billing_candidate.created", {
         companyId: ctx.companyId,
         contractId: contract.id,
-        candidateId: row.id,
+        candidateId: r.id,
       });
     }
-    return { id: row.id, created: !row.existed };
+    return r;
   }
 
   /**
@@ -1017,65 +925,23 @@ class FleetEngineImpl implements DomainEngine {
       `نقل ركاب — حجز ${booking.bookingNumber}، ${pax} راكب على المسار ${route}` +
       (booking.notes ? `\n${booking.notes}` : "");
 
-    const rows = await rawQuery<{ id: number; existed: boolean }>(
-      `WITH ins AS (
-         INSERT INTO transport_billing_candidates (
-           "companyId", "branchId",
-           "sourceType", "sourceId", "sourceRef",
-           "customerId", "serviceType", "serviceDate",
-           "routeFrom", "routeTo",
-           "vehicleId", "driverId",
-           quantity, "unitOfMeasure",
-           "operationalStatus",
-           notes,
-           "createdBy"
-         )
-         VALUES (
-           $1, $2,
-           'transport_booking_passenger', $3, $4,
-           $5, 'passenger', CURRENT_DATE,
-           $6, $7,
-           $8, $9,
-           $10, 'pax',
-           'completed',
-           $11,
-           $12
-         )
-         ON CONFLICT ("companyId", "sourceType", "sourceId") DO NOTHING
-         RETURNING id, FALSE AS existed
-       )
-       SELECT id, existed FROM ins
-       UNION ALL
-       SELECT id, TRUE AS existed
-         FROM transport_billing_candidates
-        WHERE "companyId" = $1 AND "sourceType" = 'transport_booking_passenger' AND "sourceId" = $3
-          AND NOT EXISTS (SELECT 1 FROM ins)
-       LIMIT 1`,
-      [
-        ctx.companyId,
-        ctx.branchId || null,
-        booking.id,
-        booking.bookingNumber,
-        booking.customerId,
-        booking.fromLocationText,
-        booking.toLocationText,
-        booking.vehicleId ?? null,
-        booking.driverId ?? null,
-        pax,
-        note,
-        ctx.createdBy,
-      ]
-    );
-    const row = rows[0];
-    if (!row) return null;
-    if (!row.existed) {
+    const r = await this.createBillingCandidate(ctx, {
+      sourceType: "transport_booking_passenger", sourceId: booking.id, sourceRef: booking.bookingNumber,
+      serviceType: "passenger", operationalStatus: "completed",
+      quantity: pax, unitOfMeasure: "pax",
+      customerId: booking.customerId,
+      routeFrom: booking.fromLocationText, routeTo: booking.toLocationText,
+      vehicleId: booking.vehicleId ?? null, driverId: booking.driverId ?? null,
+      notes: note,
+    });
+    if (r?.created) {
       eventBus.emit("fleet.passenger.billing_candidate.created", {
         companyId: ctx.companyId,
         bookingId: booking.id,
-        candidateId: row.id,
+        candidateId: r.id,
       });
     }
-    return { id: row.id, created: !row.existed };
+    return r;
   }
 
   /**

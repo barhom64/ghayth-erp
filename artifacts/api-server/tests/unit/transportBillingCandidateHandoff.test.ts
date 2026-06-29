@@ -26,20 +26,23 @@ describe("#1733 — transport→finance handoff: engine", () => {
     expect(FLEET_ENGINE).toMatch(/async createCargoBillingCandidate\(/);
   });
 
-  it("createCargoBillingCandidate inserts into transport_billing_candidates, not journal_entries", () => {
-    const block = FLEET_ENGINE.match(
-      /async createCargoBillingCandidate\([\s\S]*?\n\s\s\}\n/,
-    )?.[0];
-    expect(block).toBeTruthy();
-    expect(block!).toContain("transport_billing_candidates");
-    expect(block!).not.toMatch(/postJournalEntry/);
+  it("billing candidates insert into transport_billing_candidates, not journal_entries (cargo delegates to the shared writer)", () => {
+    // The six creators now delegate to ONE createBillingCandidate writer (was
+    // six copy-pasted INSERT blocks). Cargo maps + delegates; the writer owns
+    // the INSERT — neither posts a journal entry on the transport path.
+    const cargo = FLEET_ENGINE.match(/async createCargoBillingCandidate\([\s\S]*?\n\s\s\}\n/)?.[0];
+    expect(cargo).toBeTruthy();
+    expect(cargo!).toContain("this.createBillingCandidate(");
+    expect(cargo!).not.toMatch(/postJournalEntry/);
+    const writer = FLEET_ENGINE.match(/async createBillingCandidate\([\s\S]*?\n\s\s\}\n/)?.[0];
+    expect(writer).toBeTruthy();
+    expect(writer!).toContain("transport_billing_candidates");
+    expect(writer!).not.toMatch(/postJournalEntry|journal_entries/);
   });
 
-  it("createCargoBillingCandidate uses ON CONFLICT for idempotency", () => {
-    const block = FLEET_ENGINE.match(
-      /async createCargoBillingCandidate\([\s\S]*?\n\s\s\}\n/,
-    )?.[0]!;
-    expect(block).toMatch(/ON CONFLICT[^)]*sourceType[^)]*sourceId/i);
+  it("the shared createBillingCandidate writer uses ON CONFLICT for idempotency", () => {
+    const writer = FLEET_ENGINE.match(/async createBillingCandidate\([\s\S]*?\n\s\s\}\n/)?.[0]!;
+    expect(writer).toMatch(/ON CONFLICT[^)]*sourceType[^)]*sourceId/i);
   });
 
   it("postCargoDeliveryGL remains for accountant-side materialisation", () => {
