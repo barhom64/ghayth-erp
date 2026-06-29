@@ -388,6 +388,7 @@ export default function MaintenanceDetail() {
               <SelectItem value="company">الشركة (مصروف صيانة المركبة)</SelectItem>
               <SelectItem value="driver">السائق (يُسترَدّ بخصم الراتب)</SelectItem>
               <SelectItem value="insurance">التأمين (ذمة مدينة مستردّة)</SelectItem>
+              <SelectItem value="warranty">الضمان (ذمة مدينة مستردّة)</SelectItem>
               <SelectItem value="third_party">طرف ثالث (ذمة مدينة مستردّة)</SelectItem>
             </SelectContent>
           </Select>
