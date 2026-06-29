@@ -15,8 +15,7 @@ export default function ModulesScreen() {
   const { user } = useAuth();
   const router = useRouter();
 
-  // استخدم جميع الوحدات للعرض (الخادم هو الحارس الفعلي)
-  const modules = visibleModules(undefined);
+  const modules = visibleModules(user?.roles);
 
   const renderItem = ({ item }: { item: NavModule }) => (
     <Pressable

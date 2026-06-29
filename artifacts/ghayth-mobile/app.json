@@ -28,12 +28,11 @@
       [
         "expo-router",
         {
-          "origin": "https://replit.com/"
+          "origin": "https://hr.door.sa"
         }
       ],
       "expo-font",
-      "expo-web-browser",
-      "@react-native-community/datetimepicker"
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
