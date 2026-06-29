@@ -219,4 +219,10 @@ describe("شريحة 4 — خصم النقص/التأخير (مرشّح → ما
     expect(DETAIL).toContain("submitDeduction");
     expect(DETAIL).toContain("إشعارًا دائنًا"); // يوضّح أنّ المالية تُصدر الإشعار
   });
+
+  it("نقص الوزن يُشتقّ من الأوزان المسجّلة (computeWeightShortage) ويُقترح في النموذج", () => {
+    expect(TRIP_WEIGHT).toContain("export function computeWeightShortage");
+    expect(DETAIL).toContain("computeWeightShortage(b.tripEvents)");
+    expect(DETAIL).toContain("اقتراح من الأوزان");
+  });
 });
