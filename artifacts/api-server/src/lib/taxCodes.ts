@@ -16,6 +16,7 @@
 
 import { rawQuery } from "./rawdb.js";
 import { roundTo2 } from "./businessHelpers.js";
+import { resolveVatLegAccount } from "./vatLeg.js";
 
 export type TaxType = "standard" | "zero" | "exempt" | "out_of_scope" | "reverse_charge";
 
@@ -210,6 +211,27 @@ export async function getInputVatAccountCode(companyId: number, taxCode: string)
     [code.inputAccountId, companyId]
   );
   return rows[0]?.code ?? null;
+}
+
+/**
+ * البند ٤ (جانب المشتريات) — حساب ضريبة المدخلات للشركة. فواتير الشراء وأوامره
+ * لا تحمل رمز ضريبة لكل وثيقة (بخلاف فواتير المبيعات)، فيُشتقّ حساب المدخلات من
+ * رمز الضريبة القياسي للشركة (getDefaultTaxCode → inputAccountId). يرتدّ إلى
+ * `fallbackAccount` (تعيين الشركة العام) حين لا رمز قياسي أو لا حساب مدخلات
+ * مُهيّأ له — فيبقى السلوك مطابقًا تمامًا للسابق عند عدم التهيئة.
+ *
+ * نظير resolveVatLegAccount على جانب المبيعات، لكن المصدر هنا الرمز القياسي
+ * لا رمز الوثيقة (لغياب عمود taxCode على المشتريات). الدقّة لكل وثيقة تحتاج
+ * هجرة (عمود taxCode على purchase_orders/vendor_invoices) — خارج هذا النطاق.
+ */
+export async function resolveCompanyInputVatAccount(
+  companyId: number,
+  fallbackAccount: string,
+): Promise<string> {
+  const def = await getDefaultTaxCode(companyId);
+  const specific = def ? await getInputVatAccountCode(companyId, def.code) : null;
+  // القرار نفسه المثبَّت على جانب المبيعات: حساب الرمز إن وُجد، وإلا الاحتياطي.
+  return resolveVatLegAccount(specific, fallbackAccount);
 }
 
 /**
