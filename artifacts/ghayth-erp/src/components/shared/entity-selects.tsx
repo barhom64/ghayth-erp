@@ -510,6 +510,10 @@ export const UnitSelect = buildEntitySelect({
   createTitle: "إضافة وحدة",
   createLabel: "+ وحدة جديدة",
   createApiPath: "/properties/units",
+  // B1-b (توجيه إبراهيم «أ») — «+ وحدة جديدة» يفتح النموذج الكامل (المبنى/النوع/
+  // الحالة/المساحة/الغرف/الإيجار/المالك/العدادات/المرافق) عبر AllowCreateDrawer،
+  // لا [رقم الوحدة] المبتور وحده.
+  createEntityKind: "unit",
   createFields: [{ key: "unitNumber", label: "رقم الوحدة", required: true }],
   getName: (r) => [r?.buildingName, r?.unitNumber].filter(Boolean).join(" - ") || `#${r?.id}`,
   getSublabel: (r) => r?.unitType || r?.status || "",
