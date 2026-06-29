@@ -147,13 +147,15 @@ describe("شريحة 1 — تجربة تسجيل الواقعة (الواجهة)
 });
 
 describe("شريحة 2 — الوزن (فارغ/محمّل/صافي)", () => {
-  it("هجرة 430 تضيف weightKind بـCHECK idempotent (DROP IF EXISTS قبل ADD)", () => {
+  it("هجرة 430 تضيف weightKind بقيد idempotent عبر حارس pg_constraint (بلا DROP CONSTRAINT)", () => {
     expect(existsSync(MIGRATION_430_PATH)).toBe(true);
     expect(MIGRATION_430).toContain("BEGIN;");
     expect(MIGRATION_430).toContain("COMMIT;");
     expect(MIGRATION_430).toContain("@rollback");
     expect(MIGRATION_430).toMatch(/ADD COLUMN IF NOT EXISTS "weightKind"/);
-    expect(MIGRATION_430).toContain("DROP CONSTRAINT IF EXISTS fleet_trip_events_weight_kind_check");
+    // حارس DO-block (idempotent) بلا DROP CONSTRAINT — يمرّ سياسة الهجرات.
+    expect(MIGRATION_430).toContain("FROM pg_constraint");
+    expect(MIGRATION_430).toMatch(/ADD CONSTRAINT fleet_trip_events_weight_kind_check/);
     for (const k of ["tare", "gross", "axle", "other"]) {
       expect(MIGRATION_430, `weightKind ${k} missing`).toContain(`'${k}'`);
     }
