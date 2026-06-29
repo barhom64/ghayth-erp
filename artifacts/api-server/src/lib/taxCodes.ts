@@ -235,6 +235,44 @@ export async function resolveCompanyInputVatAccount(
 }
 
 /**
+ * البند ٤ (دقّة لكل وثيقة شراء) — حساب ضريبة المدخلات لوثيقة بعينها. تَرتُّب
+ * الاشتقاق: **رمز ضريبة الوثيقة** (إن حملته وكان حسابه مُهيّأً) ← **الرمز القياسي
+ * للشركة** ← **الاحتياطي العام**. فوثيقة برمز غير قياسي تُرحّل ضريبتها إلى حساب
+ * رمزها، والوثائق بلا رمز تبقى على الرمز القياسي (سلوك #3084).
+ *
+ * يُستعمل في المعالج الحقيقي لفاتورة المورد (resolveVendorInvoicePlan) حيث رمز
+ * الوثيقة يُشتقّ من بنودها (vendorInvoiceLineSchema.taxCode) — بلا هجرة.
+ */
+export async function resolveInputVatAccount(
+  companyId: number,
+  docTaxCode: string | null | undefined,
+  fallbackAccount: string,
+): Promise<string> {
+  const code = typeof docTaxCode === "string" ? docTaxCode.trim() : "";
+  if (code) {
+    const specific = await getInputVatAccountCode(companyId, code);
+    if (specific) return specific;
+  }
+  return resolveCompanyInputVatAccount(companyId, fallbackAccount);
+}
+
+/**
+ * البند ٤ — رمز ضريبة الوثيقة من بنودها: أوّل بند خاضع للضريبة (vatAmount > 0)
+ * يحمل رمزًا غير فارغ. سطر ضريبة المدخلات رأسيّ واحد، فالبنود مختلطة الرموز
+ * تأخذ أوّل رمز (نظير قيد سطر الضريبة الرأسي في المبيعات). لا بند برمز ⇒ null
+ * (يرتدّ resolveInputVatAccount عندئذٍ للرمز القياسي للشركة). وحدة نقية.
+ */
+export function pickDocTaxCodeFromLines(
+  lines: ReadonlyArray<{ taxCode?: string | null; vatAmount?: number | null }>,
+): string | null {
+  for (const l of lines) {
+    const code = (l.taxCode ?? "").trim();
+    if (Number(l.vatAmount) > 0 && code) return code;
+  }
+  return null;
+}
+
+/**
  * Validate that a tax code is usable in a given direction. Throws if
  * the code is exempt/out-of-scope but the caller is trying to compute
  * VAT, or if the code has no account configured.
