@@ -697,19 +697,15 @@ export async function createJournalEntry(params: {
     // SELECT SUM(...) WHERE costCenterId = X just works.
     await enrichJournalLines(client, params.lines, params.companyId, params.branchId);
 
-    // Step 3 — subsidiary code substitution. OFF BY DEFAULT (gated by
-    // `system_settings.gl_subsidiary_substitution`). When ON, a line
-    // posting to a control account like 1121 (سلفة الموظفين) with
-    // employeeId=42 gets its accountCode swapped to '1121-0042' — the
-    // employee's subsidiary code. Reports that aggregate by
-    // chart_of_accounts.parentId still work because the parent
-    // currentBalance is unchanged by the swap (the rollup is via the
-    // CoA tree, not the literal accountCode).
-    //
-    // Adopting this on an existing tenant is a one-line setting flip,
-    // but it's NOT default-on because tenants whose reports were
-    // built assuming parent posting would silently shift. The dim-
-    // routing page surfaces the toggle so the operator can opt in.
+    // Step 3 — subsidiary code substitution. ON BY DEFAULT (البند ٤ — إذن إبراهيم
+    // «نعم حساب خاص»): a line posting to a control account like 1121 (سلفة
+    // الموظفين) with employeeId=42 gets its accountCode swapped to '1121-0042' —
+    // the employee's own subsidiary code (مبدأ «حساب خاص لكل أصل/كيان، تلقائيًّا»).
+    // Reports that aggregate by chart_of_accounts.parentId still work because the
+    // parent currentBalance is unchanged by the swap (the rollup is via the CoA
+    // tree, not the literal accountCode). A company opts OUT explicitly via
+    // `system_settings.gl_subsidiary_substitution='false'` (the dim-routing page
+    // surfaces the toggle) — for tenants whose reports read literal leaf codes.
     await substituteSubsidiaryAccountCodes(client, params.lines, params.companyId);
 
     // FIN-INTEGRITY-CONTRACT (#2246 SLICE 1) — عقد صدق دفتر الأستاذ المركزي بعد

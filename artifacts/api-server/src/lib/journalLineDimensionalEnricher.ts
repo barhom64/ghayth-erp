@@ -333,9 +333,10 @@ export function applyHeaderDimensionsToLines<T extends DimensionalLineInput>(
 //  - Idempotent: running twice on the same line is a no-op (the second
 //    pass finds no subsidiary whose parent matches the already-swapped
 //    code).
-//  - OFF BY DEFAULT — gated by `system_settings.gl_subsidiary_substitution`
-//    so tenants whose existing reports assume parent posting aren't
-//    silently broken.
+//  - ON BY DEFAULT (البند ٤ — إذن إبراهيم «نعم حساب خاص»): every track posts to
+//    the entity's own subsidiary automatically. A company opts OUT explicitly via
+//    `system_settings.gl_subsidiary_substitution='false'` (for tenants whose
+//    existing reports read literal leaf codes rather than the CoA parent tree).
 //
 // Entity FK → entityType map:
 //   employeeId  → 'employee'
@@ -432,11 +433,18 @@ export async function isSubsidiarySubstitutionEnabled(
       [companyId],
     );
     const raw = rows[0]?.value;
-    const enabled = raw === "true" || raw === "1" || raw === true;
-    _substitutionFlagCache.set(companyId, enabled);
-    return enabled;
+    // البند ٤ (إذن إبراهيم الصريح «نعم حساب خاص»): «حساب خاص لكل كيان» مُفعَّل
+    // **افتراضيًّا** لكل المسارات والشركات — كل قيدٍ على حساب تحكّمٍ (أب) يحمل بُعد
+    // كيانٍ له حساب فرعي يُرحَّل تلقائيًّا على ذلك الحساب الفرعي (مبدأ «تلقائي لكل
+    // أصل»). يُعطَّل فقط بإيقاف صريح لكل شركة (مخرج للشركات القائمة): value='false'/'0'.
+    // التجميع على شجرة الحسابات (parent) لا يتأثّر؛ يتغيّر الكود الورقي فقط.
+    const disabled = raw === "false" || raw === "0" || (raw as unknown) === false;
+    _substitutionFlagCache.set(companyId, !disabled);
+    return !disabled;
   } catch {
-    return false;
+    // تعذّر قراءة الإعداد → نُبقي الافتراض الجديد (مُفعَّل)؛ الاستبدال آمن: يُعيد
+    // الحساب الأصلي إن لم يوجد حساب فرعي للكيان (لا يفشل ترحيل القيد أبدًا).
+    return true;
   }
 }
 
