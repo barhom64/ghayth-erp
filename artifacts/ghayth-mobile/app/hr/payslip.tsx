@@ -49,9 +49,16 @@ function LineRow({ label, amount, isDeduction, c }: {
 
 export default function PayslipScreen() {
   const c = useColors();
-  const { data: resp, isLoading } = useList<MySpacePayslipResp>('/api/my-space/payslip');
+  const { data: resp, isLoading, isError } = useList<MySpacePayslipResp>('/api/my-space/payslip');
 
   if (isLoading) return <GLoadingState text="جارٍ تحميل كشف الراتب…" />;
+  if (isError) return (
+    <GEmptyState
+      icon="alert-circle-outline"
+      title="تعذّر تحميل كشف الراتب"
+      description="تحقق من اتصالك بالإنترنت وحاول مجدداً"
+    />
+  );
 
   const ps = resp?.data;
 

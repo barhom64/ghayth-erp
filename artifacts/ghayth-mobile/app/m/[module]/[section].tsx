@@ -107,7 +107,10 @@ export default function SectionListScreen() {
 
   useEffect(() => {
     isMounted.current = true;
-    return () => { isMounted.current = false; };
+    return () => {
+      isMounted.current = false;
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
   }, []);
 
   // search debounce
