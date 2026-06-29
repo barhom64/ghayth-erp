@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useRoute, useLocation, Link } from "wouter";
 import { useApiQuery, useApiMutation, apiFetch, getErrorMessage } from "@/lib/api";
-import { summarizeTripWeights, TRIP_WEIGHT_KIND_LABEL } from "@/lib/trip-weight";
+import { summarizeTripWeights, computeWeightShortage, TRIP_WEIGHT_KIND_LABEL } from "@/lib/trip-weight";
 import { TripEventRecorder, TRIP_EVENT_LABEL } from "@/components/shared/trip-event-recorder";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -827,6 +827,18 @@ export default function TransportBookingDetail() {
                   {dedBasis === "weight_shortage" ? "النقص (كغم)" : "التأخّر (ساعة)"}
                 </label>
                 <Input type="number" min="0" value={dedMeasure} onChange={(e) => setDedMeasure(e.target.value)} className="w-32 h-8" />
+                {/* اشتقاق نقص الحمولة من الأوزان المسجّلة (محمّل المنشأ − الوجهة). */}
+                {dedBasis === "weight_shortage" && (() => {
+                  const sug = computeWeightShortage(b.tripEvents);
+                  return sug != null ? (
+                    <Button
+                      type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs"
+                      onClick={() => setDedMeasure(String(sug))}
+                    >
+                      اقتراح من الأوزان: {sug} كغم
+                    </Button>
+                  ) : null;
+                })()}
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <label className="text-xs text-muted-foreground w-20">المبلغ (ريال)</label>

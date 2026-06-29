@@ -35,6 +35,21 @@ export function summarizeTripWeights(events: TripWeightEvent[]): TripWeightSumma
   return { tareKg, grossKg, netKg };
 }
 
+/**
+ * يشتقّ نقص الحمولة من قراءات الوزن المحمّل (gross): الفارق بين أول وزن محمّل
+ * (عند المنشأ) وآخر وزن محمّل (عند الوجهة). يتطلب قراءتين محمّلتين على الأقل،
+ * ويُرجع النقص الموجب فقط (وإلا null — لا نقص أو بيانات غير كافية). الوزن
+ * الفارغ يُلغى من الطرفين (نفس الشاحنة) فيكفي فرق المحمّل.
+ */
+export function computeWeightShortage(events: TripWeightEvent[]): number | null {
+  const grosses = events
+    .filter((e) => e.weightKind === "gross" && e.weightKg != null)
+    .map((e) => e.weightKg as number);
+  if (grosses.length < 2) return null;
+  const shortage = Math.round((grosses[0] - grosses[grosses.length - 1]) * 1000) / 1000;
+  return shortage > 0 ? shortage : null;
+}
+
 export const TRIP_WEIGHT_KIND_LABEL: Record<string, string> = {
   tare: "فارغ",
   gross: "محمّل",

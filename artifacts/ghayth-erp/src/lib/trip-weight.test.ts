@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { summarizeTripWeights, TRIP_WEIGHT_KIND_LABEL } from "./trip-weight";
+import { summarizeTripWeights, computeWeightShortage, TRIP_WEIGHT_KIND_LABEL } from "./trip-weight";
 
 describe("summarizeTripWeights — صافي الحمولة (شريحة 2)", () => {
   it("يشتقّ الصافي = محمّل − فارغ", () => {
@@ -48,5 +48,36 @@ describe("summarizeTripWeights — صافي الحمولة (شريحة 2)", () =
   it("المصطلحات عربية موحّدة", () => {
     expect(TRIP_WEIGHT_KIND_LABEL.tare).toBe("فارغ");
     expect(TRIP_WEIGHT_KIND_LABEL.gross).toBe("محمّل");
+  });
+});
+
+describe("computeWeightShortage — نقص الحمولة (محمّل المنشأ − محمّل الوجهة)", () => {
+  it("يشتقّ النقص من أول وآخر وزن محمّل", () => {
+    const s = computeWeightShortage([
+      { weightKg: 20000, weightKind: "gross" }, // المنشأ
+      { weightKg: 8000, weightKind: "tare" },
+      { weightKg: 19500, weightKind: "gross" }, // الوجهة
+    ]);
+    expect(s).toBe(500);
+  });
+
+  it("null عند أقل من قراءتين محمّلتين", () => {
+    expect(computeWeightShortage([{ weightKg: 20000, weightKind: "gross" }])).toBeNull();
+    expect(computeWeightShortage([{ weightKg: 8000, weightKind: "tare" }])).toBeNull();
+    expect(computeWeightShortage([])).toBeNull();
+  });
+
+  it("null عند عدم وجود نقص (الوجهة ≥ المنشأ)", () => {
+    expect(computeWeightShortage([
+      { weightKg: 19500, weightKind: "gross" },
+      { weightKg: 20000, weightKind: "gross" },
+    ])).toBeNull();
+  });
+
+  it("يحفظ دقّة ثلاث منازل", () => {
+    expect(computeWeightShortage([
+      { weightKg: 20000.5, weightKind: "gross" },
+      { weightKg: 19500.125, weightKind: "gross" },
+    ])).toBe(500.375);
   });
 });
