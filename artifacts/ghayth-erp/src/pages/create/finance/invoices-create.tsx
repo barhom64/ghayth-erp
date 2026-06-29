@@ -499,6 +499,8 @@ export default function InvoicesCreate() {
           payload={{
             clientId: Number(form.clientId),
             taxRate: Number(form.vatRate),
+            // البند ٤ — أرسل رمز الضريبة كي تعرض المعاينة حساب الرمز الفعلي.
+            taxCode: form.taxCode || undefined,
             lines: lines.map((l) => ({
               quantity: Number(l.quantity || 0),
               unitPrice: Number(l.unitPrice || 0),
