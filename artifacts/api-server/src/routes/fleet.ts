@@ -310,6 +310,8 @@ const cancelTripSchema = z.object({
 
 const completeMaintenanceSchema = z.object({
   cost: z.coerce.number().nonnegative().optional(),
+  // البند ٤ ج-٥ — مَن يتحمّل الصيانة (يلتقطه المُكمِل ويُحمَل على ترشيح المحاسب كافتراض).
+  costBearer: z.enum(["company", "driver", "insurance", "customer", "tenant", "third_party"]).optional(),
 });
 
 const updateTripSchema = z.object({
@@ -3373,7 +3375,7 @@ router.post("/maintenance/:id/complete", authorize({ feature: "fleet.maintenance
       const { fleetEngine } = await import("../lib/engines/index.js");
       await fleetEngine.createMaintenanceExpenseCandidate(
         { companyId: scope.companyId, branchId: vehicleBranchId, createdBy: scope.activeAssignmentId ?? scope.userId },
-        { id, vehicleId: m.vehicleId as number, cost: finalCost, type: m.type as string | undefined, description: `مصروف صيانة مركبة${plateLabel} / ${m.type ?? ""} / ${m.description ?? ""}` }
+        { id, vehicleId: m.vehicleId as number, cost: finalCost, type: m.type as string | undefined, description: `مصروف صيانة مركبة${plateLabel} / ${m.type ?? ""} / ${m.description ?? ""}`, costBearer: b.costBearer }
       ).catch((e: unknown) => logger.error(e, "Maintenance expense candidate failed:"));
     }
 
