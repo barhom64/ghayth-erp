@@ -243,3 +243,27 @@ describe("#1733 — createCargoBillingCandidate behaviour", () => {
     expect(result).toEqual({ id: 42, created: false });
   });
 });
+
+// البند ٤ شريحة ٢ — costBearer لصيانة المركبة يصل من واجهة المحاسب حتى توجيه القيد.
+describe("البند ٤ — costBearer للصيانة عبر المادْيَلة (خلفية + واجهة)", () => {
+  const INTAKE_FE = readFileSync(
+    join(apiSrc, "../../ghayth-erp/src/pages/finance/finance-intake-center.tsx"), "utf8");
+
+  it("materialize schema accepts costBearer (نفس enum تقييم الحادث canonical)", () => {
+    expect(HANDOFF_ROUTE).toMatch(/costBearer: z\.enum\(\["company", "driver", "insurance", "customer", "tenant", "third_party"\]\)\.optional\(\)/);
+  });
+
+  it("فرع الصيانة يمرّر costBearer إلى postMaintenanceGL", () => {
+    const mi = HANDOFF_ROUTE.indexOf('sourceType === "maintenance"');
+    expect(mi).toBeGreaterThan(0);
+    expect(HANDOFF_ROUTE.slice(mi, mi + 320)).toMatch(/costBearer: overrides\.costBearer/);
+  });
+
+  it("واجهة مركز التلقّي تُظهر منتقي «مَن يتحمّل» للصيانة وترسله فقط لها", () => {
+    expect(INTAKE_FE).toMatch(/مَن يتحمّل التكلفة/);
+    // المنتقي مشروط بكون الترشيح صيانة.
+    expect(INTAKE_FE).toMatch(/dialog\.row\.sourceType === "maintenance" && \(/);
+    // يُرسَل costBearer فقط لترشيح الصيانة (الخلفية تتجاهله لغيره).
+    expect(INTAKE_FE).toMatch(/sourceType === "maintenance" \? \{ costBearer \} : \{\}/);
+  });
+});
