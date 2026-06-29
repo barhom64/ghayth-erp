@@ -52,7 +52,7 @@ export default function AttendanceScreen() {
     try {
       const body = {
         lat: position.lat,
-        lng: position.lng,
+        lon: position.lng,
         accuracy: position.accuracy,
         photo: photo ?? undefined,
         timestamp: new Date().toISOString(),
