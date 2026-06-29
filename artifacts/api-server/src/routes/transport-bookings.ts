@@ -629,6 +629,8 @@ const recordTripEventSchema = z.object({
   lat: z.coerce.number().min(-90).max(90).optional(),
   lng: z.coerce.number().min(-180).max(180).optional(),
   weightKg: z.coerce.number().min(0).optional(),
+  // شريحة 2 — تصنيف قراءة الوزن (فارغ/محمّل/محور/أخرى) ليُشتقّ الصافي.
+  weightKind: z.enum(["tare", "gross", "axle", "other"]).optional(),
   proofObjectPaths: z.array(z.string().min(1).max(512)).max(20).optional(),
   notes: z.string().max(2000).optional(),
 });
@@ -706,6 +708,13 @@ transportBookingsRouter.post(
           );
         }
       }
+      // شريحة 2 — نوع الوزن بلا قيمة وزن لا معنى له (الصافي يُشتقّ من القيم).
+      if (b.weightKind != null && b.weightKg == null) {
+        throw new ValidationError(
+          "حدّد قيمة الوزن (كغم) عند اختيار نوع الوزن",
+          { field: "weightKg" },
+        );
+      }
 
       // اشتقاق حالة الحجز (تشغيلي، للأمام فقط — لا رجوع، لا مساس بالدفتر).
       let derivedStatus: string | null = null;
@@ -720,12 +729,12 @@ transportBookingsRouter.post(
         const ins = await rawExecute(
           `INSERT INTO fleet_trip_events
              ("companyId", "branchId", "bookingId", "dispatchOrderId", "eventType",
-              "occurredAt", "lat", "lng", "weightKg", "proofObjectPaths", "notes",
+              "occurredAt", "lat", "lng", "weightKg", "weightKind", "proofObjectPaths", "notes",
               "recordedByAssignmentId", "createdBy")
-           VALUES ($1,$2,$3,$4,$5, COALESCE($6::timestamptz, NOW()), $7,$8,$9,$10,$11, $12,$13)`,
+           VALUES ($1,$2,$3,$4,$5, COALESCE($6::timestamptz, NOW()), $7,$8,$9,$10,$11,$12, $13,$14)`,
           [
             scope.companyId, scope.branchId ?? null, id, b.dispatchOrderId ?? null, b.eventType,
-            b.occurredAt ?? null, b.lat ?? null, b.lng ?? null, b.weightKg ?? null,
+            b.occurredAt ?? null, b.lat ?? null, b.lng ?? null, b.weightKg ?? null, b.weightKind ?? null,
             b.proofObjectPaths ?? null, b.notes ?? null,
             scope.activeAssignmentId ?? null, scope.userId,
           ],

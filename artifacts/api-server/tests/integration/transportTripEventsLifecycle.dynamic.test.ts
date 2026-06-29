@@ -129,21 +129,44 @@ d("شريحة 1 — دورة حياة وقائع الرحلة (قاعدة حيّ
     draftBookingId = res2.body.data.id;
   }, 90_000);
 
-  it("واقعة «تحميل» تُسجّل وتنقل الحجز إلى in_progress", async () => {
+  it("واقعة «تحميل» تُسجّل (مع وزن فارغ) وتنقل الحجز إلى in_progress", async () => {
     const res = await withAuth(
       request(app).post(`/api/transport/bookings/${bookingId}/events`), tokenA,
-    ).send({ eventType: "load", weightKg: 12000, notes: "تم التحميل" });
+    ).send({ eventType: "load", weightKg: 8000, weightKind: "tare", notes: "تم التحميل" });
     expect(res.status, JSON.stringify(res.body)).toBe(201);
     expect(res.body?.data?.derivedStatus).toBe("in_progress");
 
-    const [ev] = await rawQuery<{ eventType: string; weightKg: string }>(
-      `SELECT "eventType","weightKg" FROM fleet_trip_events WHERE "bookingId"=$1`,
+    const [ev] = await rawQuery<{ eventType: string; weightKind: string | null }>(
+      `SELECT "eventType","weightKind" FROM fleet_trip_events WHERE "bookingId"=$1`,
       [bookingId],
     );
     expect(ev.eventType).toBe("load");
+    expect(ev.weightKind).toBe("tare"); // شريحة 2
     const [bk] = await rawQuery<{ status: string }>(
       `SELECT status FROM transport_bookings WHERE id=$1`, [bookingId]);
     expect(bk.status).toBe("in_progress");
+  });
+
+  it("شريحة 2 — واقعة «خروج» بوزن محمّل تُخزّن weightKind=gross", async () => {
+    const res = await withAuth(
+      request(app).post(`/api/transport/bookings/${bookingId}/events`), tokenA,
+    ).send({ eventType: "depart", weightKg: 20000, weightKind: "gross" });
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    const [row] = await rawQuery<{ weightKind: string | null; weightKg: string }>(
+      `SELECT "weightKind","weightKg" FROM fleet_trip_events
+        WHERE "bookingId"=$1 AND "eventType"='depart'`,
+      [bookingId],
+    );
+    expect(row.weightKind).toBe("gross");
+    expect(Number(row.weightKg)).toBe(20000);
+    // الصافي (20000 − 8000 = 12000) يُشتقّ في الواجهة عبر summarizeTripWeights.
+  });
+
+  it("شريحة 2 — نوع الوزن بلا قيمة وزن → 400", async () => {
+    const res = await withAuth(
+      request(app).post(`/api/transport/bookings/${bookingId}/events`), tokenA,
+    ).send({ eventType: "arrive", weightKind: "gross" });
+    expect(res.status).toBe(400);
   });
 
   it("واقعة الإغلاق «تفريغ» بلا إثبات → 400", async () => {
@@ -167,12 +190,12 @@ d("شريحة 1 — دورة حياة وقائع الرحلة (قاعدة حيّ
     expect(bk.status).toBe("completed");
   });
 
-  it("GET الوقائع يُرجع الواقعتين مرتّبتين زمنيًا", async () => {
+  it("GET الوقائع يُرجع الوقائع مرتّبة زمنيًا", async () => {
     const res = await withAuth(
       request(app).get(`/api/transport/bookings/${bookingId}/events`), tokenA);
     expect(res.status).toBe(200);
     const types = (res.body?.data ?? []).map((e: any) => e.eventType);
-    expect(types).toEqual(["load", "unload"]);
+    expect(types).toEqual(["load", "depart", "unload"]);
   });
 
   it("عزل إيجاري: شركة أخرى لا تسجّل/ترى وقائع حجز ليس لها (404)", async () => {
