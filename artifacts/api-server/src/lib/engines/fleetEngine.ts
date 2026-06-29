@@ -623,6 +623,8 @@ class FleetEngineImpl implements DomainEngine {
       suggestedRevenue?: number | null;
       suggestedCost?: number | null;
       notes?: string | null;
+      // البند ٤ ج-٥ — مَن يتحمّل (يُخزَّن على الترشيح فيصل المحاسب كافتراض).
+      costBearer?: string | null;
     }
   ): Promise<{ id: number; created: boolean } | null> {
     const rows = await rawQuery<{ id: number; existed: boolean }>(
@@ -636,7 +638,7 @@ class FleetEngineImpl implements DomainEngine {
            quantity, "unitOfMeasure",
            "operationalStatus",
            "suggestedRevenue", "suggestedCost",
-           notes, "createdBy"
+           notes, "createdBy", "costBearer"
          )
          VALUES (
            $1, $2,
@@ -647,7 +649,7 @@ class FleetEngineImpl implements DomainEngine {
            $13, $14,
            $15,
            $16, $17,
-           $18, $19
+           $18, $19, $20
          )
          ON CONFLICT ("companyId", "sourceType", "sourceId") DO NOTHING
          RETURNING id, FALSE AS existed
@@ -668,7 +670,7 @@ class FleetEngineImpl implements DomainEngine {
         c.quantity, c.unitOfMeasure,
         c.operationalStatus,
         c.suggestedRevenue ?? null, c.suggestedCost ?? null,
-        c.notes ?? null, ctx.createdBy,
+        c.notes ?? null, ctx.createdBy, c.costBearer ?? null,
       ]
     );
     const row = rows[0];
@@ -741,7 +743,7 @@ class FleetEngineImpl implements DomainEngine {
    */
   async createMaintenanceExpenseCandidate(
     ctx: FleetGLContext,
-    maintenance: { id: number; vehicleId: number; cost: number; type?: string | null; description?: string | null; sourceRef?: string | null }
+    maintenance: { id: number; vehicleId: number; cost: number; type?: string | null; description?: string | null; sourceRef?: string | null; costBearer?: string | null }
   ): Promise<{ id: number; created: boolean } | null> {
     const cost = Number(maintenance.cost) || 0;
     if (cost <= 0) return null;
@@ -752,6 +754,8 @@ class FleetEngineImpl implements DomainEngine {
       quantity: 1, unitOfMeasure: "service",
       vehicleId: maintenance.vehicleId,
       suggestedCost: cost, notes: maintenance.description ?? null,
+      // البند ٤ ج-٥ — اختيار المُكمِل لمَن يتحمّل يصل المحاسب كافتراض.
+      costBearer: maintenance.costBearer ?? null,
     });
   }
 

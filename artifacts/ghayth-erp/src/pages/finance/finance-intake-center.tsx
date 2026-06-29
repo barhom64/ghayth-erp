@@ -28,6 +28,7 @@ type Status = "pending" | "materialized" | "rejected";
 interface Candidate {
   id: number;
   sourceType: string;
+  costBearer?: string | null; // البند ٤ ج-٥ — اختيار المُكمِل (افتراض حوار المادْيَلة).
   sourceRef: string | null;
   customerName: string | null;
   serviceType: string | null;
@@ -89,7 +90,7 @@ export default function FinanceIntakeCenter() {
   const openMaterialize = (row: Candidate) => {
     setRevenue(row.suggestedRevenue != null ? String(row.suggestedRevenue) : "");
     setCost(row.suggestedCost != null ? String(row.suggestedCost) : "");
-    setCostBearer("company");
+    setCostBearer(row.costBearer ?? "company"); // افتراض من اختيار المُكمِل (ج-٥)، يبقى تجاوز المحاسب.
     setDialog({ mode: "materialize", row });
   };
   const openReject = (row: Candidate) => { setReason(""); setDialog({ mode: "reject", row }); };
