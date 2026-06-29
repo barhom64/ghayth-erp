@@ -26,7 +26,7 @@ export default function NotificationsScreen() {
   const [tab, setTab] = useState<Tab>('unread');
 
   const { data, isLoading, refetch } = useList<NotificationItem[]>('/api/notifications');
-  const markAllMutation = useMutation<unknown, object>('/api/notifications/read-all', 'POST');
+  const markAllMutation = useMutation<unknown, object>('/api/notifications/mark-all-read', 'PATCH');
 
   const unread = (data ?? []).filter(n => !n.read);
   const read = (data ?? []).filter(n => n.read);

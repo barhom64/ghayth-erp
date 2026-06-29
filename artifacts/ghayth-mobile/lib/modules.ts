@@ -34,7 +34,7 @@ export const NAV_MODULES: NavModule[] = [
   { key: "notifications", label: "الإشعارات", icon: "notifications-outline", route: "/(tabs)/notifications", selfService: true, built: true },
   { key: "calendar", label: "التقويم", icon: "calendar-outline", route: "/(tabs)/approvals", selfService: true, built: true },
   { key: "approvals", label: "مركز الاعتماد", icon: "checkmark-done-outline", route: "/(tabs)/approvals", selfService: true, built: true },
-  { key: "hr", label: "الموارد البشرية", icon: "people-outline", route: "/hr/attendance", built: true },
+  { key: "hr", label: "الموارد البشرية", icon: "people-outline", built: true },
   { key: "finance", label: "المالية", icon: "cash-outline", built: true },
   { key: "fleet", label: "الأسطول", icon: "car-outline", built: true },
   { key: "warehouse", label: "المستودع", icon: "cube-outline", built: true },

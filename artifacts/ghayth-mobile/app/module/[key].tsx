@@ -9,7 +9,6 @@ import { GLoadingState, GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { NAV_MODULES } from '@/lib/modules';
 import { getModuleDef } from '@/lib/moduleSections';
-import { useList } from '@/hooks/useApi';
 import type { ComponentProps } from 'react';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
