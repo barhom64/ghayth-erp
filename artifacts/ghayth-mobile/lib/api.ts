@@ -12,6 +12,17 @@ export interface UserRole {
   is_primary?: boolean;
 }
 
+export interface Assignment {
+  id: number;
+  companyId: number;
+  branchId: number | null;
+  role: string;
+  status: string;
+  jobTitle: string | null;
+  companyName: string | null;
+  branchName: string | null;
+}
+
 export interface ApiErrorBody {
   message?: string;
   error?: string;
