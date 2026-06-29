@@ -1984,7 +1984,13 @@ async function resolveVendorInvoicePlan(
   const totalWithVat = roundTo2(totalNet + totalVat);
   let vatInputAccountCode: string | null = null;
   if (totalVat > 0) {
-    vatInputAccountCode = await financialEngine.resolveAccountCode(scope.companyId, "vat_input", "debit", "1180");
+    const general = await financialEngine.resolveAccountCode(scope.companyId, "vat_input", "debit", "1180");
+    // البند ٤ — حساب ضريبة المدخلات على حساب رمز ضريبة الوثيقة (أول بند خاضع
+    // للضريبة يحمل رمزًا)، وإلا الرمز القياسي للشركة، وإلا العام. سطر الضريبة
+    // رأسيّ واحد، فبنودٌ مختلطة الرموز تأخذ أوّل رمز (نظير قيد المبيعات).
+    const { resolveInputVatAccount, pickDocTaxCodeFromLines } = await import("../lib/taxCodes.js");
+    const docTaxCode = pickDocTaxCodeFromLines(p.lines);
+    vatInputAccountCode = await resolveInputVatAccount(scope.companyId, docTaxCode, general);
   }
 
   const lines = buildVendorInvoiceLines({
