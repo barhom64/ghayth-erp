@@ -812,6 +812,9 @@ export const PropertyOwnerSelect = buildEntitySelect({
   createTitle: "إضافة مالك عقار",
   createLabel: "+ مالك جديد",
   createApiPath: "/properties/owners",
+  // B1-b (توجيه إبراهيم «أ») — «+ مالك جديد» يفتح النموذج الكامل (نوع المالك/
+  // الهوية/البنك/الوكالة/العنوان) عبر AllowCreateDrawer، لا [اسم، هاتف] المبتور.
+  createEntityKind: "property-owner",
   createFields: [
     { key: "name", label: "اسم المالك", required: true },
     { key: "phone", label: "الهاتف" },

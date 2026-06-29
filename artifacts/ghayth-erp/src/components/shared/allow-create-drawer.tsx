@@ -44,7 +44,7 @@ export interface GenericCreateConfig {
  * union — and the registry below — one entry per migration batch, inside the
  * owner module. Selectors opt in via `EntitySelectConfig.createEntityKind`.
  */
-export type EntityKind = "department" | "branch" | "project" | "client" | "driver" | "vehicle" | "account" | "vendor" | "cost-center" | "employee" | "building";
+export type EntityKind = "department" | "branch" | "project" | "client" | "driver" | "vehicle" | "account" | "vendor" | "cost-center" | "employee" | "building" | "property-owner";
 
 interface RegistryEntry {
   /** Drawer header (Arabic, user-facing). */
@@ -159,6 +159,15 @@ const ENTITY_CREATE_FORMS: Record<EntityKind, RegistryEntry> = {
     Form: lazy(() =>
       import("@/pages/create/properties/building-form").then((m) => ({
         default: m.BuildingForm as ComponentType<EmbeddedCreateFormProps>,
+      })),
+    ),
+  },
+  "property-owner": {
+    title: "إضافة مالك عقار",
+    fullPagePath: "/properties/owners/create",
+    Form: lazy(() =>
+      import("@/pages/create/properties/owner-form").then((m) => ({
+        default: m.OwnerForm as ComponentType<EmbeddedCreateFormProps>,
       })),
     ),
   },
