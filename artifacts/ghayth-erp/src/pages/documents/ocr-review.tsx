@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { useLocation } from "wouter";
 import { apiFetch } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -57,6 +58,7 @@ const TARGETS_BY_DOCTYPE: Record<string, { value: string; label: string }[]> = {
 
 export default function OcrReviewPage() {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [items, setItems] = useState<Extraction[]>([]);
   const [loading, setLoading] = useState(true);
   const [edits, setEdits] = useState<Record<number, Record<string, string>>>({});
@@ -109,7 +111,49 @@ export default function OcrReviewPage() {
         method: "POST",
         body: JSON.stringify(payload),
       });
-      toast({ title: "تم تأكيد المستخلَص وحفظه على الكيان" });
+      // البند ٣ — تطبيق المستخلَص المؤكَّد على كيان المسار القائد عبر عقده. الوثائق لا
+      // تكتب على الكيان؛ نمرّر الحقول لعقد المالك (موظف→HR، مركبة→الأسطول…، يحتاج صلاحية
+      // المسار المالك، سياسة «املأ الفارغ فقط»). نقص الصلاحية → التأكيد محفوظ والتطبيق
+      // يُترك للمسار المالك. (إضافة مسار قائد جديد = سطر واحد في الإحالة أدناه.)
+      const item = items.find((x) => x.id === id);
+      const dt = item?.docType || "";
+      const applyEndpoint =
+        t?.appliedTo === "employee" && /iqama|residence|الإقامة|الاقامة|هوية|national|driving_license|driving|license|رخصة/i.test(dt)
+          ? `/employees/${Number(t.appliedToId)}/ocr-apply`
+          : t?.appliedTo === "vehicle" && /vehicle|registration|استمارة|مركبة|سيارة/i.test(dt)
+            ? `/fleet/vehicles/${Number(t.appliedToId)}/ocr-apply`
+            : t?.appliedTo === "company" && /commercial|سجل\s*تجاري|cr_?reg|registration/i.test(dt)
+              ? `/settings/companies/${Number(t.appliedToId)}/ocr-apply`
+              : null;
+      if (applyEndpoint && t?.appliedToId) {
+        try {
+          const r = await apiFetch<{ applied?: string[] }>(applyEndpoint, {
+            method: "POST",
+            body: JSON.stringify({ docType: dt, fields: edits[id] || {} }),
+          });
+          const n = r?.applied?.length ?? 0;
+          toast({ title: n ? `تم التأكيد وتطبيق ${n} حقل فارغ على الكيان` : "تم التأكيد — لا حقول فارغة للتعبئة على الكيان" });
+        } catch {
+          toast({ title: "تم التأكيد — التطبيق على الكيان يحتاج صلاحية المسار المالك" });
+        }
+      } else if (/invoice|فاتورة/i.test(dt)) {
+        // فاتورة مشتريات: ليست «ملء كيان قائم» بل إنشاء مستند مالي جديد. لا إنشاء آلي —
+        // نفتح نموذج فاتورة المورد معبَّأً (مبلغ/تاريخ/رقم/ضريبة) + مطابقة المورّد بالرقم
+        // الضريبي على الفاتورة. البشر يختار/يؤكّد المورّد ويحفظ عبر المسار المُدقَّق.
+        const f = edits[id] || {};
+        const qs = new URLSearchParams();
+        if (f.amount) qs.set("ocrAmount", String(f.amount));
+        if (f.vatAmount) qs.set("ocrVat", String(f.vatAmount));
+        if (f.date) qs.set("ocrDate", String(f.date));
+        if (f.invoiceNo) qs.set("ocrInvoiceNo", String(f.invoiceNo));
+        if (f.taxNumber) qs.set("ocrTaxNumber", String(f.taxNumber));
+        setItems((p) => p.filter((x) => x.id !== id));
+        toast({ title: "تم التأكيد — فتح نموذج فاتورة المشتريات معبَّأً" });
+        navigate(`/finance/documents/vendor-invoice?${qs.toString()}`);
+        return;
+      } else {
+        toast({ title: "تم تأكيد المستخلَص وتسجيل الكيان المرتبط" });
+      }
       setItems((p) => p.filter((x) => x.id !== id));
     } catch (err: any) {
       toast({ variant: "destructive", title: "فشل التأكيد", description: err?.message });
@@ -162,7 +206,10 @@ export default function OcrReviewPage() {
         const conf = Number(ex.confidence ?? 0);
         const targetOptions = TARGETS_BY_DOCTYPE[ex.docType] || [];
         const t = targets[ex.id] || { appliedTo: targetOptions[0]?.value ?? "", appliedToId: "" };
-        const requireTarget = targetOptions.length > 0;
+        // الفاتورة تُنشئ مستندًا جديدًا (لا كيان قائم برقم) → لا تتطلّب رقم كيان؛ التأكيد
+        // يفتح نموذج فاتورة المشتريات معبَّأً (البند ٣، فاتورة المورد).
+        const isInvoice = /invoice|فاتورة/i.test(ex.docType);
+        const requireTarget = targetOptions.length > 0 && !isInvoice;
         return (
           <Card key={ex.id} className="p-4 space-y-3">
             <div className="flex items-start justify-between">

@@ -1,7 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { z } from "zod";
-import { useApiQuery, useApiMutation } from "@/lib/api";
-import { useToast } from "@/hooks/use-toast";
+import { useApiQuery } from "@/lib/api";
 import { SearchableSelect, SearchableSelectField, type SelectOption } from "./searchable-select";
 import { FormFieldWrapper, fieldErrorClass } from "./form-field-wrapper";
 import {
@@ -10,101 +8,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { FormShell, FormTextField } from "@workspace/ui-core";
 import { AllowCreateDrawer, type EntityKind } from "./allow-create-drawer";
+import { useAppContextOptional } from "@/contexts/app-context";
 
 interface QuickCreateField {
   key: string;
   label: string;
   required?: boolean;
   type?: string;
-}
-
-interface QuickCreateDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  title: string;
-  fields: QuickCreateField[];
-  apiPath: string;
-  invalidateKey: string;
-  onCreated?: (data: any) => void;
-}
-
-function QuickCreateDialog({
-  open,
-  onOpenChange,
-  title,
-  fields,
-  apiPath,
-  invalidateKey,
-  onCreated,
-}: QuickCreateDialogProps) {
-  const { toast } = useToast();
-  const createMut = useApiMutation<unknown, Record<string, any>>(apiPath, "POST", [[invalidateKey]]);
-
-  // Build a runtime zod schema and default values from the fields prop.
-  // Required fields gate the submit button via FormShell's built-in
-  // validation — no more "missing fields" toast list.
-  const schemaShape: Record<string, z.ZodString> = {};
-  const defaults: Record<string, string> = {};
-  for (const f of fields) {
-    const s = z.string().trim();
-    schemaShape[f.key] = f.required ? s.min(1, "مطلوب") : s;
-    defaults[f.key] = "";
-  }
-  const quickCreateSchema = z.object(schemaShape);
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-        </DialogHeader>
-        <FormShell
-          // Remount on open so the form clears between consecutive
-          // create flows without an explicit reset.
-          key={open ? "open" : "closed"}
-          schema={quickCreateSchema as unknown as z.ZodType<Record<string, string>>}
-          defaultValues={defaults}
-          submitLabel={createMut.isPending ? "جاري الإنشاء..." : "إنشاء"}
-          secondaryActions={
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>إلغاء</Button>
-          }
-          onSubmit={(values) => {
-            // #2134 — drop untouched optional fields instead of sending "".
-            // The backend zod schemas validate present values strictly (an
-            // empty-string email fails z.email()), so a quick-create with
-            // «البريد» left blank 422'd and the entity silently never existed.
-            const payload = Object.fromEntries(
-              Object.entries(values).filter(([, v]) => String(v ?? "").trim() !== "")
-            );
-            createMut.mutate(payload, {
-              onSuccess: (data: any) => {
-                onCreated?.(data);
-                onOpenChange(false);
-                toast({ title: `تم الإنشاء بنجاح` });
-              },
-              onError: (err: any) => {
-                toast({ variant: "destructive", title: "خطأ في الإنشاء", description: err?.fix ?? err?.message });
-              },
-            });
-          }}
-        >
-          {fields.map((field) => (
-            <FormTextField
-              key={field.key}
-              name={field.key}
-              label={field.label}
-              required={field.required}
-              type={field.type as any}
-              placeholder={field.label}
-            />
-          ))}
-        </FormShell>
-      </DialogContent>
-    </Dialog>
-  );
 }
 
 /* ------------------------------------------------------------------ *
@@ -190,10 +101,11 @@ interface EntitySelectConfig {
    */
   serverSearch?: boolean;
   /**
-   * When set, "+ جديد" opens the unified FULL create form in a drawer
-   * (`AllowCreateDrawer`) instead of the truncated `QuickCreateDialog`. Set it
-   * once a registered embedded form exists for the entity (migration is
-   * selector-by-selector). See allow-create-drawer.tsx.
+   * When set, "+ جديد" opens the entity's registered FULL embedded create form
+   * in the unified drawer (`AllowCreateDrawer`). When omitted, the same drawer
+   * hosts a generic field-driven form built from `createFields`. Either way
+   * there is ONE create surface (the retired `QuickCreateDialog` is gone).
+   * See allow-create-drawer.tsx.
    */
   createEntityKind?: EntityKind;
   /**
@@ -240,6 +152,9 @@ interface EntitySelectProps {
   filter?: (item: any) => boolean;
   /** Visually hide the label (sr-only) for dense inline/toolbar contexts. */
   hideLabel?: boolean;
+  /** Render the picker locked (read-only). Used by BranchSelect's
+   *  autoSelectOwnBranch lock; also available to any caller that needs it. */
+  disabled?: boolean;
 }
 
 function buildEntitySelect(config: EntitySelectConfig) {
@@ -257,6 +172,7 @@ function buildEntitySelect(config: EntitySelectConfig) {
     allowCreate = config.allowCreateDefault ?? true,
     filter,
     hideLabel,
+    disabled,
   }: EntitySelectProps) {
     const [showCreate, setShowCreate] = useState(false);
     // #2134 — entities created from «+ جديد» are appended locally so they
@@ -322,6 +238,7 @@ function buildEntitySelect(config: EntitySelectConfig) {
           required={required}
           error={error}
           hideLabel={hideLabel}
+          disabled={disabled}
           options={options}
           value={value}
           onValueChange={onChange}
@@ -329,28 +246,24 @@ function buildEntitySelect(config: EntitySelectConfig) {
           searchPlaceholder={config.searchPlaceholder}
           emptyText={`لا توجد نتائج`}
           fieldClassName={className}
-          onCreateNew={allowCreate ? () => setShowCreate(true) : undefined}
+          onCreateNew={allowCreate && !disabled ? () => setShowCreate(true) : undefined}
           createNewLabel={config.createLabel}
           onSearchChange={config.serverSearch ? setSearchText : undefined}
         />
-        {allowCreate && (config.createEntityKind ? (
+        {allowCreate && (
           <AllowCreateDrawer
             kind={config.createEntityKind}
+            genericConfig={config.createEntityKind ? undefined : {
+              title: config.createTitle,
+              fields: config.createFields,
+              apiPath: config.createApiPath,
+              invalidateKey: config.queryKey,
+            }}
             open={showCreate}
             onOpenChange={setShowCreate}
             onCreated={handleCreated}
           />
-        ) : (
-          <QuickCreateDialog
-            open={showCreate}
-            onOpenChange={setShowCreate}
-            title={config.createTitle}
-            fields={config.createFields}
-            apiPath={config.createApiPath}
-            invalidateKey={config.queryKey}
-            onCreated={handleCreated}
-          />
-        ))}
+        )}
       </>
     );
   };
@@ -431,6 +344,12 @@ export const SupplierSelect = buildEntitySelect({
   createTitle: "إضافة مورد جديد",
   createLabel: "+ مورد جديد",
   createApiPath: "/warehouse/suppliers",
+  // Warehouse suppliers and finance vendors are the SAME `suppliers` table
+  // (both INSERT INTO suppliers — finance-vendors.ts:160 / warehouse.ts:1591),
+  // so the quick-add opens the SAME full AP-aware vendor form (name, contact,
+  // phone, email, tax number, address, payment terms, WHT) instead of the
+  // stripped 2-field generic. createFields stays only as the legacy fallback.
+  createEntityKind: "vendor",
   createFields: [
     { key: "name", label: "اسم المورد", required: true },
     { key: "phone", label: "الهاتف" },
@@ -459,7 +378,7 @@ export const DriverSelect = buildEntitySelect({
   getSublabel: (r) => r?.licenseNumber || r?.phone || "",
 });
 
-export const BranchSelect = buildEntitySelect({
+const BranchSelectBase = buildEntitySelect({
   queryKey: "branches-list",
   endpoint: "/settings/branches",
   defaultLabel: "الفرع",
@@ -478,6 +397,69 @@ export const BranchSelect = buildEntitySelect({
   getName: (r) => r?.name || `#${r?.id}`,
   getSublabel: (r) => r?.city || "",
 });
+
+interface BranchSelectProps extends EntitySelectProps {
+  /**
+   * B2 (توجيه إبراهيم) — «الفرع مقفل يختار فرعي تلقائيًا، فرع الإدخال تلقائي».
+   * تفعيل اختياري لشاشات الإدخال فقط (لا المرشِّحات / الشاشات عبر-الفروع):
+   *  - يُهيّئ القيمة تلقائيًّا بفرع المستخدم الفعّال (`selectedBranchId`) متى كان
+   *    الحقل فارغًا.
+   *  - يقفل المنتقي (read-only) متى كان للمستخدم فرع واحد متاح فقط — فلا خيار
+   *    فعليًّا، والقفل يمنع إدخالًا خاطئًا على فرع لا يملكه.
+   * المستخدم متعدّد الفروع يحصل على تهيئة تلقائية قابلة للتغيير (لا قفل).
+   */
+  autoSelectOwnBranch?: boolean;
+}
+
+export interface OwnBranchDecision {
+  /** القيمة التي يجب تثبيتها تلقائيًّا (مرة واحدة)، أو null لا تفعل شيئًا. */
+  autoSelectTo: string | null;
+  /** اقفل المنتقي (خيار وحيد فعليًّا). */
+  locked: boolean;
+}
+
+/**
+ * B2 — القرار النقي خلف `autoSelectOwnBranch` (وحدة قابلة للاختبار بمعزل عن React):
+ *  - معطّل ⇒ لا تهيئة ولا قفل.
+ *  - الفرع الفعّال = `selectedBranchId` إن وُجد، وإلا الفرع الوحيد المتاح، وإلا «».
+ *  - يُهيّئ فقط متى كان الحقل فارغًا (لا يدوس على نسخ/تعديل قائم).
+ *  - يقفل فقط متى فرع واحد متاح والقيمة مُثبّتة (لا قفل عند تعدّد الفروع).
+ */
+export function decideOwnBranch(opts: {
+  enabled?: boolean;
+  value: string;
+  selectedBranchId: number | null | undefined;
+  branches: { id: number }[];
+}): OwnBranchDecision {
+  const { enabled, value, selectedBranchId, branches } = opts;
+  if (!enabled) return { autoSelectTo: null, locked: false };
+  const own =
+    selectedBranchId != null
+      ? String(selectedBranchId)
+      : branches.length === 1
+        ? String(branches[0].id)
+        : "";
+  return {
+    autoSelectTo: !value && own ? own : null,
+    locked: branches.length === 1 && !!value,
+  };
+}
+
+export function BranchSelect({ autoSelectOwnBranch, value, onChange, disabled, ...rest }: BranchSelectProps) {
+  const ctx = useAppContextOptional();
+  const { autoSelectTo, locked } = decideOwnBranch({
+    enabled: autoSelectOwnBranch,
+    value,
+    selectedBranchId: ctx?.selectedBranchId,
+    branches: ctx?.branches ?? [],
+  });
+
+  useEffect(() => {
+    if (autoSelectTo) onChange(autoSelectTo);
+  }, [autoSelectTo, onChange]);
+
+  return <BranchSelectBase value={value} onChange={onChange} disabled={disabled || locked} {...rest} />;
+}
 
 export const DepartmentSelect = buildEntitySelect({
   queryKey: "departments-list",
@@ -528,6 +510,10 @@ export const UnitSelect = buildEntitySelect({
   createTitle: "إضافة وحدة",
   createLabel: "+ وحدة جديدة",
   createApiPath: "/properties/units",
+  // B1-b (توجيه إبراهيم «أ») — «+ وحدة جديدة» يفتح النموذج الكامل (المبنى/النوع/
+  // الحالة/المساحة/الغرف/الإيجار/المالك/العدادات/المرافق) عبر AllowCreateDrawer،
+  // لا [رقم الوحدة] المبتور وحده.
+  createEntityKind: "unit",
   createFields: [{ key: "unitNumber", label: "رقم الوحدة", required: true }],
   getName: (r) => [r?.buildingName, r?.unitNumber].filter(Boolean).join(" - ") || `#${r?.id}`,
   getSublabel: (r) => r?.unitType || r?.status || "",
@@ -741,7 +727,7 @@ export const CommitteeSelect = buildEntitySelect({
 // id, since the per-category attendance policy keys off the string key.
 // Backend: /org/employee-categories. Quick-create disabled here — the
 // 6 system categories are seeded by migration 270 and a per-company
-// override needs a richer form than what the QuickCreateDialog offers.
+// override needs a richer form than the generic field-driven create offers.
 export const EmployeeCategorySelect = buildEntitySelect({
   queryKey: "employee-categories-list",
   endpoint: "/org/employee-categories",
@@ -809,6 +795,10 @@ export const BuildingSelect = buildEntitySelect({
   createTitle: "إضافة مبنى",
   createLabel: "+ مبنى جديد",
   createApiPath: "/properties/buildings",
+  // B1-b (توجيه إبراهيم «أ») — «+ مبنى جديد» يفتح النموذج الكامل المعتمد
+  // (نوع المبنى/الصك/المالك/العنوان الوطني/الإحداثيات) عبر AllowCreateDrawer،
+  // لا الإضافة المبتورة [اسم، مدينة]. createFields يبقى احتياطًا.
+  createEntityKind: "building",
   createFields: [
     { key: "name", label: "اسم المبنى", required: true },
     { key: "city", label: "المدينة" },
@@ -826,6 +816,9 @@ export const PropertyOwnerSelect = buildEntitySelect({
   createTitle: "إضافة مالك عقار",
   createLabel: "+ مالك جديد",
   createApiPath: "/properties/owners",
+  // B1-b (توجيه إبراهيم «أ») — «+ مالك جديد» يفتح النموذج الكامل (نوع المالك/
+  // الهوية/البنك/الوكالة/العنوان) عبر AllowCreateDrawer، لا [اسم، هاتف] المبتور.
+  createEntityKind: "property-owner",
   createFields: [
     { key: "name", label: "اسم المالك", required: true },
     { key: "phone", label: "الهاتف" },

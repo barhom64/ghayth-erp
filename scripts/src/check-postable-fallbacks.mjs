@@ -72,7 +72,34 @@ const FALLBACK_PATTERNS = [
   /\|\|\s*"([1-6]\d{3})"/g,
   /\?\?\s*"([1-6]\d{3})"/g,
   /default\("([1-6]\d{3})"\)/g,
+  // Ternary fallback as the resolver's last arg: `... ? "A" : "B")`. BOTH branches
+  // must be postable leaves. The comma-anchored helper patterns above only see a
+  // direct literal last arg, so a ternary (a colon — not a comma — before the final
+  // code) slips past them entirely: the exact shape of the invoice_payment_cash bug
+  // (`method === "cash" ? "1100" : "1110"`). Anchored to the two resolver helpers so
+  // unrelated ternaries elsewhere never false-positive. Captures both A and B.
+  /(?:resolveAccountCode|getAccountCodeFromMapping)\([^)]*?\?\s*"([1-6]\d{3})"\s*:\s*"([1-6]\d{3})"\s*\)/g,
 ];
+
+// Scan one source text → [{ code, verdict, index }] for every fallback code that is
+// a non-postable parent or absent from the chart. Each pattern may capture more than
+// one code (the ternary captures both branches), so we walk every capture group.
+// Exported for the guard's own test (check-postable-fallbacks.test.mjs).
+export function scanFallbacks(text, postable) {
+  const out = [];
+  for (const re of FALLBACK_PATTERNS) {
+    re.lastIndex = 0;
+    for (let m; (m = re.exec(text)); ) {
+      for (const code of m.slice(1)) {
+        if (!code) continue;
+        const p = postable.get(code);
+        const verdict = p === false ? "non-postable parent" : p === undefined ? "absent from chart" : null;
+        if (verdict) out.push({ code, verdict, index: m.index });
+      }
+    }
+  }
+  return out;
+}
 
 function main() {
   // Postable leaves vs non-postable parents from the default chart of accounts.
@@ -90,20 +117,13 @@ function main() {
     const text = readFileSync(file, "utf8");
     const rel = relative(SRC, file);
     const seen = new Set();
-    for (const re of FALLBACK_PATTERNS) {
-      re.lastIndex = 0;
-      for (let m; (m = re.exec(text)); ) {
-        const code = m[1];
-        const p = postable.get(code);
-        const verdict = p === false ? "non-postable parent" : p === undefined ? "absent from chart" : null;
-        if (!verdict) continue;
-        const key = `${rel}:${code}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        const lineNo = text.slice(0, m.index).split("\n").length;
-        const rec = { file: `${file}:${lineNo}`, code, verdict, line: text.split("\n")[lineNo - 1]?.trim() };
-        (ALLOWLIST.has(key) ? baselined : offenders).push(rec);
-      }
+    for (const { code, verdict, index } of scanFallbacks(text, postable)) {
+      const key = `${rel}:${code}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const lineNo = text.slice(0, index).split("\n").length;
+      const rec = { file: `${file}:${lineNo}`, code, verdict, line: text.split("\n")[lineNo - 1]?.trim() };
+      (ALLOWLIST.has(key) ? baselined : offenders).push(rec);
     }
   }
 

@@ -345,7 +345,6 @@ export const allNavSections: NavSection[] = [
           { label: "مركز التسويات", path: "/finance/reconciliation-hub", icon: RefreshCw },
           { label: "القيود اليدوية", path: "/finance/journal-manual", icon: FileSignature, minRoleLevel: 70 },
           { label: "قوالب القيود", path: "/finance/journal-templates", icon: FileText },
-          { label: "قوالب قيود سريعة", path: "/finance/journal-quick-templates", icon: Zap },
           { label: "معالج عكس قيد", path: "/finance/journal/reverse", icon: ArrowLeftRight },
           { label: "قيود دورية", path: "/finance/recurring-journals", icon: CalendarClock },
           { label: "تقويم الدورية", path: "/finance/recurring-calendar", icon: Calendar },
@@ -361,7 +360,7 @@ export const allNavSections: NavSection[] = [
           { label: "تحويل بين الحسابات", path: "/finance/treasury/transfer", icon: ArrowLeftRight },
           { label: "النقد في الطريق", path: "/finance/cash-in-transit", icon: Banknote },
           { label: "المقبوضات", path: "/finance/receivables", icon: DollarSign },
-          { label: "سند قبض العميل (تطبيق تلقائي)", path: "/finance/receivables/receipt", icon: DollarSign },
+          { label: "تحصيل من عميل (مطابقة تلقائية)", path: "/finance/collect", icon: DollarSign },
           { label: "المدفوعات", path: "/finance/payments", icon: Wallet },
           { label: "دفعات مقدمة من العملاء", path: "/finance/customer-advances", icon: ArrowLeftRight },
           { label: "منضدة دفعات العملاء المقدمة", path: "/finance/customer-advances-workbench", icon: Briefcase },
@@ -590,6 +589,8 @@ export const allNavSections: NavSection[] = [
           // أُعيدت بعد سقوطها من المجموعة في إعادة تنظيم الأسطول، إذ اختفت قائمة
           // المركبات وزر الإضافة من القائمة رغم بقاء الصفحة قائمةً تعمل.
           { label: "المركبات", path: "/fleet", icon: Car, perm: "fleet.vehicles:list" },
+          // البند ٤ — «تسجيل واقعة مركبة» الموحّدة (الكيان يقود: وقود/صيانة/تأمين معًا).
+          { label: "تسجيل واقعة مركبة", path: "/fleet/record-event", icon: ClipboardCheck, perm: "fleet.vehicles:update" },
           { label: "السائقين", path: "/fleet/drivers", icon: User, perm: "fleet.vehicles:list" },
           { label: "فحوص المركبات", path: "/fleet/inspections", icon: ClipboardCheck, perm: "fleet.vehicles:list" },
           { label: "الرحلات", path: "/fleet/trips", icon: Navigation, perm: "fleet.trips:list" },

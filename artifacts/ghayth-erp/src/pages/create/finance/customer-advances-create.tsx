@@ -106,6 +106,7 @@ export default function CustomerAdvancesCreate() {
           onChange={(v) => setForm((f) => ({ ...f, branchId: String(v ?? "") }))}
           label="الفرع"
           allowCreate={false}
+          autoSelectOwnBranch
         />
 
         <FormFieldWrapper label="تاريخ الاستلام" required error={fieldErrors.receivedDate}>

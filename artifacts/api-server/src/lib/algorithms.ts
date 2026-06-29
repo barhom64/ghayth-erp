@@ -21,6 +21,24 @@ export function haversineDistance(
 
 export const haversineKm = haversineDistance;
 
+// Great-circle distance in METERS (haversineDistance above is in km). Shared by
+// the fleet optimizer + maps-service manual fallback (was duplicated in both).
+export function haversineMeters(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+): number {
+  const R = 6_371_000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+
 export function movingAverage(values: number[], periods?: number): number {
   if (values.length === 0) return 0;
   const p = periods ?? values.length;
@@ -159,11 +177,23 @@ export async function loadBalanceAssign(
 
 export function criticalPathLength(tasks: { id: number; estimatedHours: number; dependsOn: number[] }[]): number {
   const dp = new Map<number, number>();
+  // Recursion stack. A back-edge to a node still being computed means a
+  // circular dependency (A→B→A). `project_task_dependencies` is inserted
+  // without any cycle check (routes/projects.ts), so a cycle is reachable from
+  // user input — and without this guard the recursion below would never
+  // terminate (stack overflow → 500 on the project-detail endpoint). On a
+  // back-edge we ignore that edge (contribute 0) so the result stays finite;
+  // acyclic graphs are unaffected, since a node leaves `visiting` before its
+  // value is memoised.
+  const visiting = new Set<number>();
   function longest(id: number): number {
     if (dp.has(id)) return dp.get(id)!;
+    if (visiting.has(id)) return 0;
     const t = tasks.find((x) => x.id === id);
     if (!t) return 0;
+    visiting.add(id);
     const depMax = t.dependsOn.length ? Math.max(...t.dependsOn.map(longest)) : 0;
+    visiting.delete(id);
     const val = depMax + (t.estimatedHours || 0);
     dp.set(id, val);
     return val;

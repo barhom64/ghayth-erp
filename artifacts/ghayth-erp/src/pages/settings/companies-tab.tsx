@@ -13,6 +13,7 @@ import {
   type DataTableColumn,
   FormShell,
   FormTextField,
+  FormSelectField,
   FormGrid,
 } from "@workspace/ui-core";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
@@ -25,9 +26,10 @@ const companyFormSchema = z.object({
   nameEn: z.string().trim(),
   taxNumber: z.string().trim(),
   crNumber: z.string().trim(),
+  parentCompanyId: z.string().trim().optional(),
 });
 type CompanyForm = z.infer<typeof companyFormSchema>;
-const blankCompany: CompanyForm = { name: "", nameEn: "", taxNumber: "", crNumber: "" };
+const blankCompany: CompanyForm = { name: "", nameEn: "", taxNumber: "", crNumber: "", parentCompanyId: "" };
 
 export function CompaniesTab() {
   const { refreshFilters } = useAppContext();
@@ -62,6 +64,16 @@ export function CompaniesTab() {
     },
     { key: "taxNumber", header: "الرقم الضريبي", searchable: true, render: (r: any) => <span className="text-muted-foreground">{r.vatNumber || "-"}</span> },
     { key: "crNumber", header: "السجل التجاري", searchable: true, render: (r: any) => <span className="text-muted-foreground">{r.crNumber || "-"}</span> },
+    {
+      key: "parentCompanyId",
+      header: "الشركة الأم",
+      render: (r: any) => {
+        const parent = r.parentCompanyId ? items.find((c: any) => c.id === r.parentCompanyId) : null;
+        return parent
+          ? <Badge variant="outline" className="font-normal">تابعة لـ {parent.name}</Badge>
+          : <span className="text-muted-foreground">-</span>;
+      },
+    },
     {
       key: "actions",
       header: "إجراءات",
@@ -99,23 +111,28 @@ export function CompaniesTab() {
       nameEn: item.nameEn || "",
       taxNumber: item.vatNumber || "",
       crNumber: item.crNumber || "",
+      parentCompanyId: item.parentCompanyId ? String(item.parentCompanyId) : "",
     });
     setEditingId(item.id);
     setShowForm(true);
   };
 
   const handleSave = async (values: CompanyForm) => {
+    const payload = {
+      ...values,
+      parentCompanyId: values.parentCompanyId ? Number(values.parentCompanyId) : null,
+    };
     if (editingId) {
       await apiFetch(`/settings/companies/${editingId}`, {
         method: "PUT",
-        body: JSON.stringify(values),
+        body: JSON.stringify(payload),
       });
       toast({ title: "تم التعديل", description: "تم تعديل بيانات الشركة بنجاح" });
       resetForm();
     } else {
       const result = await apiFetch<any>("/settings/companies", {
         method: "POST",
-        body: JSON.stringify(values),
+        body: JSON.stringify(payload),
       });
       setLastBootstrapOps(result.operations || null);
       toast({
@@ -217,6 +234,14 @@ export function CompaniesTab() {
                 <FormTextField name="nameEn" label="اسم الشركة (إنجليزي)" placeholder="Al-Faisal Trading Co." />
                 <FormTextField name="taxNumber" label="الرقم الضريبي" placeholder="300000000000003" />
                 <FormTextField name="crNumber" label="رقم السجل التجاري" placeholder="1010000000" />
+                <FormSelectField
+                  name="parentCompanyId"
+                  label="الشركة الأم (اختياري)"
+                  placeholder="— بدون — (شركة مستقلة)"
+                  options={items
+                    .filter((c: any) => c.id !== editingId)
+                    .map((c: any) => ({ value: String(c.id), label: c.name }))}
+                />
               </FormGrid>
               {!editingId && (
                 <div className="mt-4 p-3 bg-status-info-surface rounded-lg border border-status-info-surface">

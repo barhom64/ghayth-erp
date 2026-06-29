@@ -316,6 +316,39 @@ const dispatchOrderRescheduleSchema = z.object({
   { message: "يجب إرسال حقل واحد على الأقل من: driverId / vehicleId / scheduledStartAt / scheduledEndAt" },
 );
 
+// The driver/vehicle time-window overlap check, shared by dispatch-create and
+// reschedule (was copy-pasted in both). Builds the SQL + params — the duplicated
+// part — and each caller executes with its own executor (rawQuery on create; the
+// tx client on the FOR-UPDATE reschedule path). `excludeId` skips the order being
+// rescheduled (omit on create — there is no self row yet). Declined/cancelled
+// orders don't reserve resources, so they're excluded.
+function dispatchConflictQuery(
+  companyId: number,
+  driverId: number,
+  vehicleId: number,
+  startAt: string,
+  endAt: string,
+  excludeId?: number,
+): { sql: string; params: unknown[] } {
+  const ex = excludeId != null ? " AND id <> $6" : "";
+  const sql =
+    `SELECT id, 'driver' AS kind FROM transport_dispatch_orders
+        WHERE "companyId" = $1 AND "driverId" = $2${ex}
+          AND status NOT IN ('declined', 'cancelled')
+          AND tstzrange("scheduledStartAt", "scheduledEndAt", '[)')
+              && tstzrange($3::timestamptz, $4::timestamptz, '[)')
+     UNION
+     SELECT id, 'vehicle' AS kind FROM transport_dispatch_orders
+        WHERE "companyId" = $1 AND "vehicleId" = $5${ex}
+          AND status NOT IN ('declined', 'cancelled')
+          AND tstzrange("scheduledStartAt", "scheduledEndAt", '[)')
+              && tstzrange($3::timestamptz, $4::timestamptz, '[)')`;
+  const params = excludeId != null
+    ? [companyId, driverId, startAt, endAt, vehicleId, excludeId]
+    : [companyId, driverId, startAt, endAt, vehicleId];
+  return { sql, params };
+}
+
 const createLocationSchema = z.object({
   code: z.string().max(32).optional(),
   name: z.string().min(1).max(255),
@@ -425,6 +458,15 @@ transportBookingsRouter.get(
           ORDER BY d."scheduledStartAt" ASC`,
         [id],
       );
+      // شريحة 1 — وقائع الرحلة (تسجيل واقعة): الجدول الزمني التشغيلي
+      // (تحميل/خروج/وصول/فحص/تفريغ/تسليم) الذي تُشتقّ منه حالة الحجز والـPOD.
+      // المُبطَلة (voidedAt) تُستبعد من العرض التشغيلي.
+      const tripEvents = await rawQuery<Record<string, unknown>>(
+        `SELECT * FROM fleet_trip_events
+          WHERE "bookingId" = $1 AND "companyId" = $2 AND "voidedAt" IS NULL
+          ORDER BY "occurredAt" ASC, id ASC`,
+        [id, scope.companyId],
+      );
       // #1812 source context (operational review feedback: "النظام لا
       // يستفيد بما يكفي من العمرة / CRM / العقود / المشاريع / الأوقاف /
       // التقويم"). Resolve the upstream entity referenced by the
@@ -437,7 +479,7 @@ transportBookingsRouter.get(
         "fleet.bookings.cancelPolicy", scope.companyId, scope.branchId ?? undefined,
       );
       const cancelPolicy = rawCancelPolicy === "cascade" ? "cascade" : "guard";
-      res.json(maskFields(req, { data: { ...booking, lines, dispatchOrders, sourceContext, cancelPolicy } }));
+      res.json(maskFields(req, { data: { ...booking, lines, dispatchOrders, tripEvents, sourceContext, cancelPolicy } }));
     } catch (err) {
       handleRouteError(err, res, "Get transport booking error:");
     }
@@ -553,6 +595,161 @@ transportBookingsRouter.get(
       }));
     } catch (err) {
       handleRouteError(err, res, "Get transport booking confirmation error:");
+    }
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────
+// شريحة 1 — وقائع الرحلة (الكيان يقود التجربة / تسجيل واقعة)
+// المنسّق/السائق يسجّل «ما حدث» (تحميل/خروج/وصول/فحص/تفريغ/تسليم) ويرفق
+// الإثبات (POD)، والنظام يشتقّ خلفيًا انتقال حالة الحجز:
+//   أي واقعة تنفيذ على حجز (approved/scheduled/dispatched) → in_progress
+//   واقعة إغلاق (unload/deliver) + إثبات → completed (إغلاق تشغيلي)
+// append-only: لا تعديل على الواقعة؛ التصحيح = إبطال ناعم + واقعة جديدة.
+// الإغلاق المالي منفصل (مرشّح الفوترة → المالية) — لا يُلمس هنا.
+// ─────────────────────────────────────────────────────────────────────────
+const TRIP_EVENT_TYPES = [
+  "load", "depart", "arrive", "inspect", "unload", "handover", "deliver",
+] as const;
+// وقائع الإغلاق التشغيلي — تتطلب إثبات POD وتنقل الحجز إلى «مكتمل».
+const TRIP_EVENT_CLOSING_TYPES = new Set<string>(["unload", "deliver"]);
+// الحالات التي يجوز فيها تسجيل واقعة (تنفيذ قائم أو ممكن).
+const TRIP_EVENT_EXECUTABLE_STATUSES = new Set<string>([
+  "approved", "scheduled", "dispatched", "in_progress",
+]);
+// حالات «ما قبل التنفيذ» — أول واقعة تنفيذ تنقلها إلى in_progress.
+const TRIP_EVENT_PRE_EXECUTION_STATUSES = new Set<string>([
+  "approved", "scheduled", "dispatched",
+]);
+
+const recordTripEventSchema = z.object({
+  eventType: z.enum(TRIP_EVENT_TYPES),
+  dispatchOrderId: z.coerce.number().int().positive().optional(),
+  occurredAt: z.string().datetime({ offset: true }).optional(),
+  lat: z.coerce.number().min(-90).max(90).optional(),
+  lng: z.coerce.number().min(-180).max(180).optional(),
+  weightKg: z.coerce.number().min(0).optional(),
+  proofObjectPaths: z.array(z.string().min(1).max(512)).max(20).optional(),
+  notes: z.string().max(2000).optional(),
+});
+
+// GET /transport/bookings/:id/events — الجدول الزمني لوقائع الرحلة.
+transportBookingsRouter.get(
+  "/transport/bookings/:id/events",
+  authorize({ feature: "fleet.bookings", action: "view" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const [booking] = await rawQuery<Record<string, unknown>>(
+        `SELECT id FROM transport_bookings WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!booking) throw new NotFoundError("الحجز غير موجود");
+      const events = await rawQuery<Record<string, unknown>>(
+        `SELECT * FROM fleet_trip_events
+          WHERE "bookingId" = $1 AND "companyId" = $2 AND "voidedAt" IS NULL
+          ORDER BY "occurredAt" ASC, id ASC`,
+        [id, scope.companyId],
+      );
+      res.json(maskFields(req, { data: events }));
+    } catch (err) {
+      handleRouteError(err, res, "List trip events error:");
+    }
+  },
+);
+
+// POST /transport/bookings/:id/events — تسجيل واقعة رحلة + اشتقاق الحالة.
+transportBookingsRouter.post(
+  "/transport/bookings/:id/events",
+  authorize({ feature: "fleet.bookings", action: "update" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const b = zodParse(recordTripEventSchema.safeParse(req.body));
+
+      const [booking] = await rawQuery<Record<string, unknown>>(
+        `SELECT id, status FROM transport_bookings
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!booking) throw new NotFoundError("الحجز غير موجود");
+      const status = String(booking.status);
+      if (!TRIP_EVENT_EXECUTABLE_STATUSES.has(status)) {
+        throw new ValidationError(
+          "لا يمكن تسجيل واقعة على حجز في هذه الحالة",
+          { field: "status" },
+        );
+      }
+      // واقعة الإغلاق التشغيلي تتطلب إثبات POD (صورة تفريغ/تسليم).
+      if (
+        TRIP_EVENT_CLOSING_TYPES.has(b.eventType) &&
+        (!b.proofObjectPaths || b.proofObjectPaths.length === 0)
+      ) {
+        throw new ValidationError(
+          "واقعة الإغلاق تتطلب صورة إثبات (POD)",
+          { field: "proofObjectPaths" },
+        );
+      }
+      // أمر التوزيع (إن مُرّر) يجب أن يخصّ هذا الحجز ونفس الشركة.
+      if (b.dispatchOrderId != null) {
+        const [d] = await rawQuery<Record<string, unknown>>(
+          `SELECT id FROM transport_dispatch_orders
+            WHERE id = $1 AND "bookingId" = $2 AND "companyId" = $3`,
+          [b.dispatchOrderId, id, scope.companyId],
+        );
+        if (!d) {
+          throw new ValidationError(
+            "أمر التوزيع غير مرتبط بهذا الحجز",
+            { field: "dispatchOrderId" },
+          );
+        }
+      }
+
+      // اشتقاق حالة الحجز (تشغيلي، للأمام فقط — لا رجوع، لا مساس بالدفتر).
+      let derivedStatus: string | null = null;
+      if (TRIP_EVENT_CLOSING_TYPES.has(b.eventType)) {
+        derivedStatus = "completed";
+      } else if (TRIP_EVENT_PRE_EXECUTION_STATUSES.has(status)) {
+        derivedStatus = "in_progress";
+      }
+      // الواقعة + الحالة المشتقّة تُكتبان ذرّيًا (إمّا معًا أو لا شيء):
+      // rawExecute داخل withTransaction ينضمّ لـtxStore فيبقى الكل ذرّيًا.
+      const insertId = await withTransaction(async () => {
+        const ins = await rawExecute(
+          `INSERT INTO fleet_trip_events
+             ("companyId", "branchId", "bookingId", "dispatchOrderId", "eventType",
+              "occurredAt", "lat", "lng", "weightKg", "proofObjectPaths", "notes",
+              "recordedByAssignmentId", "createdBy")
+           VALUES ($1,$2,$3,$4,$5, COALESCE($6::timestamptz, NOW()), $7,$8,$9,$10,$11, $12,$13)`,
+          [
+            scope.companyId, scope.branchId ?? null, id, b.dispatchOrderId ?? null, b.eventType,
+            b.occurredAt ?? null, b.lat ?? null, b.lng ?? null, b.weightKg ?? null,
+            b.proofObjectPaths ?? null, b.notes ?? null,
+            scope.activeAssignmentId ?? null, scope.userId,
+          ],
+        );
+        assertInsert(ins.insertId, "fleet_trip_events");
+        if (derivedStatus && derivedStatus !== status) {
+          await rawExecute(
+            `UPDATE transport_bookings SET status = $1, "updatedAt" = NOW()
+              WHERE id = $2 AND "companyId" = $3`,
+            [derivedStatus, id, scope.companyId],
+          );
+        }
+        return ins.insertId;
+      });
+
+      createAuditLog({
+        companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+        action: "trip_event_recorded", entity: "transport_bookings", entityId: id,
+        after: { tripEventId: insertId, eventType: b.eventType, derivedStatus },
+      }).catch((e) => logger.error(e, "trip event audit failed"));
+
+      res.status(201).json({ data: { id: insertId, derivedStatus } });
+    } catch (err) {
+      handleRouteError(err, res, "Record trip event error:");
     }
   },
 );
@@ -1257,20 +1454,8 @@ transportBookingsRouter.post(
       // 2) Conflict detection — driver / vehicle already booked in
       //    the window. Excludes declined / cancelled orders since they
       //    don't reserve resources.
-      const conflicts = await rawQuery<{ id: number; kind: string }>(
-        `SELECT id, 'driver' AS kind FROM transport_dispatch_orders
-          WHERE "companyId" = $1 AND "driverId" = $2
-            AND status NOT IN ('declined', 'cancelled')
-            AND tstzrange("scheduledStartAt", "scheduledEndAt", '[)')
-                && tstzrange($3::timestamptz, $4::timestamptz, '[)')
-         UNION
-         SELECT id, 'vehicle' AS kind FROM transport_dispatch_orders
-          WHERE "companyId" = $1 AND "vehicleId" = $5
-            AND status NOT IN ('declined', 'cancelled')
-            AND tstzrange("scheduledStartAt", "scheduledEndAt", '[)')
-                && tstzrange($3::timestamptz, $4::timestamptz, '[)')`,
-        [scope.companyId, b.driverId, b.scheduledStartAt, b.scheduledEndAt, b.vehicleId],
-      );
+      const cq = dispatchConflictQuery(scope.companyId, b.driverId, b.vehicleId, b.scheduledStartAt, b.scheduledEndAt);
+      const conflicts = await rawQuery<{ id: number; kind: string }>(cq.sql, cq.params);
       if (conflicts.length > 0 && !b.overrideReason) {
         const kinds = [...new Set(conflicts.map((c) => c.kind))].join("+");
         throw new ConflictError(
@@ -1524,20 +1709,8 @@ transportBookingsRouter.post(
 
         // 2) Re-run time-window conflict detection EXCLUDING this row
         //    itself (otherwise an unchanged window reads as a conflict).
-        const conflicts = await tx.query<{ id: number; kind: string }>(
-          `SELECT id, 'driver' AS kind FROM transport_dispatch_orders
-            WHERE "companyId" = $1 AND "driverId" = $2 AND id <> $6
-              AND status NOT IN ('declined', 'cancelled')
-              AND tstzrange("scheduledStartAt", "scheduledEndAt", '[)')
-                  && tstzrange($3::timestamptz, $4::timestamptz, '[)')
-           UNION
-           SELECT id, 'vehicle' AS kind FROM transport_dispatch_orders
-            WHERE "companyId" = $1 AND "vehicleId" = $5 AND id <> $6
-              AND status NOT IN ('declined', 'cancelled')
-              AND tstzrange("scheduledStartAt", "scheduledEndAt", '[)')
-                  && tstzrange($3::timestamptz, $4::timestamptz, '[)')`,
-          [scope.companyId, targetDriverId, targetStart, targetEnd, targetVehicleId, id],
-        );
+        const cq = dispatchConflictQuery(scope.companyId, targetDriverId, targetVehicleId, targetStart, targetEnd, id);
+        const conflicts = await tx.query<{ id: number; kind: string }>(cq.sql, cq.params);
         if (conflicts.rows.length > 0 && !b.overrideReason) {
           const kinds = [...new Set(conflicts.rows.map((c) => c.kind))].join("+");
           throw new ConflictError(
