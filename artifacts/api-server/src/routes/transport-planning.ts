@@ -44,6 +44,8 @@ import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 import { rawQuery, rawExecute, assertInsert, withTransaction } from "../lib/rawdb.js";
 import { recordTripEventSchema, recordBookingTripEvent } from "../lib/transport/tripEvents.js";
+import { assertDriverEligibility } from "../lib/fleet/driverEligibility.js";
+import { assertDriverRest } from "../lib/fleet/driverRest.js";
 import {
   MapsService, loadPlanningSettings, updatePlanningSettings,
 } from "../lib/fleet/mapsService.js";
@@ -1336,6 +1338,112 @@ transportPlanningRouter.post(
       res.status(201).json({ data: { id: insertId, derivedStatus } });
     } catch (err) {
       handleRouteError(err, res, "Driver trip event error:");
+    }
+  },
+);
+
+// شريحة 3 — مرشّحو العهدة: سائقو الشركة الذين يجوز التسليم لهم (عدا الحالي).
+// متاح للسائق (fleet.dispatch) لتعبئة منتقي المستلِم في تطبيقه.
+transportPlanningRouter.get(
+  "/transport/dispatch-orders/:id/handover-candidates",
+  authorize({ feature: "fleet.dispatch", action: "update" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const dispatchOrderId = parseId(req.params.id, "id");
+      const [d] = await rawQuery<{ driverId: number }>(
+        `SELECT d."driverId" FROM transport_dispatch_orders d
+          WHERE d.id = $1 AND d."companyId" = $2
+            AND d."driverId" IN (
+              SELECT fd.id FROM fleet_drivers fd
+               WHERE fd."employeeId" = $3 AND fd."companyId" = $2 AND fd."deletedAt" IS NULL
+            )`,
+        [dispatchOrderId, scope.companyId, scope.employeeId],
+      );
+      if (!d) throw new NotFoundError("أمر التوزيع غير مُسنَد إليك");
+      const candidates = await rawQuery<Record<string, unknown>>(
+        `SELECT id, name FROM fleet_drivers
+          WHERE "companyId" = $1 AND "deletedAt" IS NULL AND id <> $2
+          ORDER BY name ASC LIMIT 200`,
+        [scope.companyId, d.driverId],
+      );
+      res.json(maskFields(req, { data: candidates }));
+    } catch (err) {
+      handleRouteError(err, res, "Handover candidates error:");
+    }
+  },
+);
+
+// شريحة 3 — عهدة تبديل السائق: السائق الحالي يُسلّم العهدة لسائق آخر أثناء
+// الرحلة. يُسجَّل كواقعة handover (إثبات حالة الصندوق + المستلِم) ويُعاد إسناد
+// أمر التوزيع للسائق الجديد ذرّيًا. فحص أهلية المستلِم إلزامي (رخصة + راحة).
+const handoverSchema = z.object({
+  incomingDriverId: z.coerce.number().int().positive(),
+  proofObjectPaths: z.array(z.string().min(1).max(512)).min(1).max(20),
+  notes: z.string().max(2000).optional(),
+  lat: z.coerce.number().min(-90).max(90).optional(),
+  lng: z.coerce.number().min(-180).max(180).optional(),
+  weightKg: z.coerce.number().min(0).optional(),
+  weightKind: z.enum(["tare", "gross", "axle", "other"]).optional(),
+});
+
+transportPlanningRouter.post(
+  "/transport/dispatch-orders/:id/handover",
+  authorize({ feature: "fleet.dispatch", action: "update" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const dispatchOrderId = parseId(req.params.id, "id");
+      const b = zodParse(handoverSchema.safeParse(req.body));
+      // السائق الحالي يملك أمر التوزيع — نجلب الحجز والمركبة والسائق الحالي.
+      const [d] = await rawQuery<{ bookingId: number; vehicleId: number; driverId: number }>(
+        `SELECT d."bookingId", d."vehicleId", d."driverId"
+           FROM transport_dispatch_orders d
+          WHERE d.id = $1 AND d."companyId" = $2
+            AND d."driverId" IN (
+              SELECT fd.id FROM fleet_drivers fd
+               WHERE fd."employeeId" = $3 AND fd."companyId" = $2 AND fd."deletedAt" IS NULL
+            )`,
+        [dispatchOrderId, scope.companyId, scope.employeeId],
+      );
+      if (!d) throw new NotFoundError("أمر التوزيع غير مُسنَد إليك");
+      if (b.incomingDriverId === d.driverId) {
+        throw new ValidationError("لا يمكن تسليم العهدة لنفس السائق", { field: "incomingDriverId" });
+      }
+      // المستلِم سائق صالح في الشركة.
+      const [incoming] = await rawQuery<{ id: number }>(
+        `SELECT id FROM fleet_drivers
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [b.incomingDriverId, scope.companyId],
+      );
+      if (!incoming) {
+        throw new ValidationError("السائق المستلِم غير موجود", { field: "incomingDriverId" });
+      }
+      // فحص أهلية المستلِم — إلزامي (اعتماد المالك). يرميان عند عدم الأهلية:
+      // الرخصة (ValidationError → 400) والراحة (ConflictError → 409).
+      await assertDriverEligibility({
+        companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId,
+        driverId: b.incomingDriverId, vehicleId: d.vehicleId,
+        sourceType: "fleet_trip", sourceId: dispatchOrderId,
+      });
+      await assertDriverRest({
+        companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId,
+        driverId: b.incomingDriverId, nextAssignmentStartAt: new Date().toISOString(),
+      });
+      // واقعة العهدة + إعادة الإسناد ذرّيًا عبر المنطق المشترك.
+      const { insertId, derivedStatus } = await recordBookingTripEvent(
+        scope, d.bookingId,
+        {
+          eventType: "handover", dispatchOrderId,
+          handoverToDriverId: b.incomingDriverId,
+          proofObjectPaths: b.proofObjectPaths, notes: b.notes,
+          lat: b.lat, lng: b.lng, weightKg: b.weightKg, weightKind: b.weightKind,
+        },
+        { reassignDispatchDriverId: b.incomingDriverId },
+      );
+      res.status(201).json({ data: { id: insertId, derivedStatus, reassignedTo: b.incomingDriverId } });
+    } catch (err) {
+      handleRouteError(err, res, "Driver handover error:");
     }
   },
 );
