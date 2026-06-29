@@ -67,6 +67,7 @@ interface BookingDetail {
   lines: BookingLine[];
   dispatchOrders: DispatchOrder[];
   tripEvents: TripEvent[];
+  deductions: DeductionCandidate[];
   // #2475-follow-up — resolved booking-cancel policy (guard|cascade), used by
   // the confirmation/preview dialog. Defaults to "guard" when absent.
   cancelPolicy?: "guard" | "cascade";
@@ -118,6 +119,22 @@ interface TripEvent {
   proofObjectPaths: string[] | null;
   notes: string | null;
 }
+
+// شريحة 4 — مرشّح خصم النقص/التأخير (تشغيلي؛ القيد يُرحَّل في المالية).
+interface DeductionCandidate {
+  id: number;
+  basis: string;
+  shortageKg: number | null;
+  delayHours: number | null;
+  amount: number;
+  reason: string;
+  status: string;
+}
+const DEDUCTION_STATUS_LABEL: Record<string, string> = {
+  pending: "قيد المراجعة",
+  issued: "صدر إشعار دائن",
+  rejected: "مرفوض",
+};
 
 // وقائع الرحلة: مُسجّل التسجيل (الأزرار/الوزن/الإثبات) في المكوّن المشترك
 // TripEventRecorder؛ هنا نبقي بوابة الحالة + الجدول الزمني + ملخّص الوزن.
@@ -307,6 +324,40 @@ export default function TransportBookingDetail() {
   );
 
   // وقائع الرحلة: التسجيل عبر المكوّن المشترك TripEventRecorder (أدناه).
+
+  // شريحة 4 — مرشّح خصم النقص/التأخير (يُنشئ مرشّحًا؛ المالية تُصدر الإشعار).
+  const [showDeductionForm, setShowDeductionForm] = useState(false);
+  const [dedBasis, setDedBasis] = useState<"weight_shortage" | "delay">("weight_shortage");
+  const [dedMeasure, setDedMeasure] = useState("");
+  const [dedAmount, setDedAmount] = useState("");
+  const [dedReason, setDedReason] = useState("");
+  const deductionMut = useApiMutation<
+    unknown,
+    { basis: string; shortageKg?: number; delayHours?: number; amount: number; reason: string }
+  >(
+    () => `/transport/bookings/${id}/deductions`,
+    "POST",
+    [["transport-booking", id || ""]],
+    { successMessage: "تم تسجيل مرشّح الخصم" },
+  );
+  const submitDeduction = () => {
+    const amount = Number(dedAmount);
+    const measure = Number(dedMeasure);
+    if (!(amount > 0)) { toast({ variant: "destructive", title: "أدخل مبلغ الخصم" }); return; }
+    if (!(measure > 0)) {
+      toast({ variant: "destructive", title: dedBasis === "weight_shortage" ? "أدخل نقص الوزن" : "أدخل ساعات التأخّر" });
+      return;
+    }
+    if (!dedReason.trim()) { toast({ variant: "destructive", title: "أدخل السبب" }); return; }
+    deductionMut.mutate(
+      {
+        basis: dedBasis,
+        ...(dedBasis === "weight_shortage" ? { shortageKg: measure } : { delayHours: measure }),
+        amount, reason: dedReason.trim(),
+      },
+      { onSuccess: () => { setShowDeductionForm(false); setDedMeasure(""); setDedAmount(""); setDedReason(""); } },
+    );
+  };
 
   if (isLoading) return <LoadingSpinner />;
   if (isError || !b) return <ErrorState />;
@@ -735,6 +786,73 @@ export default function TransportBookingDetail() {
                     <span className="text-xs">· {ev.proofObjectPaths.length} صورة</span>
                   )}
                   {ev.notes && <span className="text-xs text-muted-foreground truncate max-w-[40%]">· {ev.notes}</span>}
+                </li>
+              ))}
+            </ol>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* شريحة 4 — خصومات النقص/التأخير: يُنشئ مرشّح خصم؛ المالية تُصدر منه
+          إشعارًا دائنًا (تخفيض إيراد العميل) عبر تدفّقها — لا قيد من النقل. */}
+      <Card className="mt-4">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center justify-between">
+            <span>خصومات النقص/التأخير ({b.deductions.length})</span>
+            <Button
+              size="sm"
+              variant={showDeductionForm ? "default" : "outline"}
+              onClick={() => setShowDeductionForm(!showDeductionForm)}
+            >
+              {showDeductionForm ? "إلغاء" : "تسجيل خصم"}
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {showDeductionForm && (
+            <div className="border rounded-md p-3 space-y-2 bg-muted/30">
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="text-xs text-muted-foreground w-20">السبب</label>
+                <select
+                  className="h-8 text-sm border rounded-md px-2 bg-background"
+                  value={dedBasis}
+                  onChange={(e) => setDedBasis(e.target.value as "weight_shortage" | "delay")}
+                >
+                  <option value="weight_shortage">نقص وزن</option>
+                  <option value="delay">تأخّر</option>
+                </select>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="text-xs text-muted-foreground w-20">
+                  {dedBasis === "weight_shortage" ? "النقص (كغم)" : "التأخّر (ساعة)"}
+                </label>
+                <Input type="number" min="0" value={dedMeasure} onChange={(e) => setDedMeasure(e.target.value)} className="w-32 h-8" />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="text-xs text-muted-foreground w-20">المبلغ (ريال)</label>
+                <Input type="number" min="0" value={dedAmount} onChange={(e) => setDedAmount(e.target.value)} className="w-32 h-8" />
+              </div>
+              <Input value={dedReason} onChange={(e) => setDedReason(e.target.value)} placeholder="السبب التفصيلي" className="h-8 text-sm" />
+              <div className="text-[11px] text-muted-foreground">
+                يُنشئ مرشّح خصم؛ المالية تُصدر منه إشعارًا دائنًا (تخفيض إيراد العميل).
+              </div>
+              <Button size="sm" onClick={submitDeduction} disabled={deductionMut.isPending}>
+                {deductionMut.isPending ? "جاري التسجيل…" : "تسجيل المرشّح"}
+              </Button>
+            </div>
+          )}
+          {b.deductions.length === 0 ? (
+            <div className="text-center py-4 text-muted-foreground text-sm">لا خصومات مسجّلة.</div>
+          ) : (
+            <ol className="space-y-1.5">
+              {b.deductions.map((d) => (
+                <li key={d.id} className="flex flex-wrap items-center gap-2 text-sm border-b pb-1.5 last:border-0">
+                  <Badge variant="outline" className="shrink-0">
+                    {d.basis === "weight_shortage" ? "نقص وزن" : "تأخّر"}
+                  </Badge>
+                  <span className="text-xs">{d.amount} ريال</span>
+                  <span className="text-xs text-muted-foreground">· {DEDUCTION_STATUS_LABEL[d.status] ?? d.status}</span>
+                  {d.reason && <span className="text-xs text-muted-foreground truncate max-w-[40%]">· {d.reason}</span>}
                 </li>
               ))}
             </ol>

@@ -388,4 +388,36 @@ d("شريحة 1 — دورة حياة وقائع الرحلة (قاعدة حيّ
     expect(ev.eventType).toBe("handover");
     expect(ev.handoverToDriverId).toBe(driverHeavyId);
   });
+
+  // ── شريحة 4 — مرشّح خصم النقص/التأخير (تشغيلي؛ لا قيد من النقل) ──
+  it("شريحة 4 — تسجيل مرشّح خصم نقص وزن → 201 ويظهر في القائمة", async () => {
+    const res = await withAuth(
+      request(app).post(`/api/transport/bookings/${bookingId}/deductions`), tokenA,
+    ).send({ basis: "weight_shortage", shortageKg: 500, amount: 250, reason: "نقص 500 كغم" });
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    const [row] = await rawQuery<{ basis: string; amount: string; status: string }>(
+      `SELECT basis, amount, status FROM transport_deduction_candidates WHERE "bookingId"=$1 ORDER BY id DESC LIMIT 1`,
+      [bookingId]);
+    expect(row.basis).toBe("weight_shortage");
+    expect(Number(row.amount)).toBe(250);
+    expect(row.status).toBe("pending");
+    const list = await withAuth(
+      request(app).get(`/api/transport/bookings/${bookingId}/deductions`), tokenA);
+    expect(list.status).toBe(200);
+    expect((list.body?.data ?? []).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("شريحة 4 — أساس نقص الوزن بلا قياس → 400", async () => {
+    const res = await withAuth(
+      request(app).post(`/api/transport/bookings/${bookingId}/deductions`), tokenA,
+    ).send({ basis: "weight_shortage", amount: 100, reason: "بلا قياس" });
+    expect(res.status).toBe(400);
+  });
+
+  it("شريحة 4 — عزل: شركة أخرى لا تسجّل خصمًا على حجز ليس لها → 404", async () => {
+    const res = await withAuth(
+      request(app).post(`/api/transport/bookings/${bookingId}/deductions`), tokenB,
+    ).send({ basis: "delay", delayHours: 3, amount: 90, reason: "تأخّر" });
+    expect(res.status).toBe(404);
+  });
 });
