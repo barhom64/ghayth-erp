@@ -51,6 +51,7 @@ d("شريحة 1 — دورة حياة وقائع الرحلة (قاعدة حيّ
   let tokenB = "";
   let bookingId = 0;
   let draftBookingId = 0;
+  let driverDispatchId = 0;
 
   // يهيّئ شركة معزولة مع مالك ويُعيد (companyId, branchId, token).
   async function bootstrapOwner(label: string, stamp: number) {
@@ -82,7 +83,7 @@ d("شريحة 1 — دورة حياة وقائع الرحلة (قاعدة حيّ
       [eid, companyId, branchId],
     );
     const token = signToken({ userId: uid, assignmentId: aid, role: "owner" });
-    return { companyId, branchId, token };
+    return { companyId, branchId, eid, token };
   }
 
   beforeAll(async () => {
@@ -127,6 +128,44 @@ d("شريحة 1 — دورة حياة وقائع الرحلة (قاعدة حيّ
     });
     expect(res2.status, JSON.stringify(res2.body)).toBe(201);
     draftBookingId = res2.body.data.id;
+
+    // ── سطح السائق: حجز قابل للتنفيذ + مركبة + سائق (= موظف المالك) + أمر توزيع
+    //    مُسنَد له، حتى يتطابق scope.employeeId مع fleet_drivers.employeeId. ──
+    const drvRes = await withAuth(request(app).post("/api/transport/bookings"), tokenA).send({
+      bookingNumber: `BK-TE-DRV-${stamp}`,
+      bookingSource: "manual_entry",
+      transportServiceType: "cargo_load",
+      fromLocationText: "أ", toLocationText: "ب", cargoDescription: "حمولة سائق",
+    });
+    expect(drvRes.status, JSON.stringify(drvRes.body)).toBe(201);
+    const driverBookingId = drvRes.body.data.id;
+    await rawExecute(
+      `UPDATE transport_bookings SET status='scheduled' WHERE id=$1 AND "companyId"=$2`,
+      [driverBookingId, a.companyId],
+    );
+    const [line] = await rawQuery<{ id: number }>(
+      `SELECT id FROM transport_booking_lines
+        WHERE "bookingId"=$1 AND "companyId"=$2 ORDER BY id ASC LIMIT 1`,
+      [driverBookingId, a.companyId],
+    );
+    const [veh] = await rawQuery<{ id: number }>(
+      `INSERT INTO fleet_vehicles ("companyId","branchId","plateNumber")
+       VALUES ($1,$2,$3) RETURNING id`,
+      [a.companyId, a.branchId, `TE-${stamp}`.slice(0, 20)],
+    );
+    const [drv] = await rawQuery<{ id: number }>(
+      `INSERT INTO fleet_drivers ("companyId","branchId","employeeId",name)
+       VALUES ($1,$2,$3,$4) RETURNING id`,
+      [a.companyId, a.branchId, a.eid, "TripEvents Driver A"],
+    );
+    const [disp] = await rawQuery<{ id: number }>(
+      `INSERT INTO transport_dispatch_orders
+         ("companyId","branchId","bookingId","bookingLineId","vehicleId","driverId",
+          "scheduledStartAt","scheduledEndAt",status)
+       VALUES ($1,$2,$3,$4,$5,$6, NOW(), NOW() + INTERVAL '2 hours', 'accepted') RETURNING id`,
+      [a.companyId, a.branchId, driverBookingId, line.id, veh.id, drv.id],
+    );
+    driverDispatchId = disp.id;
   }, 90_000);
 
   it("واقعة «تحميل» تُسجّل (مع وزن فارغ) وتنقل الحجز إلى in_progress", async () => {
@@ -220,5 +259,34 @@ d("شريحة 1 — دورة حياة وقائع الرحلة (قاعدة حيّ
       request(app).post(`/api/transport/bookings/${draftBookingId}/events`), tokenA,
     ).send({ eventType: "load", dispatchOrderId: 999_999_999 });
     expect(res.status).toBe(400);
+  });
+
+  it("سطح السائق — السائق المُسنَد يسجّل واقعة على أمر توزيعه (201) ويربطها به", async () => {
+    const res = await withAuth(
+      request(app).post(`/api/transport/dispatch-orders/${driverDispatchId}/trip-event`), tokenA,
+    ).send({ eventType: "load", weightKg: 9000, weightKind: "tare" });
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    expect(res.body?.data?.derivedStatus).toBe("in_progress");
+    const [ev] = await rawQuery<{ dispatchOrderId: number; weightKind: string | null }>(
+      `SELECT "dispatchOrderId","weightKind" FROM fleet_trip_events
+        WHERE "dispatchOrderId"=$1 ORDER BY id DESC LIMIT 1`,
+      [driverDispatchId],
+    );
+    expect(ev.dispatchOrderId).toBe(driverDispatchId);
+    expect(ev.weightKind).toBe("tare");
+  });
+
+  it("سطح السائق — عزل: شركة أخرى لا تسجّل على أمر توزيع ليس لها (404)", async () => {
+    const res = await withAuth(
+      request(app).post(`/api/transport/dispatch-orders/${driverDispatchId}/trip-event`), tokenB,
+    ).send({ eventType: "arrive" });
+    expect(res.status).toBe(404);
+  });
+
+  it("سطح السائق — أمر توزيع غير موجود → 404", async () => {
+    const res = await withAuth(
+      request(app).post(`/api/transport/dispatch-orders/999999999/trip-event`), tokenA,
+    ).send({ eventType: "arrive" });
+    expect(res.status).toBe(404);
   });
 });
