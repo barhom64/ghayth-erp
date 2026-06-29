@@ -25,13 +25,13 @@ interface AttendanceStatus {
 export default function AttendanceScreen() {
   const c = useColors();
   const router = useRouter();
-  const { data, isLoading, refetch } = useList<AttendanceStatus>('/api/my-space/attendance');
+  const { data, isLoading, refetch } = useList<AttendanceStatus>('/api/my-space');
   const { position, loading: gpsLoading, error: gpsError, refresh: fetchGPS } = useCurrentPosition();
   const [photo, setPhoto] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const checkInMutation = useMutation('/api/hr/attendance/check-in', 'POST');
-  const checkOutMutation = useMutation('/api/hr/attendance/check-out', 'POST');
+  const checkInMutation = useMutation('/api/hr/check-in', 'POST');
+  const checkOutMutation = useMutation('/api/hr/check-out', 'POST');
 
   const today = data?.attendance ?? data?.today;
   const checkedIn = today?.status === 'present' && !today?.checkOut;
