@@ -1088,6 +1088,15 @@ function AuthGate() {
       <Stack.Screen name="finance/collection-history" options={{ title: 'سجل التحصيل' }} />
       <Stack.Screen name="finance/invoice-memos" options={{ title: 'مذكرات الفاتورة' }} />
       <Stack.Screen name="finance/bad-debt-preview" options={{ title: 'معاينة مخصص الديون' }} />
+      <Stack.Screen name="documents/document-entity-links" options={{ title: 'روابط الكيانات' }} />
+      <Stack.Screen name="documents/document-access-log" options={{ title: 'سجل الوصول للمستند' }} />
+      <Stack.Screen name="documents/document-acls" options={{ title: 'صلاحيات المستند' }} />
+      <Stack.Screen name="documents/template-variables" options={{ title: 'متغيرات القالب' }} />
+      <Stack.Screen name="tasks/task-assignees" options={{ title: 'منسوبو المهمة' }} />
+      <Stack.Screen name="requests/request-actions" options={{ title: 'إجراءات الطلب' }} />
+      <Stack.Screen name="comms/log-referral-chain" options={{ title: 'سلسلة الإحالة' }} />
+      <Stack.Screen name="marketing/campaign-roas" options={{ title: 'عائد الإنفاق الإعلاني' }} />
+      <Stack.Screen name="support/kb-detail" options={{ title: 'مقالة قاعدة المعرفة' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
