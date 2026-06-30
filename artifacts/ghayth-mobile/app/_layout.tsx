@@ -805,6 +805,8 @@ function AuthGate() {
       <Stack.Screen name="admin/rbac-sod" options={{ title: 'فصل المهام' }} />
       <Stack.Screen name="admin/jit-pending" options={{ title: 'طلبات الوصول المؤقت' }} />
       <Stack.Screen name="admin/notification-stats" options={{ title: 'إحصاءات الإشعارات' }} />
+      <Stack.Screen name="finance/gl-mudad-salary" options={{ title: 'رواتب مدد — معلقة' }} />
+      <Stack.Screen name="finance/gl-fx-revaluation" options={{ title: 'إعادة تقييم العملات — معلقة' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
