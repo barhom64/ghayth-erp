@@ -483,6 +483,35 @@ function AuthGate() {
       <Stack.Screen name="legal/sessions" options={{ title: 'جلسات القضايا' }} />
       <Stack.Screen name="legal/judgments" options={{ title: 'الأحكام القضائية' }} />
       <Stack.Screen name="legal/contracts" options={{ title: 'العقود القانونية' }} />
+      <Stack.Screen name="finance/income-statement" options={{ title: 'قائمة الدخل' }} />
+      <Stack.Screen name="finance/balance-sheet" options={{ title: 'الميزانية العمومية' }} />
+      <Stack.Screen name="finance/bank-accounts" options={{ title: 'الحسابات البنكية' }} />
+      <Stack.Screen name="finance/vendors" options={{ title: 'الموردون' }} />
+      <Stack.Screen name="finance/commitments" options={{ title: 'الالتزامات' }} />
+      <Stack.Screen name="finance/recurring-invoices" options={{ title: 'الفواتير المتكررة' }} />
+      <Stack.Screen name="finance/purchase-requests" options={{ title: 'طلبات الشراء' }} />
+      <Stack.Screen name="finance/purchase-orders" options={{ title: 'أوامر الشراء' }} />
+      <Stack.Screen name="umrah/invoices" options={{ title: 'فواتير العمرة' }} />
+      <Stack.Screen name="umrah/violations" options={{ title: 'مخالفات العمرة' }} />
+      <Stack.Screen name="umrah/families" options={{ title: 'عائلات العمرة' }} />
+      <Stack.Screen name="umrah/sub-agents" options={{ title: 'الوكلاء الفرعيون' }} />
+      <Stack.Screen name="properties/contracts" options={{ title: 'عقود الأملاك' }} />
+      <Stack.Screen name="properties/inspections" options={{ title: 'معاينات الأملاك' }} />
+      <Stack.Screen name="properties/payments" options={{ title: 'مدفوعات الأملاك' }} />
+      <Stack.Screen name="fleet/inspections" options={{ title: 'معاينات الأسطول' }} />
+      <Stack.Screen name="fleet/insurances" options={{ title: 'تأمينات الأسطول' }} />
+      <Stack.Screen name="umrah/transports" options={{ title: 'نقل العمرة' }} />
+      <Stack.Screen name="umrah/payments" options={{ title: 'مدفوعات العمرة' }} />
+      <Stack.Screen name="finance/salary-advances" options={{ title: 'سلف الرواتب' }} />
+      <Stack.Screen name="finance/customer-advances" options={{ title: 'سلف العملاء' }} />
+      <Stack.Screen name="finance/vendor-advances" options={{ title: 'سلف الموردين' }} />
+      <Stack.Screen name="finance/custodies" options={{ title: 'العهد المالية' }} />
+      <Stack.Screen name="finance/insurances" options={{ title: 'التأمينات' }} />
+      <Stack.Screen name="finance/vendor-contracts" options={{ title: 'عقود الموردين' }} />
+      <Stack.Screen name="finance/obligations" options={{ title: 'الالتزامات المالية' }} />
+      <Stack.Screen name="crm/clients" options={{ title: 'عملاء CRM' }} />
+      <Stack.Screen name="hr/excuse-requests" options={{ title: 'طلبات الاستئذان' }} />
+      <Stack.Screen name="hr/violations" options={{ title: 'مخالفات الموارد البشرية' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
