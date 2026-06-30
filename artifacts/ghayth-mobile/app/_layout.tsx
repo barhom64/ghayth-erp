@@ -864,6 +864,15 @@ function AuthGate() {
       <Stack.Screen name="admin/audit-entities" options={{ title: 'كيانات سجل التدقيق' }} />
       <Stack.Screen name="print/entity-types" options={{ title: 'أنواع كيانات الطباعة' }} />
       <Stack.Screen name="print/jobs" options={{ title: 'مهام الطباعة' }} />
+      <Stack.Screen name="admin/pbx-overview" options={{ title: 'نظرة عامة PBX' }} />
+      <Stack.Screen name="admin/pbx-ivr-menus" options={{ title: 'قوائم IVR' }} />
+      <Stack.Screen name="admin/activity-feed" options={{ title: 'تغذية نشاط النظام' }} />
+      <Stack.Screen name="admin/approval-overrides" options={{ title: 'تجاوزات الاعتماد' }} />
+      <Stack.Screen name="admin/intelligence-kpis" options={{ title: 'مؤشرات الأداء الذكية' }} />
+      <Stack.Screen name="admin/rbac-roles" options={{ title: 'أدوار RBAC' }} />
+      <Stack.Screen name="bi/exec-overdue-invoices" options={{ title: 'الفواتير المتأخرة' }} />
+      <Stack.Screen name="bi/exec-pnl" options={{ title: 'الأرباح والخسائر الموحّد' }} />
+      <Stack.Screen name="bi/exec-critical-obligations" options={{ title: 'الالتزامات الحرجة' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
