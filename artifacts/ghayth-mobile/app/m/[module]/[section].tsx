@@ -10,6 +10,8 @@ import { useColors } from '@/hooks/useColors';
 import { apiFetch } from '@/hooks/useApi';
 import { getSection, pickField, statusBadge } from '@/lib/moduleSections';
 import { setRecord } from '@/lib/recordStore';
+import { useAuth } from '@/context/AuthContext';
+import { allowedModuleSet } from '@/lib/modules';
 
 type Row = Record<string, unknown>;
 const PAGE_SIZE = 30;
@@ -54,6 +56,7 @@ function getTotal(data: unknown): number | null {
 export default function SectionListScreen() {
   const c = useColors();
   const router = useRouter();
+  const { user } = useAuth();
   const { module, section } = useLocalSearchParams<{ module: string; section: string }>();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -67,6 +70,8 @@ export default function SectionListScreen() {
   const searchRef = useRef('');
 
   const def = getSection(module, section);
+  const allowed = allowedModuleSet(user?.userRoles);
+  const hasModuleAccess = def?.write?.moduleKey ? allowed.has(def.write.moduleKey) : false;
 
   const fetchPage = useCallback(async (p: number, reset = false) => {
     if (!def) return;
@@ -161,7 +166,7 @@ export default function SectionListScreen() {
       <Stack.Screen
         options={{
           title: def.label,
-          headerRight: (def.write?.createFields?.length ?? 0) > 0 ? () => (
+          headerRight: hasModuleAccess && (def.write?.createFields?.length ?? 0) > 0 ? () => (
             <Pressable
               onPress={() => router.push({ pathname: '/m/[module]/[section]/form', params: { module, section } })}
               style={{ marginLeft: 12 }}

@@ -12,6 +12,8 @@ import { getSection, statusBadge, type SectionAction } from '@/lib/moduleSection
 import { getRecord } from '@/lib/recordStore';
 import { apiFetch } from '@/hooks/useApi';
 import { useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/context/AuthContext';
+import { allowedModuleSet, canApprove } from '@/lib/modules';
 
 const LABELS: Record<string, string> = {
   id: 'المعرّف', ref: 'المرجع', status: 'الحالة', name: 'الاسم', title: 'العنوان',
@@ -60,11 +62,14 @@ function isActionVisible(action: SectionAction, row: Record<string, unknown>): b
   return action.showWhenStatus.includes(val);
 }
 
+const MANAGER_ACTION_KEYS = new Set(['approve', 'reject', 'post', 'reverse']);
+
 export default function RecordScreen() {
   const c = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
+  const { user } = useAuth();
   const stored = getRecord();
   const title = stored?.title ?? 'تفاصيل';
   const initialRow: Record<string, unknown> = stored?.row ?? {};
@@ -94,9 +99,15 @@ export default function RecordScreen() {
       .catch(() => {/* استمر بالبيانات المتاحة */})
       .finally(() => setDetailLoading(false));
   }, []);
-  const canEdit = !!def?.write?.editFields?.length && recordId !== undefined;
-  const canDelete = !!def?.write?.canDelete && recordId !== undefined;
-  const actions = (def?.write?.actions ?? []).filter(a => isActionVisible(a, row));
+  const allowed = allowedModuleSet(user?.userRoles);
+  const isManager = canApprove(user?.userRoles);
+  const hasModuleAccess = def?.write?.moduleKey ? allowed.has(def.write.moduleKey) : false;
+
+  const canEdit = hasModuleAccess && !!def?.write?.editFields?.length && recordId !== undefined;
+  const canDelete = hasModuleAccess && !!def?.write?.canDelete && recordId !== undefined;
+  const actions = (def?.write?.actions ?? [])
+    .filter(a => isActionVisible(a, row))
+    .filter(a => MANAGER_ACTION_KEYS.has(a.key) ? isManager : true);
 
   const entries = Object.entries(row).filter(
     ([k, v]) => !HIDDEN.has(k) && v !== null && v !== undefined && v !== '' && typeof v !== 'object',
