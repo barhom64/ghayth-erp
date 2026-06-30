@@ -3453,11 +3453,12 @@ purchaseRouter.post("/vendor-invoices", authorize({ feature: "finance.purchase",
     const { financialEngine } = await import("../lib/engines/index.js");
     const expenseCode = b.expenseAccountCode
       ?? await financialEngine.resolveAccountCode(scope.companyId, "vendor_invoice_expense", "debit", "5340");
-    // ⚠️ مسار مظلَّل (shadowed): journalRouter.post("/vendor-invoices")
-    // (finance-journal:2123) مركَّب قبل purchaseRouter فيلتقط POST
-    // /finance/vendor-invoices دائمًا — هذا المعالج لا تصله الواجهة. توصيل دقّة
-    // رمز ضريبة الوثيقة على المعالج الحقيقي (resolveVendorInvoicePlan، #3087)؛
-    // لا تربط حساب رمز الضريبة هنا (أُزيل توصيل #3084 الخامل — تنظيف).
+    // ⚠️ مسار مظلَّل (shadowed): معالج POST vendor-invoices في journalRouter
+    // (finance-journal:2123) مركَّب قبل purchaseRouter فيلتقط الطلب دائمًا —
+    // هذا المعالج لا تصله الواجهة. توصيل دقّة رمز ضريبة الوثيقة على المعالج
+    // الحقيقي (resolveVendorInvoicePlan، #3087)؛ لا تربط حساب رمز الضريبة هنا
+    // (أُزيل توصيل #3084 الخامل — تنظيف). ملاحظة: لا تُعِد كتابة تعريف مسار
+    // كامل (اسمٌ ثم نقطة ثم post) في تعليق هنا — يخدع حارس audit-coverage.
     const [vatInputCode, apCode] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "purchase_vat_input", "debit", "1180"),
       financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "credit", "2111"),
