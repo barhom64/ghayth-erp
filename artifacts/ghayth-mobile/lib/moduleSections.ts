@@ -1999,8 +1999,45 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
-      { key: "leads", label: "قائمة الجمهور المستهدف", icon: "people-outline", endpoint: "/api/marketing/leads", detailRoute: "/crm/lead-detail", titleFields: ["name", "email"], subtitleFields: ["source", "campaign"], statusField: "status", dateFields: ["createdAt"] },
-      { key: "email-campaigns", label: "حملات البريد", icon: "mail-outline", endpoint: "/api/marketing/email-campaigns", detailRoute: "/crm/email-campaign-detail", titleFields: ["name", "subject"], subtitleFields: ["listName"], statusField: "status", dateFields: ["scheduledAt"] },
+      {
+        key: "leads", label: "قائمة الجمهور المستهدف", icon: "people-outline", endpoint: "/api/marketing/leads",
+        detailRoute: "/crm/lead-detail", titleFields: ["name", "email"], subtitleFields: ["source", "campaign"], statusField: "status", dateFields: ["createdAt"],
+        write: {
+          moduleKey: "marketing",
+          createFields: [
+            { name: "name", label: "الاسم", type: "text", required: true },
+            { name: "email", label: "البريد الإلكتروني", type: "text" },
+            { name: "phone", label: "رقم الهاتف", type: "text" },
+            {
+              name: "source", label: "المصدر", type: "select",
+              options: [
+                { value: "website", label: "الموقع الإلكتروني" },
+                { value: "social", label: "التواصل الاجتماعي" },
+                { value: "referral", label: "إحالة" },
+                { value: "event", label: "فعالية" },
+                { value: "other", label: "أخرى" },
+              ],
+            },
+            { name: "notes", label: "ملاحظات", type: "textarea" },
+          ],
+        },
+      },
+      {
+        key: "email-campaigns", label: "حملات البريد", icon: "mail-outline", endpoint: "/api/marketing/email-campaigns",
+        detailRoute: "/crm/email-campaign-detail", titleFields: ["name", "subject"], subtitleFields: ["listName"], statusField: "status", dateFields: ["scheduledAt"],
+        write: {
+          moduleKey: "marketing",
+          createFields: [
+            { name: "name", label: "اسم الحملة", type: "text", required: true },
+            { name: "subject", label: "عنوان البريد", type: "text", required: true },
+            { name: "scheduledAt", label: "موعد الإرسال", type: "date" },
+            { name: "bodyHtml", label: "محتوى الرسالة", type: "textarea" },
+          ],
+          actions: [
+            { key: "send", label: "إرسال الحملة", icon: "send-outline", method: "POST", path: (id) => `/api/marketing/email-campaigns/${id}/send`, confirm: "هل تريد إرسال الحملة الآن؟", successText: "تم إرسال الحملة", showWhenStatus: ["draft", "scheduled"] },
+          ],
+        },
+      },
     ],
   },
   property: {
