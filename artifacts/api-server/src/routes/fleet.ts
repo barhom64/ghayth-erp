@@ -805,6 +805,17 @@ router.post("/me/fuel-logs", authorize({ feature: "fleet.driver.me", action: "up
       [driver.companyId, resolvedVehicleId, driver.id, fuelDate, liters, costPerLiter, totalCost, mileageAtFuel, stationName, validatedTripId]);
     assertInsert(insertId, "fleet_fuel_logs");
 
+    // Advance the vehicle odometer to the fuel reading (monotonic — GREATEST,
+    // never decreases), so currentMileage stays fresh and the next form
+    // auto-fills the true reading. Mirrors the trip-completion update pattern.
+    if (mileageAtFuel != null) {
+      await rawExecute(
+        `UPDATE fleet_vehicles SET "currentMileage" = GREATEST(COALESCE("currentMileage", 0), $1), "updatedAt" = NOW()
+          WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
+        [mileageAtFuel, resolvedVehicleId, driver.companyId],
+      ).catch((e) => logger.error(e, "[fleet] fuel-log odometer update failed (non-fatal)"));
+    }
+
     // مرشّح مصروف للمالية (لا ترحيل مباشر للدفتر) — يُجسّده المحاسب لاحقًا.
     if (totalCost > 0) {
       const plateLabel = b.vehiclePlate ? ` / ${b.vehiclePlate}` : "";
@@ -3297,6 +3308,15 @@ router.post("/maintenance", authorize({ feature: "fleet.maintenance", action: "c
 
       if (b.vehicleId) {
         await client.query(`UPDATE fleet_vehicles SET status='maintenance', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='available' AND "deletedAt" IS NULL`, [b.vehicleId, scope.companyId]);
+        // Advance the odometer to the service reading (monotonic — GREATEST,
+        // never decreases), keeping currentMileage fresh for the next form.
+        const svcMileage = Number(b.mileageAtService) || null;
+        if (svcMileage != null) {
+          await client.query(
+            `UPDATE fleet_vehicles SET "currentMileage" = GREATEST(COALESCE("currentMileage", 0), $1), "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
+            [svcMileage, b.vehicleId, scope.companyId],
+          );
+        }
       }
 
       return maintId;
