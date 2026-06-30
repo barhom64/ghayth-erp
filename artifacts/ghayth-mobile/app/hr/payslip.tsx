@@ -3,8 +3,8 @@
  */
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Stack } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState } from '@workspace/ui-native';
+import { Stack, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState, GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 
@@ -49,6 +49,7 @@ function LineRow({ label, amount, isDeduction, c }: {
 
 export default function PayslipScreen() {
   const c = useColors();
+  const router = useRouter();
   const { data: resp, isLoading, isError } = useList<MySpacePayslipResp>('/api/my-space/payslip');
 
   if (isLoading) return <GLoadingState text="جارٍ تحميل كشف الراتب…" />;
@@ -116,6 +117,15 @@ export default function PayslipScreen() {
         <GText variant="caption" color={c.onPrimary + 'CC'} style={{ textAlign: 'center' }}>صافي الراتب</GText>
         <Text style={[styles.netAmount, { color: c.onPrimary }]}>{formatAmount(ps.netSalary)}</Text>
       </GCard>
+
+      {/* تاريخ المسيرات */}
+      <GButton
+        title="تاريخ مسيرات الراتب"
+        icon="time-outline"
+        variant="secondary"
+        onPress={() => router.push({ pathname: '/m/[module]/[section]', params: { module: 'hr', section: 'payroll' } } as never)}
+        style={{ marginTop: 4 }}
+      />
     </ScrollView>
   );
 }
