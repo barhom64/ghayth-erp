@@ -749,6 +749,13 @@ function AuthGate() {
       <Stack.Screen name="properties/operations-dashboard" options={{ title: 'لوحة عمليات الأملاك' }} />
       <Stack.Screen name="warehouse/stats" options={{ title: 'إحصاءات المستودع' }} />
       <Stack.Screen name="warehouse/inventory-counts" options={{ title: 'عدادات الجرد' }} />
+      <Stack.Screen name="umrah/pilgrim-movements" options={{ title: 'حركات الحجاج' }} />
+      <Stack.Screen name="umrah/profitability" options={{ title: 'ربحية العمرة' }} />
+      <Stack.Screen name="umrah/violations-summary" options={{ title: 'ملخص مخالفات العمرة' }} />
+      <Stack.Screen name="umrah/commissions-summary" options={{ title: 'ملخص عمولات العمرة' }} />
+      <Stack.Screen name="umrah/finance-hygiene" options={{ title: 'سلامة البيانات المالية' }} />
+      <Stack.Screen name="umrah/daily-runsheet" options={{ title: 'جدول تشغيل اليوم' }} />
+      <Stack.Screen name="umrah/costs-report" options={{ title: 'تكاليف العمرة' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
