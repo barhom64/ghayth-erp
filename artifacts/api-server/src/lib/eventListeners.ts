@@ -2168,6 +2168,21 @@ export function registerEventListeners() {
   registerCrossDomainHandler("legal.invoice.requested", invoiceRequestHandler);
   registerCrossDomainHandler("project.invoice.requested", invoiceRequestHandler);
 
+  // شريحة 4 — ربط مرشّح خصم النقل بالإشعار الدائن الذي أصدرته المالية.
+  // النقل يحدّث مرشّحه فقط (يملك جدوله)؛ المالية أطلقت الحدث (قفل الحدود).
+  const transportDeductionLinkHandler = async (payload: EventPayload) => {
+    const candidateId = Number(payload.deductionCandidateId);
+    const creditMemoId = payload.creditMemoId != null ? Number(payload.creditMemoId) : null;
+    if (!candidateId || !payload.companyId) return;
+    await rawExecute(
+      `UPDATE transport_deduction_candidates
+          SET status = 'issued', "creditMemoId" = $1, "updatedAt" = NOW()
+        WHERE id = $2 AND "companyId" = $3 AND status = 'pending'`,
+      [creditMemoId, candidateId, payload.companyId],
+    );
+  };
+  registerCrossDomainHandler("transport.deduction.materialized", transportDeductionLinkHandler);
+
   // ─── Cross-Domain Fixed Asset Registration ────────────────────────────
   // Fleet and Property domains emit events when they need to register
   // a fixed asset. Finance domain processes these here.
