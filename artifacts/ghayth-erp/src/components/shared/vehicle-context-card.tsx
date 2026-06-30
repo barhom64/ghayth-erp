@@ -7,6 +7,7 @@ import {
   Truck, Fuel, Wrench, Shield, MapPin, AlertTriangle, Info, Calendar,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ContextCardSkeleton, ContextStat, ContextWarning } from "./context-card-kit";
 
 export type VehicleContextSection = "trip" | "maintenance" | "fuel" | "insurance";
 
@@ -95,18 +96,7 @@ export function VehicleContextCard({
 
   if (!hasId) return null;
 
-  if (isLoading) {
-    return (
-      <Card className={cn("border-border bg-surface-subtle/50 animate-pulse", className)}>
-        <CardContent className="p-4">
-          <div className="h-4 w-32 bg-gray-200 rounded mb-3" />
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {[1, 2, 3, 4].map((i) => <div key={i} className="h-12 bg-gray-100 rounded" />)}
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
+  if (isLoading) return <ContextCardSkeleton className={className} />;
 
   if (!data) return null;
 
@@ -154,7 +144,7 @@ export function VehicleContextCard({
 
         {/* Core grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          <InfoTile label="السائق المعيّن" value={data.driverName || "—"} />
+          <InfoTile label="السائق الحالي" value={data.driverName || "—"} />
           <InfoTile label="عداد الكيلومترات" value={data.mileage ? `${formatNumber(Number(data.mileage))} كم` : "—"} />
           <InfoTile label="عدد الرحلات" value={`${(data.trips || []).length}`} />
           <InfoTile label="تزويدات سابقة" value={`${(data.fuelLogs || []).length}`} />
@@ -210,38 +200,30 @@ export function VehicleContextCard({
 
         {/* Not available warning */}
         {notAvailable && (
-          <div className="flex items-center gap-1.5 text-xs text-status-error-foreground bg-status-error-surface border border-status-error-surface rounded p-1.5">
-            <AlertTriangle className="h-3 w-3" />
-            <span>
-              {data.status === "maintenance" && "المركبة تحت الصيانة — لا تقبل رحلات"}
-              {data.status === "retired" && "المركبة متوقفة — لا يمكن تعيين رحلات أو صيانة"}
-              {data.status === "sold" && "المركبة مباعة — غير متاحة"}
-            </span>
-          </div>
+          <ContextWarning icon={AlertTriangle}>
+            {data.status === "maintenance" && "المركبة تحت الصيانة — لا تقبل رحلات"}
+            {data.status === "retired" && "المركبة متوقفة — لا يمكن تعيين رحلات أو صيانة"}
+            {data.status === "sold" && "المركبة مباعة — غير متاحة"}
+          </ContextWarning>
         )}
 
         {/* Insurance warning */}
         {insuranceExpired && (
-          <div className="flex items-center gap-1.5 text-xs text-status-error-foreground bg-status-error-surface border border-status-error-surface rounded p-1.5">
-            <Shield className="h-3 w-3" />
-            <span>التأمين منتهي — لا يجوز تعيين رحلات قبل تجديده</span>
-          </div>
+          <ContextWarning icon={Shield}>
+            التأمين منتهي — لا يجوز تعيين رحلات قبل تجديده
+          </ContextWarning>
         )}
         {insuranceExpiringSoon && activeInsurance && (
-          <div className="flex items-center gap-1.5 text-xs text-status-warning-foreground bg-status-warning-surface border border-status-warning-surface rounded p-1.5">
-            <Shield className="h-3 w-3" />
-            <span>
-              التأمين ينتهي خلال شهر ({new Date(activeInsurance.endDate!).toLocaleDateString("ar-SA")}) — جدّد قبل الانتهاء
-            </span>
-          </div>
+          <ContextWarning icon={Shield} tone="warning">
+            التأمين ينتهي خلال شهر ({new Date(activeInsurance.endDate!).toLocaleDateString("ar-SA")}) — جدّد قبل الانتهاء
+          </ContextWarning>
         )}
 
         {/* Maintenance warning */}
         {serviceOverdue && (
-          <div className="flex items-center gap-1.5 text-xs text-status-error-foreground bg-status-error-surface border border-status-error-surface rounded p-1.5">
-            <Wrench className="h-3 w-3" />
-            <span>موعد الصيانة الدوري متأخر — راجع قبل الرحلة التالية</span>
-          </div>
+          <ContextWarning icon={Wrench}>
+            موعد الصيانة الدوري متأخر — راجع قبل الرحلة التالية
+          </ContextWarning>
         )}
 
         {/* Section-specific */}
@@ -348,11 +330,8 @@ export function VehicleContextCard({
   );
 }
 
+// Thin alias kept so the ~10 call sites read unchanged; the markup now lives
+// once in the shared ContextStat (context-card-kit).
 function InfoTile({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="bg-white rounded p-2 border border-border">
-      <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
-      <p className="text-sm font-semibold text-gray-800 truncate">{value}</p>
-    </div>
-  );
+  return <ContextStat label={label} value={value} truncate />;
 }

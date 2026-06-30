@@ -16,6 +16,7 @@ import { Plus, Trash2, Save, Package } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { UnifiedDateInput } from "@/components/ui/unified-date-input";
+import { useVehicleDriverDefault } from "@/hooks/use-vehicle-driver-default";
 
 interface VehicleOption { id: number; plateNumber: string; }
 interface DriverOption { id: number; name: string; status: string; }
@@ -50,6 +51,9 @@ export default function CargoCreate() {
     freightCost: 0,
     notes: "",
   });
+
+  // الكيان يقود التجربة: اختيار المركبة يُعبّئ سائقها المعيَّن تلقائيًا (قابل للتغيير).
+  useVehicleDriverDefault(form.vehicleId, form.driverId, (v) => setForm((f) => ({ ...f, driverId: v })));
 
   const [items, setItems] = useState<ItemDraft[]>([]);
   const [draft, setDraft] = useState<ItemDraft>({

@@ -3315,9 +3315,20 @@ router.post("/maintenance", authorize({ feature: "properties.maintenance", actio
     if (!unit) {
       throw new ValidationError("الوحدة غير موجودة", { field: "unitId", fix: "اختر وحدة مسجلة" });
     }
+    // الكيان يقود التجربة: المستخدم يختار الوحدة فقط — والنظام يربط البلاغ تلقائيًا
+    // بالعقد النشط ومستأجره المسؤول (maintenance_requests يحمل contractId+tenantName
+    // أصلًا). يفضّل أي tenantName صريح، ويسقط على العقد النشط للوحدة.
+    const [activeContract] = await rawQuery<{ id: number; tenantName: string }>(
+      `SELECT id, "tenantName" FROM rental_contracts
+        WHERE "unitId"=$1 AND "companyId"=$2 AND status='active' AND "deletedAt" IS NULL
+        ORDER BY "startDate" DESC LIMIT 1`,
+      [b.unitId, scope.companyId]
+    );
+    const resolvedContractId = activeContract?.id ?? null;
+    const resolvedTenantName = b.tenantName ?? activeContract?.tenantName ?? null;
     const { insertId } = await rawExecute(
-      `INSERT INTO maintenance_requests ("companyId","unitId","tenantName",category,description,priority,status,"supplierId","unregisteredSupplierName") VALUES ($1,$2,$3,$4,$5,$6,'open',$7,$8)`,
-      [scope.companyId, b.unitId, b.tenantName, b.category || 'general', b.description, b.priority || 'medium', b.supplierId ?? null, b.unregisteredSupplierName ?? null]
+      `INSERT INTO maintenance_requests ("companyId","unitId","contractId","tenantName",category,description,priority,status,"supplierId","unregisteredSupplierName") VALUES ($1,$2,$3,$4,$5,$6,$7,'open',$8,$9)`,
+      [scope.companyId, b.unitId, resolvedContractId, resolvedTenantName, b.category || 'general', b.description, b.priority || 'medium', b.supplierId ?? null, b.unregisteredSupplierName ?? null]
     );
     assertInsert(insertId, "maintenance_requests");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);

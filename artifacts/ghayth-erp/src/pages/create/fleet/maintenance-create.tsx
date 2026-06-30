@@ -13,6 +13,7 @@ import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zon
 import { VehicleContextCard } from "@/components/shared/vehicle-context-card";
 import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { VehicleSelect, SupplierSelect } from "@/components/shared/entity-selects";
+import { useVehicleMileageDefault } from "@/hooks/use-vehicle-driver-default";
 
 const DRAFT_KEY = "fleet_maintenance_create";
 const INITIAL = {
@@ -29,6 +30,8 @@ export default function MaintenanceCreate() {
   const createMut = useApiMutation("/fleet/maintenance", "POST", [["fleet-maintenance"]]);
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
+  // الكيان يقود التجربة: اختيار المركبة يُعبّئ قراءة العداد بعدّادها الحالي (قابل للتعديل).
+  useVehicleMileageDefault(form.vehicleId, form.mileageAtService, (v) => setForm((f) => ({ ...f, mileageAtService: v })));
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 

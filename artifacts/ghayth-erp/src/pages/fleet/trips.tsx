@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { VehicleSelect, DriverSelect } from "@/components/shared/entity-selects";
 import { useToast } from "@/hooks/use-toast";
+import { useVehicleDriverDefault } from "@/hooks/use-vehicle-driver-default";
 
 type ViewMode = "list" | "schedule";
 
@@ -41,6 +42,8 @@ export default function TripsPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [showCreate, setShowCreate] = useState(false);
   const [tripForm, setTripForm] = useState(EMPTY_TRIP);
+  // الكيان يقود التجربة: اختيار المركبة يُعبّئ سائقها الحالي تلقائيًا (قابل للتغيير).
+  useVehicleDriverDefault(tripForm.vehicleId, tripForm.driverId, (v) => setTripForm((x) => ({ ...x, driverId: v })));
   const [saving, setSaving] = useState(false);
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
 

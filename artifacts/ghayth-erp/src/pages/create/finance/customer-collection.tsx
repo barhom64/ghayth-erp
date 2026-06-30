@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, roundMoney, todayLocal } from "@/lib/formatters";
 import { isMoneyAccount } from "@/lib/finance-account-usage";
 import { ClientSelect, BranchSelect, AccountSelect } from "@/components/shared/entity-selects";
+import { ClientContextCard } from "@/components/shared/client-context-card";
 import { NumberField, TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 /**
@@ -107,6 +108,12 @@ export default function CustomerCollectionPanel() {
       <div dir="rtl" className="space-y-5">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <ClientSelect value={clientId} onChange={(v) => { setClientId(String(v ?? "")); setPreview(null); }} label="العميل" required allowCreate={false} />
+          {clientId && (
+            <div className="md:col-span-3">
+              {/* الكيان يقود التجربة: مستحقات العميل وحالته المالية أمام عينك قبل تسجيل التحصيل. */}
+              <ClientContextCard clientId={clientId} section="invoice" />
+            </div>
+          )}
           <NumberField label="المبلغ المستلم" required min={0} value={amount || ""} onChange={(v) => { setAmount(Number(v) || 0); setPreview(null); }} placeholder="0.00" />
           <AccountSelect value={cashAccountCode} onChange={setCashAccountCode} label="وجهة المال (الخزنة / البنك)" required placeholder="اختر الخزنة أو البنك..." filter={(a: any) => isMoneyAccount(a)} />
           <FormFieldWrapper label="التاريخ"><DatePicker value={date} onChange={setDate} /></FormFieldWrapper>

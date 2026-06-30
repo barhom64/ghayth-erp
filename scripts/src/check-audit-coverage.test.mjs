@@ -11,7 +11,7 @@
 // Exits 0 on pass, 1 on any assertion failure.
 //
 
-import { unauditedWriteKeys, buildMountMap, auditWrapperCallMatcher } from "./check-audit-coverage.mjs";
+import { unauditedWriteKeys, buildMountMap, auditWrapperCallMatcher, KNOWN_AUDIT_WRAPPERS } from "./check-audit-coverage.mjs";
 
 let failed = 0;
 function assert(cond, label) {
@@ -164,6 +164,25 @@ console.log("audit-wrapper detection");
   ].join("\n");
   const re = auditWrapperCallMatcher(src);
   assert(re === null || !re.test("push('a', 1)"), "collection `push` helper not treated as audit wrapper");
+}
+
+// ── cross-file wrapper recognition: applyTransition, incl. generic-typed calls
+// `applyTransition<Record<string, unknown>>({…})`. Before the regex allowed an
+// optional `<…>` type-argument list, 22 audited finance/legal/support lifecycle
+// handlers (journal-manual submit/review/approve/post, budgets/commitments/
+// financial-requests/receivables approve, bank-guarantees cancel/release, …)
+// were mis-reported as audit gaps. ──────────────────────────────────────────
+console.log("known audit-wrapper — applyTransition with/without generics");
+{
+  const r = () => new RegExp(KNOWN_AUDIT_WRAPPERS.source); // fresh, no /g state
+  assert(r().test("await applyTransition({"), "plain applyTransition( recognised");
+  assert(r().test("await applyTransition<Foo>({"), "single-generic applyTransition<Foo>( recognised");
+  assert(
+    r().test("const updated = await applyTransition<Record<string, unknown>>({"),
+    "nested-generic applyTransition<Record<string, unknown>>( recognised (the fixed gap)",
+  );
+  assert(!r().test("foo.applyTransition<Foo>("), "method call foo.applyTransition(…) NOT recognised");
+  assert(!r().test("myApplyTransitionX("), "different identifier NOT recognised");
 }
 
 if (failed) {
