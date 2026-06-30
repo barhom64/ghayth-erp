@@ -744,6 +744,11 @@ function AuthGate() {
       <Stack.Screen name="admin/predefined-roles" options={{ title: 'الأدوار المعرّفة' }} />
       <Stack.Screen name="admin/system-stops" options={{ title: 'إيقافات النظام' }} />
       <Stack.Screen name="admin/role-strategies" options={{ title: 'استراتيجيات الأدوار' }} />
+      <Stack.Screen name="fleet/stats" options={{ title: 'إحصاءات الأسطول' }} />
+      <Stack.Screen name="projects/stats" options={{ title: 'إحصاءات المشاريع' }} />
+      <Stack.Screen name="properties/operations-dashboard" options={{ title: 'لوحة عمليات الأملاك' }} />
+      <Stack.Screen name="warehouse/stats" options={{ title: 'إحصاءات المستودع' }} />
+      <Stack.Screen name="warehouse/inventory-counts" options={{ title: 'عدادات الجرد' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
