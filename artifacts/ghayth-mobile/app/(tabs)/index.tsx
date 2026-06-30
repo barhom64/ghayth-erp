@@ -180,15 +180,19 @@ export default function DashboardScreen() {
         ))}
       </View>
 
-      {/* مؤشرات إضافية */}
-      <GText variant="subheading" style={{ paddingHorizontal: 16, marginTop: 8, marginBottom: 8 }}>
-        لمحة عامة
-      </GText>
-      <View style={styles.statsRow}>
-        <StatCard label="الموظفون" value={String(data?.totalEmployees ?? 0)} icon="people-outline" tone="default" c={c} />
-        <StatCard label="فواتير معلقة" value={String(data?.pendingInvoices ?? 0)} icon="receipt-outline" tone="warning" c={c} />
-        <StatCard label="تنبيهات مخزن" value={String(data?.warehouseAlerts ?? 0)} icon="warning-outline" tone="danger" c={c} />
-      </View>
+      {/* مؤشرات إضافية — للمديرين فقط */}
+      {isManager && (
+        <>
+          <GText variant="subheading" style={{ paddingHorizontal: 16, marginTop: 8, marginBottom: 8 }}>
+            لمحة عامة
+          </GText>
+          <View style={styles.statsRow}>
+            <StatCard label="الموظفون" value={String(data?.totalEmployees ?? 0)} icon="people-outline" tone="default" c={c} />
+            <StatCard label="فواتير معلقة" value={String(data?.pendingInvoices ?? 0)} icon="receipt-outline" tone="warning" c={c} />
+            <StatCard label="تنبيهات مخزن" value={String(data?.warehouseAlerts ?? 0)} icon="warning-outline" tone="danger" c={c} />
+          </View>
+        </>
+      )}
     </GScreen>
   );
 }

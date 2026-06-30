@@ -44,16 +44,26 @@ export function DateInput({ label, value, onChange, error, minDate, maxDate, pla
   const [selMonth, setSelMonth] = useState(parsed?.m ?? now.getMonth() + 1);
   const [selDay, setSelDay]     = useState(parsed?.d ?? now.getDate());
 
-  // سنوات: من 5 سنوات مضت إلى سنتين قادمتين
+  const minP = parseDate(minDate ?? '');
+  const maxP = parseDate(maxDate ?? '');
+
+  // سنوات: من 5 سنوات مضت إلى سنتين قادمتين، مقيّدة بmin/max
   const years = useMemo(() => {
     const base = now.getFullYear();
-    return Array.from({ length: 8 }, (_, i) => base - 5 + i);
-  }, []);
+    const from = minP ? minP.y : base - 5;
+    const to   = maxP ? maxP.y : base + 2;
+    return Array.from({ length: to - from + 1 }, (_, i) => from + i);
+  }, [minP?.y, maxP?.y]);
 
   const days = useMemo(() => {
     const count = daysInMonth(selYear, selMonth);
-    return Array.from({ length: count }, (_, i) => i + 1);
-  }, [selYear, selMonth]);
+    return Array.from({ length: count }, (_, i) => {
+      const d = i + 1;
+      if (minP && selYear === minP.y && selMonth === minP.m && d < minP.d) return null;
+      if (maxP && selYear === maxP.y && selMonth === maxP.m && d > maxP.d) return null;
+      return d;
+    }).filter((d): d is number => d !== null);
+  }, [selYear, selMonth, minP?.y, minP?.m, minP?.d, maxP?.y, maxP?.m, maxP?.d]);
 
   const displayValue = parsed
     ? `${parsed.d} ${MONTHS_AR[parsed.m - 1]} ${parsed.y}`
@@ -117,6 +127,10 @@ export function DateInput({ label, value, onChange, error, minDate, maxDate, pla
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.scroll}>
             {MONTHS_AR.map((name, i) => {
               const m = i + 1;
+              const disabled =
+                (minP && selYear === minP.y && m < minP.m) ||
+                (maxP && selYear === maxP.y && m > maxP.m);
+              if (disabled) return null;
               return (
                 <TouchableOpacity
                   key={m}
