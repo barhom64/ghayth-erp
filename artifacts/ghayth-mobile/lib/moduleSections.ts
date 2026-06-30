@@ -406,6 +406,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "invoices", label: "الفواتير", icon: "receipt-outline", endpoint: "/api/finance/invoices",
         titleFields: ["ref", "invoiceNumber", "number"], subtitleFields: ["clientName", "customerName"], statusField: "status", amountFields: ["total", "amount"], dateFields: ["issueDate", "createdAt", "date"],
+        detailRoute: "/finance/invoice-detail",
         write: {
           moduleKey: "finance",
           detailPath: (id) => `/api/finance/invoices/${id}`,
