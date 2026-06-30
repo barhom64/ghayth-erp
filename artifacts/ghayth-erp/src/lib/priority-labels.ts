@@ -1,24 +1,27 @@
 /**
- * Canonical Arabic labels and tonal classes for the three-level
- * priority scale used by tasks, linked-tasks, requests, and tickets.
+ * Canonical Arabic labels and tonal classes for the four-level
+ * priority scale (low · medium · high · critical) used by tasks,
+ * linked-tasks, requests, and tickets — matching the backend
+ * z.enum(["low","medium","high","critical"]). «critical» (حرجة) is the
+ * canonical top level; «urgent» is NOT a value and stays unmapped.
  *
  * Until this file existed, `linked-tasks.tsx` and `tasks.tsx` each
- * carried their own copy of the same `{ high, medium, low }` maps.
- * Centralise them so a future bump (adding "urgent" / "critical")
- * lands in one place and so the colour scheme stays identical
- * between an entity card's "linked tasks" badge and the global
- * /tasks list.
+ * carried their own copy of the same maps. Centralise them so the
+ * colour scheme stays identical between an entity card's "linked
+ * tasks" badge and the global /tasks list.
  */
 
-export type Priority = "high" | "medium" | "low";
+export type Priority = "critical" | "high" | "medium" | "low";
 
 const PRIORITY_LABEL: Record<string, string> = {
+  critical: "حرجة",
   high: "عالية",
   medium: "متوسطة",
   low: "منخفضة",
 };
 
 const PRIORITY_BADGE_CLASS: Record<string, string> = {
+  critical: "bg-red-200 text-red-800",
   high: "bg-rose-100 text-rose-700",
   medium: "bg-amber-100 text-status-warning-foreground",
   low: "bg-emerald-100 text-emerald-700",
