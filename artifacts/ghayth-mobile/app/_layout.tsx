@@ -827,6 +827,12 @@ function AuthGate() {
       <Stack.Screen name="admin/system-registry/pages" options={{ title: 'صفحات سجل النظام' }} />
       <Stack.Screen name="admin/system-registry/reports" options={{ title: 'تقارير سجل النظام' }} />
       <Stack.Screen name="admin/system-registry/print-templates" options={{ title: 'قوالب طباعة سجل النظام' }} />
+      <Stack.Screen name="bi/overview" options={{ title: 'نظرة BI العامة' }} />
+      <Stack.Screen name="module-dashboards/hr" options={{ title: 'لوحة الموارد البشرية' }} />
+      <Stack.Screen name="module-dashboards/finance" options={{ title: 'لوحة المالية' }} />
+      <Stack.Screen name="module-dashboards/fleet" options={{ title: 'لوحة الأسطول' }} />
+      <Stack.Screen name="module-dashboards/legal" options={{ title: 'لوحة القانونية' }} />
+      <Stack.Screen name="admin/rules" options={{ title: 'قواعد النظام' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
