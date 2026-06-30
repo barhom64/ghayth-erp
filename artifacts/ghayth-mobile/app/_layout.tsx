@@ -526,6 +526,11 @@ function AuthGate() {
       <Stack.Screen name="hr/transfers" options={{ title: 'نقل الموظفين' }} />
       <Stack.Screen name="hr/salary-components" options={{ title: 'مكونات الراتب' }} />
       <Stack.Screen name="hr/positions" options={{ title: 'المناصب الوظيفية' }} />
+      <Stack.Screen name="hr/missions" options={{ title: 'المأموريات' }} />
+      <Stack.Screen name="support/knowledge-base" options={{ title: 'قاعدة المعرفة' }} />
+      <Stack.Screen name="crm/opportunities" options={{ title: 'فرص البيع' }} />
+      <Stack.Screen name="admin/companies" options={{ title: 'الشركات' }} />
+      <Stack.Screen name="admin/branches" options={{ title: 'الفروع' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
