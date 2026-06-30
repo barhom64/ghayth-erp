@@ -853,6 +853,17 @@ function AuthGate() {
       <Stack.Screen name="transport/calendar-events" options={{ title: 'أحداث تقويم النقل' }} />
       <Stack.Screen name="transport/planning-settings" options={{ title: 'إعدادات تخطيط النقل' }} />
       <Stack.Screen name="transport/maps-usage" options={{ title: 'استهلاك الخرائط' }} />
+      <Stack.Screen name="admin/event-logs" options={{ title: 'سجلات الأحداث' }} />
+      <Stack.Screen name="digital-signature/logs" options={{ title: 'سجلات التوقيع الرقمي' }} />
+      <Stack.Screen name="documents/templates" options={{ title: 'قوالب المستندات' }} />
+      <Stack.Screen name="admin/notification-delivery-stats" options={{ title: 'إحصاءات تسليم الإشعارات' }} />
+      <Stack.Screen name="admin/notification-delivery-log" options={{ title: 'سجل تسليم الإشعارات' }} />
+      <Stack.Screen name="admin/notification-webhooks" options={{ title: 'Webhooks الإشعارات' }} />
+      <Stack.Screen name="notifications/fallback-chains" options={{ title: 'سلاسل الإشعار الاحتياطي' }} />
+      <Stack.Screen name="requests/types" options={{ title: 'أنواع الطلبات' }} />
+      <Stack.Screen name="admin/audit-entities" options={{ title: 'كيانات سجل التدقيق' }} />
+      <Stack.Screen name="print/entity-types" options={{ title: 'أنواع كيانات الطباعة' }} />
+      <Stack.Screen name="print/jobs" options={{ title: 'مهام الطباعة' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
