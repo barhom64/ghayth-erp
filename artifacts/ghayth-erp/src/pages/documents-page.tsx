@@ -52,13 +52,15 @@ import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
 import { groupByCategoryOrder } from "@/lib/document-grouping";
 
+// القيم تطابق تعداد DOCUMENT_CATEGORIES الخلفي (وعليه فترة الحفظ) — official/financial/
+// other لم تكن ضمنه فكان الرفع/الفلترة بها يفشل؛ صُحّحت (التسميات العربية كما هي).
 const CATEGORIES = [
   { value: "contracts", label: "عقود" },
-  { value: "official", label: "وثائق رسمية" },
-  { value: "financial", label: "مالية" },
+  { value: "compliance", label: "وثائق رسمية" },
+  { value: "finance", label: "مالية" },
   { value: "hr", label: "موارد بشرية" },
   { value: "legal", label: "قانونية" },
-  { value: "other", label: "أخرى" },
+  { value: "general", label: "أخرى" },
 ];
 
 const CATEGORY_EFFECTS: Record<string, { icon: string; approvedEffect: string; severity: "info" | "warning" | "success" }> = {
