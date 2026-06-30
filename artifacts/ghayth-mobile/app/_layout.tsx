@@ -843,6 +843,16 @@ function AuthGate() {
       <Stack.Screen name="hr/discipline-auto-log" options={{ title: 'سجل الكشف التلقائي' }} />
       <Stack.Screen name="hr/wps-settings" options={{ title: 'إعدادات WPS' }} />
       <Stack.Screen name="hr/wps-runs" options={{ title: 'تشغيلات WPS' }} />
+      <Stack.Screen name="support/kb" options={{ title: 'قاعدة المعرفة' }} />
+      <Stack.Screen name="support/replies" options={{ title: 'ردود الدعم' }} />
+      <Stack.Screen name="crm/assignees" options={{ title: 'مندوبو المبيعات' }} />
+      <Stack.Screen name="warehouse/expiring-items" options={{ title: 'البنود المنتهية الصلاحية' }} />
+      <Stack.Screen name="hr/saudization-history" options={{ title: 'تاريخ السعودة' }} />
+      <Stack.Screen name="umrah/sub-agents-unlinked" options={{ title: 'وكلاء غير مرتبطين' }} />
+      <Stack.Screen name="transport/billing-candidates" options={{ title: 'مرشحو فوترة النقل' }} />
+      <Stack.Screen name="transport/calendar-events" options={{ title: 'أحداث تقويم النقل' }} />
+      <Stack.Screen name="transport/planning-settings" options={{ title: 'إعدادات تخطيط النقل' }} />
+      <Stack.Screen name="transport/maps-usage" options={{ title: 'استهلاك الخرائط' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
