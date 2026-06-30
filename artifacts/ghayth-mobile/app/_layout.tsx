@@ -894,6 +894,9 @@ function AuthGate() {
       <Stack.Screen name="hr/employee-document-types" options={{ title: 'أنواع وثائق الموظف' }} />
       <Stack.Screen name="hr/company-document-categories" options={{ title: 'تصنيفات وثائق الشركة' }} />
       <Stack.Screen name="hr/onboarding-steps" options={{ title: 'خطوات التأهيل' }} />
+      <Stack.Screen name="org/supervision-lines" options={{ title: 'خطوط الإشراف' }} />
+      <Stack.Screen name="org/approval-authorities" options={{ title: 'صلاحيات الاعتماد' }} />
+      <Stack.Screen name="org/scoring-ranking" options={{ title: 'ترتيب التقييم' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
