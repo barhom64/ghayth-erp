@@ -46,6 +46,7 @@ import { rawQuery, rawExecute, assertInsert, withTransaction } from "../lib/rawd
 import { recordTripEventSchema, recordBookingTripEvent } from "../lib/transport/tripEvents.js";
 import { assertDriverEligibility } from "../lib/fleet/driverEligibility.js";
 import { assertDriverRest } from "../lib/fleet/driverRest.js";
+import { deductionCandidateSchema, createDeductionCandidate } from "../lib/transport/deductions.js";
 import {
   MapsService, loadPlanningSettings, updatePlanningSettings,
 } from "../lib/fleet/mapsService.js";
@@ -1444,6 +1445,36 @@ transportPlanningRouter.post(
       res.status(201).json({ data: { id: insertId, derivedStatus, reassignedTo: b.incomingDriverId } });
     } catch (err) {
       handleRouteError(err, res, "Driver handover error:");
+    }
+  },
+);
+
+// شريحة 4 — إبلاغ السائق عن خصم نقص/تأخير من الميدان. يُدخل الأساس والقياس
+// (كغم/ساعة)؛ والنظام يحسب المبلغ من المعدّل المُعدّ (createDeductionCandidate).
+// مرشّح تشغيلي — لا قيد؛ المالية تُصدر الإشعار. ملكية أمر التوزيع كالعادة.
+transportPlanningRouter.post(
+  "/transport/dispatch-orders/:id/deduction",
+  authorize({ feature: "fleet.dispatch", action: "update" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const dispatchOrderId = parseId(req.params.id, "id");
+      const b = zodParse(deductionCandidateSchema.safeParse(req.body));
+      const [d] = await rawQuery<{ bookingId: number }>(
+        `SELECT d."bookingId"
+           FROM transport_dispatch_orders d
+          WHERE d.id = $1 AND d."companyId" = $2
+            AND d."driverId" IN (
+              SELECT fd.id FROM fleet_drivers fd
+               WHERE fd."employeeId" = $3 AND fd."companyId" = $2 AND fd."deletedAt" IS NULL
+            )`,
+        [dispatchOrderId, scope.companyId, scope.employeeId],
+      );
+      if (!d) throw new NotFoundError("أمر التوزيع غير مُسنَد إليك");
+      const { insertId, amount } = await createDeductionCandidate(scope, d.bookingId, b);
+      res.status(201).json({ data: { id: insertId, amount } });
+    } catch (err) {
+      handleRouteError(err, res, "Driver deduction error:");
     }
   },
 );
