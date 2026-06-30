@@ -167,7 +167,7 @@ export default function InventoryTurnoverPage() {
   return (
     <PageShell
       title="معدل دوران المخزون"
-      subtitle="معدل الدوران = COGS الفترة / قيمة المخزون الحالية — لرصد المنتجات السريعة والمنتجات الجامدة"
+      subtitle="معدل الدوران = تكلفة البضاعة المباعة (COGS) للفترة / قيمة المخزون الحالية — لرصد المنتجات السريعة والمنتجات الجامدة"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
         { href: "/finance/reports", label: "التقارير" },
