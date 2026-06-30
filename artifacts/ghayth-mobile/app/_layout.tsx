@@ -921,6 +921,11 @@ function AuthGate() {
       <Stack.Screen name="hr/tracking-policies" options={{ title: 'سياسات تتبع الحضور' }} />
       <Stack.Screen name="admin/import-entities" options={{ title: 'كيانات الاستيراد' }} />
       <Stack.Screen name="finance/datafix-subsidiaries" options={{ title: 'الحسابات الفرعية المخطوءة' }} />
+      <Stack.Screen name="umrah/uninvoiced-groups" options={{ title: 'مجموعات بلا فواتير' }} />
+      <Stack.Screen name="hr/my-overtime" options={{ title: 'ساعاتي الإضافية' }} />
+      <Stack.Screen name="hr/my-loans" options={{ title: 'قروضي' }} />
+      <Stack.Screen name="hr/discipline-regulation" options={{ title: 'لائحة الجزاءات' }} />
+      <Stack.Screen name="hr/discipline-auto-summary" options={{ title: 'ملخص الاكتشاف التلقائي' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
