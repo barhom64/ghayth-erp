@@ -1100,6 +1100,28 @@ function AuthGate() {
       <Stack.Screen name="org/team-members" options={{ title: 'أعضاء الفريق' }} />
       <Stack.Screen name="org/committee-members" options={{ title: 'أعضاء اللجنة' }} />
       <Stack.Screen name="org/project-contributors" options={{ title: 'مساهمو المشروع' }} />
+      <Stack.Screen name="module-dashboards/properties" options={{ title: 'لوحة الأملاك' }} />
+      <Stack.Screen name="module-dashboards/projects" options={{ title: 'لوحة المشاريع' }} />
+      <Stack.Screen name="module-dashboards/crm" options={{ title: 'لوحة CRM' }} />
+      <Stack.Screen name="module-dashboards/store" options={{ title: 'لوحة المتجر' }} />
+      <Stack.Screen name="module-dashboards/support" options={{ title: 'لوحة الدعم' }} />
+      <Stack.Screen name="module-dashboards/tasks" options={{ title: 'لوحة المهام' }} />
+      <Stack.Screen name="module-dashboards/warehouse" options={{ title: 'لوحة المستودعات' }} />
+      <Stack.Screen name="umrah/group-cost-breakdown" options={{ title: 'تفصيل تكاليف المجموعة' }} />
+      <Stack.Screen name="umrah/group-transport-requests" options={{ title: 'طلبات نقل المجموعة' }} />
+      <Stack.Screen name="inbox/threads" options={{ title: 'صندوق الوارد' }} />
+      <Stack.Screen name="inbox/calls" options={{ title: 'سجل المكالمات' }} />
+      <Stack.Screen name="inbox/drafts" options={{ title: 'المسودات' }} />
+      <Stack.Screen name="inbox/signatures" options={{ title: 'التواقيع' }} />
+      <Stack.Screen name="inbox/search" options={{ title: 'بحث في البريد' }} />
+      <Stack.Screen name="m/field-tracking" options={{ title: 'التتبع الميداني' }} />
+      <Stack.Screen name="m/action-center" options={{ title: 'مركز الإجراءات' }} />
+      <Stack.Screen name="m/activity-log" options={{ title: 'سجل النشاط' }} />
+      <Stack.Screen name="m/activity-summary" options={{ title: 'ملخص النشاط' }} />
+      <Stack.Screen name="m/seasonal-patterns" options={{ title: 'الأنماط الموسمية' }} />
+      <Stack.Screen name="m/intelligence-recommendations" options={{ title: 'التوصيات الذكية' }} />
+      <Stack.Screen name="m/client-rfm" options={{ title: 'تحليل RFM للعميل' }} />
+      <Stack.Screen name="m/client-analytics" options={{ title: 'تحليلات العملاء' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
