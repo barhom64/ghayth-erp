@@ -1011,6 +1011,25 @@ function AuthGate() {
       <Stack.Screen name="portal/projects" options={{ title: 'مشاريعي' }} />
       <Stack.Screen name="portal/kb" options={{ title: 'قاعدة المعرفة' }} />
       <Stack.Screen name="settings/two-factor-auth" options={{ title: 'المصادقة الثنائية' }} />
+      <Stack.Screen name="finance/subsidiary-ledger" options={{ title: 'دفتر الأستاذ المساعد' }} />
+      <Stack.Screen name="finance/entity-statement" options={{ title: 'كشف حساب الكيان' }} />
+      <Stack.Screen name="finance/vehicle-profitability" options={{ title: 'ربحية المركبات' }} />
+      <Stack.Screen name="finance/property-profitability" options={{ title: 'ربحية العقارات' }} />
+      <Stack.Screen name="finance/project-profitability" options={{ title: 'ربحية المشاريع' }} />
+      <Stack.Screen name="finance/umrah-agent-profitability" options={{ title: 'ربحية وكلاء العمرة' }} />
+      <Stack.Screen name="finance/journal-manual" options={{ title: 'القيود اليدوية' }} />
+      <Stack.Screen name="finance/cost-center-pnl" options={{ title: 'ربحية مركز التكلفة' }} />
+      <Stack.Screen name="finance/cost-center-series" options={{ title: 'السلاسل الزمنية' }} />
+      <Stack.Screen name="finance/vendor-contact-summary" options={{ title: 'ملخص المورد' }} />
+      <Stack.Screen name="hr/upward-reviews" options={{ title: 'التقييمات الصاعدة' }} />
+      <Stack.Screen name="hr/evaluation-history" options={{ title: 'سجل التقييمات' }} />
+      <Stack.Screen name="crm/client-contact-summary" options={{ title: 'ملخص تواصل العميل' }} />
+      <Stack.Screen name="projects/project-resources" options={{ title: 'موارد المشروع' }} />
+      <Stack.Screen name="projects/project-costs" options={{ title: 'تكاليف المشروع' }} />
+      <Stack.Screen name="projects/project-boq" options={{ title: 'جدول الكميات' }} />
+      <Stack.Screen name="projects/project-letters" options={{ title: 'خطابات المشروع' }} />
+      <Stack.Screen name="projects/project-gantt" options={{ title: 'مخطط غانت' }} />
+      <Stack.Screen name="projects/project-units" options={{ title: 'وحدات المشروع' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
