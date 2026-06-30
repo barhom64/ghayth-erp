@@ -598,6 +598,11 @@ function AuthGate() {
       <Stack.Screen name="admin/outbound-queue" options={{ title: 'طابور الإرسال' }} />
       <Stack.Screen name="admin/notification-chains" options={{ title: 'سلاسل الإشعارات' }} />
       <Stack.Screen name="careers/jobs" options={{ title: 'الوظائف المتاحة' }} />
+      <Stack.Screen name="hr/saudization" options={{ title: 'نسبة السعودة' }} />
+      <Stack.Screen name="hr/job-titles" options={{ title: 'المسميات الوظيفية' }} />
+      <Stack.Screen name="transport/route-patterns" options={{ title: 'أنماط المسارات' }} />
+      <Stack.Screen name="transport/locations" options={{ title: 'مواقع النقل' }} />
+      <Stack.Screen name="fleet/telematics-devices" options={{ title: 'أجهزة التتبع' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
