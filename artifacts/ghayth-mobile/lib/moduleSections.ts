@@ -424,7 +424,15 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           { key: "approve", label: "اعتماد الطلب", icon: "checkmark-circle-outline", method: "PATCH", path: (id) => `/api/hr/transfers/${id}/approve`, body: { approved: true }, confirm: "هل تريد اعتماد طلب إنهاء الخدمة؟", successText: "تم اعتماد الطلب", showWhenStatus: ["pending"] },
         ] } },
       { key: "gratuity", label: "مكافأة نهاية الخدمة", icon: "ribbon-outline", endpoint: "/api/hr/gratuity", detailRoute: "/hr/gratuity-detail", titleFields: ["employeeName"], subtitleFields: ["yearsOfService"], statusField: "status", amountFields: ["gratuityAmount", "totalAmount"], dateFields: ["lastWorkingDay"] },
-      { key: "delegations", label: "التفويضات", icon: "swap-horizontal-outline", endpoint: "/api/hr/delegations", detailRoute: "/hr/delegation-detail", titleFields: ["delegatorName"], subtitleFields: ["delegateeName", "scope"], statusField: "status", dateFields: ["fromDate", "toDate"] },
+      { key: "delegations", label: "التفويضات", icon: "swap-horizontal-outline", endpoint: "/api/hr/delegations", detailRoute: "/hr/delegation-detail", titleFields: ["delegatorName"], subtitleFields: ["delegateeName", "scope"], statusField: "status", dateFields: ["fromDate", "toDate"],
+        write: { moduleKey: "hr", createFields: [
+          { name: "delegatorId", label: "المفوِّض", type: "reference", required: true, refEndpoint: "/api/hr/employees", refLabelFields: ["name"], refValueField: "id" },
+          { name: "delegateeId", label: "المفوَّض إليه", type: "reference", required: true, refEndpoint: "/api/hr/employees", refLabelFields: ["name"], refValueField: "id" },
+          { name: "scope", label: "نطاق التفويض", type: "text", required: true },
+          { name: "fromDate", label: "تاريخ البداية", type: "date", required: true },
+          { name: "toDate", label: "تاريخ الانتهاء", type: "date", required: true },
+          { name: "notes", label: "ملاحظات", type: "textarea" },
+        ] } },
       { key: "evaluations", label: "تقييمات الأداء", icon: "star-outline", endpoint: "/api/hr/evaluations", titleFields: ["employeeName"], subtitleFields: ["period", "evaluatorName"], statusField: "status", amountFields: ["score"], dateFields: ["evaluationDate"], detailRoute: "/hr/evaluation-detail" },
       { key: "official-letters", label: "الخطابات الرسمية", icon: "mail-outline", endpoint: "/api/hr/official-letters", titleFields: ["subject", "letterNumber"], subtitleFields: ["employeeName", "type"], statusField: "status", dateFields: ["createdAt"], detailRoute: "/hr/official-letter-detail",
         write: { moduleKey: "hr", createFields: [
@@ -672,7 +680,16 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           { key: "approve", label: "اعتماد الفاتورة", icon: "checkmark-circle-outline" as never, method: "PATCH" as const, path: (id: string | number) => `/api/finance/vendor-invoices/${id}/approve`, confirm: "هل تريد اعتماد فاتورة المورد؟", successText: "تم الاعتماد", showWhenStatus: ["pending", "submitted"] },
           { key: "post", label: "ترحيل إلى دفتر الأستاذ", icon: "git-commit-outline" as never, method: "POST" as const, path: (id: string | number) => `/api/finance/vendor-invoices/${id}/post`, confirm: "سيتم ترحيل الفاتورة محاسبيًا. متابعة؟", successText: "تم الترحيل", showWhenStatus: ["approved"] },
         ] } },
-      { key: "vendor-advances", label: "دفعات الموردين المقدمة", icon: "arrow-up-circle-outline", endpoint: "/api/finance/vendor-advances", detailRoute: "/finance/vendor-advance-detail", titleFields: ["ref"], subtitleFields: ["supplierName", "method"], statusField: "status", amountFields: ["amount"], dateFields: ["paidDate"] },
+      { key: "vendor-advances", label: "دفعات الموردين المقدمة", icon: "arrow-up-circle-outline", endpoint: "/api/finance/vendor-advances", detailRoute: "/finance/vendor-advance-detail", titleFields: ["ref"], subtitleFields: ["supplierName", "method"], statusField: "status", amountFields: ["amount"], dateFields: ["paidDate"],
+        write: { moduleKey: "finance", createFields: [
+          { name: "vendorId", label: "المورد", type: "reference", required: true, refEndpoint: "/api/finance/vendors", refLabelFields: ["name"], refValueField: "id" },
+          { name: "amount", label: "المبلغ", type: "currency", required: true },
+          { name: "paidDate", label: "تاريخ الدفع", type: "date", required: true },
+          { name: "method", label: "طريقة الدفع", type: "select", required: true, options: [{ value: "bank_transfer", label: "تحويل بنكي" }, { value: "check", label: "شيك" }, { value: "cash", label: "نقد" }] },
+          { name: "bankAccountId", label: "الحساب البنكي", type: "reference", refEndpoint: "/api/finance/bank-accounts", refLabelFields: ["bankName", "accountNumber"], refValueField: "id" },
+          { name: "reference", label: "رقم المرجع", type: "text" },
+          { name: "notes", label: "ملاحظات", type: "textarea" },
+        ] } },
       {
         key: "vendors", label: "الموردون", icon: "business-outline", endpoint: "/api/finance/vendors",
         titleFields: ["name", "vendorName"], subtitleFields: ["taxNumber", "phone"], statusField: "status", amountFields: ["balance"],
@@ -758,7 +775,15 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
         },
       },
       { key: "recurring-journals", label: "القيود الدورية", icon: "repeat-outline", endpoint: "/api/finance/recurring-journals", titleFields: ["name"], subtitleFields: ["frequency"], dateFields: ["nextRunDate"] },
-      { key: "obligations", label: "الالتزامات", icon: "checkmark-circle-outline", endpoint: "/api/obligations", titleFields: ["title"], subtitleFields: ["obligationType", "entityType"], statusField: "status", dateFields: ["dueAt"], detailRoute: "/finance/obligation-detail" },
+      { key: "obligations", label: "الالتزامات", icon: "checkmark-circle-outline", endpoint: "/api/obligations", titleFields: ["title"], subtitleFields: ["obligationType", "entityType"], statusField: "status", dateFields: ["dueAt"], detailRoute: "/finance/obligation-detail",
+        write: { moduleKey: "finance", createFields: [
+          { name: "title", label: "عنوان الالتزام", type: "text", required: true },
+          { name: "obligationType", label: "نوع الالتزام", type: "select", required: true, options: [{ value: "payment", label: "دفعة" }, { value: "contract", label: "عقد" }, { value: "regulatory", label: "تنظيمي" }, { value: "other", label: "أخرى" }] },
+          { name: "amount", label: "المبلغ", type: "currency" },
+          { name: "dueAt", label: "تاريخ الاستحقاق", type: "date", required: true },
+          { name: "entityType", label: "نوع الجهة", type: "text" },
+          { name: "notes", label: "ملاحظات", type: "textarea" },
+        ] } },
       { key: "bank-reconciliation", label: "تسوية البنوك", icon: "swap-horizontal-outline", endpoint: "/api/finance/bank-reconciliation", titleFields: ["ref", "bankAccount"], subtitleFields: ["bankName"], statusField: "status", dateFields: ["statementDate"] },
       { key: "fixed-assets", label: "الأصول الثابتة", icon: "home-outline", endpoint: "/api/finance/fixed-assets", titleFields: ["name", "assetCode"], subtitleFields: ["category", "location"], statusField: "status", amountFields: ["acquisitionCost", "bookValue"], dateFields: ["acquisitionDate"], detailRoute: "/finance/fixed-asset-detail",
         write: { moduleKey: "finance", createFields: [
@@ -1272,7 +1297,12 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
-      { key: "categories", label: "تصنيفات المنتجات", icon: "list-outline", endpoint: "/api/warehouse/categories", titleFields: ["name"], subtitleFields: ["parentName", "code"] },
+      { key: "categories", label: "تصنيفات المنتجات", icon: "list-outline", endpoint: "/api/warehouse/categories", titleFields: ["name"], subtitleFields: ["parentName", "code"],
+        write: { moduleKey: "warehouse", createFields: [
+          { name: "name", label: "اسم التصنيف", type: "text", required: true },
+          { name: "code", label: "الرمز", type: "text" },
+          { name: "description", label: "الوصف", type: "textarea" },
+        ] } },
       { key: "purchase-orders", label: "أوامر شراء المستودع", icon: "cart-outline", endpoint: "/api/warehouse/purchase-orders", detailRoute: "/finance/purchase-order-detail", titleFields: ["ref", "poNumber"], subtitleFields: ["supplierName"], statusField: "status", amountFields: ["totalAmount"], dateFields: ["orderDate"] },
       { key: "cycle-counts", label: "جرد المخزون", icon: "calculator-outline", endpoint: "/api/warehouse/cycle-counts", titleFields: ["ref", "cycle"], subtitleFields: ["location", "status"], statusField: "status", dateFields: ["startDate"], detailRoute: "/warehouse/cycle-count-detail",
         write: { moduleKey: "warehouse", createFields: [
@@ -1291,7 +1321,15 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
     key: "operations",
     label: "العمليات والمشاريع",
     sections: [
-      { key: "projects", label: "المشاريع", icon: "briefcase-outline", endpoint: "/api/projects", titleFields: ["name", "projectName"], subtitleFields: ["code"], statusField: "status", amountFields: ["budget"], dateFields: ["startDate"], detailRoute: "/projects/project-detail" },
+      { key: "projects", label: "المشاريع", icon: "briefcase-outline", endpoint: "/api/projects", titleFields: ["name", "projectName"], subtitleFields: ["code"], statusField: "status", amountFields: ["budget"], dateFields: ["startDate"], detailRoute: "/projects/project-detail",
+        write: { moduleKey: "operations", createFields: [
+          { name: "name", label: "اسم المشروع", type: "text", required: true },
+          { name: "clientId", label: "العميل", type: "reference", refEndpoint: "/api/clients", refLabelFields: ["name"], refValueField: "id" },
+          { name: "budget", label: "الميزانية", type: "currency" },
+          { name: "startDate", label: "تاريخ البداية", type: "date" },
+          { name: "endDate", label: "تاريخ الانتهاء المتوقع", type: "date" },
+          { name: "description", label: "الوصف", type: "textarea" },
+        ] } },
       {
         key: "tasks", label: "المهام", icon: "checkbox-outline", endpoint: "/api/tasks", titleFields: ["title", "name"], subtitleFields: ["assigneeName", "priority"], statusField: "status", dateFields: ["dueDate"], detailRoute: "/projects/task-detail",
         write: {
@@ -1630,7 +1668,15 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
-      { key: "nusk-invoices", label: "فواتير نُسك", icon: "documents-outline", endpoint: "/api/umrah/nusk-invoices", titleFields: ["nuskInvoiceNumber"], subtitleFields: ["agentName"], statusField: "nuskStatus", amountFields: ["totalAmount"], dateFields: ["createdAt"], detailRoute: "/umrah/nusk-invoice-detail" },
+      { key: "nusk-invoices", label: "فواتير نُسك", icon: "documents-outline", endpoint: "/api/umrah/nusk-invoices", titleFields: ["nuskInvoiceNumber"], subtitleFields: ["agentName"], statusField: "nuskStatus", amountFields: ["totalAmount"], dateFields: ["createdAt"], detailRoute: "/umrah/nusk-invoice-detail",
+        write: { moduleKey: "umrah", createFields: [
+          { name: "groupId", label: "المجموعة", type: "reference", required: true, refEndpoint: "/api/umrah/groups", refLabelFields: ["name", "groupCode"], refValueField: "id" },
+          { name: "agentId", label: "الوكيل", type: "reference", required: true, refEndpoint: "/api/umrah/agents", refLabelFields: ["name"], refValueField: "id" },
+          { name: "totalAmount", label: "المبلغ الإجمالي", type: "currency", required: true },
+          { name: "notes", label: "ملاحظات", type: "textarea" },
+        ], actions: [
+          { key: "approve", label: "اعتماد الفاتورة", icon: "checkmark-circle-outline" as never, method: "PATCH" as const, path: (id: string | number) => `/api/umrah/nusk-invoices/${id}/approve`, confirm: "هل تريد اعتماد فاتورة نُسك؟", successText: "تم الاعتماد", showWhenStatus: ["draft", "pending"] },
+        ] } },
       {
         key: "payments", label: "المدفوعات", icon: "cash-outline", endpoint: "/api/umrah/payments",
         titleFields: ["reference"], subtitleFields: ["subAgentName", "method"], amountFields: ["sarAmount"], dateFields: ["paymentDate"],
@@ -1911,7 +1957,15 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
     key: "support",
     label: "الدعم",
     sections: [
-      { key: "sla", label: "اتفاقيات مستوى الخدمة", icon: "speedometer-outline", endpoint: "/api/support/sla", titleFields: ["name", "title"], subtitleFields: ["category", "priority"], statusField: "status" },
+      { key: "sla", label: "اتفاقيات مستوى الخدمة", icon: "speedometer-outline", endpoint: "/api/support/sla", titleFields: ["name", "title"], subtitleFields: ["category", "priority"], statusField: "status",
+        write: { moduleKey: "support", createFields: [
+          { name: "name", label: "اسم الاتفاقية", type: "text", required: true },
+          { name: "category", label: "التصنيف", type: "text" },
+          { name: "priority", label: "الأولوية", type: "select", options: [{ value: "low", label: "منخفضة" }, { value: "medium", label: "متوسطة" }, { value: "high", label: "عالية" }, { value: "critical", label: "حرجة" }] },
+          { name: "responseTimeHours", label: "وقت الاستجابة (ساعات)", type: "number" },
+          { name: "resolutionTimeHours", label: "وقت الحل (ساعات)", type: "number" },
+          { name: "description", label: "الوصف", type: "textarea" },
+        ] } },
       {
         key: "categories", label: "تصنيفات الدعم", icon: "list-outline", endpoint: "/api/support/categories",
         titleFields: ["name"], subtitleFields: ["parentName"],
@@ -2671,7 +2725,13 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
         },
       },
       { key: "inbox", label: "صندوق الوارد", icon: "mail-unread-outline", endpoint: "/api/inbox", titleFields: ["subject", "from"], subtitleFields: ["mailboxName", "from"], statusField: "status", dateFields: ["receivedAt", "createdAt"] },
-      { key: "conversations", label: "المحادثات", icon: "chatbubbles-outline", endpoint: "/api/inbox/conversations", titleFields: ["subject", "clientName"], subtitleFields: ["channel", "status"], statusField: "status", dateFields: ["lastMessageAt", "updatedAt"], detailRoute: "/comms/conversation" },
+      { key: "conversations", label: "المحادثات", icon: "chatbubbles-outline", endpoint: "/api/inbox/conversations", titleFields: ["subject", "clientName"], subtitleFields: ["channel", "status"], statusField: "status", dateFields: ["lastMessageAt", "updatedAt"], detailRoute: "/comms/conversation",
+        write: { moduleKey: "comms", createFields: [
+          { name: "clientId", label: "العميل", type: "reference", refEndpoint: "/api/clients", refLabelFields: ["name"], refValueField: "id" },
+          { name: "subject", label: "الموضوع", type: "text", required: true },
+          { name: "channel", label: "القناة", type: "select", required: true, options: [{ value: "email", label: "بريد إلكتروني" }, { value: "whatsapp", label: "واتساب" }, { value: "sms", label: "رسالة نصية" }, { value: "phone", label: "مكالمة هاتفية" }] },
+          { name: "body", label: "نص الرسالة", type: "textarea", required: true },
+        ] } },
       { key: "mailboxes", label: "صناديق البريد", icon: "server-outline", endpoint: "/api/mailboxes", titleFields: ["name", "email"], subtitleFields: ["type", "email"], statusField: "status" },
     ],
   },
