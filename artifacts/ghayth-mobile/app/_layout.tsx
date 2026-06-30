@@ -392,6 +392,8 @@ function AuthGate() {
       <Stack.Screen name="finance/operations-center" options={{ title: 'مركز العمليات' }} />
       <Stack.Screen name="settings/custom-fields" options={{ title: 'الحقول المخصصة' }} />
       <Stack.Screen name="hr/org-structure" options={{ title: 'الهيكل التنظيمي' }} />
+      <Stack.Screen name="bi/reports" options={{ title: 'التقارير التحليلية' }} />
+      <Stack.Screen name="properties/sales" options={{ title: 'مبيعات العقارات' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
