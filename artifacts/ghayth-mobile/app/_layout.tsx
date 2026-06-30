@@ -975,6 +975,22 @@ function AuthGate() {
       <Stack.Screen name="print/reprint-requests" options={{ title: 'طلبات إعادة الطباعة' }} />
       <Stack.Screen name="bi/alert-fatigue-settings" options={{ title: 'إعدادات التعب التنبيهي' }} />
       <Stack.Screen name="bi/alert-fatigue-daily" options={{ title: 'الإحصاء اليومي للتنبيهات' }} />
+      <Stack.Screen name="finance/wht-summary" options={{ title: 'ملخص الاستقطاع (WHT)' }} />
+      <Stack.Screen name="finance/lot-expiry-alerts" options={{ title: 'تنبيهات انتهاء صلاحية الدفعات' }} />
+      <Stack.Screen name="finance/inventory-turnover" options={{ title: 'معدل دوران المخزون' }} />
+      <Stack.Screen name="finance/cogs-summary" options={{ title: 'ملخص تكلفة البضاعة المباعة' }} />
+      <Stack.Screen name="finance/negative-stock" options={{ title: 'المخزون السالب' }} />
+      <Stack.Screen name="finance/cash-flow" options={{ title: 'قائمة التدفق النقدي' }} />
+      <Stack.Screen name="finance/operation-gaps" options={{ title: 'فجوات العمليات المالية' }} />
+      <Stack.Screen name="finance/unmapped-lines" options={{ title: 'سطور القيود غير المعيّنة' }} />
+      <Stack.Screen name="finance/revenue-by-activity" options={{ title: 'الإيراد حسب نوع النشاط' }} />
+      <Stack.Screen name="finance/expenses-by-cost-center" options={{ title: 'المصروفات حسب مركز التكلفة' }} />
+      <Stack.Screen name="finance/opening-balances" options={{ title: 'الأرصدة الافتتاحية' }} />
+      <Stack.Screen name="finance/inventory-costing" options={{ title: 'تكاليف المخزون' }} />
+      <Stack.Screen name="finance/rounding-account" options={{ title: 'حساب فروق التقريب' }} />
+      <Stack.Screen name="finance/fx-revaluation" options={{ title: 'إعادة تقييم العملات الأجنبية' }} />
+      <Stack.Screen name="hr/my-overtime" options={{ title: 'إضافي خاص بي' }} />
+      <Stack.Screen name="hr/my-loans" options={{ title: 'قروضي' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>

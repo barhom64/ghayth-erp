@@ -5,19 +5,19 @@ import { GLoadingState, GEmptyState } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 
-interface CashFlowLine {
+interface OperationGap {
   section?: string;
-  description?: string;
-  amount?: number;
-  isTotal?: boolean;
+  entityId?: number;
+  ref?: string;
+  issue?: string;
 }
 
-export default function CashFlowScreen() {
+export default function OperationGapsScreen() {
   const c = useColors();
-  const { data, isLoading, isError, refetch } = useList<CashFlowLine[]>('/api/finance/reports/cash-flow');
+  const { data, isLoading, isError, refetch } = useList<OperationGap[]>('/api/finance/reports/operation-gaps');
   const list = Array.isArray(data) ? data : [];
 
-  if (isLoading) return <GLoadingState text="جارٍ تحميل قائمة التدفق النقدي…" />;
+  if (isLoading) return <GLoadingState text="جارٍ تحميل فجوات العمليات…" />;
   if (isError) return (
     <GEmptyState icon="alert-circle-outline" title="تعذّر التحميل" description="تحقق من الاتصال"
       actionLabel="إعادة المحاولة" onAction={refetch} />
@@ -25,26 +25,27 @@ export default function CashFlowScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Stack.Screen options={{ title: 'قائمة التدفق النقدي' }} />
+      <Stack.Screen options={{ title: 'فجوات العمليات المالية' }} />
       <FlatList
         data={list}
         keyExtractor={(_, i) => String(i)}
         contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
         onRefresh={refetch}
         refreshing={isLoading}
-        ListEmptyComponent={<GEmptyState icon="stats-chart-outline" title="لا توجد بيانات" description="" />}
+        ListEmptyComponent={<GEmptyState icon="checkmark-circle-outline" title="لا توجد فجوات" description="" />}
         renderItem={({ item }) => (
           <View style={{ backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, padding: 14 }}>
             <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={{ fontSize: item.isTotal ? 14 : 13, fontWeight: item.isTotal ? '700' : '400', color: c.text, flex: 1 }}>
-                {item.description ?? item.section ?? '—'}
-              </Text>
-              {item.amount != null ? (
-                <Text style={{ fontSize: 13, color: Number(item.amount) < 0 ? '#EF4444' : c.text, fontWeight: item.isTotal ? '700' : '400' }}>
-                  {Number(item.amount).toLocaleString('ar-SA')} ر.س
-                </Text>
+              {item.section ? (
+                <View style={{ backgroundColor: '#F59E0B20', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                  <Text style={{ fontSize: 11, color: '#F59E0B' }}>{item.section}</Text>
+                </View>
               ) : null}
+              {item.ref ? <Text style={{ fontSize: 12, color: c.textMuted }}>{item.ref}</Text> : null}
             </View>
+            {item.issue ? (
+              <Text style={{ fontSize: 13, color: c.text, marginTop: 6, textAlign: 'right' }}>{item.issue}</Text>
+            ) : null}
           </View>
         )}
       />

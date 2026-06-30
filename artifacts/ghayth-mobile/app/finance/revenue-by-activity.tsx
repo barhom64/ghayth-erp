@@ -5,19 +5,18 @@ import { GLoadingState, GEmptyState } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 
-interface CashFlowLine {
-  section?: string;
-  description?: string;
-  amount?: number;
-  isTotal?: boolean;
+interface RevenueByActivity {
+  activityType?: string;
+  revenue?: number;
+  count?: number;
 }
 
-export default function CashFlowScreen() {
+export default function RevenueByActivityScreen() {
   const c = useColors();
-  const { data, isLoading, isError, refetch } = useList<CashFlowLine[]>('/api/finance/reports/cash-flow');
+  const { data, isLoading, isError, refetch } = useList<RevenueByActivity[]>('/api/finance/reports/revenue-by-activity-type');
   const list = Array.isArray(data) ? data : [];
 
-  if (isLoading) return <GLoadingState text="جارٍ تحميل قائمة التدفق النقدي…" />;
+  if (isLoading) return <GLoadingState text="جارٍ تحميل الإيراد حسب النشاط…" />;
   if (isError) return (
     <GEmptyState icon="alert-circle-outline" title="تعذّر التحميل" description="تحقق من الاتصال"
       actionLabel="إعادة المحاولة" onAction={refetch} />
@@ -25,10 +24,10 @@ export default function CashFlowScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Stack.Screen options={{ title: 'قائمة التدفق النقدي' }} />
+      <Stack.Screen options={{ title: 'الإيراد حسب نوع النشاط' }} />
       <FlatList
         data={list}
-        keyExtractor={(_, i) => String(i)}
+        keyExtractor={(item, i) => item.activityType ?? String(i)}
         contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
         onRefresh={refetch}
         refreshing={isLoading}
@@ -36,15 +35,18 @@ export default function CashFlowScreen() {
         renderItem={({ item }) => (
           <View style={{ backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, padding: 14 }}>
             <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={{ fontSize: item.isTotal ? 14 : 13, fontWeight: item.isTotal ? '700' : '400', color: c.text, flex: 1 }}>
-                {item.description ?? item.section ?? '—'}
-              </Text>
-              {item.amount != null ? (
-                <Text style={{ fontSize: 13, color: Number(item.amount) < 0 ? '#EF4444' : c.text, fontWeight: item.isTotal ? '700' : '400' }}>
-                  {Number(item.amount).toLocaleString('ar-SA')} ر.س
+              <Text style={{ fontSize: 14, fontWeight: '600', color: c.text }}>{item.activityType ?? '—'}</Text>
+              {item.revenue != null ? (
+                <Text style={{ fontSize: 14, color: c.brand, fontWeight: '600' }}>
+                  {Number(item.revenue).toLocaleString('ar-SA')} ر.س
                 </Text>
               ) : null}
             </View>
+            {item.count != null ? (
+              <Text style={{ fontSize: 12, color: c.textMuted, marginTop: 4, textAlign: 'right' }}>
+                العدد: {item.count}
+              </Text>
+            ) : null}
           </View>
         )}
       />

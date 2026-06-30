@@ -5,51 +5,55 @@ import { GLoadingState, GEmptyState } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 
-interface MyOvertimeRecord {
+interface MyOvertime {
   id?: number;
   date?: string;
   hours?: number;
   status?: string;
-  approvedBy?: string;
+  rate?: number;
+  totalPay?: number;
 }
 
-export default function HrMyOvertimeScreen() {
+export default function MyOvertimeScreen() {
   const c = useColors();
-  const { data, isLoading, isError, refetch } = useList<MyOvertimeRecord[]>('/api/hr/overtime/my');
+  const { data, isLoading, isError, refetch } = useList<MyOvertime[]>('/api/hr/overtime/my');
   const list = Array.isArray(data) ? data : [];
 
-  if (isLoading) return <GLoadingState text="جارٍ تحميل ساعاتك الإضافية…" />;
+  if (isLoading) return <GLoadingState text="جارٍ تحميل إضافي خاص بي…" />;
   if (isError) return (
     <GEmptyState icon="alert-circle-outline" title="تعذّر التحميل" description="تحقق من الاتصال"
       actionLabel="إعادة المحاولة" onAction={refetch} />
   );
 
-  const statusColor = (s?: string) => s === 'approved' ? '#22C55E' : s === 'rejected' ? '#EF4444' : '#F59E0B';
-  const statusLabel = (s?: string) => s === 'approved' ? 'معتمد' : s === 'rejected' ? 'مرفوض' : 'قيد المراجعة';
+  const statusLabel = (s?: string) => s === 'approved' ? 'معتمد' : s === 'pending' ? 'قيد المراجعة' : s === 'rejected' ? 'مرفوض' : s ?? '—';
+  const statusColor = (s?: string) => s === 'approved' ? '#22C55E' : s === 'pending' ? '#F59E0B' : s === 'rejected' ? '#EF4444' : '#9CA3AF';
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Stack.Screen options={{ title: 'ساعاتي الإضافية' }} />
+      <Stack.Screen options={{ title: 'إضافي خاص بي' }} />
       <FlatList
         data={list}
         keyExtractor={(item, i) => String(item.id ?? i)}
         contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
         onRefresh={refetch}
         refreshing={isLoading}
-        ListEmptyComponent={<GEmptyState icon="time-outline" title="لا توجد ساعات إضافية" description="" />}
+        ListEmptyComponent={<GEmptyState icon="time-outline" title="لا توجد سجلات إضافي" description="" />}
         renderItem={({ item }) => (
-          <View style={{ backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, padding: 14, flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' }}>
-            <View style={{ flex: 1 }}>
-              {item.date ? (
-                <Text style={{ fontSize: 14, fontWeight: '600', color: c.text }}>
-                  {new Date(item.date).toLocaleDateString('ar-SA', { month: 'short', day: 'numeric', year: 'numeric' })}
-                </Text>
-              ) : null}
-              {item.hours != null ? <Text style={{ fontSize: 12, color: c.textMuted, marginTop: 2 }}>{item.hours} ساعة</Text> : null}
+          <View style={{ backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, padding: 14 }}>
+            <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: c.text }}>
+                {item.hours != null ? `${item.hours} ساعة` : '—'}
+              </Text>
+              <Text style={{ fontSize: 11, color: statusColor(item.status) }}>{statusLabel(item.status)}</Text>
             </View>
-            {item.status ? (
-              <Text style={{ fontSize: 11, color: statusColor(item.status), backgroundColor: c.bg, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                {statusLabel(item.status)}
+            {item.totalPay != null ? (
+              <Text style={{ fontSize: 12, color: c.textMuted, marginTop: 4, textAlign: 'right' }}>
+                المبلغ: {Number(item.totalPay).toLocaleString('ar-SA')} ر.س
+              </Text>
+            ) : null}
+            {item.date ? (
+              <Text style={{ fontSize: 11, color: c.textFaint, marginTop: 4, textAlign: 'right' }}>
+                {new Date(item.date).toLocaleDateString('ar-SA', { month: 'short', day: 'numeric', year: 'numeric' })}
               </Text>
             ) : null}
           </View>
