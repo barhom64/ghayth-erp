@@ -1315,6 +1315,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "tickets", label: "التذاكر", icon: "help-buoy-outline", endpoint: "/api/support/tickets",
         titleFields: ["subject", "title"], subtitleFields: ["ticketNumber", "clientName", "priority"], statusField: "status", dateFields: ["createdAt"],
+        detailRoute: "/support/ticket-detail",
         write: {
           moduleKey: "support",
           statuses: [
