@@ -19,6 +19,7 @@ import { NumberField, FormFieldWrapper, TextField } from "@/components/shared/fo
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { FinanceStartFromDocument } from "@/components/shared/finance-start-from-document";
 
 /**
  * تسجيل واقعة مالية — م١-ب. الواجهة تشغيلية: يدخل المستخدم (الكيان/الطرف + ما حدث +
@@ -160,19 +161,8 @@ export default function FinancialEventCreate({ embedded = false }: { embedded?: 
       )}
       <div dir="rtl">
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* اختصار «ابدأ من مستند» — يُبرز محرّك قراءة المستندات (OCR) وبوابة الاستيراد
-              في مكان تسجيل الواقعة: امسح ورقة/فاتورة ضوئيًّا (محرّك OCR، تأكيد بشري) أو
-              استورد Excel/CSV، بدل الإدخال اليدوي. كلاهما يمرّ على نفس محرّك القيد. */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-dashed bg-surface-subtle px-3 py-2 text-sm">
-            <span className="text-muted-foreground">عندك المستند جاهز؟ ابدأ منه:</span>
-            <button type="button" className="text-primary hover:underline font-medium" onClick={() => navigate("/documents/ocr/review")}>
-              قراءة ضوئية (OCR) ←
-            </button>
-            <span className="text-muted-foreground" aria-hidden>·</span>
-            <button type="button" className="text-primary hover:underline font-medium" onClick={() => navigate("/finance/documents/import")}>
-              استيراد Excel/CSV ←
-            </button>
-          </div>
+          {/* اختصار «ابدأ من مستند» (قراءة ضوئية OCR + استيراد Excel/CSV) — مكوّن مشترك (DRY). */}
+          <FinanceStartFromDocument />
 
           {/* النوع: تصنيف/اختصار لا إلزام — لكن الاتجاه واضح بصريًّا (لون + سهم + لافتة)
               فلا يلتبس قبض (مال داخل) بصرف (مال خارج). النظام يضع القيد في اتجاهه تلقائيًّا. */}
