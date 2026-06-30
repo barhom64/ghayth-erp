@@ -126,6 +126,8 @@ function AuthGate() {
       <Stack.Screen name="exec-dashboard" options={{ title: 'لوحة المدير التنفيذي' }} />
       <Stack.Screen name="comms/conversation" options={{ title: 'المحادثة' }} />
       <Stack.Screen name="manager-workspace" options={{ title: 'مساحة عمل المدير' }} />
+      <Stack.Screen name="finance/reports" options={{ title: 'التقارير المالية' }} />
+      <Stack.Screen name="hr/employee-detail" options={{ title: 'ملف الموظف' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
   );
