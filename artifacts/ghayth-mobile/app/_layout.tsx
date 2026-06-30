@@ -918,6 +918,9 @@ function AuthGate() {
       <Stack.Screen name="admin/numbering-assignments" options={{ title: 'تعيينات الترقيم' }} />
       <Stack.Screen name="admin/numbering-audit" options={{ title: 'سجل تدقيق الترقيم' }} />
       <Stack.Screen name="admin/numbering-health" options={{ title: 'صحة الترقيم' }} />
+      <Stack.Screen name="hr/tracking-policies" options={{ title: 'سياسات تتبع الحضور' }} />
+      <Stack.Screen name="admin/import-entities" options={{ title: 'كيانات الاستيراد' }} />
+      <Stack.Screen name="finance/datafix-subsidiaries" options={{ title: 'الحسابات الفرعية المخطوءة' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
