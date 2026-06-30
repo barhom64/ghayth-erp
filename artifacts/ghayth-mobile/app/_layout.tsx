@@ -612,6 +612,9 @@ function AuthGate() {
       <Stack.Screen name="bi/operations" options={{ title: 'تأخيرات SLA' }} />
       <Stack.Screen name="governance/expiring-docs" options={{ title: 'إقامات منتهية الصلاحية' }} />
       <Stack.Screen name="admin/pdpl-retention" options={{ title: 'سياسات الاحتفاظ بالبيانات' }} />
+      <Stack.Screen name="finance/vendor-credits" options={{ title: 'مذكرات ائتمان الموردين' }} />
+      <Stack.Screen name="finance/payment-runs" options={{ title: 'دفعات الدفع' }} />
+      <Stack.Screen name="finance/dunning-history" options={{ title: 'سجل التحصيل' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
