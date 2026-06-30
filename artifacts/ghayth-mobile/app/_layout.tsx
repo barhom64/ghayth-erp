@@ -1097,6 +1097,9 @@ function AuthGate() {
       <Stack.Screen name="comms/log-referral-chain" options={{ title: 'سلسلة الإحالة' }} />
       <Stack.Screen name="marketing/campaign-roas" options={{ title: 'عائد الإنفاق الإعلاني' }} />
       <Stack.Screen name="support/kb-detail" options={{ title: 'مقالة قاعدة المعرفة' }} />
+      <Stack.Screen name="org/team-members" options={{ title: 'أعضاء الفريق' }} />
+      <Stack.Screen name="org/committee-members" options={{ title: 'أعضاء اللجنة' }} />
+      <Stack.Screen name="org/project-contributors" options={{ title: 'مساهمو المشروع' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
