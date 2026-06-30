@@ -80,6 +80,11 @@ const ALLOWLIST = new Set([
   // بـ redirect إلى «قيد يومية» (/finance/journal/create) بعد دمج قوالبها الـ١٢ فيها
   // كمنتقي قالب (بياناتها صارت lib/journal-templates.ts). الملف redirect stub مُبقًى (§٨).
   "pages/create/finance/journal-quick-templates.tsx",
+  // توحيد القراءة الضوئية — صندوق المسح القديم (documents-ocr-inbox) كان نسخة أضعف
+  // (بلا رفع ملف ولا تطبيق على كيان). وُحِّد في «قراءة المستندات (OCR)» (documents/ocr-review)
+  // التي تضيف رفع الملف + تمييز قبض/صرف؛ مساره /documents/ocr-inbox يُحوَّل redirect إليها.
+  // الملف مُبقًى للمرجع/التراجع (تحويل لا حذف؛ تقاعده النهائي بقرار مستقل من المالك).
+  "pages/documents-ocr-inbox.tsx",
 ]);
 
 const SOURCE_EXTS = [".ts", ".tsx", ".js", ".jsx"];
