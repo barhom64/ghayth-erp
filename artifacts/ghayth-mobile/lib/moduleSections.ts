@@ -369,6 +369,19 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
+      { key: "payroll", label: "مسيرات الرواتب", icon: "cash-outline", endpoint: "/api/hr/payroll", titleFields: ["ref", "batchName"], subtitleFields: ["period", "month"], statusField: "status", amountFields: ["totalNet", "totalAmount"], dateFields: ["createdAt"],
+        write: { moduleKey: "hr", actions: [
+          { key: "approve", label: "اعتماد المسيرة", icon: "checkmark-circle-outline", method: "POST", path: (id) => `/api/hr/payroll/${id}/approve`, confirm: "هل تريد اعتماد مسيرة الرواتب؟", successText: "تم اعتماد المسيرة", showWhenStatus: ["draft", "pending"] },
+          { key: "post", label: "ترحيل المسيرة", icon: "git-commit-outline", method: "POST", path: (id) => `/api/hr/payroll/${id}/post`, confirm: "سيتم ترحيل المسيرة محاسبيًا. متابعة؟", successText: "تم ترحيل المسيرة", showWhenStatus: ["approved"] },
+        ] } },
+      { key: "payslips", label: "كشوف الرواتب", icon: "document-text-outline", endpoint: "/api/hr/payroll/slips", titleFields: ["employeeName"], subtitleFields: ["period", "month"], statusField: "status", amountFields: ["netSalary"] },
+      { key: "exit-requests", label: "طلبات إنهاء الخدمة", icon: "log-out-outline", endpoint: "/api/hr/transfers", titleFields: ["employeeName"], subtitleFields: ["exitType", "reason"], statusField: "status", dateFields: ["requestDate"],
+        write: { moduleKey: "hr", actions: [
+          { key: "approve", label: "اعتماد الطلب", icon: "checkmark-circle-outline", method: "PATCH", path: (id) => `/api/hr/transfers/${id}/approve`, body: { approved: true }, confirm: "هل تريد اعتماد طلب إنهاء الخدمة؟", successText: "تم اعتماد الطلب", showWhenStatus: ["pending"] },
+        ] } },
+      { key: "gratuity", label: "مكافأة نهاية الخدمة", icon: "ribbon-outline", endpoint: "/api/hr/gratuity", titleFields: ["employeeName"], subtitleFields: ["yearsOfService"], statusField: "status", amountFields: ["gratuityAmount", "totalAmount"], dateFields: ["lastWorkingDay"] },
+      { key: "delegations", label: "التفويضات", icon: "swap-horizontal-outline", endpoint: "/api/hr/delegations", titleFields: ["delegatorName"], subtitleFields: ["delegateeName", "scope"], statusField: "status", dateFields: ["fromDate", "toDate"] },
+      { key: "evaluations", label: "تقييمات الأداء", icon: "star-outline", endpoint: "/api/hr/evaluations", titleFields: ["employeeName"], subtitleFields: ["period", "evaluatorName"], statusField: "status", amountFields: ["score"], dateFields: ["evaluationDate"] },
       { key: "official-letters", label: "الخطابات الرسمية", icon: "mail-outline", endpoint: "/api/hr/official-letters", titleFields: ["subject", "letterNumber"], subtitleFields: ["employeeName", "type"], statusField: "status", dateFields: ["createdAt"] },
       { key: "excuse-requests", label: "طلبات الاستئذان", icon: "hand-left-outline", endpoint: "/api/hr/excuse-requests", titleFields: ["employeeName"], subtitleFields: ["excuseType"], statusField: "status", dateFields: ["excuseDate"],
         write: { moduleKey: "hr", actions: [

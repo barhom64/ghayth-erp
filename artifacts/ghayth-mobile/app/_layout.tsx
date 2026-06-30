@@ -124,6 +124,8 @@ function AuthGate() {
       <Stack.Screen name="calendar" options={{ title: 'التقويم الموحّد' }} />
       <Stack.Screen name="assistant" options={{ title: 'المساعد الذكي' }} />
       <Stack.Screen name="exec-dashboard" options={{ title: 'لوحة المدير التنفيذي' }} />
+      <Stack.Screen name="comms/conversation" options={{ title: 'المحادثة' }} />
+      <Stack.Screen name="manager-workspace" options={{ title: 'مساحة عمل المدير' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
   );
