@@ -9,7 +9,7 @@
 # As real gaps get audit wired in, prune their line here — the covered %
 # climbs monotonically and can never silently regress.
 #
-# Baseline captured: 88 unaudited write endpoint(s).
+# Baseline captured: 63 unaudited write endpoint(s) (pruned 27 now-recognized as audited via applyTransition<…> + stale OCR/WPS).
 #
 # POST /finance/intercompany — audit IS present (emitEvent + createAuditLog in
 # finance-hardening.ts, ~L1470/L1479) but ~237 lines into the handler, beyond the
@@ -17,7 +17,6 @@
 # audited + event-emitted on commit.
 POST /finance/intercompany
 DELETE /admin/saudi/wps/credentials/:bankCode
-DELETE /documents/saudi/wps/credentials/:bankCode
 DELETE /finance/saudi/wps/credentials/:bankCode
 DELETE /hr/saudi/wps/credentials/:bankCode
 DELETE /inbox/drafts/:id
@@ -27,26 +26,14 @@ DELETE /umrah/hotels/:id
 DELETE /umrah/import/presets/:id
 DELETE /warehouse/saudi/wps/credentials/:bankCode
 PATCH /admin/zatca/missing-tax-numbers/:id
-PATCH /documents/zatca/missing-tax-numbers/:id
-PATCH /finance/budgets/:id/approve
-PATCH /finance/commitments/:id/approve
-PATCH /finance/financial-requests/:id/approve
-PATCH /finance/journal-manual/:id/approve
-PATCH /finance/journal-manual/:id/post
-PATCH /finance/journal-manual/:id/review
-PATCH /finance/journal-manual/:id/submit
-PATCH /finance/receivables/:id/approve
 PATCH /finance/zatca/missing-tax-numbers/:id
 PATCH /hr/zatca/missing-tax-numbers/:id
 PATCH /inbox/drafts/:id
 PATCH /inbox/signatures/:id
 PATCH /umrah/hotels/:id
 PATCH /warehouse/zatca/missing-tax-numbers/:id
-POST /admin/:id/ocr/rerun
 POST /admin/ai-governance/prompts/:id/simulate
 POST /admin/communication-control/dlp-rules/test
-POST /admin/ocr/extractions/:id/confirm
-POST /admin/ocr/extractions/:id/reject
 POST /admin/pbx-control/ivr-test
 POST /admin/pbx-control/setup/generate-secret
 POST /admin/pbx-control/setup/test-signature
@@ -55,16 +42,9 @@ POST /admin/permissions/explain
 POST /admin/vendor-settings/:slug/test
 POST /admin/vendor-settings/company/smtp/test
 POST /events/outbox/drain
-POST /finance/:id/ocr/rerun
-POST /finance/bank-guarantees/:id/cancel
-POST /finance/bank-guarantees/:id/release
 POST /finance/fiscal-periods-v2/:id/close
-POST /finance/fiscal-periods-v2/:id/lock
-POST /finance/fiscal-periods-v2/:id/reopen
 POST /finance/fiscal-periods/:period/close
 POST /finance/journal/:id/reverse
-POST /finance/ocr/extractions/:id/confirm
-POST /finance/ocr/extractions/:id/reject
 POST /finance/payment-run/execute
 # POST /finance/documents/import/analyze — بوابة الاستيراد م٢: قراءة فقط. تحلّل ملف
 # Excel/CSV وتُعيّنه إلى بنود مستند ثم تُعيدها للمراجعة — لا كتابة في قاعدة البيانات
@@ -82,10 +62,7 @@ DELETE /finance/documents/import/presets/:id
 POST /finance/documents/collect/preview
 POST /finance/vendor-invoices/impact-preview
 POST /finance/zatca/test-connection
-POST /hr/:id/ocr/rerun
 POST /hr/attendance/field-ping
-POST /hr/ocr/extractions/:id/confirm
-POST /hr/ocr/extractions/:id/reject
 POST /impact-preview
 POST /inbox/conversations/:id/messages
 POST /inbox/drafts
@@ -106,11 +83,7 @@ POST /umrah/groups/:id/transport-requests
 POST /umrah/import/presets
 POST /umrah/import/vouchers
 POST /umrah/reclassify-revenue
-POST /warehouse/:id/ocr/rerun
-POST /warehouse/ocr/extractions/:id/confirm
-POST /warehouse/ocr/extractions/:id/reject
 PUT /admin/saudi/wps/credentials/:bankCode
-PUT /documents/saudi/wps/credentials/:bankCode
 PUT /finance/saudi/wps/credentials/:bankCode
 PUT /hr/saudi/wps/credentials/:bankCode
 PUT /warehouse/saudi/wps/credentials/:bankCode

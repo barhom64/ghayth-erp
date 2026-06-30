@@ -128,7 +128,14 @@ const AUDIT_PRIMITIVE = /createAuditLog\s*\(|auditFromRequest\s*\(|auditMutation
 // them is audited even with no inline primitive. `applyTransition`
 // (lib/lifecycleEngine.ts) always calls createAuditLog after every committed
 // state change — see lifecycleEngine.ts. Calling it counts as coverage.
-const KNOWN_AUDIT_WRAPPERS = /(?<!\.)\b(?:applyTransition)\s*\(/;
+// The optional `<…>` group recognises generic-typed calls
+// (`applyTransition<Record<string, unknown>>({…})`) — without it the bare
+// `\s*\(` cannot match because the type-argument list sits between the name
+// and the call paren, so 22 audited finance/legal/support lifecycle handlers
+// were mis-reported as audit gaps. `[^(){};]*` keeps the match on the call's
+// own statement (never crosses a paren/brace/`;`); greedy backtracking
+// handles nested generics like `<Record<string, unknown>>`.
+export const KNOWN_AUDIT_WRAPPERS = /(?<!\.)\b(?:applyTransition)\s*(?:<[^(){};]*>)?\s*\(/;
 
 // Many routers funnel every write through a thin file-local wrapper instead of
 // calling the primitive inline — e.g. org.ts `audit(req, …)` and
