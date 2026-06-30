@@ -789,6 +789,9 @@ function AuthGate() {
       <Stack.Screen name="umrah/compliance" options={{ title: 'تقرير الامتثال' }} />
       <Stack.Screen name="umrah/transport-report" options={{ title: 'تقرير نقل الحجاج' }} />
       <Stack.Screen name="umrah/group-portfolio" options={{ title: 'محفظة المجموعات' }} />
+      <Stack.Screen name="hr/attendance-policy" options={{ title: 'سياسة الحضور' }} />
+      <Stack.Screen name="hr/leave-stats" options={{ title: 'إحصاءات الإجازات' }} />
+      <Stack.Screen name="hr/approval-chain-definitions" options={{ title: 'تعريفات سلاسل الاعتماد' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
