@@ -178,6 +178,19 @@ export async function upsertDerivedDriverHours(
   return { id, drivingHours: derived.drivingHours, stopHours: derived.stopHours, frozen };
 }
 
+/** يحلّ معرّف السائق من موظفه (لعرض السائق لساعاته). null إن لم يكن سائقًا. */
+export async function resolveOwnDriverId(
+  scope: FleetScope,
+  employeeId: number,
+): Promise<number | null> {
+  const [drv] = await rawQuery<{ id: number }>(
+    `SELECT id FROM fleet_drivers
+      WHERE "employeeId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+    [employeeId, scope.companyId],
+  );
+  return drv?.id ?? null;
+}
+
 export interface DriverHoursFilters {
   driverId?: number;
   from?: string;

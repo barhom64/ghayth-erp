@@ -23,7 +23,6 @@ import { handleRouteError, parseId, zodParse } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { todayISO } from "../lib/businessHelpers.js";
-import { rawQuery } from "../lib/rawdb.js";
 import {
   type FleetScope,
   manualHoursSchema,
@@ -32,6 +31,7 @@ import {
   listDriverWorkHours,
   setManualDriverHours,
   approveDriverWorkHours,
+  resolveOwnDriverId,
 } from "../lib/fleet/driverHours.js";
 
 export const fleetDriverHoursRouter = Router();
@@ -138,18 +138,14 @@ fleetDriverHoursRouter.get(
         res.json({ data: [] });
         return;
       }
-      const [drv] = await rawQuery<{ id: number }>(
-        `SELECT id FROM fleet_drivers
-          WHERE "employeeId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-        [employeeId, scope.companyId],
-      );
-      if (!drv) {
+      const driverId = await resolveOwnDriverId(scope, employeeId);
+      if (driverId == null) {
         res.json({ data: [] });
         return;
       }
       const q = req.query as Record<string, string | undefined>;
       const rows = await listDriverWorkHours(scope, {
-        driverId: drv.id,
+        driverId,
         from: q.from && DATE_RE.test(q.from) ? q.from : undefined,
         to: q.to && DATE_RE.test(q.to) ? q.to : undefined,
       });

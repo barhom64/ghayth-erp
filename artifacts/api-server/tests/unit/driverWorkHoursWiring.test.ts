@@ -123,9 +123,11 @@ describe("المسارات — routes/fleet-driver-hours", () => {
     expect(ROUTES).toMatch(/"\/fleet\/driver-work-hours\/:id"[\s\S]{0,160}"update"/);
     expect(ROUTES).toMatch(/"\/fleet\/driver-work-hours\/:id\/approve"[\s\S]{0,160}"approve"/);
   });
-  it("السائق يرى ساعاته فقط — يُحلّ من scope.employeeId", () => {
+  it("السائق يرى ساعاته فقط — يُحلّ من scope.employeeId عبر مساعد المكتبة", () => {
     expect(ROUTES).toContain('"/fleet/driver/me/work-hours"');
-    expect(ROUTES).toMatch(/fleet_drivers[\s\S]*?"employeeId" = \$1/);
+    expect(ROUTES).toContain("resolveOwnDriverId(scope, employeeId)");
+    // الاستعلام المعزول إيجاريًا يعيش في المكتبة لا في الراوت (حارس scope-helper)
+    expect(LIB).toMatch(/resolveOwnDriverId[\s\S]*?"employeeId" = \$1 AND "companyId" = \$2/);
   });
   it("الراوتر مُسجّل في index", () => {
     expect(INDEX).toContain('from "./fleet-driver-hours.js"');
