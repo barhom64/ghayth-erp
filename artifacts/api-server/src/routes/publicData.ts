@@ -17,6 +17,27 @@ const forgotPasswordSchema = z.object({
   email: z.string().email("الرجاء إدخال بريد إلكتروني صحيح"),
 });
 
+// التقاط طلبات/استفسارات الزوّار من الموقع العام مباشرةً في CRM غيث (فرصة جديدة).
+// جسر إلى النواة الموجودة — لا backend مكرر. يُحفظ كـ crm_opportunity بمرحلة "lead".
+// خريطة المواقع العامة → معرّف الشركة (tenant مثبّت على الخادم). لا نثق أبداً
+// بـ companyId قادم من العميل (يفتح كتابة عبر-المستأجرين + تعداد الشركات).
+// إضافة موقع عام جديد = سطر هنا فقط.
+const PUBLIC_SITE_COMPANY: Record<string, number> = {
+  wafd: 4,
+};
+
+const publicLeadSchema = z.object({
+  site: z.string().trim().min(1).max(40),
+  name: z.string().trim().min(2, "الاسم مطلوب").max(160),
+  phone: z.string().trim().min(4, "رقم الجوال مطلوب").max(40),
+  email: z.string().trim().email("بريد إلكتروني غير صحيح").max(160).optional().or(z.literal("")).transform((v) => (v ? v : undefined)),
+  subject: z.string().trim().max(200).optional(),
+  message: z.string().trim().max(4000).optional(),
+  source: z.string().trim().max(60).optional(),
+  // حقل فخّ (honeypot) — يجب أن يبقى فارغاً؛ يملؤه البوت فقط.
+  website: z.string().max(200).optional(),
+});
+
 const router = Router();
 
 const publicLimiter = rateLimit({
@@ -321,6 +342,84 @@ router.post("/onboarding/:token", publicLimiter, async (req, res) => {
     res.json({ ok: true, message: "تم استلام بياناتك. ستتم مراجعتها واعتمادها لتفعيل حسابك." });
   } catch (err) {
     handleRouteError(err, res, "إرسال بيانات الاستكمال الذاتي");
+  }
+});
+
+// POST /api/public/leads — استقبال طلب/استفسار من موقع وفد العام وتحويله إلى
+// فرصة CRM في غيث. عام تماماً (قبل authMiddleware) ومحمي بـ anonymousIpLimiter
+// + publicLimiter. لا backend مكرر — يكتب في نفس جدول crm_opportunities.
+router.post("/leads", publicLimiter, async (req, res) => {
+  try {
+    const b = zodParse(publicLeadSchema.safeParse(req.body ?? {}));
+
+    // رسالة قبول موحّدة لكل المسارات المقبولة/المُسقَطة — تمنع تعداد المستأجرين
+    // أو كشف اصطياد البوتات عبر فروق الاستجابة.
+    const accepted = { ok: true, message: "تم استلام طلبك بنجاح. سيتواصل معك فريقنا قريباً." } as const;
+
+    // فخّ البوتات: لو امتلأ الحقل المخفي، نقبل صورياً ونُسقط الطلب بصمت.
+    if (b.website && b.website.trim()) {
+      res.status(201).json(accepted);
+      return;
+    }
+
+    // المستأجر يُحَل على الخادم من خريطة مثبّتة — لا نثق بأي companyId من العميل.
+    const companyId = PUBLIC_SITE_COMPANY[b.site];
+    if (!companyId) {
+      res.status(201).json(accepted);
+      return;
+    }
+
+    // التحقق أن الشركة موجودة وفعّالة قبل الكتابة (companies تُدار بـ status، لا deletedAt).
+    const [company] = await rawQuery<{ id: number; status: string | null }>(
+      `SELECT id, status FROM companies WHERE id = $1 LIMIT 1`,
+      [companyId],
+    );
+    if (!company || (company.status && company.status !== "active")) {
+      // استجابة موحّدة — لا نكشف أن الموقع غير مُفعّل.
+      res.status(201).json(accepted);
+      return;
+    }
+
+    const title = b.subject?.trim()
+      ? `${b.subject.trim()} — ${b.name}`
+      : `استفسار من الموقع — ${b.name}`;
+    const notesParts = [b.message?.trim(), b.subject?.trim() ? `الموضوع: ${b.subject.trim()}` : null].filter(Boolean);
+    const notes = notesParts.length ? notesParts.join("\n") : null;
+
+    const { insertId } = await rawExecute(
+      `INSERT INTO crm_opportunities ("companyId",title,"contactName","contactPhone","contactEmail",source,stage,notes)
+       VALUES ($1,$2,$3,$4,$5,$6,'lead',$7)`,
+      [companyId, title, b.name, b.phone, b.email ?? null, b.source?.trim() || "website", notes],
+    );
+
+    // إشعار فريق المبيعات بالفرصة الجديدة (إرسال فقط — لا سياسة).
+    void sendNotification({
+      companyId,
+      type: "crm_opportunity",
+      title: "طلب جديد من الموقع",
+      body: `${b.name} — ${b.phone}${b.email ? ` — ${b.email}` : ""}`,
+      priority: "high",
+      targetRole: "sales_manager",
+      refType: "crm_opportunities",
+      refId: insertId,
+      actionUrl: `/crm/opportunities/${insertId}`,
+      channels: ["in_app"],
+    }).catch((e) => logger.error(e, "public lead notify failed"));
+
+    void createAuditLog({
+      companyId, userId: 0,
+      action: "crm.public_lead_captured", entity: "crm_opportunities", entityId: insertId,
+      after: { name: b.name, source: b.source?.trim() || "website" },
+    }).catch((e) => logger.error(e, "publicData background task failed"));
+    void emitEvent({
+      companyId, branchId: 0, userId: 0,
+      action: "crm.lead.captured", entity: "crm_opportunities", entityId: insertId,
+      details: JSON.stringify({ source: b.source?.trim() || "website" }),
+    }).catch((e) => logger.error(e, "publicData background task failed"));
+
+    res.status(201).json({ ok: true, message: "تم استلام طلبك بنجاح. سيتواصل معك فريقنا قريباً." });
+  } catch (err) {
+    handleRouteError(err, res, "إرسال طلب من الموقع");
   }
 });
 
