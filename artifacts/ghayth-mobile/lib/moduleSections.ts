@@ -1208,6 +1208,45 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
+      {
+        key: "inspections", label: "فحوصات المركبات", icon: "clipboard-outline", endpoint: "/api/fleet/inspections",
+        detailRoute: "/fleet/inspection-detail", createRoute: "/fleet/inspection-new",
+        titleFields: ["vehiclePlate", "ref"], subtitleFields: ["inspectorName", "type"], statusField: "status", dateFields: ["inspectionDate"],
+        write: {
+          moduleKey: "fleet",
+          createFields: [
+            {
+              name: "vehicleId", label: "المركبة", type: "reference", required: true,
+              refEndpoint: "/api/fleet/vehicles", refLabelFields: ["plateNumber", "plate"], refValueField: "id",
+            },
+            {
+              name: "type", label: "نوع الفحص", type: "select",
+              options: [
+                { value: "pre_trip", label: "قبل الرحلة" },
+                { value: "post_trip", label: "بعد الرحلة" },
+                { value: "daily", label: "يومي" },
+                { value: "emergency", label: "طارئ" },
+              ],
+            },
+            {
+              name: "overallCondition", label: "الحالة العامة", type: "select",
+              options: [
+                { value: "good", label: "جيدة" },
+                { value: "fair", label: "مقبولة" },
+                { value: "poor", label: "سيئة" },
+                { value: "critical", label: "حرجة" },
+              ],
+            },
+            { name: "mileage", label: "قراءة العداد (كم)", type: "number" },
+            { name: "notes", label: "ملاحظات", type: "textarea" },
+          ],
+        },
+      },
+      {
+        key: "field-tracking", label: "التتبع الميداني", icon: "locate-outline", endpoint: "/api/fleet/telematics/live",
+        titleFields: ["vehiclePlate", "plate"], subtitleFields: ["driverName", "speed"], statusField: "status", dateFields: ["lastUpdated"],
+        write: { moduleKey: "fleet", noDetail: true },
+      },
     ],
   },
   warehouse: {
@@ -1728,6 +1767,22 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
           actions: [
             { key: "approve", label: "اعتماد", icon: "checkmark-circle-outline", method: "PATCH", path: (id) => `/api/umrah/agent-invoices/${id}/approve`, confirm: "هل تريد اعتماد الفاتورة؟", successText: "تم", showWhenStatus: ["draft", "pending"] },
+          ],
+        },
+      },
+      {
+        key: "families", label: "العائلات", icon: "people-circle-outline", endpoint: "/api/umrah/families",
+        detailRoute: "/umrah/family-detail", createRoute: "/umrah/family-new",
+        titleFields: ["familyName", "name"], subtitleFields: ["memberCount", "groupName"], dateFields: ["createdAt"],
+        write: {
+          moduleKey: "umrah",
+          createFields: [
+            { name: "familyName", label: "اسم العائلة", type: "text", required: true },
+            {
+              name: "groupId", label: "المجموعة", type: "reference",
+              refEndpoint: "/api/umrah/groups", refLabelFields: ["name", "groupNumber"], refValueField: "id",
+            },
+            { name: "notes", label: "ملاحظات", type: "textarea" },
           ],
         },
       },

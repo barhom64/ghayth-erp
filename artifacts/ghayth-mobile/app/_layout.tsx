@@ -330,6 +330,12 @@ function AuthGate() {
       <Stack.Screen name="umrah/sub-agent-new" options={{ title: 'وكيل فرعي جديد' }} />
       <Stack.Screen name="umrah/group-new" options={{ title: 'مجموعة عمرة جديدة' }} />
       <Stack.Screen name="finance/vendor-new" options={{ title: 'مورد جديد' }} />
+      <Stack.Screen name="umrah/family-detail" options={{ title: 'عائلة المعتمر' }} />
+      <Stack.Screen name="umrah/family-new" options={{ title: 'عائلة جديدة' }} />
+      <Stack.Screen name="fleet/inspection-detail" options={{ title: 'تقرير الفحص' }} />
+      <Stack.Screen name="fleet/inspection-new" options={{ title: 'فحص جديد' }} />
+      <Stack.Screen name="hr/wps" options={{ title: 'نظام حماية الأجور' }} />
+      <Stack.Screen name="fleet/field-tracking" options={{ title: 'التتبع الميداني' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
