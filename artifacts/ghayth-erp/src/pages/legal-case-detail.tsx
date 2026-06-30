@@ -552,7 +552,7 @@ export default function LegalCaseDetail() {
           className="text-xs gap-1 text-status-error-foreground"
           onClick={handleClose}
           disabled={closeMut.isPending}
-          title="إغلاق نهائي للقضية (يفعل side-effects: إشعار المحامي، إغلاق المخاطر)"
+          title="إغلاق نهائي للقضية (يُفعّل آثارًا تلقائية: إشعار المحامي، إغلاق المخاطر)"
         >
           <X className="h-3 w-3" />
           إغلاق القضية

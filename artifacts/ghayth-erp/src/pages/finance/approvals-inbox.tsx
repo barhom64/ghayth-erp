@@ -43,7 +43,7 @@ const QUEUES: QueueDef[] = [
   {
     key: "budgetApprovals",
     label: "اعتمادات تجاوز الميزانية",
-    description: "طلبات تتطلب CFO أو GM لتجاوز سقف ميزانية حساب",
+    description: "طلبات تتطلب المدير المالي أو المدير العام لتجاوز سقف ميزانية حساب",
     icon: ShieldCheck,
     href: "/finance/budget-approvals",
     color: "red",
@@ -70,7 +70,7 @@ const QUEUES: QueueDef[] = [
   {
     key: "expenses",
     label: "مصاريف بانتظار الاعتماد",
-    description: "مصاريف pending — تحتاج اعتماد قبل ترحيلها للـ GL",
+    description: "مصاريف معلّقة — تحتاج اعتماد قبل ترحيلها للأستاذ العام",
     icon: Receipt,
     href: "/finance/expenses?status=pending",
     color: "blue",
@@ -79,7 +79,7 @@ const QUEUES: QueueDef[] = [
   {
     key: "purchaseRequests",
     label: "طلبات شراء بانتظار الاعتماد",
-    description: "طلبات شراء submitted — تنتظر اعتماد قبل تحويلها لـ PO",
+    description: "طلبات شراء مُرسَلة — تنتظر اعتماد قبل تحويلها لأمر شراء",
     icon: ClipboardList,
     href: "/finance/purchase-requests",
     color: "blue",
@@ -88,7 +88,7 @@ const QUEUES: QueueDef[] = [
   {
     key: "vouchers",
     label: "سندات صرف/قبض بانتظار الاعتماد",
-    description: "Vouchers لم تُعتمد بعد",
+    description: "سندات لم تُعتمد بعد",
     icon: Wallet,
     href: "/finance/vouchers",
     color: "purple",
