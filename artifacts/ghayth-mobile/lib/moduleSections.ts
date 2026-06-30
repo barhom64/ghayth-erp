@@ -634,6 +634,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       },
       {
         key: "fuel-logs", label: "سجلات الوقود", icon: "flame-outline", endpoint: "/api/fleet/fuel-logs",
+        detailRoute: "/fleet/fuel-log-detail",
         titleFields: ["vehiclePlate", "ref"], subtitleFields: ["driverName", "stationName"], amountFields: ["totalCost", "cost", "amount", "total"], dateFields: ["fuelDate", "date", "createdAt"],
         write: {
           moduleKey: "fleet",
@@ -1017,6 +1018,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       },
       {
         key: "packages", label: "الباقات", icon: "cube-outline", endpoint: "/api/umrah/packages",
+        detailRoute: "/umrah/package-detail",
         titleFields: ["name"], subtitleFields: ["seasonTitle", "duration"], amountFields: ["sellPrice"],
         write: {
           moduleKey: "umrah",
@@ -1042,6 +1044,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       },
       {
         key: "agents", label: "الوكلاء", icon: "person-outline", endpoint: "/api/umrah/agents",
+        detailRoute: "/umrah/agent-detail",
         titleFields: ["name"], subtitleFields: ["country", "phone"], statusField: "status",
         write: {
           moduleKey: "umrah",
