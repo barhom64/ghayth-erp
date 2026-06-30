@@ -833,6 +833,16 @@ function AuthGate() {
       <Stack.Screen name="module-dashboards/fleet" options={{ title: 'لوحة الأسطول' }} />
       <Stack.Screen name="module-dashboards/legal" options={{ title: 'لوحة القانونية' }} />
       <Stack.Screen name="admin/rules" options={{ title: 'قواعد النظام' }} />
+      <Stack.Screen name="finance/expense-memory" options={{ title: 'ذاكرة المصروفات' }} />
+      <Stack.Screen name="finance/journal-templates" options={{ title: 'قوالب القيود المحاسبية' }} />
+      <Stack.Screen name="transport/intake-rules" options={{ title: 'قواعد استقبال النقل' }} />
+      <Stack.Screen name="fleet/telematics-integrations" options={{ title: 'تكاملات التتبع' }} />
+      <Stack.Screen name="fleet/telematics-live" options={{ title: 'التتبع المباشر' }} />
+      <Stack.Screen name="fleet/telematics-ai-alerts" options={{ title: 'تنبيهات AI للتتبع' }} />
+      <Stack.Screen name="hr/discipline-auto-settings" options={{ title: 'إعدادات الكشف التلقائي' }} />
+      <Stack.Screen name="hr/discipline-auto-log" options={{ title: 'سجل الكشف التلقائي' }} />
+      <Stack.Screen name="hr/wps-settings" options={{ title: 'إعدادات WPS' }} />
+      <Stack.Screen name="hr/wps-runs" options={{ title: 'تشغيلات WPS' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
