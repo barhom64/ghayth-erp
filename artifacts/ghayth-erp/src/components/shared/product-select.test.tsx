@@ -89,4 +89,15 @@ describe("ProductSelect", () => {
     expect(await screen.findByText(hasText("شاي أخضر"))).toBeInTheDocument();
     expect(screen.queryByText(hasText("استشارة"))).not.toBeInTheDocument();
   });
+
+  it("shows the item-type badge (منتج / خدمة) on each option so service vs product is visible (D-2)", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    await user.click(screen.getByRole("combobox"));
+    // both items listed, each carrying its type label as a sublabel
+    expect(await screen.findByText(hasText("شاي أخضر"))).toBeInTheDocument();
+    expect(await screen.findByText("منتج")).toBeInTheDocument(); // the product
+    expect(await screen.findByText("خدمة")).toBeInTheDocument(); // the service
+  });
 });

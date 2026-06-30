@@ -271,7 +271,7 @@ export default function ExpensesPage() {
           <Button asChild variant="outline" size="sm"><Link href="/finance/expense-burn-rate">
               <BarChart3 className="h-4 w-4 me-2" />معدل الحرق
             </Link></Button>
-          <Link href="/finance/expenses/create">
+          <Link href="/finance/documents/create">
             <GuardedButton perm="finance:create" size="sm"><Plus className="h-4 w-4 me-1" />إضافة مصروف</GuardedButton>
           </Link>
           <PrintButton

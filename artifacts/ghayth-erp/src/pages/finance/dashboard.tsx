@@ -326,11 +326,11 @@ export default function FinanceDashboard() {
             <FileText className="h-4 w-4 text-status-info-foreground" />
             <div className="text-xs font-semibold">فاتورة</div>
           </Link>
-          <Link href="/finance/expenses/create" className="border rounded p-2 text-center hover:bg-muted/30 transition flex flex-col items-center gap-1">
+          <Link href="/finance/documents/create" className="border rounded p-2 text-center hover:bg-muted/30 transition flex flex-col items-center gap-1">
             <Receipt className="h-4 w-4 text-destructive" />
             <div className="text-xs font-semibold">مصروف</div>
           </Link>
-          <Link href="/finance/vouchers/create" className="border rounded p-2 text-center hover:bg-muted/30 transition flex flex-col items-center gap-1">
+          <Link href="/finance/documents/create" className="border rounded p-2 text-center hover:bg-muted/30 transition flex flex-col items-center gap-1">
             <Wallet className="h-4 w-4" />
             <div className="text-xs font-semibold">سند صرف</div>
           </Link>

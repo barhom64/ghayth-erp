@@ -14,6 +14,8 @@ const Trips = lazy(() => import("@/pages/fleet/trips"));
 // page file itself are all gone — manual trip creation now flows
 // exclusively through booking → dispatch.
 const TripDetail = lazy(() => import("@/pages/fleet/trip-detail"));
+// البند ٤ — «تسجيل واقعة مركبة» الموحّدة (الكيان يقود: وقود/صيانة/تأمين في مكان واحد).
+const VehicleEventCreate = lazy(() => import("@/pages/create/fleet/vehicle-event-create"));
 const FleetMaintenance = lazy(() => import("@/pages/fleet/maintenance"));
 const MaintenanceTicketImpact = lazy(() => import("@/pages/fleet/maintenance-ticket-impact"));
 const MaintenanceCreate = lazy(() => import("@/pages/create/fleet/maintenance-create"));
@@ -88,6 +90,7 @@ const InspectionsReview = lazy(() => import("@/pages/fleet/inspections-review"))
 
 export const fleetRoutes = [
   { path: "/fleet", component: Fleet },
+  { path: "/fleet/record-event", component: VehicleEventCreate },
   { path: "/fleet/vehicles/create", component: VehiclesCreate },
   { path: "/fleet/inspections", component: InspectionsReview },
   { path: "/fleet/drivers", component: Drivers },

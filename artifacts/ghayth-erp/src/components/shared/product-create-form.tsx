@@ -9,8 +9,9 @@ import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+import { ITEM_TYPES, isStockItem } from "@/lib/item-type";
 
-const INITIAL = { name: "", sku: "", categoryId: "", unit: "piece", costPrice: "", sellPrice: "", currentStock: "", minStock: "", location: "" };
+const INITIAL = { name: "", sku: "", itemType: "product", categoryId: "", unit: "piece", costPrice: "", sellPrice: "", currentStock: "", minStock: "", location: "" };
 
 export interface ProductCreateFormProps {
   /** Called with the freshly-created product row after a successful save. */
@@ -43,14 +44,18 @@ export function ProductCreateForm({ onCreated, onCancel, draftKey = "warehouse_p
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
+  // D-1 (توجيه إبراهيم) — هل النوع المختار مخزني؟ الخدمة/الأصل/الرقمي لا يُمسك لها
+  // مخزون (تطابق سلوك الخلفية)، فحقول المخزون لا تُعرض ولا تُتحقَّق ولا تُرسَل لها.
+  const stockTracked = isStockItem(form.itemType);
+
   const handleSubmit = async () => {
     const firstError = validate({
       name: form.name ? null : "يرجى إدخال اسم المنتج",
       sku: form.sku ? null : "يرجى إدخال رمز المنتج",
       costPrice: form.costPrice && Number(form.costPrice) < 0 ? "سعر التكلفة يجب أن يكون صفر أو أكثر" : null,
       sellPrice: form.sellPrice && Number(form.sellPrice) < 0 ? "سعر البيع يجب أن يكون صفر أو أكثر" : null,
-      minStock: form.minStock && Number(form.minStock) < 0 ? "الحد الأدنى يجب أن يكون صفر أو أكثر" : null,
-      currentStock: form.currentStock && Number(form.currentStock) < 0 ? "المخزون الحالي يجب أن يكون صفر أو أكثر" : null,
+      minStock: stockTracked && form.minStock && Number(form.minStock) < 0 ? "الحد الأدنى يجب أن يكون صفر أو أكثر" : null,
+      currentStock: stockTracked && form.currentStock && Number(form.currentStock) < 0 ? "المخزون الحالي يجب أن يكون صفر أو أكثر" : null,
     });
     if (firstError) {
       toast({ variant: "destructive", title: firstError });
@@ -60,13 +65,15 @@ export function ProductCreateForm({ onCreated, onCancel, draftKey = "warehouse_p
       const created = await addProduct.mutateAsync({
         name: form.name,
         sku: form.sku,
+        itemType: form.itemType,
         categoryId: form.categoryId ? Number(form.categoryId) : undefined,
-        unit: form.unit,
         costPrice: Number(form.costPrice) || 0,
         sellPrice: Number(form.sellPrice) || 0,
-        currentStock: Number(form.currentStock) || 0,
-        minStock: Number(form.minStock) || 0,
-        location: form.location || undefined,
+        // حقول المخزون تُرسَل للأنواع المخزنية فقط؛ غير المخزني يُحفظ بلا رصيد/وحدة/موقع.
+        unit: stockTracked ? form.unit : undefined,
+        currentStock: stockTracked ? Number(form.currentStock) || 0 : 0,
+        minStock: stockTracked ? Number(form.minStock) || 0 : 0,
+        location: stockTracked ? form.location || undefined : undefined,
       });
       clearDraft();
       toast({ title: "تمت إضافة المنتج بنجاح" });
@@ -92,6 +99,14 @@ export function ProductCreateForm({ onCreated, onCancel, draftKey = "warehouse_p
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <TextField label="اسم المنتج" required value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} placeholder="اسم المنتج" error={fieldErrors.name} />
           <TextField label="رمز المنتج" required dir="ltr" value={form.sku} onChange={(v) => setForm((f) => ({ ...f, sku: v }))} placeholder="رمز المنتج" error={fieldErrors.sku} />
+          <FormFieldWrapper label="نوع الصنف">
+            <Select value={form.itemType} onValueChange={(v) => setForm((f) => ({ ...f, itemType: v }))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {ITEM_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </FormFieldWrapper>
           <FormFieldWrapper label="التصنيف">
             <Select value={form.categoryId || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, categoryId: v === "_none" ? "" : v }))}>
               <SelectTrigger><SelectValue placeholder="بدون تصنيف" /></SelectTrigger>
@@ -101,24 +116,32 @@ export function ProductCreateForm({ onCreated, onCancel, draftKey = "warehouse_p
               </SelectContent>
             </Select>
           </FormFieldWrapper>
-          <FormFieldWrapper label="الوحدة">
-            <Select value={form.unit} onValueChange={(v) => setForm((f) => ({ ...f, unit: v }))}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="piece">قطعة</SelectItem>
-                <SelectItem value="kg">كيلوغرام</SelectItem>
-                <SelectItem value="liter">لتر</SelectItem>
-                <SelectItem value="meter">متر</SelectItem>
-                <SelectItem value="box">صندوق</SelectItem>
-              </SelectContent>
-            </Select>
-          </FormFieldWrapper>
+          {stockTracked && (
+            <FormFieldWrapper label="الوحدة">
+              <Select value={form.unit} onValueChange={(v) => setForm((f) => ({ ...f, unit: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="piece">قطعة</SelectItem>
+                  <SelectItem value="kg">كيلوغرام</SelectItem>
+                  <SelectItem value="liter">لتر</SelectItem>
+                  <SelectItem value="meter">متر</SelectItem>
+                  <SelectItem value="box">صندوق</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormFieldWrapper>
+          )}
           <NumberField label="سعر التكلفة" value={form.costPrice} onChange={(v) => setForm((f) => ({ ...f, costPrice: v }))} placeholder="٠" step={0.01} min={0} error={fieldErrors.costPrice} />
           <NumberField label="سعر البيع" value={form.sellPrice} onChange={(v) => setForm((f) => ({ ...f, sellPrice: v }))} placeholder="٠" step={0.01} min={0} error={fieldErrors.sellPrice} />
-          <NumberField label="المخزون الحالي" value={form.currentStock} onChange={(v) => setForm((f) => ({ ...f, currentStock: v }))} placeholder="٠" min={0} error={fieldErrors.currentStock} />
-          <NumberField label="الحد الأدنى" value={form.minStock} onChange={(v) => setForm((f) => ({ ...f, minStock: v }))} placeholder="٠" min={0} error={fieldErrors.minStock} />
+          {stockTracked && (
+            <>
+              <NumberField label="المخزون الحالي" value={form.currentStock} onChange={(v) => setForm((f) => ({ ...f, currentStock: v }))} placeholder="٠" min={0} error={fieldErrors.currentStock} />
+              <NumberField label="الحد الأدنى" value={form.minStock} onChange={(v) => setForm((f) => ({ ...f, minStock: v }))} placeholder="٠" min={0} error={fieldErrors.minStock} />
+            </>
+          )}
         </div>
-        <TextField label="الموقع في المستودع" value={form.location} onChange={(v) => setForm((f) => ({ ...f, location: v }))} placeholder="الموقع في المستودع" />
+        {stockTracked && (
+          <TextField label="الموقع في المستودع" value={form.location} onChange={(v) => setForm((f) => ({ ...f, location: v }))} placeholder="الموقع في المستودع" />
+        )}
         {showAttachments && <FileDropZone files={attachments} onFilesChange={setAttachments} />}
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="outline" onClick={onCancel}>إلغاء</Button>

@@ -169,7 +169,6 @@ import umrahEmployeeAssignmentsRouter from "./umrah-employee-assignments.js";
 import operationsCenterRouter from "./operationsCenter.js";
 import {
   warehouseStubsRouter,
-  documentsStubsRouter,
   hrStubsRouter,
   financeStubsRouter,
   adminStubsRouter,
@@ -742,7 +741,7 @@ router.use("/operations-center", requireModule("operations"), requireMinLevel(50
 // stand-ins; real implementations carry their own authorize/requireMinLevel.
 // GAP_MATRIX P1 — role ladder: 20 not a real role level; corrected to 10.
 router.use("/warehouse", requireModule("warehouse"), requireMinLevel(10), warehouseStubsRouter);
-router.use("/documents", requireModule("documents"), requireMinLevel(10), documentsStubsRouter);
+// /documents OCR stubs نُقِلت إلى routes/documents.ts بتنفيذ حقيقي (م٢-ج) — لا stub متبقٍّ.
 router.use("/hr", requireModule("hr"), requireMinLevel(10), hrStubsRouter);
 // Pricing rules — real CRUD + engine preview (migration 171). Mounted BEFORE
 // financeStubsRouter so /finance/pricing/* resolves to the real handlers (the

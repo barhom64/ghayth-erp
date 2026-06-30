@@ -35,7 +35,7 @@ import {
   resolveTaskSlaReminderConfig,
   shouldFireSlaReminder,
 } from "./inboxClassifier.js";
-import { processFallbackChains } from "./notificationDispatch.js";
+import { processFallbackChains, dispatchNotification } from "./notificationDispatch.js";
 import {
   resolveSystemSmtpConfig,
   formatFromHeader,
@@ -54,6 +54,8 @@ import { decryptSecret } from "./secrets.js";
 import { processDueRecurringJournals } from "./recurringJournalProcessor.js";
 import { processDueAmortizations } from "./engines/prepaidAmortizationEngine.js";
 import { processDueRecognitions } from "./engines/deferredRevenueEngine.js";
+import { overstayPenaltyAmount } from "./umrahPenaltyMath.js";
+import { postBadDebtProvision } from "./finance/badDebtProvision.js";
 import {
   assetDepreciationProfile, type DepreciationAssetRow,
   eosAccrualProfile, leaveAccrualProfile,
@@ -1216,14 +1218,19 @@ async function dailyInvoiceOverdueEscalation(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let actions = 0;
   for (const company of companies) {
+    // Include status='overdue' too — day-1 flips an invoice to 'overdue', so
+    // excluding it here would silently skip the day-7 reminder when the cron
+    // ran normally on day 1. Only paid/cancelled invoices are excluded.
     const invoices = await rawQuery<Record<string, unknown>>(
-      `SELECT i.id, i.ref, i."clientId", i.total, i."paidAmount", i."dueDate",
-              c.name AS "clientName", c.phone AS "clientPhone",
+      `SELECT i.id, i.ref, i."clientId", i."branchId", i.total, i."paidAmount", i."dueDate",
+              c.name AS "clientName", c.phone AS "clientPhone", c.email AS "clientEmail",
+              c."isBlacklisted" AS "clientBlacklisted",
+              c.classification AS "clientClassification",
               (CURRENT_DATE - i."dueDate"::date) AS "daysOverdue",
               i.status
        FROM invoices i
        LEFT JOIN clients c ON c.id = i."clientId"
-       WHERE i."companyId" = $1 AND i.status NOT IN ('paid','cancelled','overdue')
+       WHERE i."companyId" = $1 AND i.status NOT IN ('paid','cancelled')
          AND i."dueDate" < CURRENT_DATE`,
       [company.id]
     );
@@ -1237,6 +1244,7 @@ async function dailyInvoiceOverdueEscalation(): Promise<string> {
       else if (days >= 14) phase = "reminder";
       else if (days >= 7) phase = "first_notice";
       else if (days >= 3) phase = "alert";
+      else if (days >= 1) phase = "first_reminder"; // Spec 03 §collection day-1: SMS+email to client
       if (!phase) continue;
 
       // Flip the invoice status to 'overdue' when appropriate — reports,
@@ -1258,6 +1266,188 @@ async function dailyInvoiceOverdueEscalation(): Promise<string> {
         days >= 30 ? "critical" : "warning",
         "invoice", inv.id as number
       );
+
+      // Spec ملف 03 §تحصيل 6 مراحل (السطر 46-47): يوم 1 → SMS+إيميل للعميل،
+      // يوم 7 → إيميل ثاني للعميل (+ إشعار المحاسب الداخلي عبر broadcastAlert
+      // أعلاه). تقطعنا الإشعار عند هذين اليومين فقط في هذه الشريحة (Slice 1
+      // of the overdue activation plan). المراحل 21/30/60 — التصعيدات
+      // الداخلية + الحظر + churn — تأتي في شريحة منفصلة لأنها قرارات أعمال.
+      //
+      // CHANNEL DISCIPLINE — CRITICAL: we pass `channels` EXPLICITLY here
+      // because the default `invoice` routing rule resolves to
+      // ["in_app","email"], and in_app without an assignmentId/targetRole
+      // fans out to up to 100 ACTIVE employees in the tenant (see
+      // notificationDispatch.resolveInAppRecipients). For a CLIENT-facing
+      // dunning reminder that would (a) leak the client's outstanding
+      // balance internally and (b) hit every employee with a malformed
+      // "you have an overdue invoice" message. We keep client reminders to
+      // email + sms ONLY and target the client by their own contact
+      // details. The accountant's in_app awareness is preserved through
+      // the broadcastAlert call above.
+      if (days === 1 || days === 7) {
+        const clientEmail = (inv.clientEmail as string | null) ?? null;
+        const clientPhone = (inv.clientPhone as string | null) ?? null;
+        if (!clientEmail && !clientPhone) {
+          logger.info(`[cronScheduler] client invoice-overdue: no contact for inv=${inv.id} — skipped`);
+        } else {
+          const clientChannels: ("email" | "sms")[] = [];
+          if (clientEmail) clientChannels.push("email");
+          if (clientPhone) clientChannels.push("sms");
+          try {
+            const outstanding = Number(inv.total ?? 0) - Number(inv.paidAmount ?? 0);
+            await dispatchNotification({
+              companyId: company.id,
+              eventCategory: "invoice.overdue",
+              title: "",
+              body: "",
+              channels: clientChannels,
+              templateKey: "invoice.overdue",
+              templateVars: {
+                invoiceRef: String(inv.ref ?? ""),
+                days: String(days),
+                amount: outstanding.toFixed(2),
+              },
+              recipientEmail: clientEmail ?? undefined,
+              recipientPhone: clientPhone ?? undefined,
+              recipientName: (inv.clientName as string | null) ?? undefined,
+              clientId: inv.clientId as number,
+              refType: "invoice",
+              refId: inv.id as number,
+              priority: "high",
+            });
+          } catch (e) {
+            logger.warn(e, `[cronScheduler] client invoice-overdue notification failed (inv=${inv.id})`);
+          }
+        }
+      }
+
+      // ─────────────────────────────────────────────────────────────────────
+      // Spec ملف 03 §تحصيل 6 مراحل (السطر 49-51): internal escalation tiers
+      //   يوم 21 → تصعيد للمدير المالي
+      //   يوم 30 → إشعار GM + حظر العميل + غرامة 2% شهرياً (مفوّض من إبراهيم)
+      //   يوم 60 → إشعار القانوني + تصنيف العميل churned (مفوّض من إبراهيم)
+      //
+      // Channels: explicit ["email"] only. The internal in_app awareness is
+      // already covered by the broadcastAlert call above (which fires for
+      // EVERY phase). Adding in_app here would re-create the fan-out issue
+      // Codex caught in slice 1.
+      // ─────────────────────────────────────────────────────────────────────
+      const inheritedBranchId = Number(inv.branchId ?? 0) || 1; // fallback to branch 1 if invoice has no branch
+      const outstanding = Number(inv.total ?? 0) - Number(inv.paidAmount ?? 0);
+      const escalationBase = {
+        companyId: company.id,
+        title: "",
+        body: "",
+        channels: ["email" as const],
+        templateVars: {
+          clientName: String(inv.clientName ?? "—"),
+          invoiceRef: String(inv.ref ?? ""),
+          days: String(days),
+          amount: outstanding.toFixed(2),
+        },
+        clientId: inv.clientId as number,
+        refType: "invoice",
+        refId: inv.id as number,
+        priority: "high" as const,
+      };
+
+      if (days === 21) {
+        // Escalate to CFO (fallback chain CFO → GM → owner inside the helper).
+        try {
+          const cfoAssignmentId = await getCfoAssignmentId(company.id, inheritedBranchId);
+          if (cfoAssignmentId) {
+            const [cfo] = await rawQuery<{ name: string; email: string | null }>(
+              `SELECT e.name, e.email FROM employee_assignments ea
+                 JOIN employees e ON e.id = ea."employeeId"
+                WHERE ea.id = $1`,
+              [cfoAssignmentId],
+            );
+            await dispatchNotification({
+              ...escalationBase,
+              eventCategory: "invoice.escalation.fm",
+              templateKey: "invoice.escalation.fm",
+              templateVars: { ...escalationBase.templateVars, managerName: String(cfo?.name ?? "—") },
+              assignmentId: cfoAssignmentId,
+              recipientEmail: cfo?.email ?? undefined,
+              recipientName: cfo?.name ?? undefined,
+            });
+          }
+        } catch (e) {
+          logger.warn(e, `[cronScheduler] invoice-overdue day-21 FM escalation failed (inv=${inv.id})`);
+        }
+      } else if (days === 30) {
+        // 1) blacklist the client (block new invoices). Idempotent — only set
+        //    if not already blacklisted, so we never thrash the row.
+        if (!inv.clientBlacklisted) {
+          try {
+            await rawExecute(
+              `UPDATE clients SET "isBlacklisted" = TRUE, "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $2`,
+              [inv.clientId as number, company.id],
+            );
+          } catch (e) {
+            logger.warn(e, `[cronScheduler] invoice-overdue day-30 blacklist failed (client=${inv.clientId})`);
+          }
+        }
+        // 2) notify GM (helper falls back to owner).
+        try {
+          const gmAssignmentId = await getDirectorAssignmentId(company.id, inheritedBranchId);
+          if (gmAssignmentId) {
+            const [gm] = await rawQuery<{ name: string; email: string | null }>(
+              `SELECT e.name, e.email FROM employee_assignments ea
+                 JOIN employees e ON e.id = ea."employeeId"
+                WHERE ea.id = $1`,
+              [gmAssignmentId],
+            );
+            await dispatchNotification({
+              ...escalationBase,
+              eventCategory: "invoice.blocked.gm",
+              templateKey: "invoice.blocked.gm",
+              templateVars: { ...escalationBase.templateVars, managerName: String(gm?.name ?? "—") },
+              assignmentId: gmAssignmentId,
+              recipientEmail: gm?.email ?? undefined,
+              recipientName: gm?.name ?? undefined,
+            });
+          }
+        } catch (e) {
+          logger.warn(e, `[cronScheduler] invoice-overdue day-30 GM escalation failed (inv=${inv.id})`);
+        }
+      } else if (days === 60) {
+        // 1) flip client classification to 'churned' — idempotent guard.
+        if (inv.clientClassification !== "churned") {
+          try {
+            await rawExecute(
+              `UPDATE clients SET classification = 'churned', "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $2`,
+              [inv.clientId as number, company.id],
+            );
+          } catch (e) {
+            logger.warn(e, `[cronScheduler] invoice-overdue day-60 churn failed (client=${inv.clientId})`);
+          }
+        }
+        // 2) hand over to legal (helper falls back GM → owner).
+        try {
+          const legal = await getLegalResponsible(company.id);
+          if (legal) {
+            const [legalContact] = await rawQuery<{ email: string | null }>(
+              `SELECT e.email FROM employee_assignments ea
+                 JOIN employees e ON e.id = ea."employeeId"
+                WHERE ea.id = $1`,
+              [legal.assignmentId],
+            );
+            await dispatchNotification({
+              ...escalationBase,
+              eventCategory: "invoice.legal_handover",
+              templateKey: "invoice.legal_handover",
+              templateVars: { ...escalationBase.templateVars, managerName: legal.employeeName },
+              assignmentId: legal.assignmentId,
+              recipientEmail: legalContact?.email ?? undefined,
+              recipientName: legal.employeeName,
+            });
+          }
+        } catch (e) {
+          logger.warn(e, `[cronScheduler] invoice-overdue day-60 legal handover failed (inv=${inv.id})`);
+        }
+      }
+
       actions++;
     }
   }
@@ -1601,9 +1791,17 @@ async function monthlyRentPenalties(): Promise<string> {
   let legalHandoffs = 0;
   for (const company of companies) {
     const overduePayments = await rawQuery<Record<string, unknown>>(
-      `SELECT rp.id, rp."dueDate", rp.amount, rp."contractId", c."tenantName", c."tenantPhone", c."unitId"
+      `SELECT rp.id, rp."dueDate", rp.amount, rp."contractId",
+              c."branchId",
+              COALESCE(NULLIF(c."tenantName", ''), t.name)             AS "tenantName",
+              COALESCE(NULLIF(c."tenantPhone", ''), t.phone)            AS "tenantPhone",
+              COALESCE(NULLIF(c."tenantEmail", ''), t.email)            AS "tenantEmail",
+              c."unitId",
+              COALESCE(NULLIF(TRIM(CONCAT_WS(' - ', u."buildingName", u."unitNumber")), ''), '#' || c."unitId"::text) AS "unitName"
          FROM rent_payments rp
          JOIN rental_contracts c ON c.id = rp."contractId"
+         LEFT JOIN tenants t ON t.id = c."tenantId" AND t."companyId" = c."companyId"
+         LEFT JOIN property_units u ON u.id = c."unitId" AND u."companyId" = c."companyId"
         WHERE c."companyId" = $1 AND rp.status IN ('pending','partial')
           AND rp."dueDate" < CURRENT_DATE`,
       [company.id]
@@ -1612,12 +1810,29 @@ async function monthlyRentPenalties(): Promise<string> {
       const lateDays = Math.floor((Date.now() - new Date(p.dueDate as string | Date).getTime()) / 86400000);
       let targetStage: string | null = null;
       let targetPhase: number | null = null;
+      // Spec ملف 05 §إيجار متأخر السداسي (السطر 59) — السلسلة الكاملة:
+      //   يوم 1  → SMS تذكير (phase 0 — شريحة ٣)
+      //   يوم 3  → تنبيه داخلي (phase 1)
+      //   يوم 5  → غرامة 2% (phase 5 — موضعها الجديد بعد نقلها من يوم 60)
+      //   يوم 7  → إشعار رسمي (phase 2)
+      //   يوم 14 → زيارة ميدانية (phase 3)
+      //   يوم 21 → إنذار رسمي (phase 7 — مرحلة جديدة)
+      //   يوم 30 → تصعيد GM + قانوني (phase 4 — تحسين)
+      //   يوم 60 → إخلاء (phase 8 — مرحلة جديدة، استبدلت الغرامة هنا)
+      //   يوم 90 → إحالة قانونية كقضية (phase 6 — لجوء أخير)
+      // كل مرحلة محروسة بـ idempotency على (paymentId, phase) في
+      // late_rent_actions. الترتيب else-if يختار أعلى مرحلة منطبقة فقط؛ هذا
+      // متعمد: لو وصلتنا دفعة قديمة (مثلاً مُستوردة) متأخرة 90 يومًا، لا
+      // نُرسل سلسلة الإشعارات بأثر رجعي بل ننتقل مباشرة لمسار اللجوء الأخير.
       if (lateDays >= 90)      { targetStage = 'legal_transfer';  targetPhase = 6; }
-      else if (lateDays >= 60) { targetStage = 'penalty_applied'; targetPhase = 5; }
+      else if (lateDays >= 60) { targetStage = 'eviction';        targetPhase = 8; }
       else if (lateDays >= 30) { targetStage = 'escalation';      targetPhase = 4; }
+      else if (lateDays >= 21) { targetStage = 'formal_notice';   targetPhase = 7; }
       else if (lateDays >= 14) { targetStage = 'field_visit';     targetPhase = 3; }
       else if (lateDays >= 7)  { targetStage = 'notification';    targetPhase = 2; }
+      else if (lateDays >= 5)  { targetStage = 'penalty_applied'; targetPhase = 5; }
       else if (lateDays >= 3)  { targetStage = 'alert';           targetPhase = 1; }
+      else if (lateDays >= 1)  { targetStage = 'tenant_reminder'; targetPhase = 0; }
       if (!targetStage || targetPhase === null) continue;
 
       const existing = await rawQuery<Record<string, unknown>>(
@@ -1626,12 +1841,245 @@ async function monthlyRentPenalties(): Promise<string> {
       );
       if (existing.length > 0) continue;
 
+      // Phase 0 — day-1 tenant-facing reminder. Dispatched BEFORE the
+      // existing internal escalation ladder fires anything. Channels are
+      // explicitly the tenant-facing set (sms/email/whatsapp) — we do NOT
+      // include in_app here because the engine would fan it out to active
+      // employees with no assignmentId/targetRole (the lesson Codex flagged
+      // on PR #3010). The property manager already sees this via the
+      // existing phase-tracking dashboards on late_rent_actions.
+      if (targetStage === 'tenant_reminder') {
+        const tenantPhone = (p.tenantPhone as string | null) ?? null;
+        const tenantEmail = (p.tenantEmail as string | null) ?? null;
+        if (!tenantPhone && !tenantEmail) {
+          logger.info(`[cronScheduler] rent overdue day-1: tenant has no contact (rent_payment=${p.id}) — skipped`);
+        } else {
+          const tenantChannels: ("email" | "sms" | "whatsapp")[] = [];
+          if (tenantPhone) { tenantChannels.push("sms"); tenantChannels.push("whatsapp"); }
+          if (tenantEmail) tenantChannels.push("email");
+          try {
+            await dispatchNotification({
+              companyId: company.id,
+              eventCategory: "property.rent.overdue.day1",
+              title: "",
+              body: "",
+              channels: tenantChannels,
+              templateKey: "property.rent.overdue.day1",
+              templateVars: {
+                tenantName: String(p.tenantName ?? "—"),
+                unitName: String(p.unitName ?? p.unitId ?? "—"),
+                dueDate: String(p.dueDate ?? ""),
+                amount: Number(p.amount ?? 0).toFixed(2),
+              },
+              recipientEmail: tenantEmail ?? undefined,
+              recipientPhone: tenantPhone ?? undefined,
+              recipientName: (p.tenantName as string | null) ?? undefined,
+              refType: "rent_payment",
+              refId: Number(p.id),
+              priority: "high",
+            });
+          } catch (e) {
+            logger.warn(e, `[cronScheduler] rent overdue day-1 dispatch failed (rent_payment=${p.id})`);
+          }
+        }
+        // Record the action so the next day's cron doesn't re-send.
+        await rawExecute(
+          `INSERT INTO late_rent_actions ("contractId","paymentId",phase,action,"sentAt",notes)
+           VALUES ($1,$2,$3,$4,NOW(),$5)`,
+          [p.contractId, p.id, 0, 'تذكير المستأجر', `تذكير سداد يوم ${lateDays}`]
+        ).catch((e) => logger.error(e, "[cronScheduler] tenant_reminder late_rent_actions insert failed"));
+        continue;
+      }
+
       let actionLabel = targetStage;
       if (targetStage === 'penalty_applied') {
+        // يوم 5 — غرامة 2%. لا قيد دفتر جديد: تُضاف على رصيد rent_payments
+        // (نفس النمط القائم قبل شريحة ٤، فقط نُقل التاريخ من يوم 60 → يوم 5
+        // وفق المواصفة). كتابة سطور journal تتطلب assertion test (دستور §٣
+        // قاعدة ٣) — نتركها لمسار محاسبي منفصل حين يقرّر إبراهيم اعتمادها.
         const lateFee = roundTo2(Number(p.amount) * 0.02);
         await rawExecute(`UPDATE rent_payments SET amount = amount + $1, "updatedAt"=NOW() WHERE id = $2`, [lateFee, p.id]);
+        const newTotal = roundTo2(Number(p.amount) + lateFee);
         actionLabel = `غرامة تأخير ${lateFee}`;
         penalties++;
+        // إشعار المستأجر بالغرامة المضافة — قنوات صريحة، بلا in_app.
+        const tenantPhone = (p.tenantPhone as string | null) ?? null;
+        const tenantEmail = (p.tenantEmail as string | null) ?? null;
+        if (tenantPhone || tenantEmail) {
+          const tenantChannels: ("email" | "sms" | "whatsapp")[] = [];
+          if (tenantPhone) { tenantChannels.push("sms"); tenantChannels.push("whatsapp"); }
+          if (tenantEmail) tenantChannels.push("email");
+          try {
+            await dispatchNotification({
+              companyId: company.id,
+              eventCategory: "property.rent.overdue.day5",
+              title: "",
+              body: "",
+              channels: tenantChannels,
+              templateKey: "property.rent.overdue.day5",
+              templateVars: {
+                tenantName: String(p.tenantName ?? "—"),
+                unitName: String(p.unitName ?? p.unitId ?? "—"),
+                dueDate: String(p.dueDate ?? ""),
+                amount: newTotal.toFixed(2),
+                lateFee: lateFee.toFixed(2),
+              },
+              recipientEmail: tenantEmail ?? undefined,
+              recipientPhone: tenantPhone ?? undefined,
+              recipientName: (p.tenantName as string | null) ?? undefined,
+              refType: "rent_payment",
+              refId: Number(p.id),
+              priority: "high",
+            });
+          } catch (e) {
+            logger.warn(e, `[cronScheduler] rent overdue day-5 dispatch failed (rent_payment=${p.id})`);
+          }
+        }
+      } else if (targetStage === 'field_visit') {
+        actionLabel = 'زيارة ميدانية';
+        // إشعار المستأجر بقرب الزيارة الميدانية — قنوات صريحة، بلا in_app.
+        const tenantPhone = (p.tenantPhone as string | null) ?? null;
+        const tenantEmail = (p.tenantEmail as string | null) ?? null;
+        if (tenantPhone || tenantEmail) {
+          const tenantChannels: ("email" | "sms" | "whatsapp")[] = [];
+          if (tenantPhone) tenantChannels.push("sms");
+          if (tenantEmail) tenantChannels.push("email");
+          try {
+            await dispatchNotification({
+              companyId: company.id,
+              eventCategory: "property.rent.overdue.day14",
+              title: "",
+              body: "",
+              channels: tenantChannels,
+              templateKey: "property.rent.overdue.day14",
+              templateVars: {
+                tenantName: String(p.tenantName ?? "—"),
+                unitName: String(p.unitName ?? p.unitId ?? "—"),
+                dueDate: String(p.dueDate ?? ""),
+                amount: Number(p.amount ?? 0).toFixed(2),
+                lateDays: String(lateDays),
+              },
+              recipientEmail: tenantEmail ?? undefined,
+              recipientPhone: tenantPhone ?? undefined,
+              recipientName: (p.tenantName as string | null) ?? undefined,
+              refType: "rent_payment",
+              refId: Number(p.id),
+              priority: "high",
+            });
+          } catch (e) {
+            logger.warn(e, `[cronScheduler] rent overdue day-14 dispatch failed (rent_payment=${p.id})`);
+          }
+        }
+      } else if (targetStage === 'formal_notice') {
+        actionLabel = 'إنذار رسمي';
+        // إشعار المستأجر بالإنذار الرسمي — كل القنوات (SMS+email+WA) لأنها
+        // مرحلة قانونية حاسمة قبل تصعيد GM والقانونية.
+        const tenantPhone = (p.tenantPhone as string | null) ?? null;
+        const tenantEmail = (p.tenantEmail as string | null) ?? null;
+        if (tenantPhone || tenantEmail) {
+          const tenantChannels: ("email" | "sms" | "whatsapp")[] = [];
+          if (tenantPhone) { tenantChannels.push("sms"); tenantChannels.push("whatsapp"); }
+          if (tenantEmail) tenantChannels.push("email");
+          try {
+            await dispatchNotification({
+              companyId: company.id,
+              eventCategory: "property.rent.overdue.day21",
+              title: "",
+              body: "",
+              channels: tenantChannels,
+              templateKey: "property.rent.overdue.day21",
+              templateVars: {
+                tenantName: String(p.tenantName ?? "—"),
+                unitName: String(p.unitName ?? p.unitId ?? "—"),
+                dueDate: String(p.dueDate ?? ""),
+                amount: Number(p.amount ?? 0).toFixed(2),
+                lateDays: String(lateDays),
+              },
+              recipientEmail: tenantEmail ?? undefined,
+              recipientPhone: tenantPhone ?? undefined,
+              recipientName: (p.tenantName as string | null) ?? undefined,
+              refType: "rent_payment",
+              refId: Number(p.id),
+              priority: "high",
+            });
+          } catch (e) {
+            logger.warn(e, `[cronScheduler] rent overdue day-21 dispatch failed (rent_payment=${p.id})`);
+          }
+        }
+      } else if (targetStage === 'escalation') {
+        actionLabel = 'تصعيد GM + قانوني';
+        // يوم 30 — تصعيد داخلي للـ GM والقانونية. قنوات صريحة email فقط
+        // (لكل مستلم) لتجنّب in_app fan-out (درس Codex P2 من شريحة ١).
+        const branchIdForLookup = Number(p.branchId ?? 0);
+        try {
+          const gmId = branchIdForLookup ? await getDirectorAssignmentId(company.id, branchIdForLookup) : null;
+          const legalResp = await getLegalResponsible(company.id);
+          for (const target of [
+            { assignmentId: gmId, name: 'المدير العام' },
+            { assignmentId: legalResp?.assignmentId ?? null, name: legalResp?.employeeName ?? 'القسم القانوني' },
+          ]) {
+            if (!target.assignmentId) continue;
+            await dispatchNotification({
+              companyId: company.id,
+              eventCategory: "property.rent.overdue.day30",
+              title: "",
+              body: "",
+              channels: ["email" as const],
+              templateKey: "property.rent.overdue.day30",
+              templateVars: {
+                managerName: target.name,
+                tenantName: String(p.tenantName ?? "—"),
+                unitName: String(p.unitName ?? p.unitId ?? "—"),
+                dueDate: String(p.dueDate ?? ""),
+                amount: Number(p.amount ?? 0).toFixed(2),
+                lateDays: String(lateDays),
+              },
+              assignmentId: target.assignmentId,
+              refType: "rent_payment",
+              refId: Number(p.id),
+              priority: "high",
+            });
+          }
+        } catch (e) {
+          logger.warn(e, `[cronScheduler] rent overdue day-30 escalation dispatch failed (rent_payment=${p.id})`);
+        }
+      } else if (targetStage === 'eviction') {
+        actionLabel = 'إشعار إخلاء';
+        // يوم 60 — إشعار إخلاء للمستأجر + تنبيه GM/قانوني. لا نُنشئ قضية
+        // قانونية تلقائيًا (legal_transfer يوم 90 يفعل ذلك): الإخلاء قرار
+        // إنساني يبقى للـ GM والقانونية. هنا فقط نُشعر بالنية الموثّقة.
+        const tenantPhone = (p.tenantPhone as string | null) ?? null;
+        const tenantEmail = (p.tenantEmail as string | null) ?? null;
+        if (tenantPhone || tenantEmail) {
+          const tenantChannels: ("email" | "sms" | "whatsapp")[] = [];
+          if (tenantPhone) { tenantChannels.push("sms"); tenantChannels.push("whatsapp"); }
+          if (tenantEmail) tenantChannels.push("email");
+          try {
+            await dispatchNotification({
+              companyId: company.id,
+              eventCategory: "property.rent.overdue.day60",
+              title: "",
+              body: "",
+              channels: tenantChannels,
+              templateKey: "property.rent.overdue.day60",
+              templateVars: {
+                tenantName: String(p.tenantName ?? "—"),
+                unitName: String(p.unitName ?? p.unitId ?? "—"),
+                dueDate: String(p.dueDate ?? ""),
+                amount: Number(p.amount ?? 0).toFixed(2),
+                lateDays: String(lateDays),
+              },
+              recipientEmail: tenantEmail ?? undefined,
+              recipientPhone: tenantPhone ?? undefined,
+              recipientName: (p.tenantName as string | null) ?? undefined,
+              refType: "rent_payment",
+              refId: Number(p.id),
+              priority: "high",
+            });
+          } catch (e) {
+            logger.warn(e, `[cronScheduler] rent overdue day-60 tenant dispatch failed (rent_payment=${p.id})`);
+          }
+        }
       } else if (targetStage === 'legal_transfer') {
         try {
           const responsible = await getLegalResponsible(company.id);
@@ -1700,8 +2148,8 @@ async function monthlyRentPenalties(): Promise<string> {
         actionLabel = 'تحويل للقسم القانوني';
       } else if (targetStage === 'alert') actionLabel = 'تنبيه بالتأخر';
       else if (targetStage === 'notification') actionLabel = 'إشعار رسمي';
-      else if (targetStage === 'field_visit') actionLabel = 'زيارة ميدانية';
-      else if (targetStage === 'escalation') actionLabel = 'تصعيد لإدارة الأملاك';
+      // field_visit / formal_notice / escalation / eviction labels معالَجة
+      // داخل فروعها (مع dispatch المستأجر/الداخلي).
 
       await rawExecute(
         `INSERT INTO late_rent_actions ("contractId","paymentId",phase,action,"sentAt",notes)
@@ -1829,6 +2277,292 @@ async function weeklyFleetReport(): Promise<string> {
   return `Weekly fleet reports: ${sent}`;
 }
 
+/**
+ * Spec ملف 04 §تنبيهات الأسطول السبعة — تنبيه «استبدال محتمل»:
+ * إذا تكررت أعطال مركبة (3 أو أكثر في الشهر التقويمي الحالي) → بريد
+ * للمدير العام (أو مدير الفرع) مع سؤال: هل تُستبدل المركبة؟
+ *
+ * الموجود اليوم في smartAlerts.checkVehicleRepeatedBreakdowns: نافذة
+ * 90 يومًا تضع المركبة under_review، broadcast لا أكثر. هذه الدالة
+ * تكمل الفجوة: نافذة شهر تقويمي + بريد صريح للمدير + idempotency على
+ * (vehicleId, alertMonth).
+ *
+ * تعمل يوميًا حتى يصل التنبيه يوم وقوع العطل الثالث، لا تنتظر آخر
+ * الشهر. عمود alertMonth في fleet_replacement_alerts يحفظ التكرار
+ * مرّة واحدة لكل شهر تقويمي حتى لو فُتح/أُغلق العمل اليومي عدّة مرات.
+ *
+ * channel = email فقط (داخلي للمدير) — بلا in_app fan-out (درس Codex
+ * P2 من شريحة ١: in_app بلا assignmentId يتسرّب لكل الموظفين).
+ */
+async function dailyVehicleReplacementCheck(): Promise<string> {
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
+  let alerted = 0;
+  for (const company of companies) {
+    const candidates = await rawQuery<Record<string, unknown>>(
+      `SELECT fv.id AS "vehicleId",
+              fv."branchId",
+              fv."plateNumber",
+              CONCAT_WS(' ', fv.make, fv.model) AS "vehicleName",
+              COUNT(b.id) AS "breakdownCount",
+              array_agg(DISTINCT b.category) FILTER (WHERE b.category IS NOT NULL) AS categories,
+              date_trunc('month', CURRENT_DATE)::date AS "alertMonth"
+         FROM fleet_vehicles fv
+         JOIN fleet_breakdowns b
+           ON b."vehicleId" = fv.id
+          AND b."companyId" = fv."companyId"
+          AND b."deletedAt" IS NULL
+          AND b.status <> 'cancelled'
+          AND b."reportedAt" >= date_trunc('month', CURRENT_DATE)
+          AND b."reportedAt" <  date_trunc('month', CURRENT_DATE) + INTERVAL '1 month'
+        WHERE fv."companyId" = $1
+          AND fv."deletedAt" IS NULL
+        GROUP BY fv.id, fv."branchId", fv."plateNumber", fv.make, fv.model
+        HAVING COUNT(b.id) >= 3`,
+      [company.id]
+    );
+    for (const c of candidates) {
+      const vehicleId = Number(c.vehicleId);
+      const alertMonth = String(c.alertMonth).slice(0, 10);
+      const branchId = c.branchId != null ? Number(c.branchId) : null;
+
+      const existing = await rawQuery<Record<string, unknown>>(
+        `SELECT 1 FROM fleet_replacement_alerts
+          WHERE "vehicleId" = $1 AND "alertMonth" = $2::date LIMIT 1`,
+        [vehicleId, alertMonth]
+      );
+      if (existing.length > 0) continue;
+
+      // وجِّه للمدير العام (أو owner) عند branch محدد؛ ولو ما فيش branch،
+      // ابحث على مستوى الشركة (branchId = 0 ⇒ مالك الشركة).
+      let managerAssignment: number | null = null;
+      let managerName = 'المدير العام';
+      try {
+        if (branchId) {
+          managerAssignment = await getDirectorAssignmentId(company.id, branchId);
+        }
+        if (!managerAssignment) {
+          const [fallback] = await rawQuery<{ id: number; name: string }>(
+            `SELECT ea.id, e.name
+               FROM employee_assignments ea
+               LEFT JOIN employees e ON e.id = ea."employeeId"
+              WHERE ea."companyId" = $1 AND ea.status = 'active'
+                AND ea.role IN ('general_manager','owner')
+              ORDER BY CASE ea.role WHEN 'general_manager' THEN 1 ELSE 2 END
+              LIMIT 1`,
+            [company.id]
+          );
+          if (fallback) { managerAssignment = fallback.id; managerName = fallback.name || managerName; }
+        } else {
+          const [byBranch] = await rawQuery<{ name: string }>(
+            `SELECT e.name FROM employee_assignments ea
+              LEFT JOIN employees e ON e.id = ea."employeeId"
+              WHERE ea.id = $1`,
+            [managerAssignment]
+          );
+          if (byBranch?.name) managerName = byBranch.name;
+        }
+      } catch (e) {
+        logger.warn(e, `[cronScheduler] vehicle_replacement: manager lookup failed (vehicleId=${vehicleId})`);
+      }
+
+      if (!managerAssignment) {
+        logger.info(`[cronScheduler] vehicle_replacement: no manager found (company=${company.id}, vehicleId=${vehicleId}) — skipped`);
+        continue;
+      }
+
+      const categoriesArr = Array.isArray(c.categories)
+        ? (c.categories as Array<string | null>).filter((x): x is string => typeof x === 'string')
+        : [];
+      const categoriesText = categoriesArr.length > 0 ? categoriesArr.join(', ') : 'غير محدد';
+      const monthLabel = alertMonth.slice(0, 7); // YYYY-MM
+
+      try {
+        await dispatchNotification({
+          companyId: company.id,
+          eventCategory: "fleet.breakdown.replacement_candidate",
+          title: "",
+          body: "",
+          channels: ["email" as const],
+          templateKey: "fleet.breakdown.replacement_candidate",
+          templateVars: {
+            managerName: managerName,
+            plateNumber: String(c.plateNumber ?? '—'),
+            vehicleName: String(c.vehicleName ?? '—'),
+            breakdownCount: String(c.breakdownCount ?? 0),
+            month: monthLabel,
+            categories: categoriesText,
+          },
+          assignmentId: managerAssignment,
+          refType: "fleet_vehicle",
+          refId: vehicleId,
+          priority: "high",
+        });
+      } catch (e) {
+        logger.warn(e, `[cronScheduler] vehicle_replacement dispatch failed (vehicleId=${vehicleId})`);
+        continue;
+      }
+
+      // سجّل التنبيه قبل الانتقال — يضمن عدم إعادة الإرسال نفس الشهر.
+      await rawExecute(
+        `INSERT INTO fleet_replacement_alerts
+           ("vehicleId","alertMonth","companyId","branchId","breakdownCount","alertedAssignmentId")
+         VALUES ($1,$2::date,$3,$4,$5,$6)
+         ON CONFLICT ("vehicleId","alertMonth") DO NOTHING`,
+        [vehicleId, alertMonth, company.id, branchId, Number(c.breakdownCount), managerAssignment]
+      ).catch((e) => logger.error(e, "[cronScheduler] fleet_replacement_alerts insert failed"));
+
+      alerted++;
+    }
+  }
+  return `Vehicle replacement alerts: ${alerted}`;
+}
+
+/**
+ * Spec ملف 04 §تنبيهات الأسطول السبعة — تنبيه تقييم سائق:
+ *   «تقييم سائق أقل من 3 = اجتماع تقييم أداء»
+ *
+ * المواصفة على مقياس 1-5، بينما fleet_drivers.reputationScore على 0-100
+ * (محسوب 90 يومًا في driverReputation.ts). القرار الموثَّق: <3 من 5 =
+ * <60 من 100 (نفس النسبة المئوية).
+ *
+ * يعمل يوميًا (06:45، بعد dailyVehicleReplacementCheck بـ 15 دقيقة)
+ * ليصل التنبيه في اليوم نفسه الذي تنخفض فيه السمعة دون العتبة.
+ * idempotency عبر fleet_driver_evaluation_alerts (driverId, alertMonth):
+ * مرّة واحدة لكل سائق لكل شهر تقويمي حتى لا يتكرّر التنبيه يوميًا
+ * طوال الشهر إذا لم ترتفع السمعة.
+ *
+ * channel = email فقط (داخلي للمدير) — بلا in_app fan-out (درس Codex P2
+ * من شريحة ١).
+ */
+async function dailyDriverEvaluationCheck(): Promise<string> {
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
+  let alerted = 0;
+  for (const company of companies) {
+    const candidates = await rawQuery<Record<string, unknown>>(
+      `SELECT fd.id AS "driverId",
+              fd."branchId",
+              fd.name AS "driverName",
+              fd."reputationScore",
+              fd."reputationOnTimeRate",
+              fd."reputationCompletionRate",
+              fd."reputationTripsConsidered",
+              date_trunc('month', CURRENT_DATE)::date AS "alertMonth"
+         FROM fleet_drivers fd
+        WHERE fd."companyId" = $1
+          AND fd."deletedAt" IS NULL
+          AND fd."reputationScore" IS NOT NULL
+          AND fd."reputationScore" < 60
+          AND fd."reputationComputedAt" IS NOT NULL`,
+      [company.id]
+    );
+    for (const c of candidates) {
+      const driverId = Number(c.driverId);
+      const alertMonth = String(c.alertMonth).slice(0, 10);
+      const branchId = c.branchId != null ? Number(c.branchId) : null;
+
+      const existing = await rawQuery<Record<string, unknown>>(
+        `SELECT 1 FROM fleet_driver_evaluation_alerts
+          WHERE "driverId" = $1 AND "alertMonth" = $2::date LIMIT 1`,
+        [driverId, alertMonth]
+      );
+      if (existing.length > 0) continue;
+
+      // وجِّه عبر getManagerAssignmentId (branch_manager → hr_manager →
+      // general_manager → owner). fallback لمستوى الشركة لو الفرع بلا
+      // مدير. اجتماع التقييم يحتاج HR/مدير الفرع — لذلك ليس قانوني
+      // ولا CFO.
+      let managerAssignment: number | null = null;
+      let managerName = 'المدير';
+      try {
+        if (branchId) {
+          managerAssignment = await getManagerAssignmentId(company.id, branchId);
+        }
+        if (!managerAssignment) {
+          const [fallback] = await rawQuery<{ id: number; name: string }>(
+            `SELECT ea.id, e.name
+               FROM employee_assignments ea
+               LEFT JOIN employees e ON e.id = ea."employeeId"
+              WHERE ea."companyId" = $1 AND ea.status = 'active'
+                AND ea.role IN ('hr_manager','general_manager','owner')
+              ORDER BY CASE ea.role
+                         WHEN 'hr_manager' THEN 1
+                         WHEN 'general_manager' THEN 2
+                         ELSE 3
+                       END
+              LIMIT 1`,
+            [company.id]
+          );
+          if (fallback) { managerAssignment = fallback.id; managerName = fallback.name || managerName; }
+        } else {
+          const [resolved] = await rawQuery<{ name: string }>(
+            `SELECT e.name FROM employee_assignments ea
+              LEFT JOIN employees e ON e.id = ea."employeeId"
+              WHERE ea.id = $1`,
+            [managerAssignment]
+          );
+          if (resolved?.name) managerName = resolved.name;
+        }
+      } catch (e) {
+        logger.warn(e, `[cronScheduler] driver_evaluation: manager lookup failed (driverId=${driverId})`);
+      }
+
+      if (!managerAssignment) {
+        logger.info(`[cronScheduler] driver_evaluation: no manager found (company=${company.id}, driverId=${driverId}) — skipped`);
+        continue;
+      }
+
+      const score = Number(c.reputationScore);
+      const onTime = c.reputationOnTimeRate != null ? Number(c.reputationOnTimeRate) : null;
+      const completion = c.reputationCompletionRate != null ? Number(c.reputationCompletionRate) : null;
+      const trips = c.reputationTripsConsidered != null ? Number(c.reputationTripsConsidered) : 0;
+      // النافذة الحالية لحساب السمعة في driverReputation.ts = 90 يومًا.
+      // نعرضها كنص في الإشعار لتوضيح أن «<60» مبنية على آخر 90 يومًا
+      // لا على عمر السائق كله.
+      const periodLabel = 'آخر 90 يومًا';
+
+      try {
+        await dispatchNotification({
+          companyId: company.id,
+          eventCategory: "fleet.driver.evaluation_meeting",
+          title: "",
+          body: "",
+          channels: ["email" as const],
+          templateKey: "fleet.driver.evaluation_meeting",
+          templateVars: {
+            managerName: managerName,
+            driverName: String(c.driverName ?? '—'),
+            reputationScore: score.toFixed(2),
+            tripsConsidered: String(trips),
+            onTimeRate: onTime != null ? onTime.toFixed(1) : '—',
+            completionRate: completion != null ? completion.toFixed(1) : '—',
+            period: periodLabel,
+          },
+          assignmentId: managerAssignment,
+          refType: "fleet_driver",
+          refId: driverId,
+          priority: "high",
+        });
+      } catch (e) {
+        logger.warn(e, `[cronScheduler] driver_evaluation dispatch failed (driverId=${driverId})`);
+        continue;
+      }
+
+      // سجّل التنبيه بعد dispatch ناجح حتى يسمح فشل الإرسال بإعادة
+      // المحاولة غدًا (idempotency على مستوى الشهر لا اليوم).
+      await rawExecute(
+        `INSERT INTO fleet_driver_evaluation_alerts
+           ("driverId","alertMonth","companyId","branchId","reputationScoreAtAlert","alertedAssignmentId")
+         VALUES ($1,$2::date,$3,$4,$5,$6)
+         ON CONFLICT ("driverId","alertMonth") DO NOTHING`,
+        [driverId, alertMonth, company.id, branchId, score, managerAssignment]
+      ).catch((e) => logger.error(e, "[cronScheduler] fleet_driver_evaluation_alerts insert failed"));
+
+      alerted++;
+    }
+  }
+  return `Driver evaluation alerts: ${alerted}`;
+}
+
 async function weeklyCrmReport(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let sent = 0;
@@ -1945,6 +2679,19 @@ async function weeklyClientClassification(): Promise<string> {
       const monthsSinceLastInvoice = lastInvoice
         ? (Date.now() - lastInvoice.getTime()) / (30 * 86400000)
         : 999;
+
+      // PRESERVE LIFECYCLE CHURN — Codex review on PR #3012.
+      // The daily invoice-overdue cron flips classification to 'churned'
+      // on day 60 as a legal-handover lifecycle state. This weekly
+      // recompute is purely revenue-based (last invoice age + total
+      // revenue). If we let it run for a churned client whose last
+      // invoice is recent (60 days ago, not 12 months), it would flip
+      // them back to 'regular'/'prospect'/'vip' and undo the legal
+      // handover. We never demote out of 'churned' from this cron —
+      // exit from churn is an explicit ops decision (admin PATCH).
+      if (client.classification === "churned") {
+        continue;
+      }
 
       let newClass: string;
       if (monthsSinceLastInvoice >= 12) newClass = "churned";
@@ -2204,7 +2951,7 @@ export async function processEmailQueue(): Promise<string> {
   // /admin/vendor-settings UI saves to and its test endpoints read.
   const pending = await rawQuery<Record<string, unknown>>(
     `SELECT oq.id, oq."companyId", oq.recipient AS "toEmail",
-            oq."recipientName", oq.subject, oq.body, oq.metadata
+            oq."recipientName", oq.subject, oq.body, oq."isHtml", oq.metadata
      FROM outbound_queue oq
      WHERE oq.status = 'pending' AND oq.channel = 'email'
        AND (oq."scheduledAt" IS NULL OR oq."scheduledAt" <= NOW())
@@ -2264,11 +3011,17 @@ export async function processEmailQueue(): Promise<string> {
       );
 
       const { createTransport } = await import("nodemailer");
+      const { wrapBrandedEmail } = await import("./emailLayout.js");
+      const rawBody = String(email.body ?? email.text ?? "");
       const mailOptions: Record<string, unknown> = {
         from: formatFromHeader(smtp),
         to: email.toEmail,
         subject: email.subject,
-        html: email.body ?? email.text,
+        html: wrapBrandedEmail(rawBody, {
+          subject: email.subject != null ? String(email.subject) : null,
+          recipientName: email.recipientName != null ? String(email.recipientName) : null,
+          isHtml: email.isHtml !== false,
+        }),
       };
       if (smtp.replyTo) mailOptions.replyTo = smtp.replyTo;
       const meta = (email.metadata as { attachments?: Array<{ filename: string; content: string; contentType: string; encoding?: string }> } | null) ?? null;
@@ -2853,6 +3606,72 @@ async function monthlyHrAccruals(): Promise<string> {
     }
   }
   return `Monthly HR accruals: ${processed} company(ies) posted, ${skipped} skipped`;
+}
+
+// مخصّص الديون المشكوك فيها — أتمتة شهرية بنهج delta-to-target (المحاسبة القياسية):
+// المخصّص في 1135 رصيدٌ مستهدف، فيُرحَّل كل فترة الفرقُ فقط بين الهدف بالتقادم ورصيد
+// المخصّص الحالي (زيادة DR5820/CR1135، نقص DR1135/CR5820)، بلا تراكم. idempotent
+// مشترك مع المسار اليدوي عبر مرجع الفترة `BAD-DEBT-{period}`، وبوابة الفترة داخل
+// المحرّك. assertion على سطور القيد في badDebtProvisionDelta.dynamic.test.ts.
+async function monthlyBadDebtProvision(): Promise<string> {
+  const period = currentPeriod();
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
+  let processed = 0;
+  let skipped = 0;
+
+  for (const company of companies) {
+    try {
+      // idempotency مشترك مع المسار اليدوي — مرجع واحد للفترة.
+      const ref = `BAD-DEBT-${period}`;
+      const [existing] = await rawQuery<{ id: number }>(
+        `SELECT id FROM journal_entries WHERE "companyId"=$1 AND ref=$2 AND "deletedAt" IS NULL LIMIT 1`,
+        [company.id, ref],
+      );
+      if (existing) { skipped++; continue; }
+
+      const [systemUser] = await rawQuery<Record<string, unknown>>(
+        `SELECT ea.id FROM employee_assignments ea WHERE ea."companyId" = $1 AND ea.role IN ('finance_manager','general_manager','owner') AND ea.status='active' ORDER BY ea.role='owner' DESC LIMIT 1`,
+        [company.id],
+      );
+      if (!systemUser) {
+        logger.warn(`[CRON] monthlyBadDebtProvision: no finance/owner user for company ${company.id}, skipping`);
+        skipped++;
+        continue;
+      }
+      const [systemBranch] = await rawQuery<Record<string, unknown>>(
+        `SELECT id FROM branches WHERE "companyId" = $1 LIMIT 1`,
+        [company.id],
+      );
+      if (!systemBranch?.id) { skipped++; continue; }
+      const branchId = Number(systemBranch.id);
+
+      // المحرّك المشترك: يحسب الهدف بالتقادم، يقرأ رصيد 1135، ويرحّل الفرق فقط.
+      // بوابة الفترة + الـidempotency (sourceKey) داخله ⇒ posted=false عند
+      // (فترة مُقفلة / مطابق للهدف / مُرحَّل مسبقًا) فنتخطّى.
+      const result = await postBadDebtProvision({
+        companyId: Number(company.id),
+        branchId,
+        period,
+        createdBy: Number(systemUser.id),
+      });
+      if (!result.posted) { skipped++; continue; }
+
+      await createAuditLog({
+        companyId: Number(company.id),
+        branchId,
+        userId: Number(systemUser.id),
+        action: "bad_debt.provision.cron",
+        entity: "journal_entries",
+        entityId: Number(result.journalId ?? 0),
+        after: { period, target: result.target, currentAllowance: result.currentAllowance, delta: result.delta, ref, source: "cron" },
+      }).catch((e) => logger.error(e, "[CRON] bad-debt provision audit log failed"));
+
+      processed++;
+    } catch (err) {
+      logger.error(err, `[CRON] monthlyBadDebtProvision failed for company ${company.id}:`);
+    }
+  }
+  return `Monthly bad-debt provision: ${processed} company(ies) posted, ${skipped} skipped`;
 }
 
 async function runScheduledReports(): Promise<string> {
@@ -3677,17 +4496,16 @@ async function umrahDailyOverstayScan(): Promise<string> {
     for (const row of penaltySettings) {
       penaltyByKey[row.key] = Number(row.value ?? 0);
     }
-    const perDay = penaltyByKey["umrah.overstay_daily_penalty"] ?? 0;
-    const tierDays = penaltyByKey["umrah.overstay_tier_days"] ?? 0;
-    const tierAmount = penaltyByKey["umrah.overstay_tier_amount"] ?? 0;
-    const useTiered = tierDays > 0 && tierAmount > 0;
+    const overstayCfg = {
+      perDay: penaltyByKey["umrah.overstay_daily_penalty"] ?? 0,
+      tierDays: penaltyByKey["umrah.overstay_tier_days"] ?? 0,
+      tierAmount: penaltyByKey["umrah.overstay_tier_amount"] ?? 0,
+    };
     for (const o of overstayed) {
-      const overDays = Math.max(0, Number(o.overDays) || 0);
-      // Tiered: ceil(overDays / tierDays) × tierAmount. Per-day fallback
-      // matches the pre-PR behaviour exactly.
-      const penalty = useTiered
-        ? Math.ceil(overDays / tierDays) * tierAmount
-        : overDays * perDay;
+      // ceil(overDays / tierDays) × tierAmount when tiered, else overDays ×
+      // perDay. Shared with the mutamers import (umrahPenaltyMath) so both
+      // billing paths compute the IDENTICAL invoiced penalty.
+      const penalty = overstayPenaltyAmount(o.overDays, overstayCfg);
       await rawExecute(
         `INSERT INTO umrah_violations ("companyId","branchId",type,"referenceType","referenceNumber",
           "mutamerId","groupId","subAgentId","penaltyAmount",status,description,"createdAt","updatedAt")
@@ -5069,6 +5887,14 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "monthly_closing_prep", description: "تذكير الإقفال يوم 28", schedule: "0 8 28 * *", handler: monthlyClosingPrep },
   { name: "weekly_hr_report", description: "تقرير HR الأسبوعي", schedule: "0 8 * * 0", handler: weeklyHrReport },
   { name: "weekly_fleet_report", description: "تقرير الأسطول الأسبوعي", schedule: "0 8 * * 0", handler: weeklyFleetReport },
+  // ملف 04 §تنبيهات الأسطول — تنبيه استبدال محتمل (3+ أعطال/شهر).
+  // يومي صباحًا 06:30 ليصل اليوم الذي يقع فيه العطل الثالث (idempotent
+  // عبر fleet_replacement_alerts: مرّة واحدة لكل مركبة لكل شهر تقويمي).
+  { name: "daily_vehicle_replacement_check", description: "تنبيه استبدال محتمل (3+ أعطال/شهر)", schedule: "30 6 * * *", handler: dailyVehicleReplacementCheck },
+  // ملف 04 §تنبيهات الأسطول — تنبيه تقييم سائق (سمعة <60، يعادل <3/5).
+  // يومي صباحًا 06:45 (بعد replacement check بـ 15د). idempotent عبر
+  // fleet_driver_evaluation_alerts: مرّة واحدة لكل سائق لكل شهر تقويمي.
+  { name: "daily_driver_evaluation_check", description: "تنبيه تقييم سائق (سمعة <60، اجتماع تقييم)", schedule: "45 6 * * *", handler: dailyDriverEvaluationCheck },
   { name: "weekly_crm_report", description: "تقرير CRM الأسبوعي", schedule: "0 8 * * 0", handler: weeklyCrmReport },
   { name: "weekly_cash_flow", description: "فحص التدفق النقدي الأسبوعي", schedule: "0 9 * * 1", handler: weeklyCashFlowCheck },
   { name: "weekly_property_revenue", description: "إيرادات عقارية أسبوعية", schedule: "0 9 * * 1", handler: weeklyPropertyRevenue },
@@ -5083,6 +5909,7 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "monthly_inventory_audit", description: "جرد المخزون الشهري", schedule: "0 6 1 * *", handler: monthlyInventoryAudit },
   { name: "monthly_auto_depreciation", description: "إهلاك الأصول الثابتة التلقائي", schedule: "0 6 2 * *", handler: monthlyAutoDepreciation },
   { name: "monthly_hr_accruals", description: "استحقاقات الموارد البشرية الشهرية التلقائية (إجازات + نهاية الخدمة) — idempotent عبر مرجع الفترة المشترك", schedule: "0 6 3 * *", handler: monthlyHrAccruals },
+  { name: "monthly_bad_debt_provision", description: "مخصّص الديون المشكوك فيها الشهري التلقائي (delta-to-target) — يرحّل فرق الهدف بالتقادم، idempotent عبر مرجع الفترة المشترك", schedule: "0 6 4 * *", handler: monthlyBadDebtProvision },
   { name: "yearly_leave_balance_renewal", description: "تجديد أرصدة الإجازات 1 يناير", schedule: "0 0 1 1 *", handler: yearlyLeaveBalanceRenewal },
   { name: "daily_kpi_snapshot", description: "لقطة KPI اليومية", schedule: "0 2 * * *", handler: dailyKpiSnapshot },
   { name: "daily_smart_alert_scan", description: "فحص التنبيهات الذكية", schedule: "0 8 * * *", handler: dailySmartAlertScan },

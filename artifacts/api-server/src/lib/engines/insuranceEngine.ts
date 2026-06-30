@@ -33,11 +33,10 @@
 // idempotent on a stable sourceKey.
 
 import { financialEngine } from "./financialEngine.js";
-import { rawQuery } from "../rawdb.js";
 import { roundTo2 } from "../businessHelpers.js";
 // REUSE the #2247 prepaid-amortization engine for ALL schedule math. We do NOT
 // re-implement month spreading — computeMonthlySchedule is the single source.
-import { computeMonthlySchedule } from "./prepaidAmortizationEngine.js";
+import { computeMonthlySchedule, openPrepaidSchedule } from "./prepaidAmortizationEngine.js";
 
 export type InsuranceKind = "property" | "medical";
 
@@ -213,47 +212,31 @@ export async function postInsurancePremium(
     ],
   });
 
-  // ── (b) open the recognition schedule (REUSE #2247) ─────────────────────────
-  const { months, monthlyAmount } = computeMonthlySchedule({
+  // ── (b) open the recognition schedule (REUSE #2247 + ج-٧ المُساعد المشترك) ──
+  const sched = scheduleDimsFor(kind, dims);
+  const { scheduleId, months, monthlyAmount } = await openPrepaidSchedule({
+    companyId,
+    branchId: input.branchId ?? null,
+    sourceType: `${kind}_insurance`,
+    sourceId: insuredEntityId,
+    prepaidAccountCode,
+    expenseAccountPurpose,
     totalAmount: amount,
     startDate,
     endDate,
+    dims: {
+      vehicleId: sched.vehicleId,
+      propertyId: sched.propertyId,
+      employeeId: sched.employeeId,
+      projectId: sched.projectId,
+      costCenterId: sched.costCenterId,
+    },
+    currency: input.currency,
   });
-
-  const sched = scheduleDimsFor(kind, dims);
-
-  const [row] = await rawQuery<{ id: number }>(
-    `INSERT INTO prepaid_amortization_schedules
-       ("companyId","branchId","sourceType","sourceId","prepaidAccountCode",
-        "expenseAccountPurpose","totalAmount","startDate","endDate","months",
-        "monthlyAmount","recognizedAmount",status,
-        "vehicleId","propertyId","employeeId","projectId","costCenterId","currency")
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,0,'active',$12,$13,$14,$15,$16,$17)
-     RETURNING id`,
-    [
-      companyId,
-      input.branchId ?? null,
-      `${kind}_insurance`,
-      insuredEntityId,
-      prepaidAccountCode,
-      expenseAccountPurpose,
-      amount,
-      startDate,
-      endDate,
-      months,
-      monthlyAmount,
-      sched.vehicleId,
-      sched.propertyId,
-      sched.employeeId,
-      sched.projectId,
-      sched.costCenterId,
-      input.currency ?? "SAR",
-    ],
-  );
 
   return {
     journalId: posted.journalId,
-    scheduleId: row!.id,
+    scheduleId,
     prepaidAccountCode,
     months,
     monthlyAmount,

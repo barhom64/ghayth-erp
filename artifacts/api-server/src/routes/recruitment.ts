@@ -537,7 +537,7 @@ router.post("/applications/:id/hire", authorize({ feature: "hr.recruitment", act
     });
     // 5. Audit + event.
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "hire", entity: "job_applications", entityId: id, after: { employeeId: empId, name, jobTitle: b.jobTitle } });
-    await emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "recruitment.application.hired", entity: "job_applications", entityId: id }).catch(() => {});
+    await emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "recruitment.application.hired", entity: "job_applications", entityId: id }).catch((e) => logger.error(e, "recruitment background task failed"));
     res.status(201).json({ data: { employeeId: empId, assignmentId, applicationId: id, status: "inactive", message: "تم إنشاء الموظف بنجاح — استكمل خطة التفعيل في لوحة قيد التفعيل" } });
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });

@@ -55,6 +55,7 @@ import { assertDriverEligibility } from "../lib/fleet/driverEligibility.js";
 import { assertDriverRest } from "../lib/fleet/driverRest.js";
 import { suggestAssignments } from "../lib/fleet/assignmentSuggestionEngine.js";
 import { fleetEngine } from "../lib/engines/index.js";
+import { recordTripEventSchema, recordBookingTripEvent } from "../lib/transport/tripEvents.js";
 
 export const transportBookingsRouter = Router();
 transportBookingsRouter.use(authMiddleware);
@@ -316,6 +317,39 @@ const dispatchOrderRescheduleSchema = z.object({
   { message: "يجب إرسال حقل واحد على الأقل من: driverId / vehicleId / scheduledStartAt / scheduledEndAt" },
 );
 
+// The driver/vehicle time-window overlap check, shared by dispatch-create and
+// reschedule (was copy-pasted in both). Builds the SQL + params — the duplicated
+// part — and each caller executes with its own executor (rawQuery on create; the
+// tx client on the FOR-UPDATE reschedule path). `excludeId` skips the order being
+// rescheduled (omit on create — there is no self row yet). Declined/cancelled
+// orders don't reserve resources, so they're excluded.
+function dispatchConflictQuery(
+  companyId: number,
+  driverId: number,
+  vehicleId: number,
+  startAt: string,
+  endAt: string,
+  excludeId?: number,
+): { sql: string; params: unknown[] } {
+  const ex = excludeId != null ? " AND id <> $6" : "";
+  const sql =
+    `SELECT id, 'driver' AS kind FROM transport_dispatch_orders
+        WHERE "companyId" = $1 AND "driverId" = $2${ex}
+          AND status NOT IN ('declined', 'cancelled')
+          AND tstzrange("scheduledStartAt", "scheduledEndAt", '[)')
+              && tstzrange($3::timestamptz, $4::timestamptz, '[)')
+     UNION
+     SELECT id, 'vehicle' AS kind FROM transport_dispatch_orders
+        WHERE "companyId" = $1 AND "vehicleId" = $5${ex}
+          AND status NOT IN ('declined', 'cancelled')
+          AND tstzrange("scheduledStartAt", "scheduledEndAt", '[)')
+              && tstzrange($3::timestamptz, $4::timestamptz, '[)')`;
+  const params = excludeId != null
+    ? [companyId, driverId, startAt, endAt, vehicleId, excludeId]
+    : [companyId, driverId, startAt, endAt, vehicleId];
+  return { sql, params };
+}
+
 const createLocationSchema = z.object({
   code: z.string().max(32).optional(),
   name: z.string().min(1).max(255),
@@ -425,6 +459,22 @@ transportBookingsRouter.get(
           ORDER BY d."scheduledStartAt" ASC`,
         [id],
       );
+      // شريحة 1 — وقائع الرحلة (تسجيل واقعة): الجدول الزمني التشغيلي
+      // (تحميل/خروج/وصول/فحص/تفريغ/تسليم) الذي تُشتقّ منه حالة الحجز والـPOD.
+      // المُبطَلة (voidedAt) تُستبعد من العرض التشغيلي.
+      const tripEvents = await rawQuery<Record<string, unknown>>(
+        `SELECT * FROM fleet_trip_events
+          WHERE "bookingId" = $1 AND "companyId" = $2 AND "voidedAt" IS NULL
+          ORDER BY "occurredAt" ASC, id ASC`,
+        [id, scope.companyId],
+      );
+      // شريحة 4 — مرشّحات خصم النقص/التأخير (تشغيلية؛ القيد في المالية).
+      const deductions = await rawQuery<Record<string, unknown>>(
+        `SELECT * FROM transport_deduction_candidates
+          WHERE "bookingId" = $1 AND "companyId" = $2
+          ORDER BY "createdAt" DESC`,
+        [id, scope.companyId],
+      );
       // #1812 source context (operational review feedback: "النظام لا
       // يستفيد بما يكفي من العمرة / CRM / العقود / المشاريع / الأوقاف /
       // التقويم"). Resolve the upstream entity referenced by the
@@ -437,7 +487,7 @@ transportBookingsRouter.get(
         "fleet.bookings.cancelPolicy", scope.companyId, scope.branchId ?? undefined,
       );
       const cancelPolicy = rawCancelPolicy === "cascade" ? "cascade" : "guard";
-      res.json(maskFields(req, { data: { ...booking, lines, dispatchOrders, sourceContext, cancelPolicy } }));
+      res.json(maskFields(req, { data: { ...booking, lines, dispatchOrders, tripEvents, deductions, sourceContext, cancelPolicy } }));
     } catch (err) {
       handleRouteError(err, res, "Get transport booking error:");
     }
@@ -553,6 +603,141 @@ transportBookingsRouter.get(
       }));
     } catch (err) {
       handleRouteError(err, res, "Get transport booking confirmation error:");
+    }
+  },
+);
+
+// شريحة وقائع الرحلة (الكيان يقود التجربة / تسجيل واقعة):
+// الثوابت والمخطّط والمنطق المشترك في lib/transport/tripEvents.ts — يُستعمل من
+// سطح المشغّل هنا، ومن سطح السائق في transport-planning (نفس السجل، لا منطق مزدوج).
+// تشغيلي بحت — الإغلاق المالي يبقى منفصلًا (مرشّح الفوترة → المالية).
+
+// GET /transport/bookings/:id/events — الجدول الزمني لوقائع الرحلة.
+transportBookingsRouter.get(
+  "/transport/bookings/:id/events",
+  authorize({ feature: "fleet.bookings", action: "view" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const [booking] = await rawQuery<Record<string, unknown>>(
+        `SELECT id FROM transport_bookings WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!booking) throw new NotFoundError("الحجز غير موجود");
+      const events = await rawQuery<Record<string, unknown>>(
+        `SELECT * FROM fleet_trip_events
+          WHERE "bookingId" = $1 AND "companyId" = $2 AND "voidedAt" IS NULL
+          ORDER BY "occurredAt" ASC, id ASC`,
+        [id, scope.companyId],
+      );
+      res.json(maskFields(req, { data: events }));
+    } catch (err) {
+      handleRouteError(err, res, "List trip events error:");
+    }
+  },
+);
+
+// POST /transport/bookings/:id/events — تسجيل واقعة رحلة + اشتقاق الحالة.
+transportBookingsRouter.post(
+  "/transport/bookings/:id/events",
+  authorize({ feature: "fleet.bookings", action: "update" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const b = zodParse(recordTripEventSchema.safeParse(req.body));
+      // سطح المشغّل: الصلاحية fleet.bookings:update تكفي للملكية (مفلتر بالشركة).
+      const { insertId, derivedStatus } = await recordBookingTripEvent(scope, id, b);
+      res.status(201).json({ data: { id: insertId, derivedStatus } });
+    } catch (err) {
+      handleRouteError(err, res, "Record trip event error:");
+    }
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────
+// شريحة 4 — خصم نقص الوزن/التأخير (مرشّح خصم، تشغيلي بحت — لا قيد هنا).
+// النقل يُنشئ المرشّح (الحقيقة التشغيلية)؛ المالية تُصدر منه إشعارًا دائنًا
+// (تخفيض إيراد العميل) عبر تدفّقها المُختبَر — قفل الحدود: لا يرحّل النقل الدفتر.
+// ─────────────────────────────────────────────────────────────────────────
+const deductionCandidateSchema = z.object({
+  basis: z.enum(["weight_shortage", "delay"]),
+  shortageKg: z.coerce.number().min(0).optional(),
+  delayHours: z.coerce.number().min(0).optional(),
+  amount: z.coerce.number().positive(),
+  reason: z.string().min(1).max(2000),
+  invoiceId: z.coerce.number().int().positive().optional(),
+});
+
+transportBookingsRouter.get(
+  "/transport/bookings/:id/deductions",
+  authorize({ feature: "fleet.bookings", action: "view" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const rows = await rawQuery<Record<string, unknown>>(
+        `SELECT * FROM transport_deduction_candidates
+          WHERE "bookingId" = $1 AND "companyId" = $2
+          ORDER BY "createdAt" DESC`,
+        [id, scope.companyId],
+      );
+      res.json(maskFields(req, { data: rows }));
+    } catch (err) {
+      handleRouteError(err, res, "List deduction candidates error:");
+    }
+  },
+);
+
+transportBookingsRouter.post(
+  "/transport/bookings/:id/deductions",
+  authorize({ feature: "fleet.bookings", action: "update" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const b = zodParse(deductionCandidateSchema.safeParse(req.body));
+      const [booking] = await rawQuery<Record<string, unknown>>(
+        `SELECT id FROM transport_bookings WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!booking) throw new NotFoundError("الحجز غير موجود");
+      if (b.basis === "weight_shortage" && b.shortageKg == null) {
+        throw new ValidationError("نقص الوزن (كغم) مطلوب", { field: "shortageKg" });
+      }
+      if (b.basis === "delay" && b.delayHours == null) {
+        throw new ValidationError("ساعات التأخّر مطلوبة", { field: "delayHours" });
+      }
+      // الفاتورة (إن رُبطت) يجب أن تخصّ الشركة — يقرأ فقط، لا يكتب الدفتر.
+      if (b.invoiceId != null) {
+        const [inv] = await rawQuery<Record<string, unknown>>(
+          `SELECT id FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+          [b.invoiceId, scope.companyId],
+        );
+        if (!inv) throw new ValidationError("الفاتورة غير موجودة", { field: "invoiceId" });
+      }
+      const { insertId } = await rawExecute(
+        `INSERT INTO transport_deduction_candidates
+           ("companyId", "branchId", "bookingId", "invoiceId", basis,
+            "shortageKg", "delayHours", amount, reason,
+            "recordedByAssignmentId", "createdBy")
+         VALUES ($1,$2,$3,$4,$5, $6,$7,$8,$9, $10,$11)`,
+        [
+          scope.companyId, scope.branchId ?? null, id, b.invoiceId ?? null, b.basis,
+          b.shortageKg ?? null, b.delayHours ?? null, b.amount, b.reason,
+          scope.activeAssignmentId ?? null, scope.userId,
+        ],
+      );
+      assertInsert(insertId, "transport_deduction_candidates");
+      createAuditLog({
+        companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+        action: "deduction_candidate_created", entity: "transport_bookings", entityId: id,
+        after: { deductionCandidateId: insertId, basis: b.basis, amount: b.amount },
+      }).catch((e) => logger.error(e, "deduction candidate audit failed"));
+      res.status(201).json({ data: { id: insertId } });
+    } catch (err) {
+      handleRouteError(err, res, "Create deduction candidate error:");
     }
   },
 );
@@ -1257,20 +1442,8 @@ transportBookingsRouter.post(
       // 2) Conflict detection — driver / vehicle already booked in
       //    the window. Excludes declined / cancelled orders since they
       //    don't reserve resources.
-      const conflicts = await rawQuery<{ id: number; kind: string }>(
-        `SELECT id, 'driver' AS kind FROM transport_dispatch_orders
-          WHERE "companyId" = $1 AND "driverId" = $2
-            AND status NOT IN ('declined', 'cancelled')
-            AND tstzrange("scheduledStartAt", "scheduledEndAt", '[)')
-                && tstzrange($3::timestamptz, $4::timestamptz, '[)')
-         UNION
-         SELECT id, 'vehicle' AS kind FROM transport_dispatch_orders
-          WHERE "companyId" = $1 AND "vehicleId" = $5
-            AND status NOT IN ('declined', 'cancelled')
-            AND tstzrange("scheduledStartAt", "scheduledEndAt", '[)')
-                && tstzrange($3::timestamptz, $4::timestamptz, '[)')`,
-        [scope.companyId, b.driverId, b.scheduledStartAt, b.scheduledEndAt, b.vehicleId],
-      );
+      const cq = dispatchConflictQuery(scope.companyId, b.driverId, b.vehicleId, b.scheduledStartAt, b.scheduledEndAt);
+      const conflicts = await rawQuery<{ id: number; kind: string }>(cq.sql, cq.params);
       if (conflicts.length > 0 && !b.overrideReason) {
         const kinds = [...new Set(conflicts.map((c) => c.kind))].join("+");
         throw new ConflictError(
@@ -1524,20 +1697,8 @@ transportBookingsRouter.post(
 
         // 2) Re-run time-window conflict detection EXCLUDING this row
         //    itself (otherwise an unchanged window reads as a conflict).
-        const conflicts = await tx.query<{ id: number; kind: string }>(
-          `SELECT id, 'driver' AS kind FROM transport_dispatch_orders
-            WHERE "companyId" = $1 AND "driverId" = $2 AND id <> $6
-              AND status NOT IN ('declined', 'cancelled')
-              AND tstzrange("scheduledStartAt", "scheduledEndAt", '[)')
-                  && tstzrange($3::timestamptz, $4::timestamptz, '[)')
-           UNION
-           SELECT id, 'vehicle' AS kind FROM transport_dispatch_orders
-            WHERE "companyId" = $1 AND "vehicleId" = $5 AND id <> $6
-              AND status NOT IN ('declined', 'cancelled')
-              AND tstzrange("scheduledStartAt", "scheduledEndAt", '[)')
-                  && tstzrange($3::timestamptz, $4::timestamptz, '[)')`,
-          [scope.companyId, targetDriverId, targetStart, targetEnd, targetVehicleId, id],
-        );
+        const cq = dispatchConflictQuery(scope.companyId, targetDriverId, targetVehicleId, targetStart, targetEnd, id);
+        const conflicts = await tx.query<{ id: number; kind: string }>(cq.sql, cq.params);
         if (conflicts.rows.length > 0 && !b.overrideReason) {
           const kinds = [...new Set(conflicts.rows.map((c) => c.kind))].join("+");
           throw new ConflictError(

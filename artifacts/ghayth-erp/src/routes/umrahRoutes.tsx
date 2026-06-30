@@ -52,7 +52,7 @@ const UmrahGroups = lazy(() => import("@/pages/umrah/groups"));
 const UmrahGroupDetail = lazy(() => import("@/pages/details/umrah-group-detail"));
 
 // Standalone cross-entity attachments index. Editing is still per-entity
-// via the embedded UmrahAttachmentsPanel; this page is read-only.
+// via the unified EntityDocuments panel on each detail page; this page is read-only.
 const UmrahAttachments = lazy(() => import("@/pages/umrah/attachments"));
 
 // Sister page to /umrah/commission-plans — surfaces the historical
