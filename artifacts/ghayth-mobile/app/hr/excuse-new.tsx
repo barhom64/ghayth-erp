@@ -36,6 +36,8 @@ export default function ExcuseNewScreen() {
   const activeAssignment = assignments.find(a => a.companyId === user?.companyId);
   const mutation = useMutation('/api/hr/excuse-requests', 'POST');
 
+  const today = new Date().toISOString().slice(0, 10);
+
   const needsTime = excuseType === 'late' || excuseType === 'early_leave';
 
   const validate = () => {
@@ -93,6 +95,7 @@ export default function ExcuseNewScreen() {
             value={excuseDate}
             onChange={setExcuseDate}
             error={errors.excuseDate}
+            maxDate={today}
           />
           {needsTime && (
             <>

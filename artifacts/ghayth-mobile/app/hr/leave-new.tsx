@@ -96,6 +96,7 @@ export default function LeaveNewScreen() {
             value={endDate}
             onChange={setEndDate}
             error={errors.endDate}
+            minDate={startDate || undefined}
           />
           <GInput
             label="سبب الإجازة"

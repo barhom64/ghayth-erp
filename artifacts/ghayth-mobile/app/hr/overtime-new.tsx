@@ -30,13 +30,15 @@ export default function OvertimeNewScreen() {
   const activeAssignment = assignments.find(a => a.companyId === user?.companyId);
   const mutation = useMutation('/api/hr/overtime', 'POST');
 
+  const today = new Date().toISOString().slice(0, 10);
+
   const validate = () => {
     const errs: Record<string, string> = {};
     if (!DATE_RE.test(overtimeDate)) errs.overtimeDate = 'التاريخ يجب أن يكون YYYY-MM-DD';
     if (!TIME_RE.test(startTime)) errs.startTime = 'وقت البداية يجب أن يكون HH:MM';
     if (!TIME_RE.test(endTime)) errs.endTime = 'وقت الانتهاء يجب أن يكون HH:MM';
     const h = Number(hours);
-    if (!hours || isNaN(h) || h <= 0 || h > 12) errs.hours = 'عدد ساعات صحيح (1-12)';
+    if (!hours || isNaN(h) || h <= 0 || h > 12) errs.hours = 'عدد الساعات يجب أن يكون بين 1 و12';
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -79,6 +81,7 @@ export default function OvertimeNewScreen() {
             value={overtimeDate}
             onChange={setOvertimeDate}
             error={errors.overtimeDate}
+            maxDate={today}
           />
           <GInput
             label="وقت البداية *"
