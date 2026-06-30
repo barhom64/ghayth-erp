@@ -11,6 +11,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { HeaderHeightProvider } from "./contexts/HeaderHeightContext";
+import { SiteDataProvider } from "./contexts/SiteDataContext";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import WhatsAppFloat from "./components/WhatsAppFloat";
@@ -122,9 +123,11 @@ export default function App() {
       <ThemeProvider defaultTheme="light">
         <TooltipProvider>
           <HeaderHeightProvider>
-            <WouterRouter base={BASE}>
-              <AppContent />
-            </WouterRouter>
+            <SiteDataProvider>
+              <WouterRouter base={BASE}>
+                <AppContent />
+              </WouterRouter>
+            </SiteDataProvider>
           </HeaderHeightProvider>
         </TooltipProvider>
       </ThemeProvider>

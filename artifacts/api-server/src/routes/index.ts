@@ -27,6 +27,7 @@ import fleetInspectionsRouter from "./fleet-inspections.js";
 import fleetTelematicsRouter from "./fleet-telematics.js";
 import fleetTelematicsWebhookRouter from "./fleet-telematics-webhook.js";
 import cargoRouter from "./cargo.js";
+import siteRouter from "./site.js";
 import warehouseRouter from "./warehouse.js";
 import { warehouseCycleCountsRouter } from "./warehouse-cycle-counts.js";
 import { warehouseAdvancedRouter } from "./warehouse-advanced.js";
@@ -408,6 +409,10 @@ router.use(csrfMiddleware);
 // the edge instead of inside per-domain code. Owners always pass to
 // reach /admin/subscription and pay — non-owners get a 402.
 router.use(subscriptionGate);
+
+// Website CMS (multi-tenant). Per-route RBAC (feature "website") + CSRF; no
+// requireModule gate so owner/GM reach it without a module subscription key.
+router.use("/site", siteRouter);
 
 // Per-user catch-all limiter for ALL authenticated /api traffic. Replaces
 // the blanket per-IP globalLimiter that used to live in app.ts. Mounted

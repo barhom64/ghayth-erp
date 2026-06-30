@@ -625,6 +625,13 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
   // ═══════════════════════════════════════════════════════════════
   { key: "intelligence", moduleKey: "admin", labelAr: "التتبع والتحليل", icon: "Activity",
     availableActions: ["create", "list", "view"], availableScopes: ALL_SCOPES, displayOrder: 1820 },
+
+  // ═══════════════════════════════════════════════════════════════
+  // Website / CMS — الموقع الإلكتروني (multi-tenant site control)
+  // ═══════════════════════════════════════════════════════════════
+  { key: "website", moduleKey: "website", labelAr: "الموقع الإلكتروني", icon: "Globe",
+    availableActions: ["view", "list", "create", "update", "delete"],
+    availableScopes: ["company", "multi_company", "all"], displayOrder: 1900 },
 ];
 
 /**
