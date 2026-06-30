@@ -792,6 +792,12 @@ function AuthGate() {
       <Stack.Screen name="hr/attendance-policy" options={{ title: 'سياسة الحضور' }} />
       <Stack.Screen name="hr/leave-stats" options={{ title: 'إحصاءات الإجازات' }} />
       <Stack.Screen name="hr/approval-chain-definitions" options={{ title: 'تعريفات سلاسل الاعتماد' }} />
+      <Stack.Screen name="settings/general" options={{ title: 'الإعدادات العامة' }} />
+      <Stack.Screen name="settings/departments" options={{ title: 'الأقسام' }} />
+      <Stack.Screen name="settings/system-controls" options={{ title: 'ضوابط النظام' }} />
+      <Stack.Screen name="settings/channels" options={{ title: 'قنوات الاتصال' }} />
+      <Stack.Screen name="requests/stats" options={{ title: 'إحصاءات الطلبات' }} />
+      <Stack.Screen name="projects/workload" options={{ title: 'عبء العمل' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
