@@ -18,6 +18,7 @@ interface TabDef {
 }
 
 interface NotifResponse { data?: { isRead: boolean }[]; total?: number }
+interface MySpaceData { pendingApprovals?: { length?: number } | number | null }
 
 const TABS: TabDef[] = [
   { name: 'index',         title: 'لوحة القيادة', icon: 'grid-outline',                  iconFocused: 'grid' },
@@ -33,6 +34,13 @@ export default function TabsLayout() {
   const hasApproval = canApprove(user?.userRoles);
   const { data: notifData } = useList<NotifResponse>('/api/notifications', { pageSize: 50 });
   const unreadCount = (notifData?.data ?? []).filter(n => !n.isRead).length;
+  const { data: mySpace } = useList<MySpaceData>('/api/my-space', undefined, { enabled: hasApproval });
+  const pendingCount = (() => {
+    const pa = mySpace?.pendingApprovals;
+    if (typeof pa === 'number') return pa;
+    if (Array.isArray(pa)) return pa.length;
+    return 0;
+  })();
 
   return (
     <Tabs
@@ -51,7 +59,11 @@ export default function TabsLayout() {
           options={{
             title: tab.title,
             href: tab.requiresApproval && !hasApproval ? null : undefined,
-            tabBarBadge: tab.name === 'notifications' && unreadCount > 0 ? unreadCount : undefined,
+            tabBarBadge: tab.name === 'notifications' && unreadCount > 0
+              ? unreadCount
+              : tab.name === 'approvals' && pendingCount > 0
+              ? pendingCount
+              : undefined,
             tabBarIcon: ({ focused, color, size }) => (
               <Ionicons name={focused ? tab.iconFocused : tab.icon} size={size} color={color} />
             ),
