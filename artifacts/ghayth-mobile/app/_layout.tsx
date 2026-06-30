@@ -682,6 +682,11 @@ function AuthGate() {
       <Stack.Screen name="umrah/exempt-pilgrims" options={{ title: 'المعتمرون المعفيون' }} />
       <Stack.Screen name="properties/technicians" options={{ title: 'الفنيون' }} />
       <Stack.Screen name="crm/analytics" options={{ title: 'تحليلات CRM' }} />
+      <Stack.Screen name="hr/self-submissions" options={{ title: 'الطلبات الذاتية للموظفين' }} />
+      <Stack.Screen name="hr/onboarding-tasks" options={{ title: 'مهام تأهيل الموظفين' }} />
+      <Stack.Screen name="comms/queue-stats" options={{ title: 'إحصاءات طابور الاتصالات' }} />
+      <Stack.Screen name="finance/budget-approvals" options={{ title: 'طلبات اعتماد الميزانية' }} />
+      <Stack.Screen name="finance/custodies-summary" options={{ title: 'ملخص العُهد' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
