@@ -258,6 +258,15 @@ export default function MeScreen() {
         </Pressable>
       </GCard>
 
+      {/* تغيير كلمة المرور */}
+      <Pressable
+        onPress={() => router.push('/hr/change-password' as never)}
+        style={[styles.logoutBtn, { borderColor: c.border, marginBottom: 0 }]}
+      >
+        <Ionicons name="lock-closed-outline" size={18} color={c.text} />
+        <Text style={{ fontSize: 15, color: c.text, fontWeight: '500', marginRight: 8 }}>تغيير كلمة المرور</Text>
+      </Pressable>
+
       {/* تسجيل الخروج */}
       <Pressable onPress={handleLogout} style={[styles.logoutBtn, { borderColor: c.danger }]}>
         <Ionicons name="log-out-outline" size={18} color={c.danger} />
