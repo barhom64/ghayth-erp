@@ -1207,6 +1207,8 @@ function AuthGate() {
       <Stack.Screen name="fleet/vehicle-tco" options={{ title: 'تكلفة ملكية المركبة' }} />
       <Stack.Screen name="transport/booking-detail" options={{ title: 'تفاصيل الحجز' }} />
       <Stack.Screen name="transport/route-pattern-detail" options={{ title: 'نمط المسار' }} />
+      <Stack.Screen name="warehouse/category-detail" options={{ title: 'تصنيف المستودع' }} />
+      <Stack.Screen name="warehouse/serial-detail" options={{ title: 'الرقم التسلسلي' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
