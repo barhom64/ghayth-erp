@@ -190,7 +190,15 @@ export default function PropertyDetailScreen() {
         )}
 
         {tab === 'units' && (
-          unitsLoading ? <ActivityIndicator color={c.brand} style={{ marginTop: 40 }} /> :
+          <>
+          <GButton
+            title="إضافة وحدة جديدة"
+            icon="add-circle-outline"
+            variant="secondary"
+            onPress={() => router.push({ pathname: '/properties/unit-new' as never, params: { propertyId: id } })}
+            style={{ marginBottom: 8 }}
+          />
+          {unitsLoading ? <ActivityIndicator color={c.brand} style={{ marginTop: 40 }} /> :
           units.length === 0 ? <GEmptyState icon="grid-outline" title="لا وحدات" description="لا توجد وحدات مسجّلة لهذا العقار" /> :
           <GCard style={{ gap: 0, padding: 0 }}>
             {units.map((unit, i) => {
@@ -209,7 +217,8 @@ export default function PropertyDetailScreen() {
                 </View>
               );
             })}
-          </GCard>
+          </GCard>}
+          </>
         )}
 
         {tab === 'contracts' && (

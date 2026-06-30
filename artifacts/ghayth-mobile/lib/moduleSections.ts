@@ -952,7 +952,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       },
       {
         key: "fuel-logs", label: "سجلات الوقود", icon: "flame-outline", endpoint: "/api/fleet/fuel-logs",
-        detailRoute: "/fleet/fuel-log-detail",
+        detailRoute: "/fleet/fuel-log-detail", createRoute: "/fleet/fuel-log-new",
         titleFields: ["vehiclePlate", "ref"], subtitleFields: ["driverName", "stationName"], amountFields: ["totalCost", "cost", "amount", "total"], dateFields: ["fuelDate", "date", "createdAt"],
         write: {
           moduleKey: "fleet",

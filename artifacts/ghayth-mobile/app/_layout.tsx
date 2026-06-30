@@ -275,6 +275,8 @@ function AuthGate() {
       <Stack.Screen name="projects/milestone-new" options={{ title: 'مرحلة جديدة' }} />
       <Stack.Screen name="governance/audit-new" options={{ title: 'تدقيق جديد' }} />
       <Stack.Screen name="governance/capa-new" options={{ title: 'إجراء تصحيحي / وقائي' }} />
+      <Stack.Screen name="fleet/fuel-log-new" options={{ title: 'تسجيل مصروف وقود' }} />
+      <Stack.Screen name="properties/unit-new" options={{ title: 'وحدة جديدة' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>

@@ -165,6 +165,16 @@ export default function VehicleDetailScreen() {
           </GCard>
         )}
 
+        {tab === 'info' && (
+          <GButton
+            title="تسجيل مصروف وقود"
+            icon="water-outline"
+            variant="secondary"
+            onPress={() => router.push({ pathname: '/fleet/fuel-log-new' as never, params: { vehicleId: id } })}
+            style={{ marginTop: 8 }}
+          />
+        )}
+
         {tab === 'trips' && (
           <>
           <GButton
