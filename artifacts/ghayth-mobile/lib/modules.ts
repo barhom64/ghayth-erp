@@ -32,7 +32,6 @@ export const NAV_MODULES: NavModule[] = [
   { key: "dashboard", label: "لوحة القيادة", icon: "grid-outline", route: "/(tabs)", selfService: true, built: true },
   { key: "my-space", label: "مساحتي", icon: "person-circle-outline", route: "/(tabs)/me", selfService: true, built: true },
   { key: "notifications", label: "الإشعارات", icon: "notifications-outline", route: "/(tabs)/notifications", selfService: true, built: true },
-  { key: "calendar", label: "التقويم", icon: "calendar-outline", route: "/(tabs)/approvals", selfService: true, built: true },
   { key: "approvals", label: "مركز الاعتماد", icon: "checkmark-done-outline", route: "/(tabs)/approvals", selfService: true, built: true },
   { key: "hr", label: "الموارد البشرية", icon: "people-outline", built: true },
   { key: "finance", label: "المالية", icon: "cash-outline", built: true },
@@ -48,10 +47,6 @@ export const NAV_MODULES: NavModule[] = [
   { key: "legal", label: "الشؤون القانونية", icon: "shield-checkmark-outline", built: true },
   { key: "requests", label: "الطلبات", icon: "file-tray-full-outline", built: true },
   { key: "governance", label: "الحوكمة", icon: "ribbon-outline", built: true },
-  { key: "bi", label: "تحليلات الأعمال", icon: "analytics-outline", built: true },
-  { key: "reports", label: "التقارير", icon: "bar-chart-outline", built: true },
-  { key: "settings", label: "الإعدادات", icon: "settings-outline", built: true },
-  { key: "admin", label: "إدارة النظام", icon: "server-outline", built: true },
 ];
 
 const ALWAYS_VISIBLE = new Set(["dashboard", "my-space", "notifications"]);

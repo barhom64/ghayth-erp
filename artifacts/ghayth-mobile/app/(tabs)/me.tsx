@@ -29,7 +29,7 @@ const QUICK_ACTIONS: QuickAction[] = [
   { label: 'تسجيل الحضور', icon: 'finger-print-outline',      route: '/hr/attendance' },
   { label: 'طلب إجازة',     icon: 'calendar-outline',          route: '/hr/leave-new' },
   { label: 'طلباتي',          icon: 'list-outline',              route: '/hr/my-requests' },
-  { label: 'وقت إضافي',     icon: 'alarm-outline',             route: '/hr/overtime-new', managerOnly: true },
+  { label: 'وقت إضافي',     icon: 'alarm-outline',             route: '/hr/overtime-new' },
   { label: 'كشف الراتب',    icon: 'document-text-outline',     route: '/hr/payslip' },
 ];
 
