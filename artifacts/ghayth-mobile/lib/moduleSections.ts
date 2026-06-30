@@ -293,7 +293,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "loans", label: "السلف والقروض", icon: "card-outline", endpoint: "/api/hr/loans",
         titleFields: ["loanNumber"], subtitleFields: ["employeeName", "empNumber"], statusField: "status", amountFields: ["amount"], dateFields: ["createdAt"],
-        detailRoute: "/hr/loan-detail",
+        detailRoute: "/hr/loan-detail", createRoute: "/hr/loan-new",
         write: {
           moduleKey: "hr",
           detailPath: (id) => `/api/hr/loans/${id}`,
@@ -324,7 +324,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "overtime", label: "العمل الإضافي", icon: "alarm-outline", endpoint: "/api/hr/overtime",
         titleFields: ["requestNumber"], subtitleFields: ["employeeName", "empNumber"], statusField: "status", amountFields: ["totalAmount"], dateFields: ["overtimeDate"],
-        detailRoute: "/hr/overtime-detail",
+        detailRoute: "/hr/overtime-detail", createRoute: "/hr/overtime-new",
         write: {
           moduleKey: "hr",
           createEndpoint: "/api/hr/overtime",
@@ -341,11 +341,11 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
-      { key: "exit", label: "إنهاء الخدمة", icon: "exit-outline", endpoint: "/api/hr/transfers", titleFields: ["transferNumber", "exitNumber"], subtitleFields: ["employeeName", "exitType"], statusField: "status", amountFields: ["netSettlement"], dateFields: ["requestDate"], detailRoute: "/hr/exit-request-detail" },
+      { key: "exit", label: "إنهاء الخدمة", icon: "exit-outline", endpoint: "/api/hr/transfers", titleFields: ["transferNumber", "exitNumber"], subtitleFields: ["employeeName", "exitType"], statusField: "status", amountFields: ["netSettlement"], dateFields: ["requestDate"], detailRoute: "/hr/exit-request-detail", createRoute: "/hr/exit-request-new" },
       {
         key: "violations", label: "المخالفات التأديبية", icon: "warning-outline", endpoint: "/api/hr/violations",
         titleFields: ["ref", "violationType", "typeLabel"], subtitleFields: ["employeeName"], statusField: "status", amountFields: ["penaltyAmount"], dateFields: ["incidentDate"],
-        detailRoute: "/hr/violation-detail",
+        detailRoute: "/hr/violation-detail", createRoute: "/hr/discipline-new",
         write: {
           moduleKey: "hr",
           createFields: [
@@ -436,7 +436,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           { name: "notes", label: "ملاحظات", type: "textarea" },
         ] } },
       { key: "evaluations", label: "تقييمات الأداء", icon: "star-outline", endpoint: "/api/hr/evaluations", titleFields: ["employeeName"], subtitleFields: ["period", "evaluatorName"], statusField: "status", amountFields: ["score"], dateFields: ["evaluationDate"], detailRoute: "/hr/evaluation-detail", createRoute: "/hr/evaluation-new" },
-      { key: "official-letters", label: "الخطابات الرسمية", icon: "mail-outline", endpoint: "/api/hr/official-letters", titleFields: ["subject", "letterNumber"], subtitleFields: ["employeeName", "type"], statusField: "status", dateFields: ["createdAt"], detailRoute: "/hr/official-letter-detail",
+      { key: "official-letters", label: "الخطابات الرسمية", icon: "mail-outline", endpoint: "/api/hr/official-letters", titleFields: ["subject", "letterNumber"], subtitleFields: ["employeeName", "type"], statusField: "status", dateFields: ["createdAt"], detailRoute: "/hr/official-letter-detail", createRoute: "/hr/official-letter-new",
         write: { moduleKey: "hr", createFields: [
           { name: "subject", label: "الموضوع", type: "text", required: true },
           { name: "type", label: "نوع الخطاب", type: "select", required: true, options: [{ value: "experience", label: "خطاب خبرة" }, { value: "salary", label: "خطاب راتب" }, { value: "employment", label: "خطاب تعريف بالعمل" }, { value: "noc", label: "شهادة عدم ممانعة" }, { value: "other", label: "أخرى" }] },
@@ -553,7 +553,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "expenses", label: "المصروفات", icon: "trending-down-outline", endpoint: "/api/finance/expenses",
         titleFields: ["ref", "description"], subtitleFields: ["accountName", "expenseType"], statusField: "status", amountFields: ["amount"], dateFields: ["createdAt"],
-        detailRoute: "/finance/expense-detail",
+        detailRoute: "/finance/expense-detail", createRoute: "/hr/expense-new",
         write: {
           moduleKey: "finance",
           detailPath: (id) => `/api/finance/expenses/${id}`,
@@ -750,7 +750,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       { key: "budget", label: "الموازنات", icon: "pie-chart-outline", endpoint: "/api/finance/budget", titleFields: ["accountName"], subtitleFields: ["accountCode", "period"], statusField: "status", amountFields: ["amount"] },
       { key: "cost-centers", label: "مراكز التكلفة", icon: "layers-outline", endpoint: "/api/finance/cost-centers", titleFields: ["name"], subtitleFields: ["code"], statusField: "status" },
       {
-        key: "custodies", label: "العُهد", icon: "briefcase-outline", endpoint: "/api/finance/custodies", titleFields: ["ref"], subtitleFields: ["employeeName", "description"], statusField: "status", amountFields: ["amount"], dateFields: ["date"], detailRoute: "/finance/custody-detail",
+        key: "custodies", label: "العُهد", icon: "briefcase-outline", endpoint: "/api/finance/custodies", titleFields: ["ref"], subtitleFields: ["employeeName", "description"], statusField: "status", amountFields: ["amount"], dateFields: ["date"], detailRoute: "/finance/custody-detail", createRoute: "/finance/custody-new",
         write: {
           moduleKey: "finance",
           createFields: [
@@ -787,7 +787,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           { name: "notes", label: "ملاحظات", type: "textarea" },
         ] } },
       { key: "bank-reconciliation", label: "تسوية البنوك", icon: "swap-horizontal-outline", endpoint: "/api/finance/bank-reconciliation", titleFields: ["ref", "bankAccount"], subtitleFields: ["bankName"], statusField: "status", dateFields: ["statementDate"] },
-      { key: "fixed-assets", label: "الأصول الثابتة", icon: "home-outline", endpoint: "/api/finance/fixed-assets", titleFields: ["name", "assetCode"], subtitleFields: ["category", "location"], statusField: "status", amountFields: ["acquisitionCost", "bookValue"], dateFields: ["acquisitionDate"], detailRoute: "/finance/fixed-asset-detail",
+      { key: "fixed-assets", label: "الأصول الثابتة", icon: "home-outline", endpoint: "/api/finance/fixed-assets", titleFields: ["name", "assetCode"], subtitleFields: ["category", "location"], statusField: "status", amountFields: ["acquisitionCost", "bookValue"], dateFields: ["acquisitionDate"], detailRoute: "/finance/fixed-asset-detail", createRoute: "/finance/fixed-asset-disposal-new",
         write: { moduleKey: "finance", createFields: [
           { name: "name", label: "اسم الأصل", type: "text", required: true },
           { name: "category", label: "التصنيف", type: "select", required: true, options: [{ value: "equipment", label: "معدات" }, { value: "vehicle", label: "مركبة" }, { value: "furniture", label: "أثاث" }, { value: "electronics", label: "إلكترونيات" }, { value: "building", label: "مبنى" }, { value: "other", label: "أخرى" }] },

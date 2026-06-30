@@ -322,6 +322,7 @@ function AuthGate() {
       <Stack.Screen name="umrah/sub-agent-invoice-new" options={{ title: 'فاتورة وكيل فرعي' }} />
       <Stack.Screen name="umrah/transport-new" options={{ title: 'نقل عمرة جديد' }} />
       <Stack.Screen name="umrah/violation-new" options={{ title: 'مخالفة عمرة جديدة' }} />
+      <Stack.Screen name="finance/purchase-order-new" options={{ title: 'أمر شراء جديد' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
