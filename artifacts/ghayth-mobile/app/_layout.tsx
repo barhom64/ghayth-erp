@@ -879,6 +879,12 @@ function AuthGate() {
       <Stack.Screen name="finance/classification-center" options={{ title: 'مركز تصنيف الحسابات' }} />
       <Stack.Screen name="finance/subsidiary-account-failures" options={{ title: 'أخطاء الحسابات الفرعية' }} />
       <Stack.Screen name="comms/inbox-conversations" options={{ title: 'محادثات البريد الوارد' }} />
+      <Stack.Screen name="fleet/cargo-manifests" options={{ title: 'بيانيات الشحن' }} />
+      <Stack.Screen name="hr/saudi-banks" options={{ title: 'البنوك السعودية' }} />
+      <Stack.Screen name="hr/mudad-settlements" options={{ title: 'تسويات مدد' }} />
+      <Stack.Screen name="hr/wps-credentials" options={{ title: 'بيانات اعتماد WPS' }} />
+      <Stack.Screen name="finance/zatca-pause-history" options={{ title: 'تاريخ إيقاف ZATCA' }} />
+      <Stack.Screen name="finance/zatca-missing-tax" options={{ title: 'أرقام ضريبية ناقصة ZATCA' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
