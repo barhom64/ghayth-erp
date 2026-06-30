@@ -900,6 +900,16 @@ function AuthGate() {
       <Stack.Screen name="comms/inbox-signatures" options={{ title: 'توقيعات البريد' }} />
       <Stack.Screen name="settings/inbox-routing" options={{ title: 'إعدادات توجيه البريد' }} />
       <Stack.Screen name="settings/task-sla" options={{ title: 'إعدادات SLA المهام' }} />
+      <Stack.Screen name="finance/pending-grn" options={{ title: 'أوامر الشراء المعلّقة الاستلام' }} />
+      <Stack.Screen name="finance/payment-run-pending" options={{ title: 'دفعات معلّقة للصرف' }} />
+      <Stack.Screen name="finance/tax-summary" options={{ title: 'ملخص الضريبة' }} />
+      <Stack.Screen name="finance/bad-debt-policy" options={{ title: 'سياسة الديون المعدومة' }} />
+      <Stack.Screen name="settings/audit-log" options={{ title: 'سجل تدقيق الإعدادات' }} />
+      <Stack.Screen name="settings/approval-config" options={{ title: 'إعدادات الاعتماد' }} />
+      <Stack.Screen name="settings/timezone" options={{ title: 'إعدادات التوقيت' }} />
+      <Stack.Screen name="settings/administrations" options={{ title: 'الإدارات' }} />
+      <Stack.Screen name="settings/org-tree" options={{ title: 'الهيكل التنظيمي' }} />
+      <Stack.Screen name="settings/resolved" options={{ title: 'الإعدادات المحلولة' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
