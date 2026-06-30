@@ -4102,6 +4102,54 @@ invoicesRouter.get("/bad-debt/preview", authorize({ feature: "finance.collection
   }
 });
 
+// عتبة افتراضية للنظر في شطب الذمّة المعدومة: ١٨٠ يومًا تأخّر (قابلة للتجاوز بـ ?minDaysOverdue=).
+const WRITEOFF_DEFAULT_DAYS = 180;
+
+// مرشّحو الشطب: ذمم مدينة متأخّرة فوق العتبة وغير مشطوبة بعد — للعرض والترشيح فقط.
+// لا ترحيل دفتر هنا؛ الترحيل (مدين 1135 المخصّص / دائن 1111 الذمم) يتمّ في مسار
+// الاعتماد المنفصل (الدفعة ٢) بعد اعتماد بشري + assertion. نفس تعريف الذمم القائمة
+// المستخدَم في المخصّص، مضافًا إليه استبعاد 'written_off'.
+invoicesRouter.get("/bad-debt/write-off-candidates", authorize({ feature: "finance.collection", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const asOf = (req.query.asOf as string) || todayISO();
+    const minDaysOverdue = Number.isFinite(Number(req.query.minDaysOverdue)) && Number(req.query.minDaysOverdue) > 0
+      ? Math.floor(Number(req.query.minDaysOverdue))
+      : WRITEOFF_DEFAULT_DAYS;
+
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT id, ref, "clientId", "createdAt", "dueDate", total, "paidAmount",
+              (total - COALESCE("paidAmount",0)) AS outstanding
+         FROM invoices
+        WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "createdAt" <= $2
+          AND status NOT IN ('draft','cancelled','paid','rejected','returned','written_off')
+          AND (total - COALESCE("paidAmount",0)) > 0.01`,
+      [scope.companyId, asOf]
+    );
+
+    const asOfMs = new Date(asOf).getTime();
+    const candidates = rows
+      .map((inv) => {
+        const due = inv.dueDate ? new Date(inv.dueDate as string | Date).getTime()
+          : new Date(inv.createdAt as string | Date).getTime() + 30 * 86400000;
+        const daysOverdue = Math.floor((asOfMs - due) / 86400000);
+        return { ...inv, outstanding: roundTo2(Number(inv.outstanding)), daysOverdue };
+      })
+      .filter((c) => c.daysOverdue >= minDaysOverdue)
+      .sort((a, b) => b.daysOverdue - a.daysOverdue);
+
+    res.json({
+      asOf,
+      minDaysOverdue,
+      count: candidates.length,
+      totalOutstanding: roundTo2(candidates.reduce((s, c) => s + Number(c.outstanding), 0)),
+      candidates,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Write-off candidates error:");
+  }
+});
+
 invoicesRouter.post("/bad-debt/post", authorize({ feature: "finance.collection", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
