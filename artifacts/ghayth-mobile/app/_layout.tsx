@@ -687,6 +687,10 @@ function AuthGate() {
       <Stack.Screen name="comms/queue-stats" options={{ title: 'إحصاءات طابور الاتصالات' }} />
       <Stack.Screen name="finance/budget-approvals" options={{ title: 'طلبات اعتماد الميزانية' }} />
       <Stack.Screen name="finance/custodies-summary" options={{ title: 'ملخص العُهد' }} />
+      <Stack.Screen name="legal/upcoming-sessions" options={{ title: 'الجلسات القادمة' }} />
+      <Stack.Screen name="legal/renewal-alerts" options={{ title: 'تنبيهات تجديد العقود' }} />
+      <Stack.Screen name="governance/compliance-dashboard" options={{ title: 'لوحة الامتثال' }} />
+      <Stack.Screen name="governance/compliance-actions" options={{ title: 'إجراءات الامتثال' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
