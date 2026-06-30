@@ -58,6 +58,7 @@ const QRScanner = lazy(() => import("@/pages/hr/qr-scanner"));
 const PenaltyEscalation = lazy(() => import("@/pages/hr/penalty-escalation"));
 const SalaryComponents = lazy(() => import("@/pages/hr/salary-components"));
 const DriverPayRates = lazy(() => import("@/pages/hr/driver-pay-rates")); // معدّلات أجر السائق — الدفعة 2
+const PayrollPendingDues = lazy(() => import("@/pages/hr/payroll-pending-dues")); // معاينة المستحقّات قبل الترحيل
 const EmployeeActivation = lazy(() => import("@/pages/hr/employee-activation"));
 const OnboardingReview = lazy(() => import("@/pages/hr/onboarding-review"));
 const ActivationBoard = lazy(() => import("@/pages/hr/activation-board"));
@@ -166,6 +167,7 @@ export const hrRoutes = [
   { path: "/hr/payroll/create", component: PayrollCreate, subKey: "payroll" },
   { path: "/hr/payroll/salary-components", component: SalaryComponents, subKey: "payroll" },
   { path: "/hr/driver-pay-rates", component: DriverPayRates, subKey: "payroll" },
+  { path: "/hr/payroll/pending-dues", component: PayrollPendingDues, subKey: "payroll" },
   { path: "/hr/payroll/:id", component: PayrollDetail, subKey: "payroll" },
   { path: "/hr/performance", component: Performance, subKey: "performance" },
   { path: "/hr/performance/create", component: PerformanceCreate, subKey: "performance" },

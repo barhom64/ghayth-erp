@@ -16,6 +16,8 @@ import { getApprovedDriverHoursForPeriod, markDriverHoursConsumed } from "../lib
 import { buildDriverRateResolver } from "../lib/hr/driverPayRates.js";
 // مكافآت حركات النقل (الدفعة ب): الأسطول يوفّر المكافآت المعتمدة + ختمها.
 import { getApprovedMovementBonusesForCompany, markMovementBonusesConsumed } from "../lib/fleet/movementBonuses.js";
+// معاينة المستحقّات قبل الترحيل (قراءة فقط) — نصف قراءة المسيّر بلا ترحيل.
+import { getPendingDriverDues } from "../lib/hr/payrollDuesPreview.js";
 import { resolveAttendancePolicy } from "../lib/attendancePolicyEngine.js";
 import { fieldPingSchema, getFieldEligibility, recordFieldPing } from "../lib/fieldTrackingService.js";
 import { requireAnyPermission } from "../middlewares/permissionMiddleware.js";
@@ -2914,6 +2916,23 @@ router.get("/payroll", authorize({ feature: "hr.payroll.runs", action: "view" })
     res.json(maskFields(req, { data, total: data.length, page: 1, pageSize: data.length }));
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
+  }
+});
+
+// معاينة مستحقّات السائق قيد الترحيل (قراءة فقط، بلا دفتر) — تُسجَّل قبل
+// `/payroll/:id` كي لا يلتقطها مسار المعرّف. تعرض ما سيستهلكه المسيّر القادم:
+// ساعات الفترة المعتمدة × معدّل HR + المكافآت المعتمدة المعلّقة، لكل سائق.
+router.get("/payroll/pending-dues", authorize({ feature: "hr.payroll.runs", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const period = (req.query.period as string | undefined)?.trim() || currentPeriod();
+    if (!/^\d{4}-\d{2}$/.test(period)) {
+      throw new ValidationError("الفترة يجب أن تكون بصيغة YYYY-MM", { field: "period" });
+    }
+    const data = await getPendingDriverDues(scope.companyId, period);
+    res.json(maskFields(req, { data }));
+  } catch (err) {
+    handleRouteError(err, res, "Pending driver dues error:");
   }
 });
 
