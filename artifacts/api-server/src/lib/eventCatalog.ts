@@ -295,6 +295,17 @@ export const EVENT_CATALOG: EventDefinition[] = [
     consumers: ["maintenanceWorkflow", "execDashboard"],
     sideEffects: ["notification", "obligation_register"],
   },
+  {
+    // شريحة 4 — تُصدرها المالية عند إصدار إشعار دائن من مرشّح خصم نقل، ليربط
+    // مسار النقل مرشّحه بالإشعار (الدفتر تملكه المالية؛ النقل يربط مرشّحه فقط).
+    name: "transport.deduction.materialized",
+    label: "إصدار إشعار خصم نقل",
+    domain: "fleet",
+    description: "تُصدر عند إصدار المالية إشعارًا دائنًا مرتبطًا بمرشّح خصم نقل",
+    payload: { deductionCandidateId: "number", creditMemoId: "number" },
+    consumers: ["transportDeductionLinker"],
+    sideEffects: ["audit"],
+  },
 
   // ─── PROPERTY ────────────────────────────────────────────────────────────
   {
