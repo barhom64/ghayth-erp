@@ -700,6 +700,11 @@ function AuthGate() {
       <Stack.Screen name="finance/subsidiary-state" options={{ title: 'حالة إحلال الحسابات' }} />
       <Stack.Screen name="finance/dimensional-health" options={{ title: 'صحة التوجيه الأبعادي' }} />
       <Stack.Screen name="finance/entity-ranking" options={{ title: 'تصنيف الكيانات ربحيةً' }} />
+      <Stack.Screen name="properties/stats" options={{ title: 'إحصاءات الأملاك' }} />
+      <Stack.Screen name="admin/violations-report" options={{ title: 'تقرير المخالفات' }} />
+      <Stack.Screen name="admin/automation-stats" options={{ title: 'إحصاءات الأتمتة' }} />
+      <Stack.Screen name="comms/email-domains" options={{ title: 'نطاقات البريد الإلكتروني' }} />
+      <Stack.Screen name="comms/pbx-available-extensions" options={{ title: 'تحويلات PBX المتاحة' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
