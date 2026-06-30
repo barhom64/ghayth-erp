@@ -957,6 +957,8 @@ function AuthGate() {
       <Stack.Screen name="umrah/dashboard" options={{ title: 'لوحة العمرة' }} />
       <Stack.Screen name="umrah/import-presets" options={{ title: 'قوالب الاستيراد' }} />
       <Stack.Screen name="properties/maintenance-list" options={{ title: 'قائمة الصيانة' }} />
+      <Stack.Screen name="admin/activity-stats" options={{ title: 'إحصائيات النشاط' }} />
+      <Stack.Screen name="settings/custom-field-values" options={{ title: 'قيم الحقول المخصصة' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
