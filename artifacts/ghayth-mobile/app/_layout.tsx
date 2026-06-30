@@ -648,6 +648,8 @@ function AuthGate() {
       <Stack.Screen name="hr/monthly-attendance" options={{ title: 'الحضور الشهري' }} />
       <Stack.Screen name="hr/turnover-report" options={{ title: 'تقرير الدوران الوظيفي' }} />
       <Stack.Screen name="hr/accruals-preview" options={{ title: 'معاينة الاستحقاقات' }} />
+      <Stack.Screen name="hr/employees-status" options={{ title: 'حالة الموظفين' }} />
+      <Stack.Screen name="finance/gl-pending" options={{ title: 'قيود GL المعلّقة' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
