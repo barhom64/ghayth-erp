@@ -168,6 +168,10 @@ function AuthGate() {
       <Stack.Screen name="umrah/agent-invoice-detail" options={{ title: 'فاتورة الوكيل' }} />
       <Stack.Screen name="crm/activity-detail" options={{ title: 'النشاط والمتابعة' }} />
       <Stack.Screen name="crm/contract-detail" options={{ title: 'العقد التجاري' }} />
+      <Stack.Screen name="crm/email-campaign-detail" options={{ title: 'حملة البريد الإلكتروني' }} />
+      <Stack.Screen name="properties/payment-detail" options={{ title: 'دفعة الإيجار' }} />
+      <Stack.Screen name="properties/owner-detail" options={{ title: 'ملف المالك' }} />
+      <Stack.Screen name="properties/inspection-detail" options={{ title: 'عملية الفحص' }} />
       <Stack.Screen name="admin/user-detail" options={{ title: 'المستخدم' }} />
       <Stack.Screen name="crm/campaign-detail" options={{ title: 'الحملة التسويقية' }} />
       <Stack.Screen name="governance/compliance-detail" options={{ title: 'بند الامتثال' }} />

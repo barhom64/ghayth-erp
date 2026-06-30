@@ -1412,7 +1412,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
         },
       },
       { key: "leads", label: "قائمة الجمهور المستهدف", icon: "people-outline", endpoint: "/api/marketing/leads", detailRoute: "/crm/lead-detail", titleFields: ["name", "email"], subtitleFields: ["source", "campaign"], statusField: "status", dateFields: ["createdAt"] },
-      { key: "email-campaigns", label: "حملات البريد", icon: "mail-outline", endpoint: "/api/marketing/email-campaigns", titleFields: ["name", "subject"], subtitleFields: ["listName"], statusField: "status", dateFields: ["scheduledAt"] },
+      { key: "email-campaigns", label: "حملات البريد", icon: "mail-outline", endpoint: "/api/marketing/email-campaigns", detailRoute: "/crm/email-campaign-detail", titleFields: ["name", "subject"], subtitleFields: ["listName"], statusField: "status", dateFields: ["scheduledAt"] },
     ],
   },
   property: {
@@ -1539,9 +1539,9 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
         },
       },
       { key: "tenants", label: "المستأجرون", icon: "person-outline", endpoint: "/api/properties/tenants", titleFields: ["name", "tenantName"], subtitleFields: ["phone", "email", "nationalId"], statusField: "status", detailRoute: "/properties/tenant-detail" },
-      { key: "payments", label: "دفعات الإيجار", icon: "cash-outline", endpoint: "/api/properties/payments", titleFields: ["ref", "reference"], subtitleFields: ["tenantName", "unitName"], statusField: "status", amountFields: ["amount"], dateFields: ["dueDate", "paidDate"] },
-      { key: "owners", label: "الملاك", icon: "people-circle-outline", endpoint: "/api/properties/owners", titleFields: ["name", "ownerName"], subtitleFields: ["phone", "email"], statusField: "status" },
-      { key: "inspections", label: "عمليات الفحص", icon: "eye-outline", endpoint: "/api/properties/inspections", titleFields: ["ref", "type"], subtitleFields: ["unitName", "inspectorName"], statusField: "status", dateFields: ["inspectionDate"] },
+      { key: "payments", label: "دفعات الإيجار", icon: "cash-outline", endpoint: "/api/properties/payments", detailRoute: "/properties/payment-detail", titleFields: ["ref", "reference"], subtitleFields: ["tenantName", "unitName"], statusField: "status", amountFields: ["amount"], dateFields: ["dueDate", "paidDate"] },
+      { key: "owners", label: "الملاك", icon: "people-circle-outline", endpoint: "/api/properties/owners", detailRoute: "/properties/owner-detail", titleFields: ["name", "ownerName"], subtitleFields: ["phone", "email"], statusField: "status" },
+      { key: "inspections", label: "عمليات الفحص", icon: "eye-outline", endpoint: "/api/properties/inspections", detailRoute: "/properties/inspection-detail", titleFields: ["ref", "type"], subtitleFields: ["unitName", "inspectorName"], statusField: "status", dateFields: ["inspectionDate"] },
     ],
   },
   legal: {
