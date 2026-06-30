@@ -1152,6 +1152,13 @@ function AuthGate() {
       <Stack.Screen name="hr/attendance-auto-detection-summary" options={{ title: 'ملخص الاكتشاف التلقائي' }} />
       <Stack.Screen name="hr/discipline-memo-detail" options={{ title: 'تفاصيل المذكرة التأديبية' }} />
       <Stack.Screen name="hr/discipline-regulation-detail" options={{ title: 'تفاصيل اللائحة التأديبية' }} />
+      <Stack.Screen name="fleet/accident-photos" options={{ title: 'صور الحادث' }} />
+      <Stack.Screen name="fleet/breakdown-photos" options={{ title: 'صور العطل' }} />
+      <Stack.Screen name="fleet/cargo-checkpoints" options={{ title: 'نقاط تفتيش الشحنة' }} />
+      <Stack.Screen name="fleet/driver-portal" options={{ title: 'بوابة السائق' }} />
+      <Stack.Screen name="fleet/rental-payments" options={{ title: 'دفعات عقد الإيجار' }} />
+      <Stack.Screen name="fleet/me-cargo-checkpoints" options={{ title: 'نقاط تفتيش شحنتي' }} />
+      <Stack.Screen name="transport/billing-candidate-detail" options={{ title: 'تفاصيل مرشح الفوترة' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
