@@ -418,6 +418,13 @@ function AuthGate() {
       <Stack.Screen name="finance/gl-accounts" options={{ title: 'دليل الحسابات' }} />
       <Stack.Screen name="finance/budgets" options={{ title: 'الميزانيات' }} />
       <Stack.Screen name="finance/cost-centers" options={{ title: 'مراكز التكلفة' }} />
+      <Stack.Screen name="hr/leave-types" options={{ title: 'أنواع الإجازات' }} />
+      <Stack.Screen name="hr/payroll-runs" options={{ title: 'دورات الرواتب' }} />
+      <Stack.Screen name="finance/cash-flow" options={{ title: 'التدفق النقدي' }} />
+      <Stack.Screen name="fleet/telematics" options={{ title: 'التتبع والتليماتيك' }} />
+      <Stack.Screen name="warehouse/transfers" options={{ title: 'تحويلات المستودع' }} />
+      <Stack.Screen name="properties/maintenance-requests" options={{ title: 'طلبات الصيانة' }} />
+      <Stack.Screen name="crm/pipeline" options={{ title: 'خط المبيعات' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
