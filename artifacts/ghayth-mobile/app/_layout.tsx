@@ -761,6 +761,12 @@ function AuthGate() {
       <Stack.Screen name="hr/discipline-memos" options={{ title: 'المذكرات التأديبية' }} />
       <Stack.Screen name="legal/stats" options={{ title: 'إحصاءات الشؤون القانونية' }} />
       <Stack.Screen name="legal/financial-report" options={{ title: 'التقرير المالي للقضايا' }} />
+      <Stack.Screen name="crm/stats" options={{ title: 'إحصاءات CRM' }} />
+      <Stack.Screen name="comms/stats" options={{ title: 'إحصاءات الاتصالات' }} />
+      <Stack.Screen name="hr/recruitment-stats" options={{ title: 'إحصاءات التوظيف' }} />
+      <Stack.Screen name="hr/training-stats" options={{ title: 'إحصاءات التدريب' }} />
+      <Stack.Screen name="notifications/preferences" options={{ title: 'تفضيلات الإشعارات' }} />
+      <Stack.Screen name="notifications/quiet-hours" options={{ title: 'أوقات الهدوء' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
