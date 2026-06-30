@@ -723,6 +723,16 @@ function AuthGate() {
       <Stack.Screen name="dashboards/support-module" options={{ title: 'لوحة الدعم' }} />
       <Stack.Screen name="dashboards/tasks-module" options={{ title: 'لوحة المهام' }} />
       <Stack.Screen name="dashboards/warehouse-module" options={{ title: 'لوحة المستودعات' }} />
+      <Stack.Screen name="bi/ceo-dashboard" options={{ title: 'لوحة الرئيس التنفيذي' }} />
+      <Stack.Screen name="bi/admin-reports" options={{ title: 'التقارير الإدارية' }} />
+      <Stack.Screen name="bi/ai-insights" options={{ title: 'الرؤى الذكية' }} />
+      <Stack.Screen name="bi/branch-performance" options={{ title: 'أداء الفروع' }} />
+      <Stack.Screen name="bi/vendor-performance" options={{ title: 'أداء الموردين' }} />
+      <Stack.Screen name="bi/fleet-tco" options={{ title: 'التكلفة الإجمالية للأسطول' }} />
+      <Stack.Screen name="bi/dept-leave-balance" options={{ title: 'أرصدة إجازات الأقسام' }} />
+      <Stack.Screen name="bi/property-occupancy" options={{ title: 'إشغال الأملاك' }} />
+      <Stack.Screen name="bi/training-roi" options={{ title: 'عائد الاستثمار في التدريب' }} />
+      <Stack.Screen name="bi/umrah-season-summary" options={{ title: 'ملخص موسم العمرة' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
