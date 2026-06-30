@@ -108,9 +108,13 @@ vendorsRouter.get("/vendors", authorize({ feature: "finance.vendors", action: "l
     const filters = parseScopeFilters(req);
     // #2713 (تعميم) — سلة المحذوفات: deleted=true يعرض المحذوف ناعمًا فقط.
     const showDeleted = (req.query as Record<string, string | undefined>).deleted === "true";
+    // `suppliers` is a company-level table with no `branchId` column, so any
+    // branch predicate (added when the frontend sends `?branchIds=...`) raises
+    // 42703 undefined_column → 500. Disable branch scoping like other branchless
+    // tables (clients/projects/crm_opportunities).
     const { where, params } = showDeleted
-      ? buildScopedWhere(scope, filters)
-      : buildScopedWhere(scope, filters, { softDeleteColumn: '"deletedAt"' });
+      ? buildScopedWhere(scope, filters, { disableBranchScope: true })
+      : buildScopedWhere(scope, filters, { disableBranchScope: true, softDeleteColumn: '"deletedAt"' });
     const finalWhere = showDeleted ? `${where} AND "deletedAt" IS NOT NULL` : where;
     const rows = await rawQuery<VendorRow>(
       `SELECT * FROM suppliers WHERE ${finalWhere} ORDER BY name LIMIT 500`,
