@@ -756,6 +756,11 @@ function AuthGate() {
       <Stack.Screen name="umrah/finance-hygiene" options={{ title: 'سلامة البيانات المالية' }} />
       <Stack.Screen name="umrah/daily-runsheet" options={{ title: 'جدول تشغيل اليوم' }} />
       <Stack.Screen name="umrah/costs-report" options={{ title: 'تكاليف العمرة' }} />
+      <Stack.Screen name="hr/overtime-summary" options={{ title: 'ملخص العمل الإضافي' }} />
+      <Stack.Screen name="hr/discipline-stats" options={{ title: 'إحصاءات التأديب' }} />
+      <Stack.Screen name="hr/discipline-memos" options={{ title: 'المذكرات التأديبية' }} />
+      <Stack.Screen name="legal/stats" options={{ title: 'إحصاءات الشؤون القانونية' }} />
+      <Stack.Screen name="legal/financial-report" options={{ title: 'التقرير المالي للقضايا' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
