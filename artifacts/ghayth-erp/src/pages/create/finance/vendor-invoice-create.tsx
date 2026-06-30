@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -81,6 +81,17 @@ export default function VendorInvoiceCreate() {
   const { data: accountsData, isLoading: accountsLoading, isError } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
   const accounts = accountsData?.data || [];
   const moneyAccounts = accounts.filter((a: any) => isMoneyAccount(a));
+
+  // البند ٤ — أكواد الضريبة الفعّالة لمنتقي رمز ضريبة البند (بدل النص الحر).
+  // رمز البند يحدّد حساب ضريبة المدخلات في المعالج (resolveVendorInvoicePlan).
+  const { data: taxCodesData } = useApiQuery<{ data: Array<{ code: string; name: string; rate: number | string; isActive: boolean }> }>(
+    ["tax-codes"],
+    "/finance/tax-codes",
+  );
+  const taxCodes = useMemo(
+    () => (taxCodesData?.data ?? []).filter((t) => t.isActive && t.code),
+    [taxCodesData],
+  );
 
   const [supplierId, setSupplierId] = useState("");
   const [paid, setPaid] = useState(false);
@@ -345,7 +356,21 @@ export default function VendorInvoiceCreate() {
                   )}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <CostCenterSelect value={line.costCenterId} onChange={(v) => updateLine(i, { costCenterId: v })} label="مركز التكلفة" />
-                    <TextField label="رمز الضريبة" value={line.taxCode} onChange={(v) => updateLine(i, { taxCode: v })} placeholder="رمز" />
+                    {/* البند ٤ — منتقٍ بدل النص الحر (الدستور: لا إدخال حر بحقل مرتبط
+                        بكيان). رمز البند يحدّد حساب ضريبة المدخلات في المعالج. */}
+                    <FormFieldWrapper label="رمز الضريبة">
+                      <Select value={line.taxCode || "_none"} onValueChange={(v) => updateLine(i, { taxCode: v === "_none" ? "" : v })}>
+                        <SelectTrigger><SelectValue placeholder="اختر رمز الضريبة..." /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="_none">— بدون —</SelectItem>
+                          {taxCodes.map((t) => (
+                            <SelectItem key={t.code} value={t.code}>
+                              {t.code} ({Number(t.rate).toFixed(0)}%) — {t.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormFieldWrapper>
                   </div>
                   {/* per-line dimensions */}
                   <LineAllocationPanel

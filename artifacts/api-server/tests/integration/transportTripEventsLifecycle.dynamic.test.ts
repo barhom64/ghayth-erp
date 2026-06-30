@@ -52,6 +52,10 @@ d("شريحة 1 — دورة حياة وقائع الرحلة (قاعدة حيّ
   let bookingId = 0;
   let draftBookingId = 0;
   let driverDispatchId = 0;
+  let handoverDispatchId = 0;
+  let ownerDriverId = 0;
+  let driverHeavyId = 0;
+  let driverPrivateId = 0;
 
   // يهيّئ شركة معزولة مع مالك ويُعيد (companyId, branchId, token).
   async function bootstrapOwner(label: string, stamp: number) {
@@ -166,6 +170,50 @@ d("شريحة 1 — دورة حياة وقائع الرحلة (قاعدة حيّ
       [a.companyId, a.branchId, driverBookingId, line.id, veh.id, drv.id],
     );
     driverDispatchId = disp.id;
+    ownerDriverId = drv.id;
+
+    // ── شريحة 3 (العهدة): حجز + مركبة تتطلب رخصة heavy + أمر توزيع للمالك-السائق،
+    //    وسائقان مستلِمان: مؤهّل (heavy) وغير مؤهّل (private). ──
+    const hoRes = await withAuth(request(app).post("/api/transport/bookings"), tokenA).send({
+      bookingNumber: `BK-TE-HO-${stamp}`, bookingSource: "manual_entry",
+      transportServiceType: "cargo_load", fromLocationText: "أ", toLocationText: "ب",
+    });
+    expect(hoRes.status, JSON.stringify(hoRes.body)).toBe(201);
+    const hoBookingId = hoRes.body.data.id;
+    await rawExecute(
+      `UPDATE transport_bookings SET status='scheduled' WHERE id=$1 AND "companyId"=$2`,
+      [hoBookingId, a.companyId],
+    );
+    const [hoLine] = await rawQuery<{ id: number }>(
+      `SELECT id FROM transport_booking_lines
+        WHERE "bookingId"=$1 AND "companyId"=$2 ORDER BY id ASC LIMIT 1`,
+      [hoBookingId, a.companyId],
+    );
+    const [hoVeh] = await rawQuery<{ id: number }>(
+      `INSERT INTO fleet_vehicles ("companyId","branchId","plateNumber","requiredLicenseClass")
+       VALUES ($1,$2,$3,'heavy') RETURNING id`,
+      [a.companyId, a.branchId, `HO-${stamp}`.slice(0, 20)],
+    );
+    const [hoDisp] = await rawQuery<{ id: number }>(
+      `INSERT INTO transport_dispatch_orders
+         ("companyId","branchId","bookingId","bookingLineId","vehicleId","driverId",
+          "scheduledStartAt","scheduledEndAt",status)
+       VALUES ($1,$2,$3,$4,$5,$6, NOW(), NOW() + INTERVAL '2 hours', 'accepted') RETURNING id`,
+      [a.companyId, a.branchId, hoBookingId, hoLine.id, hoVeh.id, drv.id],
+    );
+    handoverDispatchId = hoDisp.id;
+    const [dh] = await rawQuery<{ id: number }>(
+      `INSERT INTO fleet_drivers ("companyId","branchId",name,"licenseClass")
+       VALUES ($1,$2,'Heavy Driver','heavy') RETURNING id`,
+      [a.companyId, a.branchId],
+    );
+    driverHeavyId = dh.id;
+    const [dp] = await rawQuery<{ id: number }>(
+      `INSERT INTO fleet_drivers ("companyId","branchId",name,"licenseClass")
+       VALUES ($1,$2,'Private Driver','private') RETURNING id`,
+      [a.companyId, a.branchId],
+    );
+    driverPrivateId = dp.id;
   }, 90_000);
 
   it("واقعة «تحميل» تُسجّل (مع وزن فارغ) وتنقل الحجز إلى in_progress", async () => {
@@ -287,6 +335,89 @@ d("شريحة 1 — دورة حياة وقائع الرحلة (قاعدة حيّ
     const res = await withAuth(
       request(app).post(`/api/transport/dispatch-orders/999999999/trip-event`), tokenA,
     ).send({ eventType: "arrive" });
+    expect(res.status).toBe(404);
+  });
+
+  // ── شريحة 3 — العهدة (الترتيب مهم: العهدة الناجحة تُعيد الإسناد فتُنهي الملكية) ──
+  it("شريحة 3 — مرشّحو العهدة يستبعدون السائق الحالي", async () => {
+    const res = await withAuth(
+      request(app).get(`/api/transport/dispatch-orders/${handoverDispatchId}/handover-candidates`), tokenA);
+    expect(res.status).toBe(200);
+    const ids = (res.body?.data ?? []).map((c: any) => c.id);
+    expect(ids).toContain(driverHeavyId);
+    expect(ids).not.toContain(ownerDriverId);
+  });
+
+  it("شريحة 3 — تسليم لنفس السائق → 400", async () => {
+    const res = await withAuth(
+      request(app).post(`/api/transport/dispatch-orders/${handoverDispatchId}/handover`), tokenA,
+    ).send({ incomingDriverId: ownerDriverId, proofObjectPaths: ["/objects/ho-proof"] });
+    expect(res.status).toBe(400);
+  });
+
+  it("شريحة 3 — عزل: شركة أخرى لا تسلّم عهدة ليست لها → 404", async () => {
+    const res = await withAuth(
+      request(app).post(`/api/transport/dispatch-orders/${handoverDispatchId}/handover`), tokenB,
+    ).send({ incomingDriverId: driverHeavyId, proofObjectPaths: ["/objects/ho-proof"] });
+    expect(res.status).toBe(404);
+  });
+
+  it("شريحة 3 — الأهلية إلزامية: مستلِم غير مؤهّل (private لمركبة heavy) → 400، بلا إعادة إسناد", async () => {
+    const res = await withAuth(
+      request(app).post(`/api/transport/dispatch-orders/${handoverDispatchId}/handover`), tokenA,
+    ).send({ incomingDriverId: driverPrivateId, proofObjectPaths: ["/objects/ho-proof"] });
+    expect(res.status).toBe(400);
+    const [d] = await rawQuery<{ driverId: number }>(
+      `SELECT "driverId" FROM transport_dispatch_orders WHERE id=$1`, [handoverDispatchId]);
+    expect(d.driverId).toBe(ownerDriverId); // لم يُعَد الإسناد
+  });
+
+  it("شريحة 3 — العهدة لمؤهّل: 201 + تُعيد الإسناد + تُسجّل واقعة handover", async () => {
+    const res = await withAuth(
+      request(app).post(`/api/transport/dispatch-orders/${handoverDispatchId}/handover`), tokenA,
+    ).send({ incomingDriverId: driverHeavyId, proofObjectPaths: ["/objects/ho-proof-1"], notes: "تسليم عهدة" });
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    expect(res.body?.data?.reassignedTo).toBe(driverHeavyId);
+    const [d] = await rawQuery<{ driverId: number }>(
+      `SELECT "driverId" FROM transport_dispatch_orders WHERE id=$1`, [handoverDispatchId]);
+    expect(d.driverId).toBe(driverHeavyId); // أُعيد الإسناد ذرّيًا
+    const [ev] = await rawQuery<{ eventType: string; handoverToDriverId: number | null }>(
+      `SELECT "eventType","handoverToDriverId" FROM fleet_trip_events
+        WHERE "dispatchOrderId"=$1 AND "eventType"='handover' ORDER BY id DESC LIMIT 1`,
+      [handoverDispatchId]);
+    expect(ev.eventType).toBe("handover");
+    expect(ev.handoverToDriverId).toBe(driverHeavyId);
+  });
+
+  // ── شريحة 4 — مرشّح خصم النقص/التأخير (تشغيلي؛ لا قيد من النقل) ──
+  it("شريحة 4 — تسجيل مرشّح خصم نقص وزن → 201 ويظهر في القائمة", async () => {
+    const res = await withAuth(
+      request(app).post(`/api/transport/bookings/${bookingId}/deductions`), tokenA,
+    ).send({ basis: "weight_shortage", shortageKg: 500, amount: 250, reason: "نقص 500 كغم" });
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    const [row] = await rawQuery<{ basis: string; amount: string; status: string }>(
+      `SELECT basis, amount, status FROM transport_deduction_candidates WHERE "bookingId"=$1 ORDER BY id DESC LIMIT 1`,
+      [bookingId]);
+    expect(row.basis).toBe("weight_shortage");
+    expect(Number(row.amount)).toBe(250);
+    expect(row.status).toBe("pending");
+    const list = await withAuth(
+      request(app).get(`/api/transport/bookings/${bookingId}/deductions`), tokenA);
+    expect(list.status).toBe(200);
+    expect((list.body?.data ?? []).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("شريحة 4 — أساس نقص الوزن بلا قياس → 400", async () => {
+    const res = await withAuth(
+      request(app).post(`/api/transport/bookings/${bookingId}/deductions`), tokenA,
+    ).send({ basis: "weight_shortage", amount: 100, reason: "بلا قياس" });
+    expect(res.status).toBe(400);
+  });
+
+  it("شريحة 4 — عزل: شركة أخرى لا تسجّل خصمًا على حجز ليس لها → 404", async () => {
+    const res = await withAuth(
+      request(app).post(`/api/transport/bookings/${bookingId}/deductions`), tokenB,
+    ).send({ basis: "delay", delayHours: 3, amount: 90, reason: "تأخّر" });
     expect(res.status).toBe(404);
   });
 });

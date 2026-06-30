@@ -19,6 +19,10 @@ const MIGRATION_429_PATH = join(apiSrc, "migrations/429_fleet_trip_events.sql");
 const MIGRATION_429 = read(MIGRATION_429_PATH);
 const MIGRATION_430_PATH = join(apiSrc, "migrations/430_fleet_trip_events_weight_kind.sql");
 const MIGRATION_430 = read(MIGRATION_430_PATH);
+const MIGRATION_433_PATH = join(apiSrc, "migrations/433_fleet_trip_events_handover_driver.sql");
+const MIGRATION_433 = read(MIGRATION_433_PATH);
+const MIGRATION_434_PATH = join(apiSrc, "migrations/434_transport_deduction_candidates.sql");
+const MIGRATION_434 = read(MIGRATION_434_PATH);
 const HELPER = read(join(apiSrc, "lib/transport/tripEvents.ts"));
 const BOOKINGS = read(join(apiSrc, "routes/transport-bookings.ts"));
 const PLANNING = read(join(apiSrc, "routes/transport-planning.ts"));
@@ -88,7 +92,7 @@ describe("سطح المشغّل — /transport/bookings/:id/events", () => {
   });
   it("تفاصيل الحجز تُدرج tripEvents (غير المُبطَلة) في الرد", () => {
     expect(BOOKINGS).toMatch(/FROM fleet_trip_events[\s\S]+?"voidedAt" IS NULL/);
-    expect(BOOKINGS).toContain("dispatchOrders, tripEvents, sourceContext");
+    expect(BOOKINGS).toContain("dispatchOrders, tripEvents, deductions, sourceContext");
   });
 });
 
@@ -140,5 +144,85 @@ describe("اشتقاق صافي الوزن — summarizeTripWeights", () => {
   it("يشتقّ الصافي ولا يُخزّنه (المصدر الواحد)", () => {
     expect(TRIP_WEIGHT).toContain("export function summarizeTripWeights");
     expect(TRIP_WEIGHT).toMatch(/grossKg\s*-\s*tareKg/);
+  });
+});
+
+describe("شريحة 3 — عهدة تبديل السائق", () => {
+  it("هجرة 433 تضيف handoverToDriverId توسّعيًا (ADD COLUMN IF NOT EXISTS)", () => {
+    expect(existsSync(MIGRATION_433_PATH)).toBe(true);
+    expect(MIGRATION_433).toContain("@rollback");
+    expect(MIGRATION_433).toMatch(/ADD COLUMN IF NOT EXISTS "handoverToDriverId"/);
+  });
+
+  it("المنطق المشترك يُدرج handoverToDriverId ويُعيد إسناد أمر التوزيع ذرّيًا", () => {
+    expect(HELPER).toContain('"handoverToDriverId"');
+    expect(HELPER).toContain("reassignDispatchDriverId");
+    expect(HELPER).toMatch(/UPDATE transport_dispatch_orders SET "driverId"/);
+  });
+
+  it("endpoint العهدة: fleet.dispatch + ملكية + منع التسليم للنفس + يستدعي المنطق المشترك", () => {
+    expect(PLANNING).toContain('"/transport/dispatch-orders/:id/handover"');
+    expect(PLANNING).toMatch(/handover"[\s\S]{0,120}fleet\.dispatch/);
+    expect(PLANNING).toContain("لا يمكن تسليم العهدة لنفس السائق");
+    expect(PLANNING).toMatch(/reassignDispatchDriverId: b\.incomingDriverId/);
+  });
+
+  it("فحص أهلية المستلِم إلزامي (رخصة + راحة) قبل العهدة", () => {
+    const body = PLANNING.slice(PLANNING.indexOf('"/transport/dispatch-orders/:id/handover"'));
+    expect(body).toContain("assertDriverEligibility(");
+    expect(body).toContain("assertDriverRest(");
+  });
+
+  it("endpoint مرشّحي العهدة موجود (يستبعد السائق الحالي)", () => {
+    expect(PLANNING).toContain('"/transport/dispatch-orders/:id/handover-candidates"');
+    expect(PLANNING).toMatch(/FROM fleet_drivers[\s\S]+?id <> \$2/);
+  });
+
+  it("تطبيق السائق يعرض «تسليم العهدة» ويستدعي endpoint العهدة + المرشّحين", () => {
+    expect(DRIVER).toContain("تسليم العهدة");
+    expect(DRIVER).toContain("submitHandover");
+    expect(DRIVER).toMatch(/handover-candidates/);
+    expect(DRIVER).toMatch(/dispatch-orders\/\$\{session\.dispatchOrderId\}\/handover`/);
+    expect(DRIVER).toContain("incomingDriverId");
+  });
+});
+
+describe("شريحة 4 — خصم النقص/التأخير (مرشّح → مالية)", () => {
+  it("هجرة 434 تنشئ transport_deduction_candidates معزولًا إيجاريًا بلا قيد", () => {
+    expect(existsSync(MIGRATION_434_PATH)).toBe(true);
+    expect(MIGRATION_434).toContain("@rollback");
+    expect(MIGRATION_434).toContain("CREATE TABLE IF NOT EXISTS transport_deduction_candidates");
+    expect(MIGRATION_434).toMatch(/"companyId"\s+INTEGER NOT NULL REFERENCES companies\(id\)/);
+    expect(MIGRATION_434).toMatch(/"bookingId"\s+INTEGER NOT NULL REFERENCES transport_bookings\(id\)/);
+    for (const v of ["weight_shortage", "delay"]) expect(MIGRATION_434).toContain(`'${v}'`);
+    expect(MIGRATION_434).toContain('"recordedByAssignmentId"'); // القاعدة الذهبية
+  });
+
+  it("النقل يُنشئ المرشّح فقط (تشغيلي) — لا ترحيل دفتر من النقل", () => {
+    expect(BOOKINGS).toContain('"/transport/bookings/:id/deductions"');
+    expect(BOOKINGS).toContain("INSERT INTO transport_deduction_candidates");
+    // قفل الحدود: النقل لا يكتب الدفتر ولا جداول المالية.
+    expect(BOOKINGS).not.toContain("INSERT INTO credit_memos");
+    expect(BOOKINGS).not.toContain("postJournalEntry");
+  });
+
+  it("يتحقّق من القياس حسب الأساس + يُسجّل Audit + يُدرج الخصومات في التفاصيل", () => {
+    expect(BOOKINGS).toContain("نقص الوزن (كغم) مطلوب");
+    expect(BOOKINGS).toContain("ساعات التأخّر مطلوبة");
+    expect(BOOKINGS).toContain('action: "deduction_candidate_created"');
+    expect(BOOKINGS).toContain("tripEvents, deductions, sourceContext");
+  });
+
+  it("صفحة الحجز تعرض نموذج الخصم وتستدعي endpoint الخصومات", () => {
+    expect(DETAIL).toContain("خصومات النقص/التأخير");
+    expect(DETAIL).toMatch(/\/transport\/bookings\/\$\{id\}\/deductions/);
+    expect(DETAIL).toContain("submitDeduction");
+    expect(DETAIL).toContain("إشعارًا دائنًا"); // يوضّح أنّ المالية تُصدر الإشعار
+  });
+
+  it("نقص الوزن يُشتقّ من الأوزان المسجّلة (computeWeightShortage) ويُقترح في النموذج", () => {
+    expect(TRIP_WEIGHT).toContain("export function computeWeightShortage");
+    expect(DETAIL).toContain("computeWeightShortage(b.tripEvents)");
+    expect(DETAIL).toContain("اقتراح من الأوزان");
   });
 });
