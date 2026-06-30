@@ -617,6 +617,20 @@ function AuthGate() {
       <Stack.Screen name="finance/dunning-history" options={{ title: 'سجل التحصيل' }} />
       <Stack.Screen name="finance/bank-guarantees" options={{ title: 'خطابات الضمان' }} />
       <Stack.Screen name="finance/intercompany" options={{ title: 'معاملات بين الشركات' }} />
+      <Stack.Screen name="finance/ar-aging" options={{ title: 'تقادم الذمم المدينة' }} />
+      <Stack.Screen name="finance/ap-aging" options={{ title: 'تقادم الذمم الدائنة' }} />
+      <Stack.Screen name="finance/cip" options={{ title: 'أصول قيد الإنشاء' }} />
+      <Stack.Screen name="finance/treasury" options={{ title: 'الخزينة' }} />
+      <Stack.Screen name="finance/fiscal-periods" options={{ title: 'الفترات المحاسبية' }} />
+      <Stack.Screen name="finance/posting-failures" options={{ title: 'أخطاء الترحيل' }} />
+      <Stack.Screen name="finance/cash-flow-forecast" options={{ title: 'توقعات التدفق النقدي' }} />
+      <Stack.Screen name="finance/revenue-analysis" options={{ title: 'تحليل الإيرادات' }} />
+      <Stack.Screen name="finance/inventory-valuation" options={{ title: 'تقييم المخزون' }} />
+      <Stack.Screen name="finance/vat-reconciliation" options={{ title: 'تسوية الضريبة' }} />
+      <Stack.Screen name="finance/ledger-truth" options={{ title: 'صدق الدفتر' }} />
+      <Stack.Screen name="bi/ops-analytics" options={{ title: 'تحليلات العمليات' }} />
+      <Stack.Screen name="admin/daily-schedule" options={{ title: 'الجدول اليومي' }} />
+      <Stack.Screen name="admin/company-kpis" options={{ title: 'مؤشرات أداء الشركة' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
