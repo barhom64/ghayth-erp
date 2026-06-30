@@ -348,6 +348,11 @@ function AuthGate() {
       <Stack.Screen name="hr/org-chart" options={{ title: 'الهيكل التنظيمي' }} />
       <Stack.Screen name="careers/portal" options={{ title: 'بوابة التوظيف' }} />
       <Stack.Screen name="umrah/commission-detail" options={{ title: 'العمولة' }} />
+      <Stack.Screen name="finance/operations-center" options={{ title: 'مركز العمليات' }} />
+      <Stack.Screen name="umrah/reports" options={{ title: 'تقارير العمرة' }} />
+      <Stack.Screen name="governance/pdpl" options={{ title: 'حماية البيانات' }} />
+      <Stack.Screen name="comms/correspondence" options={{ title: 'المراسلات الرسمية' }} />
+      <Stack.Screen name="governance/digital-signatures" options={{ title: 'التوقيعات الرقمية' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>

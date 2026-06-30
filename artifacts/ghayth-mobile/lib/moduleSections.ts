@@ -1892,6 +1892,12 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
+      {
+        key: "reports", label: "تقارير العمرة", icon: "document-text-outline", endpoint: "/api/umrah/reports/recovery-hub",
+        titleFields: ["label", "type"], subtitleFields: ["groupName"], amountFields: ["amount"],
+        write: { moduleKey: "umrah", noDetail: true, createFields: [] },
+        detailRoute: "/umrah/reports" as never,
+      },
     ],
   },
   crm: {
@@ -2715,6 +2721,18 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
+      {
+        key: "pdpl", label: "حماية البيانات (PDPL)", icon: "shield-outline", endpoint: "/api/pdpl/requests",
+        titleFields: ["requestType"], subtitleFields: ["subjectName", "subjectEmail"], statusField: "status", dateFields: ["createdAt"],
+        write: { moduleKey: "governance", noDetail: true, createFields: [] },
+        detailRoute: "/governance/pdpl" as never,
+      },
+      {
+        key: "digital-signatures", label: "التوقيعات الرقمية", icon: "create-outline", endpoint: "/api/digital-signatures",
+        titleFields: ["documentRef"], subtitleFields: ["signerName", "documentType"], statusField: "status", dateFields: ["signedAt"],
+        write: { moduleKey: "governance", noDetail: true, createFields: [] },
+        detailRoute: "/governance/digital-signatures" as never,
+      },
     ],
   },
   bi: {
@@ -2875,6 +2893,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "correspondence", label: "المراسلات الرسمية", icon: "mail-outline", endpoint: "/api/correspondence",
         titleFields: ["subject", "ref"], subtitleFields: ["direction", "recipientName"], statusField: "status", dateFields: ["createdAt"],
+        detailRoute: "/comms/correspondence" as never,
         write: {
           moduleKey: "comms",
           createFields: [
