@@ -526,6 +526,12 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
         titleFields: ["period", "month"], subtitleFields: ["employeeCount", "status"], statusField: "status", amountFields: ["totalAmount"], dateFields: ["submittedAt"],
         write: { moduleKey: "hr", noDetail: true },
       },
+      {
+        key: "proactive-insights", label: "التنبيهات الاستباقية", icon: "notifications-outline", endpoint: "/api/me/proactive-insights",
+        titleFields: ["title"], subtitleFields: ["category", "description"], dateFields: ["dueDate"],
+        write: { moduleKey: "hr", noDetail: true, createFields: [] },
+        detailRoute: "/hr/proactive-insights" as never,
+      },
     ],
   },
   finance: {
@@ -1336,6 +1342,12 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
             { name: "estimatedDurationMin", label: "المدة التقديرية (دقيقة)", type: "number" },
           ],
         },
+      },
+      {
+        key: "cargo", label: "الشحن والبضائع", icon: "cube-outline", endpoint: "/api/cargo/manifests",
+        titleFields: ["manifestNumber"], subtitleFields: ["origin", "destination"], statusField: "status", dateFields: ["scheduledDate"],
+        detailRoute: "/fleet/cargo-detail", createRoute: "/fleet/cargo" as never,
+        write: { moduleKey: "fleet", noDetail: true, createFields: [] },
       },
     ],
   },
@@ -2757,6 +2769,12 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
         write: { moduleKey: "governance", noDetail: true, createFields: [] },
         detailRoute: "/governance/digital-signatures" as never,
       },
+      {
+        key: "gov-integrations", label: "تكاملات الحوكمة", icon: "globe-outline", endpoint: "/api/gov-integrations/expiring/iqama",
+        titleFields: ["name"], subtitleFields: ["iqamaNumber"], dateFields: ["expiryDate"],
+        write: { moduleKey: "governance", noDetail: true, createFields: [] },
+        detailRoute: "/governance/integrations" as never,
+      },
     ],
   },
   bi: {
@@ -2804,6 +2822,12 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
             { name: "description", label: "الوصف", type: "textarea" },
           ],
         },
+      },
+      {
+        key: "scheduled-reports", label: "التقارير المجدولة", icon: "time-outline", endpoint: "/api/scheduled-reports",
+        titleFields: ["name"], subtitleFields: ["frequency", "reportType"], statusField: "status", dateFields: ["nextRunAt"],
+        write: { moduleKey: "bi", noDetail: true, createFields: [] },
+        detailRoute: "/bi/scheduled-reports" as never,
       },
     ],
   },

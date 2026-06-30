@@ -362,6 +362,11 @@ function AuthGate() {
       <Stack.Screen name="umrah/import-batch" options={{ title: 'دُفعات استيراد المعتمرين' }} />
       <Stack.Screen name="umrah/import-batch-detail" options={{ title: 'تفاصيل الدُّفعة' }} />
       <Stack.Screen name="umrah/sub-agent-statement" options={{ title: 'كشف حساب الوكيل' }} />
+      <Stack.Screen name="fleet/cargo" options={{ title: 'الشحن والبضائع' }} />
+      <Stack.Screen name="fleet/cargo-detail" options={{ title: 'بيان الشحن' }} />
+      <Stack.Screen name="bi/scheduled-reports" options={{ title: 'التقارير المجدولة' }} />
+      <Stack.Screen name="hr/proactive-insights" options={{ title: 'التنبيهات الاستباقية' }} />
+      <Stack.Screen name="governance/integrations" options={{ title: 'تكاملات الحوكمة' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
