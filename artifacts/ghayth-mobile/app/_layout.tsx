@@ -323,6 +323,13 @@ function AuthGate() {
       <Stack.Screen name="umrah/transport-new" options={{ title: 'نقل عمرة جديد' }} />
       <Stack.Screen name="umrah/violation-new" options={{ title: 'مخالفة عمرة جديدة' }} />
       <Stack.Screen name="finance/purchase-order-new" options={{ title: 'أمر شراء جديد' }} />
+            <Stack.Screen name="fleet/vehicle-new" options={{ title: 'مركبة جديدة' }} />
+      <Stack.Screen name="fleet/driver-new" options={{ title: 'سائق جديد' }} />
+      <Stack.Screen name="projects/project-new" options={{ title: 'مشروع جديد' }} />
+      <Stack.Screen name="umrah/agent-new" options={{ title: 'وكيل عمرة جديد' }} />
+      <Stack.Screen name="umrah/sub-agent-new" options={{ title: 'وكيل فرعي جديد' }} />
+      <Stack.Screen name="umrah/group-new" options={{ title: 'مجموعة عمرة جديدة' }} />
+      <Stack.Screen name="finance/vendor-new" options={{ title: 'مورد جديد' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>

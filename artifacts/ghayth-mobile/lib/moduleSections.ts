@@ -645,7 +645,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "purchase-orders", label: "أوامر الشراء", icon: "cart-outline", endpoint: "/api/finance/purchase-orders",
         titleFields: ["ref", "orderNumber", "poNumber"], subtitleFields: ["supplierName", "vendorName"], statusField: "status", amountFields: ["totalAmount", "total", "amount"], dateFields: ["createdAt", "date"],
-        detailRoute: "/finance/purchase-order-detail",
+        detailRoute: "/finance/purchase-order-detail", createRoute: "/finance/purchase-order-new",
         write: {
           moduleKey: "finance",
           detailPath: (id) => `/api/finance/purchase-orders/${id}`,
@@ -695,7 +695,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "vendors", label: "الموردون", icon: "business-outline", endpoint: "/api/finance/vendors",
         titleFields: ["name", "vendorName"], subtitleFields: ["taxNumber", "phone"], statusField: "status", amountFields: ["balance"],
-        detailRoute: "/finance/vendor-detail",
+        detailRoute: "/finance/vendor-detail", createRoute: "/finance/vendor-new",
         write: {
           moduleKey: "finance",
           detailPath: (id) => `/api/finance/vendors/${id}`,
@@ -846,7 +846,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
     label: "الأسطول",
     sections: [
       {
-        key: "vehicles", label: "المركبات", icon: "car-outline", endpoint: "/api/fleet/vehicles", detailRoute: "/fleet/vehicle-detail",
+        key: "vehicles", label: "المركبات", icon: "car-outline", endpoint: "/api/fleet/vehicles", detailRoute: "/fleet/vehicle-detail", createRoute: "/fleet/vehicle-new",
         titleFields: ["plateNumber", "plate"], subtitleFields: ["make", "model"], statusField: "status", dateFields: ["expiryDate"],
         write: {
           moduleKey: "fleet",
@@ -989,7 +989,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "drivers", label: "السائقون", icon: "person-outline", endpoint: "/api/fleet/drivers",
         titleFields: ["name", "fullName"], subtitleFields: ["phone", "licenseNumber"], statusField: "status",
-        detailRoute: "/fleet/driver-detail",
+        detailRoute: "/fleet/driver-detail", createRoute: "/fleet/driver-new",
         write: {
           moduleKey: "fleet",
           canDelete: true,
@@ -1331,7 +1331,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
     key: "operations",
     label: "العمليات والمشاريع",
     sections: [
-      { key: "projects", label: "المشاريع", icon: "briefcase-outline", endpoint: "/api/projects", titleFields: ["name", "projectName"], subtitleFields: ["code"], statusField: "status", amountFields: ["budget"], dateFields: ["startDate"], detailRoute: "/projects/project-detail",
+      { key: "projects", label: "المشاريع", icon: "briefcase-outline", endpoint: "/api/projects", titleFields: ["name", "projectName"], subtitleFields: ["code"], statusField: "status", amountFields: ["budget"], dateFields: ["startDate"], detailRoute: "/projects/project-detail", createRoute: "/projects/project-new",
         write: { moduleKey: "operations", createFields: [
           { name: "name", label: "اسم المشروع", type: "text", required: true },
           { name: "clientId", label: "العميل", type: "reference", refEndpoint: "/api/clients", refLabelFields: ["name"], refValueField: "id" },
@@ -1436,7 +1436,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "groups", label: "المجموعات", icon: "albums-outline", endpoint: "/api/umrah/groups",
         titleFields: ["name", "groupNumber"], subtitleFields: ["pilgrimCount"], statusField: "status", dateFields: ["arrivalDate"],
-        detailRoute: "/umrah/group-detail",
+        detailRoute: "/umrah/group-detail", createRoute: "/umrah/group-new",
         write: {
           moduleKey: "umrah",
           createFields: [
@@ -1504,7 +1504,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       },
       {
         key: "agents", label: "الوكلاء", icon: "person-outline", endpoint: "/api/umrah/agents",
-        detailRoute: "/umrah/agent-detail",
+        detailRoute: "/umrah/agent-detail", createRoute: "/umrah/agent-new",
         titleFields: ["name"], subtitleFields: ["country", "phone"], statusField: "status",
         write: {
           moduleKey: "umrah",
@@ -1529,7 +1529,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       },
       {
         key: "sub-agents", label: "الوكلاء الفرعيون", icon: "people-circle-outline", endpoint: "/api/umrah/sub-agents",
-        detailRoute: "/umrah/sub-agent-detail",
+        detailRoute: "/umrah/sub-agent-detail", createRoute: "/umrah/sub-agent-new",
         titleFields: ["name"], subtitleFields: ["country", "agentName"],
         write: {
           moduleKey: "umrah",
