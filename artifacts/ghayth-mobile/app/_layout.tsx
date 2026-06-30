@@ -441,6 +441,48 @@ function AuthGate() {
       <Stack.Screen name="fleet/schedule" options={{ title: 'جدول الأسطول' }} />
       <Stack.Screen name="hr/overtime" options={{ title: 'العمل الإضافي' }} />
       <Stack.Screen name="projects/issues" options={{ title: 'مشاكل المشاريع' }} />
+      <Stack.Screen name="finance/invoices" options={{ title: 'الفواتير' }} />
+      <Stack.Screen name="finance/journals" options={{ title: 'القيود المحاسبية' }} />
+      <Stack.Screen name="finance/expenses" options={{ title: 'المصروفات' }} />
+      <Stack.Screen name="finance/fixed-assets" options={{ title: 'الأصول الثابتة' }} />
+      <Stack.Screen name="finance/collections" options={{ title: 'التحصيلات' }} />
+      <Stack.Screen name="finance/vendor-invoices" options={{ title: 'فواتير الموردين' }} />
+      <Stack.Screen name="finance/vouchers" options={{ title: 'السندات' }} />
+      <Stack.Screen name="finance/payments" options={{ title: 'المدفوعات' }} />
+      <Stack.Screen name="hr/employees" options={{ title: 'الموظفون' }} />
+      <Stack.Screen name="hr/leave-requests" options={{ title: 'طلبات الإجازات' }} />
+      <Stack.Screen name="hr/contracts" options={{ title: 'عقود الموظفين' }} />
+      <Stack.Screen name="hr/delegations" options={{ title: 'التفويضات' }} />
+      <Stack.Screen name="hr/gratuity" options={{ title: 'مكافأة نهاية الخدمة' }} />
+      <Stack.Screen name="hr/exit-requests" options={{ title: 'طلبات إنهاء الخدمة' }} />
+      <Stack.Screen name="hr/official-letters" options={{ title: 'الخطابات الرسمية' }} />
+      <Stack.Screen name="fleet/vehicles" options={{ title: 'المركبات' }} />
+      <Stack.Screen name="fleet/drivers" options={{ title: 'السائقون' }} />
+      <Stack.Screen name="fleet/trips" options={{ title: 'الرحلات' }} />
+      <Stack.Screen name="fleet/fuel-logs" options={{ title: 'سجلات الوقود' }} />
+      <Stack.Screen name="fleet/maintenances" options={{ title: 'صيانة المركبات' }} />
+      <Stack.Screen name="umrah/groups" options={{ title: 'مجموعات العمرة' }} />
+      <Stack.Screen name="umrah/pilgrims" options={{ title: 'الحجاج' }} />
+      <Stack.Screen name="umrah/packages" options={{ title: 'باقات العمرة' }} />
+      <Stack.Screen name="umrah/agents" options={{ title: 'وكلاء العمرة' }} />
+      <Stack.Screen name="umrah/accommodations" options={{ title: 'الإقامات' }} />
+      <Stack.Screen name="umrah/penalties" options={{ title: 'غرامات العمرة' }} />
+      <Stack.Screen name="properties/properties" options={{ title: 'العقارات' }} />
+      <Stack.Screen name="properties/units" options={{ title: 'الوحدات العقارية' }} />
+      <Stack.Screen name="properties/owners" options={{ title: 'الملاك' }} />
+      <Stack.Screen name="properties/tenants" options={{ title: 'المستأجرون' }} />
+      <Stack.Screen name="projects/projects" options={{ title: 'المشاريع' }} />
+      <Stack.Screen name="projects/tasks" options={{ title: 'مهام المشاريع' }} />
+      <Stack.Screen name="admin/users" options={{ title: 'المستخدمون' }} />
+      <Stack.Screen name="crm/contracts" options={{ title: 'عقود العملاء' }} />
+      <Stack.Screen name="crm/email-campaigns" options={{ title: 'حملات البريد الإلكتروني' }} />
+      <Stack.Screen name="warehouse/products" options={{ title: 'المنتجات' }} />
+      <Stack.Screen name="warehouse/movements" options={{ title: 'حركات المخزون' }} />
+      <Stack.Screen name="warehouse/suppliers" options={{ title: 'الموردون' }} />
+      <Stack.Screen name="warehouse/cycle-counts" options={{ title: 'الجرد الدوري' }} />
+      <Stack.Screen name="legal/sessions" options={{ title: 'جلسات القضايا' }} />
+      <Stack.Screen name="legal/judgments" options={{ title: 'الأحكام القضائية' }} />
+      <Stack.Screen name="legal/contracts" options={{ title: 'العقود القانونية' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
