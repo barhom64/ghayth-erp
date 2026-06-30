@@ -139,6 +139,12 @@ function AuthGate() {
       <Stack.Screen name="legal/case-new" options={{ title: 'قضية جديدة' }} />
       <Stack.Screen name="finance/purchase-request-new" options={{ title: 'طلب شراء جديد' }} />
       <Stack.Screen name="hr/training-enroll" options={{ title: 'التسجيل في برنامج تدريبي' }} />
+      <Stack.Screen name="finance/invoice-new" options={{ title: 'فاتورة عميل جديدة' }} />
+      <Stack.Screen name="finance/vendor-invoice-new" options={{ title: 'فاتورة مورد جديدة' }} />
+      <Stack.Screen name="finance/journal-new" options={{ title: 'قيد محاسبي جديد' }} />
+      <Stack.Screen name="hr/exit-request-new" options={{ title: 'طلب إنهاء الخدمة' }} />
+      <Stack.Screen name="crm/client-new" options={{ title: 'عميل جديد' }} />
+      <Stack.Screen name="properties/contract-new" options={{ title: 'عقد إيجار جديد' }} />
       <Stack.Screen name="fleet/maintenance-new" options={{ title: 'أمر صيانة جديد' }} />
       <Stack.Screen name="umrah/pilgrim-new" options={{ title: 'تسجيل معتمر جديد' }} />
       <Stack.Screen name="hr/leave-balances" options={{ title: 'أرصدة الإجازات' }} />
