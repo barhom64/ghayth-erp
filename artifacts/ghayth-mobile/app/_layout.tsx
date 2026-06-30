@@ -158,6 +158,9 @@ function AuthGate() {
       <Stack.Screen name="hr/delegation-detail" options={{ title: 'التفويض' }} />
       <Stack.Screen name="finance/vendor-contract-detail" options={{ title: 'عقد المورد' }} />
       <Stack.Screen name="finance/bank-account-detail" options={{ title: 'الحساب البنكي' }} />
+      <Stack.Screen name="finance/custody-detail" options={{ title: 'العهدة' }} />
+      <Stack.Screen name="finance/salary-advance-detail" options={{ title: 'سلفة الراتب' }} />
+      <Stack.Screen name="finance/obligation-detail" options={{ title: 'الالتزام' }} />
       <Stack.Screen name="admin/user-detail" options={{ title: 'المستخدم' }} />
       <Stack.Screen name="crm/campaign-detail" options={{ title: 'الحملة التسويقية' }} />
       <Stack.Screen name="governance/compliance-detail" options={{ title: 'بند الامتثال' }} />
