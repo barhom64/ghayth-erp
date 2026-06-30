@@ -1177,6 +1177,12 @@ function AuthGate() {
       <Stack.Screen name="finance/financial-request-detail" options={{ title: 'تفاصيل الطلب المالي' }} />
       <Stack.Screen name="finance/recurring-journal-detail" options={{ title: 'قيد دوري' }} />
       <Stack.Screen name="finance/pricing-rule-detail" options={{ title: 'تفاصيل قاعدة التسعير' }} />
+      <Stack.Screen name="finance/customer-360" options={{ title: 'ملف العميل 360' }} />
+      <Stack.Screen name="finance/entity-financial-profile" options={{ title: 'الملف المالي للكيانات' }} />
+      <Stack.Screen name="finance/amortization-schedules" options={{ title: 'جداول الإطفاء' }} />
+      <Stack.Screen name="finance/deferred-revenue-schedules" options={{ title: 'جداول الإيراد المؤجل' }} />
+      <Stack.Screen name="finance/journal-template-detail" options={{ title: 'قالب القيد' }} />
+      <Stack.Screen name="finance/supplier-finance-defaults" options={{ title: 'الإعدادات المالية للمورد' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
