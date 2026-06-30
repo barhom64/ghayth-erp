@@ -807,6 +807,26 @@ function AuthGate() {
       <Stack.Screen name="admin/notification-stats" options={{ title: 'إحصاءات الإشعارات' }} />
       <Stack.Screen name="finance/gl-mudad-salary" options={{ title: 'رواتب مدد — معلقة' }} />
       <Stack.Screen name="finance/gl-fx-revaluation" options={{ title: 'إعادة تقييم العملات — معلقة' }} />
+      <Stack.Screen name="org/legal-entities" options={{ title: 'الكيانات القانونية' }} />
+      <Stack.Screen name="org/positions" options={{ title: 'الوظائف' }} />
+      <Stack.Screen name="org/teams" options={{ title: 'الفرق' }} />
+      <Stack.Screen name="org/committees" options={{ title: 'اللجان' }} />
+      <Stack.Screen name="org/employee-categories" options={{ title: 'فئات الموظفين' }} />
+      <Stack.Screen name="org/attendance-policies" options={{ title: 'سياسات الحضور بالفئة' }} />
+      <Stack.Screen name="org/scoring-weights" options={{ title: 'أوزان التقييم' }} />
+      <Stack.Screen name="pdpl/retention-policies" options={{ title: 'سياسات الاحتفاظ بالبيانات' }} />
+      <Stack.Screen name="pdpl/processing-log" options={{ title: 'سجل معالجة البيانات' }} />
+      <Stack.Screen name="workspace/feed" options={{ title: 'تغذية مساحة العمل' }} />
+      <Stack.Screen name="workspace/team" options={{ title: 'فريقي' }} />
+      <Stack.Screen name="admin/system-health-checks" options={{ title: 'فحوصات صحة النظام' }} />
+      <Stack.Screen name="admin/system-registry/entities" options={{ title: 'كيانات سجل النظام' }} />
+      <Stack.Screen name="admin/system-registry/coverage" options={{ title: 'تغطية سجل النظام' }} />
+      <Stack.Screen name="admin/system-registry/actions" options={{ title: 'إجراءات سجل النظام' }} />
+      <Stack.Screen name="admin/system-registry/missing" options={{ title: 'عناصر سجل النظام الناقصة' }} />
+      <Stack.Screen name="admin/system-registry/notifications" options={{ title: 'إشعارات سجل النظام' }} />
+      <Stack.Screen name="admin/system-registry/pages" options={{ title: 'صفحات سجل النظام' }} />
+      <Stack.Screen name="admin/system-registry/reports" options={{ title: 'تقارير سجل النظام' }} />
+      <Stack.Screen name="admin/system-registry/print-templates" options={{ title: 'قوالب طباعة سجل النظام' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
