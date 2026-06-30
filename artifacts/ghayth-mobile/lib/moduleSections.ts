@@ -386,8 +386,8 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
         write: { moduleKey: "hr", actions: [
           { key: "approve", label: "اعتماد الطلب", icon: "checkmark-circle-outline", method: "PATCH", path: (id) => `/api/hr/transfers/${id}/approve`, body: { approved: true }, confirm: "هل تريد اعتماد طلب إنهاء الخدمة؟", successText: "تم اعتماد الطلب", showWhenStatus: ["pending"] },
         ] } },
-      { key: "gratuity", label: "مكافأة نهاية الخدمة", icon: "ribbon-outline", endpoint: "/api/hr/gratuity", titleFields: ["employeeName"], subtitleFields: ["yearsOfService"], statusField: "status", amountFields: ["gratuityAmount", "totalAmount"], dateFields: ["lastWorkingDay"] },
-      { key: "delegations", label: "التفويضات", icon: "swap-horizontal-outline", endpoint: "/api/hr/delegations", titleFields: ["delegatorName"], subtitleFields: ["delegateeName", "scope"], statusField: "status", dateFields: ["fromDate", "toDate"] },
+      { key: "gratuity", label: "مكافأة نهاية الخدمة", icon: "ribbon-outline", endpoint: "/api/hr/gratuity", detailRoute: "/hr/gratuity-detail", titleFields: ["employeeName"], subtitleFields: ["yearsOfService"], statusField: "status", amountFields: ["gratuityAmount", "totalAmount"], dateFields: ["lastWorkingDay"] },
+      { key: "delegations", label: "التفويضات", icon: "swap-horizontal-outline", endpoint: "/api/hr/delegations", detailRoute: "/hr/delegation-detail", titleFields: ["delegatorName"], subtitleFields: ["delegateeName", "scope"], statusField: "status", dateFields: ["fromDate", "toDate"] },
       { key: "evaluations", label: "تقييمات الأداء", icon: "star-outline", endpoint: "/api/hr/evaluations", titleFields: ["employeeName"], subtitleFields: ["period", "evaluatorName"], statusField: "status", amountFields: ["score"], dateFields: ["evaluationDate"], detailRoute: "/hr/evaluation-detail" },
       { key: "official-letters", label: "الخطابات الرسمية", icon: "mail-outline", endpoint: "/api/hr/official-letters", titleFields: ["subject", "letterNumber"], subtitleFields: ["employeeName", "type"], statusField: "status", dateFields: ["createdAt"] },
       { key: "excuse-requests", label: "طلبات الاستئذان", icon: "hand-left-outline", endpoint: "/api/hr/excuse-requests", titleFields: ["employeeName"], subtitleFields: ["excuseType"], statusField: "status", dateFields: ["excuseDate"],
@@ -517,7 +517,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
-      { key: "vendor-contracts", label: "عقود الموردين", icon: "document-attach-outline", endpoint: "/api/finance/vendor-contracts", titleFields: ["title", "ref"], subtitleFields: ["vendorName"], statusField: "status", amountFields: ["contractValue"], dateFields: ["startDate"] },
+      { key: "vendor-contracts", label: "عقود الموردين", icon: "document-attach-outline", endpoint: "/api/finance/vendor-contracts", detailRoute: "/finance/vendor-contract-detail", titleFields: ["title", "ref"], subtitleFields: ["vendorName"], statusField: "status", amountFields: ["contractValue"], dateFields: ["startDate"] },
       { key: "accounts", label: "شجرة الحسابات", icon: "git-branch-outline", endpoint: "/api/finance/accounts", titleFields: ["name", "accountName"], subtitleFields: ["code", "type"], statusField: "status", amountFields: ["balance"] },
       { key: "budget", label: "الموازنات", icon: "pie-chart-outline", endpoint: "/api/finance/budget", titleFields: ["accountName"], subtitleFields: ["accountCode", "period"], statusField: "status", amountFields: ["amount"] },
       { key: "cost-centers", label: "مراكز التكلفة", icon: "layers-outline", endpoint: "/api/finance/cost-centers", titleFields: ["name"], subtitleFields: ["code"], statusField: "status" },
@@ -531,7 +531,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       { key: "ap-aging", label: "تقادم الذمم الدائنة", icon: "trending-down-outline", endpoint: "/api/finance/ap-aging", titleFields: ["supplierName", "vendorName"], subtitleFields: ["bucket"], amountFields: ["balance", "overdue"] },
       { key: "bad-debt", label: "مخصص الديون المشكوك فيها", icon: "alert-circle-outline", endpoint: "/api/finance/bad-debt", titleFields: ["clientName"], subtitleFields: ["agingBucket"], amountFields: ["amount", "provision"], dateFields: ["dueDate"] },
       { key: "cash-flow", label: "بيان التدفقات النقدية", icon: "cash-outline", endpoint: "/api/finance/cash-flow-statement", titleFields: ["period", "label"], subtitleFields: ["category"], amountFields: ["amount"] },
-      { key: "bank-accounts", label: "الحسابات البنكية", icon: "card-outline", endpoint: "/api/finance/bank-accounts", titleFields: ["bankName", "accountName"], subtitleFields: ["iban", "currency"], statusField: "status", amountFields: ["balance"] },
+      { key: "bank-accounts", label: "الحسابات البنكية", icon: "card-outline", endpoint: "/api/finance/bank-accounts", detailRoute: "/finance/bank-account-detail", titleFields: ["bankName", "accountName"], subtitleFields: ["iban", "currency"], statusField: "status", amountFields: ["balance"] },
       { key: "tax-returns", label: "الإقرارات الضريبية", icon: "document-text-outline", endpoint: "/api/finance/tax-returns", titleFields: ["period", "ref"], subtitleFields: ["type"], statusField: "status", amountFields: ["vatAmount", "totalAmount"], dateFields: ["dueDate"] },
       { key: "fiscal-periods", label: "الفترات المالية", icon: "calendar-outline", endpoint: "/api/finance/fiscal-periods-v2", titleFields: ["name", "period"], subtitleFields: ["year"], statusField: "status", dateFields: ["startDate", "endDate"] },
       { key: "commitments", label: "الالتزامات التعاقدية", icon: "link-outline", endpoint: "/api/finance/commitments", titleFields: ["ref", "description"], subtitleFields: ["counterparty", "type"], statusField: "status", amountFields: ["amount"], dateFields: ["startDate"] },
@@ -1835,6 +1835,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
     sections: [
       {
         key: "users", label: "المستخدمون", icon: "person-circle-outline", endpoint: "/api/admin/users",
+        detailRoute: "/admin/user-detail",
         titleFields: ["name", "fullName", "email"], subtitleFields: ["email", "role"], statusField: "status",
         write: {
           moduleKey: "admin",

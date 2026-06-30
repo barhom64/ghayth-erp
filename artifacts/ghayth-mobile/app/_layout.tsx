@@ -154,6 +154,11 @@ function AuthGate() {
       <Stack.Screen name="warehouse/supplier-detail" options={{ title: 'ملف المورد' }} />
       <Stack.Screen name="umrah/sub-agent-detail" options={{ title: 'الوكيل الفرعي' }} />
       <Stack.Screen name="umrah/transport-detail" options={{ title: 'رحلة النقل' }} />
+      <Stack.Screen name="hr/gratuity-detail" options={{ title: 'مكافأة نهاية الخدمة' }} />
+      <Stack.Screen name="hr/delegation-detail" options={{ title: 'التفويض' }} />
+      <Stack.Screen name="finance/vendor-contract-detail" options={{ title: 'عقد المورد' }} />
+      <Stack.Screen name="finance/bank-account-detail" options={{ title: 'الحساب البنكي' }} />
+      <Stack.Screen name="admin/user-detail" options={{ title: 'المستخدم' }} />
       <Stack.Screen name="umrah/package-detail" options={{ title: 'الباقة' }} />
       <Stack.Screen name="umrah/agent-detail" options={{ title: 'الوكيل' }} />
       <Stack.Screen name="fleet/maintenance-detail" options={{ title: 'أمر الصيانة' }} />
