@@ -705,6 +705,12 @@ function AuthGate() {
       <Stack.Screen name="admin/automation-stats" options={{ title: 'إحصاءات الأتمتة' }} />
       <Stack.Screen name="comms/email-domains" options={{ title: 'نطاقات البريد الإلكتروني' }} />
       <Stack.Screen name="comms/pbx-available-extensions" options={{ title: 'تحويلات PBX المتاحة' }} />
+      <Stack.Screen name="admin/activity-summary" options={{ title: 'ملخص النشاط' }} />
+      <Stack.Screen name="dashboards/hr-module" options={{ title: 'لوحة الموارد البشرية' }} />
+      <Stack.Screen name="dashboards/fleet-module" options={{ title: 'لوحة الأسطول' }} />
+      <Stack.Screen name="dashboards/legal-module" options={{ title: 'لوحة القانونية' }} />
+      <Stack.Screen name="dashboards/crm-module" options={{ title: 'لوحة CRM' }} />
+      <Stack.Screen name="dashboards/projects-module" options={{ title: 'لوحة المشاريع' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
