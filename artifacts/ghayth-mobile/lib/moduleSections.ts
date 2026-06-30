@@ -286,7 +286,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
-      { key: "payroll", label: "مسيّرات الرواتب", icon: "wallet-outline", endpoint: "/api/hr/payroll", titleFields: ["period", "reference"], subtitleFields: ["employeeCount"], statusField: "status", amountFields: ["totalNet"], dateFields: ["createdAt"] },
+      { key: "payroll", label: "مسيّرات الرواتب", icon: "wallet-outline", endpoint: "/api/hr/payroll", titleFields: ["period", "reference"], subtitleFields: ["employeeCount"], statusField: "status", amountFields: ["totalNet"], dateFields: ["createdAt"], detailRoute: "/hr/payroll-detail" },
       { key: "performance", label: "تقييم الأداء", icon: "stats-chart-outline", endpoint: "/api/hr/performance", titleFields: ["employeeName"], subtitleFields: ["period"], statusField: "status", dateFields: ["createdAt"] },
       {
         key: "loans", label: "السلف والقروض", icon: "card-outline", endpoint: "/api/hr/loans",
@@ -422,6 +422,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "journal", label: "القيود اليومية", icon: "book-outline", endpoint: "/api/finance/journal",
         titleFields: ["ref", "entryNumber"], subtitleFields: ["description"], statusField: "status", amountFields: ["totalAmount", "amount", "total"], dateFields: ["date", "createdAt"],
+        detailRoute: "/finance/journal-detail",
         write: {
           moduleKey: "finance",
           detailPath: (id) => `/api/finance/journal/${id}`,
@@ -666,6 +667,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "drivers", label: "السائقون", icon: "person-outline", endpoint: "/api/fleet/drivers",
         titleFields: ["name", "fullName"], subtitleFields: ["phone", "licenseNumber"], statusField: "status",
+        detailRoute: "/fleet/driver-detail",
         write: {
           moduleKey: "fleet",
           canDelete: true,
