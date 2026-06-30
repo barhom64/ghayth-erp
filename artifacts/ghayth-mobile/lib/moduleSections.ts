@@ -1642,7 +1642,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
     sections: [
       {
         key: "policies", label: "السياسات", icon: "ribbon-outline", endpoint: "/api/governance/policies",
-        titleFields: ["title", "name"], subtitleFields: ["version"], statusField: "status", dateFields: ["effectiveDate"],
+        titleFields: ["title", "name"], subtitleFields: ["version"], statusField: "status", dateFields: ["effectiveDate"], detailRoute: "/governance/policy-detail",
         write: {
           moduleKey: "governance",
           statuses: [
