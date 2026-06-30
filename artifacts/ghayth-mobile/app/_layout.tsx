@@ -518,6 +518,11 @@ function AuthGate() {
       <Stack.Screen name="transport/bookings" options={{ title: 'حجوزات النقل' }} />
       <Stack.Screen name="transport/dispatch-orders" options={{ title: 'أوامر التوزيع' }} />
       <Stack.Screen name="requests/requests" options={{ title: 'الطلبات' }} />
+      <Stack.Screen name="fleet/alerts" options={{ title: 'تنبيهات الأسطول' }} />
+      <Stack.Screen name="fleet/rental-contracts" options={{ title: 'عقود إيجار الأسطول' }} />
+      <Stack.Screen name="fleet/traffic-violations" options={{ title: 'مخالفات المرور' }} />
+      <Stack.Screen name="warehouse/categories" options={{ title: 'فئات المستودعات' }} />
+      <Stack.Screen name="properties/buildings" options={{ title: 'المباني' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
