@@ -25,12 +25,14 @@ export type ModuleType =
   | "store"
   | "support"
   | "settings"
-  | "umrah";
+  | "umrah"
+  | "website";
 
 const ALL_MODULES: ModuleType[] = [
   "home", "hr", "finance", "fleet", "property", "operations", "warehouse",
   "governance", "bi", "requests", "documents", "reports", "admin", "comms",
   "legal", "crm", "marketing", "store", "support", "settings", "umrah",
+  "website",
 ];
 
 export interface UserRole {

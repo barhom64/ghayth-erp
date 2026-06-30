@@ -14,6 +14,7 @@ import { commsRoutes } from "@/routes/commsRoutes";
 import { warehouseRoutes } from "@/routes/warehouseRoutes";
 import { miscRoutes } from "@/routes/miscRoutes";
 import { umrahRoutes } from "@/routes/umrahRoutes";
+import { websiteRoutes } from "@/routes/websiteRoutes";
 
 const IMPLICIT_PATHS = ["/", "/dashboard", "/login"];
 
@@ -35,6 +36,7 @@ const REGISTERED_PATTERNS: string[] = [
   ...warehouseRoutes.map((r) => r.path),
   ...miscRoutes.map((r) => r.path),
   ...umrahRoutes.map((r) => r.path),
+  ...websiteRoutes.map((r) => r.path),
 ];
 
 const EXACT_PATHS = new Set<string>();

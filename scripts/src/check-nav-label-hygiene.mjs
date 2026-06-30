@@ -47,6 +47,7 @@ const CONTEXT_SCOPED_DUP_LABELS = new Set([
   "الموردون",      // owner decision: finance vs warehouse, section disambiguates (canonical-map)
   "لوحة التشغيل",  // fleet telematics ops vs umrah ops — section-scoped
   "الإعدادات",     // global settings vs umrah settings — section-scoped
+  "الباقات",       // umrah packages vs website CMS packages — section-scoped
 ]);
 
 // Established Latin acronyms permitted ONLY inside parentheses next to an Arabic

@@ -1054,6 +1054,22 @@ export const allNavSections: NavSection[] = [
       ]},
     ],
   },
+  // ══════════════════════════════════════════════════════════════════════
+  // الموقع الإلكتروني — نظام إدارة محتوى موقع الشركة (متعدد المستأجرين).
+  // موائمة بدون تكرار: تتحكّم غيث في موقع كل شركة من واجهة الإدارة هذه.
+  // ══════════════════════════════════════════════════════════════════════
+  {
+    title: "الموقع الإلكتروني",
+    items: [
+      { label: "الموقع الإلكتروني", path: "/website", icon: Globe, module: "website", children: [
+        { label: "إعدادات الموقع", path: "/website", icon: Settings },
+        { label: "الباقات", path: "/website/packages", icon: Package },
+        { label: "الفنادق", path: "/website/hotels", icon: Building2 },
+        { label: "الخدمات", path: "/website/services", icon: LayoutGrid },
+        { label: "المدونة", path: "/website/posts", icon: FileText },
+      ]},
+    ],
+  },
 ];
 
 // ──────────────────────────────────────────────────────────────────────────

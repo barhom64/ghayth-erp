@@ -407,6 +407,42 @@ export const STATUS_MAP = {
     resolved:             { label: "تمت المعالجة",    tone: "success"  },
     closed:               { label: "مُغلقة",          tone: "neutral"  },
   },
+
+  // ── Warehouse: cycle counts (جرد دوري) ─────────────────────────────
+  // Was duplicated as a local `STATUS_LABELS` map (shadcn variants) in
+  // both warehouse/cycle-counts.tsx and cycle-count-detail.tsx. Moved
+  // here so the arabic label + tone come from the same source as every
+  // other status chip. Labels preserved verbatim from the pages.
+  cycle_count: {
+    pending:              { label: "معلق",            tone: "warning"  },
+    in_progress:          { label: "قيد التنفيذ",     tone: "progress" },
+    reviewed:             { label: "مراجَع",          tone: "info"     },
+    approved:             { label: "معتمد",           tone: "success"  },
+    rejected:             { label: "مرفوض",           tone: "danger"   },
+  },
+
+  // ── Warehouse: lot lifecycle (التشغيلات/اللوطات) ───────────────────
+  lot: {
+    active:               { label: "نشط",             tone: "success"  },
+    quarantine:           { label: "حجر صحي",         tone: "warning"  },
+    expired:              { label: "منتهي",           tone: "danger"   },
+    recalled:             { label: "مستدعى",          tone: "danger"   },
+    disposed:             { label: "متلف",            tone: "muted"    },
+  },
+
+  // ── Warehouse: serial lifecycle (الأرقام التسلسلية) ────────────────
+  // Mirrors the backend SERIAL_STATUSES set verbatim
+  // (warehouse-advanced.ts:257 + DB check). The previous local page map
+  // offered `defective` (which the PATCH endpoint rejects) and lacked
+  // `warranty_repair` (so those rows showed raw english) — corrected here.
+  serial: {
+    in_stock:             { label: "في المخزن",       tone: "success"  },
+    reserved:             { label: "محجوز",           tone: "info"     },
+    sold:                 { label: "مُباع",           tone: "neutral"  },
+    returned:             { label: "مرتجع",           tone: "warning"  },
+    warranty_repair:      { label: "إصلاح بالضمان",   tone: "warning"  },
+    scrapped:             { label: "متلف",            tone: "muted"    },
+  },
 } as const satisfies Record<string, Record<string, StatusDef>>;
 
 export type StatusDomain = keyof typeof STATUS_MAP;

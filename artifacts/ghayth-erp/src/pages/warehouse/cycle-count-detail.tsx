@@ -5,7 +5,7 @@ import { PageShell } from "@workspace/ui-core";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { PageStatusBadge } from "@workspace/ui-core";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -34,13 +34,6 @@ type Header = {
   notes?: string | null;
 };
 
-const STATUS_LABELS: Record<string, { label: string; variant: any }> = {
-  pending:     { label: "معلق",      variant: "secondary" },
-  in_progress: { label: "قيد التنفيذ", variant: "default" },
-  reviewed:    { label: "مراجَع",      variant: "default" },
-  approved:    { label: "معتمد",       variant: "default" },
-  rejected:    { label: "مرفوض",       variant: "destructive" },
-};
 
 export default function CycleCountDetailPage() {
   const [location] = useLocation();
@@ -135,8 +128,6 @@ export default function CycleCountDetailPage() {
 
   if (!header) return <PageShell title="جرد دوري"><Card><CardContent className="pt-6">جاري التحميل…</CardContent></Card></PageShell>;
 
-  const s = STATUS_LABELS[header.status] ?? { label: header.status, variant: "outline" };
-
   return (
     <PageShell title={`جرد #${header.id} — ${header.warehouseName ?? `مخزن #${header.warehouseId}`}`}
       actions={
@@ -166,7 +157,7 @@ export default function CycleCountDetailPage() {
       <Card className="mb-4">
         <CardContent className="pt-6 flex flex-wrap gap-4 items-center">
           <div>التاريخ: <strong>{formatDateAr(header.scheduledDate)}</strong></div>
-          <div>الحالة: <Badge variant={s.variant}>{s.label}</Badge></div>
+          <div>الحالة: <PageStatusBadge status={header.status} domain="cycle_count" /></div>
           <div className="ms-auto flex gap-2">
             {(header.status === "pending" || header.status === "in_progress") && (
               <Button onClick={saveLines}>حفظ الكميات</Button>
