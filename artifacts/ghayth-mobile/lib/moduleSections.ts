@@ -803,7 +803,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       { key: "bad-debt", label: "مخصص الديون المشكوك فيها", icon: "alert-circle-outline", endpoint: "/api/finance/bad-debt", titleFields: ["clientName"], subtitleFields: ["agingBucket"], amountFields: ["amount", "provision"], dateFields: ["dueDate"] },
       { key: "cash-flow", label: "بيان التدفقات النقدية", icon: "cash-outline", endpoint: "/api/finance/cash-flow-statement", titleFields: ["period", "label"], subtitleFields: ["category"], amountFields: ["amount"] },
       {
-        key: "bank-accounts", label: "الحسابات البنكية", icon: "card-outline", endpoint: "/api/finance/bank-accounts", detailRoute: "/finance/bank-account-detail", titleFields: ["bankName", "accountName"], subtitleFields: ["iban", "currency"], statusField: "status", amountFields: ["balance"],
+        key: "bank-accounts", label: "الحسابات البنكية", icon: "card-outline", endpoint: "/api/finance/bank-accounts", detailRoute: "/finance/bank-account-detail", createRoute: "/finance/bank-account-new", titleFields: ["bankName", "accountName"], subtitleFields: ["iban", "currency"], statusField: "status", amountFields: ["balance"],
         write: { moduleKey: "finance", createFields: [
           { name: "bankName", label: "اسم البنك", type: "text", required: true },
           { name: "accountName", label: "اسم الحساب", type: "text", required: true },
