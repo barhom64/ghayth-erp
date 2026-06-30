@@ -340,7 +340,44 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
         },
       },
       { key: "exit", label: "إنهاء الخدمة", icon: "exit-outline", endpoint: "/api/hr/transfers", titleFields: ["transferNumber", "exitNumber"], subtitleFields: ["employeeName", "exitType"], statusField: "status", amountFields: ["netSettlement"], dateFields: ["requestDate"], detailRoute: "/hr/exit-request-detail" },
-      { key: "violations", label: "المخالفات التأديبية", icon: "warning-outline", endpoint: "/api/hr/violations", titleFields: ["ref", "violationType", "typeLabel"], subtitleFields: ["employeeName"], statusField: "status", amountFields: ["penaltyAmount"], dateFields: ["incidentDate"], detailRoute: "/hr/violation-detail" },
+      {
+        key: "violations", label: "المخالفات التأديبية", icon: "warning-outline", endpoint: "/api/hr/violations",
+        titleFields: ["ref", "violationType", "typeLabel"], subtitleFields: ["employeeName"], statusField: "status", amountFields: ["penaltyAmount"], dateFields: ["incidentDate"],
+        detailRoute: "/hr/violation-detail",
+        write: {
+          moduleKey: "hr",
+          createFields: [
+            {
+              name: "employeeId", label: "الموظف", type: "reference", required: true,
+              refEndpoint: "/api/hr/employees", refLabelFields: ["name", "nameAr"], refValueField: "id",
+            },
+            { name: "incidentDate", label: "تاريخ المخالفة", type: "date", required: true },
+            {
+              name: "violationType", label: "نوع المخالفة", type: "select", required: true,
+              options: [
+                { value: "absence", label: "غياب بدون إذن" },
+                { value: "tardiness", label: "تأخر متكرر" },
+                { value: "misconduct", label: "سلوك غير لائق" },
+                { value: "policy_violation", label: "مخالفة سياسات العمل" },
+                { value: "damage", label: "إتلاف ممتلكات" },
+                { value: "other", label: "أخرى" },
+              ],
+            },
+            { name: "description", label: "وصف المخالفة", type: "textarea", required: true },
+            {
+              name: "action", label: "الإجراء المتخذ", type: "select", required: true,
+              options: [
+                { value: "warning", label: "إنذار" },
+                { value: "deduction", label: "خصم من الراتب" },
+                { value: "suspension", label: "إيقاف عن العمل" },
+                { value: "termination", label: "إنهاء الخدمة" },
+              ],
+            },
+            { name: "penaltyAmount", label: "مبلغ الخصم", type: "currency" },
+            { name: "notes", label: "ملاحظات", type: "textarea" },
+          ],
+        },
+      },
       {
         key: "contracts", label: "عقود الموظفين", icon: "document-text-outline", endpoint: "/api/hr/contracts",
         titleFields: ["ref"], subtitleFields: ["employeeName", "contractType"], statusField: "approvalStatus", amountFields: ["salary"], dateFields: ["startDate"],
@@ -422,11 +459,53 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           { name: "vacancies", label: "عدد الشواغر", type: "number" },
           { name: "description", label: "وصف الوظيفة", type: "textarea" },
         ] } },
-      { key: "discipline", label: "المخالفات التأديبية", icon: "warning-outline", endpoint: "/api/hr/discipline/memos", titleFields: ["memoNumber"], subtitleFields: ["employeeName", "incidentType"], statusField: "status", dateFields: ["incidentDate"], detailRoute: "/hr/discipline-detail" },
-      { key: "legal-entities", label: "الكيانات القانونية", icon: "business-outline", endpoint: "/api/org/legal-entities", titleFields: ["nameAr", "nameEn"], subtitleFields: ["crNumber", "vatNumber"] },
-      { key: "positions", label: "المناصب الوظيفية", icon: "id-card-outline", endpoint: "/api/org/positions", titleFields: ["labelAr", "labelEn"], subtitleFields: ["positionKey", "level"] },
-      { key: "teams", label: "الفِرق", icon: "people-circle-outline", endpoint: "/api/org/teams", titleFields: ["name"], subtitleFields: ["departmentName", "leaderName"] },
-      { key: "committees", label: "اللجان", icon: "git-merge-outline", endpoint: "/api/org/committees", titleFields: ["name"], subtitleFields: ["type", "chairName"], dateFields: ["startDate"] },
+      {
+        key: "discipline", label: "المخالفات التأديبية", icon: "warning-outline", endpoint: "/api/hr/discipline/memos", titleFields: ["memoNumber"], subtitleFields: ["employeeName", "incidentType"], statusField: "status", dateFields: ["incidentDate"], detailRoute: "/hr/discipline-detail",
+        write: { moduleKey: "hr", createFields: [
+          { name: "employeeId", label: "الموظف", type: "text", required: true },
+          { name: "incidentDate", label: "تاريخ الحادثة", type: "date", required: true },
+          { name: "incidentType", label: "نوع المخالفة", type: "select", required: true, options: [{ value: "attendance", label: "غياب/تأخر" }, { value: "behavior", label: "سلوك مخل" }, { value: "performance", label: "إخلال بالعمل" }, { value: "policy", label: "مخالفة لوائح" }, { value: "other", label: "أخرى" }] },
+          { name: "description", label: "وصف المخالفة", type: "textarea", required: true },
+          { name: "action", label: "الإجراء المتخذ", type: "select", options: [{ value: "warning", label: "إنذار كتابي" }, { value: "final_warning", label: "إنذار نهائي" }, { value: "deduction", label: "خصم من الراتب" }, { value: "suspension", label: "إيقاف مؤقت" }] },
+          { name: "notes", label: "ملاحظات", type: "textarea" },
+        ] },
+      },
+      {
+        key: "legal-entities", label: "الكيانات القانونية", icon: "business-outline", endpoint: "/api/org/legal-entities", titleFields: ["nameAr", "nameEn"], subtitleFields: ["crNumber", "vatNumber"],
+        write: { moduleKey: "hr", createFields: [
+          { name: "nameAr", label: "الاسم بالعربي", type: "text", required: true },
+          { name: "nameEn", label: "الاسم بالإنجليزية", type: "text" },
+          { name: "crNumber", label: "رقم السجل التجاري", type: "text" },
+          { name: "vatNumber", label: "الرقم الضريبي", type: "text" },
+          { name: "city", label: "المدينة", type: "text" },
+        ] },
+      },
+      {
+        key: "positions", label: "المناصب الوظيفية", icon: "id-card-outline", endpoint: "/api/org/positions", titleFields: ["labelAr", "labelEn"], subtitleFields: ["positionKey", "level"],
+        write: { moduleKey: "hr", createFields: [
+          { name: "labelAr", label: "المسمى بالعربي", type: "text", required: true },
+          { name: "labelEn", label: "المسمى بالإنجليزية", type: "text" },
+          { name: "positionKey", label: "رمز المنصب", type: "text", required: true },
+          { name: "level", label: "المستوى الوظيفي", type: "number" },
+          { name: "description", label: "الوصف", type: "textarea" },
+        ] },
+      },
+      {
+        key: "teams", label: "الفِرق", icon: "people-circle-outline", endpoint: "/api/org/teams", titleFields: ["name"], subtitleFields: ["departmentName", "leaderName"],
+        write: { moduleKey: "hr", createFields: [
+          { name: "name", label: "اسم الفريق", type: "text", required: true },
+          { name: "description", label: "الوصف", type: "textarea" },
+        ] },
+      },
+      {
+        key: "committees", label: "اللجان", icon: "git-merge-outline", endpoint: "/api/org/committees", titleFields: ["name"], subtitleFields: ["type", "chairName"], dateFields: ["startDate"],
+        write: { moduleKey: "hr", createFields: [
+          { name: "name", label: "اسم اللجنة", type: "text", required: true },
+          { name: "type", label: "نوع اللجنة", type: "select", options: [{ value: "permanent", label: "دائمة" }, { value: "temporary", label: "مؤقتة" }, { value: "advisory", label: "استشارية" }] },
+          { name: "startDate", label: "تاريخ التأسيس", type: "date" },
+          { name: "purpose", label: "الغرض من اللجنة", type: "textarea" },
+        ] },
+      },
     ],
   },
   finance: {
@@ -498,8 +577,60 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
-      { key: "vouchers", label: "سندات الصرف", icon: "cash-outline", endpoint: "/api/finance/vouchers", titleFields: ["ref"], subtitleFields: ["payee", "description"], statusField: "status", amountFields: ["amount"], dateFields: ["createdAt"], detailRoute: "/finance/voucher-detail" },
-      { key: "customer-advances", label: "دفعات العملاء المقدمة", icon: "arrow-down-circle-outline", endpoint: "/api/finance/customer-advances", detailRoute: "/finance/customer-advance-detail", titleFields: ["ref"], subtitleFields: ["clientName", "method"], statusField: "status", amountFields: ["amount"], dateFields: ["receivedDate"] },
+      {
+        key: "vouchers", label: "سندات الصرف", icon: "cash-outline", endpoint: "/api/finance/vouchers",
+        titleFields: ["ref"], subtitleFields: ["payee", "description"], statusField: "status", amountFields: ["amount"], dateFields: ["createdAt"],
+        detailRoute: "/finance/voucher-detail",
+        write: {
+          moduleKey: "finance",
+          createFields: [
+            { name: "payee", label: "المستفيد", type: "text", required: true },
+            { name: "amount", label: "المبلغ", type: "currency", required: true },
+            { name: "description", label: "البيان", type: "text", required: true },
+            {
+              name: "paymentMethod", label: "طريقة الصرف", type: "select",
+              options: [
+                { value: "cash", label: "نقدًا" },
+                { value: "bank", label: "تحويل بنكي" },
+                { value: "check", label: "شيك" },
+              ],
+            },
+            {
+              name: "bankAccountId", label: "حساب الصرف", type: "reference",
+              refEndpoint: "/api/finance/bank-accounts", refLabelFields: ["bankName", "accountName"], refValueField: "id",
+            },
+            { name: "notes", label: "ملاحظات", type: "textarea" },
+          ],
+          actions: [
+            { key: "approve", label: "اعتماد السند", icon: "checkmark-circle-outline", method: "PATCH", path: (id) => `/api/finance/vouchers/${id}/approve`, confirm: "هل تريد اعتماد سند الصرف؟", successText: "تم اعتماد السند", showWhenStatus: ["draft", "pending"] },
+          ],
+        },
+      },
+      {
+        key: "customer-advances", label: "دفعات العملاء المقدمة", icon: "arrow-down-circle-outline", endpoint: "/api/finance/customer-advances",
+        detailRoute: "/finance/customer-advance-detail", titleFields: ["ref"], subtitleFields: ["clientName", "method"], statusField: "status", amountFields: ["amount"], dateFields: ["receivedDate"],
+        write: {
+          moduleKey: "finance",
+          createFields: [
+            {
+              name: "clientId", label: "العميل", type: "reference", required: true,
+              refEndpoint: "/api/clients", refLabelFields: ["name", "nameAr"], refValueField: "id",
+            },
+            { name: "amount", label: "المبلغ المستلم", type: "currency", required: true },
+            { name: "receivedDate", label: "تاريخ الاستلام", type: "date", required: true },
+            {
+              name: "method", label: "طريقة الاستلام", type: "select",
+              options: [
+                { value: "cash", label: "نقدًا" },
+                { value: "bank", label: "تحويل بنكي" },
+                { value: "check", label: "شيك" },
+              ],
+            },
+            { name: "reference", label: "رقم المرجع", type: "text" },
+            { name: "notes", label: "ملاحظات", type: "textarea" },
+          ],
+        },
+      },
       { key: "collection", label: "التحصيل", icon: "alert-circle-outline", endpoint: "/api/finance/collection", titleFields: ["ref"], subtitleFields: ["clientName", "currentStageName"], statusField: "status", amountFields: ["total"], dateFields: ["dueDate"], detailRoute: "/finance/collection-detail" },
       {
         key: "purchase-orders", label: "أوامر الشراء", icon: "cart-outline", endpoint: "/api/finance/purchase-orders",
@@ -617,7 +748,18 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       { key: "ap-aging", label: "تقادم الذمم الدائنة", icon: "trending-down-outline", endpoint: "/api/finance/ap-aging", titleFields: ["supplierName", "vendorName"], subtitleFields: ["bucket"], amountFields: ["balance", "overdue"] },
       { key: "bad-debt", label: "مخصص الديون المشكوك فيها", icon: "alert-circle-outline", endpoint: "/api/finance/bad-debt", titleFields: ["clientName"], subtitleFields: ["agingBucket"], amountFields: ["amount", "provision"], dateFields: ["dueDate"] },
       { key: "cash-flow", label: "بيان التدفقات النقدية", icon: "cash-outline", endpoint: "/api/finance/cash-flow-statement", titleFields: ["period", "label"], subtitleFields: ["category"], amountFields: ["amount"] },
-      { key: "bank-accounts", label: "الحسابات البنكية", icon: "card-outline", endpoint: "/api/finance/bank-accounts", detailRoute: "/finance/bank-account-detail", titleFields: ["bankName", "accountName"], subtitleFields: ["iban", "currency"], statusField: "status", amountFields: ["balance"] },
+      {
+        key: "bank-accounts", label: "الحسابات البنكية", icon: "card-outline", endpoint: "/api/finance/bank-accounts", detailRoute: "/finance/bank-account-detail", titleFields: ["bankName", "accountName"], subtitleFields: ["iban", "currency"], statusField: "status", amountFields: ["balance"],
+        write: { moduleKey: "finance", createFields: [
+          { name: "bankName", label: "اسم البنك", type: "text", required: true },
+          { name: "accountName", label: "اسم الحساب", type: "text", required: true },
+          { name: "iban", label: "رقم الآيبان", type: "text", required: true },
+          { name: "accountNumber", label: "رقم الحساب", type: "text" },
+          { name: "currency", label: "العملة", type: "select", options: [{ value: "SAR", label: "ريال سعودي" }, { value: "USD", label: "دولار أمريكي" }, { value: "EUR", label: "يورو" }, { value: "GBP", label: "جنيه إسترليني" }] },
+          { name: "openingBalance", label: "الرصيد الافتتاحي", type: "currency" },
+          { name: "notes", label: "ملاحظات", type: "textarea" },
+        ] },
+      },
       { key: "tax-returns", label: "الإقرارات الضريبية", icon: "document-text-outline", endpoint: "/api/finance/tax-returns", titleFields: ["period", "ref"], subtitleFields: ["type"], statusField: "status", amountFields: ["vatAmount", "totalAmount"], dateFields: ["dueDate"] },
       { key: "fiscal-periods", label: "الفترات المالية", icon: "calendar-outline", endpoint: "/api/finance/fiscal-periods-v2", titleFields: ["name", "period"], subtitleFields: ["year"], statusField: "status", dateFields: ["startDate", "endDate"] },
       { key: "commitments", label: "الالتزامات التعاقدية", icon: "link-outline", endpoint: "/api/finance/commitments", detailRoute: "/finance/commitment-detail", titleFields: ["ref", "description"], subtitleFields: ["counterparty", "type"], statusField: "status", amountFields: ["amount"], dateFields: ["startDate"] },
