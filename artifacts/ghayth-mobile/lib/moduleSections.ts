@@ -919,7 +919,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
     label: "العمرة",
     sections: [
       {
-        key: "pilgrims", label: "المعتمرون", icon: "people-outline", endpoint: "/api/umrah/pilgrims",
+        key: "pilgrims", label: "المعتمرون", icon: "people-outline", endpoint: "/api/umrah/pilgrims", detailRoute: "/umrah/pilgrim-detail",
         titleFields: ["name", "fullName"], subtitleFields: ["passportNumber", "groupName"], statusField: "status",
         write: {
           moduleKey: "umrah",
