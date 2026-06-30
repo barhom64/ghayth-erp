@@ -572,6 +572,12 @@ function AuthGate() {
       <Stack.Screen name="warehouse/serials" options={{ title: 'الأرقام التسلسلية' }} />
       <Stack.Screen name="finance/budget-variance" options={{ title: 'انحراف الميزانية' }} />
       <Stack.Screen name="finance/expenses-analysis" options={{ title: 'تحليل المصروفات' }} />
+      <Stack.Screen name="admin/pbx-extensions" options={{ title: 'امتدادات PBX' }} />
+      <Stack.Screen name="finance/recurring-journals" options={{ title: 'القيود الدورية' }} />
+      <Stack.Screen name="comms/mailboxes" options={{ title: 'صناديق البريد' }} />
+      <Stack.Screen name="finance/receivables" options={{ title: 'الذمم المدينة' }} />
+      <Stack.Screen name="finance/payables" options={{ title: 'الذمم الدائنة' }} />
+      <Stack.Screen name="finance/financial-requests" options={{ title: 'الطلبات المالية' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
