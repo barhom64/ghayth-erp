@@ -11,7 +11,7 @@ import { useFieldErrors } from "@/hooks/use-field-errors";
 import { VehicleContextCard } from "@/components/shared/vehicle-context-card";
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { VehicleSelect, DriverSelect } from "@/components/shared/entity-selects";
-import { useVehicleDriverDefault } from "@/hooks/use-vehicle-driver-default";
+import { useVehicleDriverDefault, useVehicleMileageDefault } from "@/hooks/use-vehicle-driver-default";
 
 const DRAFT_KEY = "fleet_fuel_create";
 const INITIAL = {
@@ -32,6 +32,8 @@ export default function FuelCreate() {
     form.driverId,
     (v) => setForm((f) => ({ ...f, driverId: v })),
   );
+  // ويُعبّئ قراءة العداد بعدّاد المركبة الحالي (قابل للتعديل).
+  useVehicleMileageDefault(form.vehicleId, form.mileageAtFuel, (v) => setForm((f) => ({ ...f, mileageAtFuel: v })));
 
   const handleSubmit = async () => {
     const firstError = validate({
