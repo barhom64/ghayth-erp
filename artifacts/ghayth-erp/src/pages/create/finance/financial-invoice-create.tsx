@@ -13,7 +13,7 @@ import { LineItemsTable } from "@/components/shared/line-items-table";
 import { ClientSelect, BranchSelect, ProjectSelect, VehicleSelect, UnitSelect } from "@/components/shared/entity-selects";
 import { NumberField, FormFieldWrapper, TextField } from "@/components/shared/form-field-wrapper";
 import { ArrowDownLeft } from "lucide-react";
-import { FinanceCreateTabs } from "@/components/shared/finance-create-tabs";
+import { FinanceStartFromDocument } from "@/components/shared/finance-start-from-document";
 
 /**
  * فاتورة مبيعات — الروح التشغيلية (م٤، docs/25 §٧.٤ + §١١.٢). نفس جدول البنود
@@ -39,7 +39,7 @@ const lineNet = (l: InvLine) => roundMoney((Number(l.quantity) || 0) * (Number(l
 // نوع الربط → عمود البُعد على سطر الفاتورة (invoice_lines، يدعمها المنفذ القائم).
 const LINK_DIM: Record<Exclude<LinkType, "">, string> = { project: "projectId", vehicle: "vehicleId", unit: "unitId" };
 
-export default function FinancialInvoiceCreate() {
+export default function FinancialInvoiceCreate({ embedded = false }: { embedded?: boolean } = {}) {
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
@@ -154,8 +154,8 @@ export default function FinancialInvoiceCreate() {
     );
   }
 
-  return (
-    <CreatePageLayout title="فاتورة مبيعات (تسجيل واقعة)" subtitle="نفس جدول البنود الموحّد، مع ربط كل بند بكيانه — تمرّ على محرّك الفاتورة القائم" backPath="/finance/invoices">
+  const inner = (
+    <>
       {hasDraft && (
         <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
@@ -164,20 +164,8 @@ export default function FinancialInvoiceCreate() {
       )}
       <div dir="rtl">
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* شريط الأنواع الموحّد — صفحات الإنشاء المالية كسطح تبويبي واحد (مترابط). */}
-          <FinanceCreateTabs active="sales" />
-
-          {/* اختصار «ابدأ من مستند» — مطابقة لصفحة الواقعة (نفس محرّك القراءة/الاستيراد). */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-dashed bg-surface-subtle px-3 py-2 text-sm">
-            <span className="text-muted-foreground">عندك المستند جاهز؟ ابدأ منه:</span>
-            <button type="button" className="text-primary hover:underline font-medium" onClick={() => navigate("/documents/ocr/review")}>
-              قراءة ضوئية (OCR) ←
-            </button>
-            <span className="text-muted-foreground" aria-hidden>·</span>
-            <button type="button" className="text-primary hover:underline font-medium" onClick={() => navigate("/finance/documents/import")}>
-              استيراد Excel/CSV ←
-            </button>
-          </div>
+          {/* اختصار «ابدأ من مستند» — مكوّن مشترك (DRY، مطابق لصفحة الواقعة). */}
+          <FinanceStartFromDocument />
 
           {/* لافتة الاتجاه — مبيعات = قبض (إيراد على العميل)، بنفس نمط الواقعة. */}
           <div className="flex items-start gap-2 rounded-lg border border-status-success-foreground/30 bg-status-success-surface px-3 py-2 text-sm text-status-success-foreground">
@@ -229,6 +217,12 @@ export default function FinancialInvoiceCreate() {
           </div>
         </form>
       </div>
+    </>
+  );
+  // مضمّن داخل الصفحة الموحّدة (FinanceCreatePage يوفّر القشرة + التبويبات)، أو مستقلًّا.
+  return embedded ? inner : (
+    <CreatePageLayout title="فاتورة مبيعات (تسجيل واقعة)" subtitle="نفس جدول البنود الموحّد، مع ربط كل بند بكيانه — تمرّ على محرّك الفاتورة القائم" backPath="/finance/invoices">
+      {inner}
     </CreatePageLayout>
   );
 }

@@ -346,11 +346,13 @@ export default function FinanceDashboard() {
             <Send className="h-4 w-4" />
             <div className="text-xs font-semibold">أمر شراء</div>
           </Link>
-          <Link href="/finance/purchase-requests/create" className="border rounded p-2 text-center hover:bg-muted/30 transition flex flex-col items-center gap-1">
+          {/* طلب الشراء والعهدة يُنشآن من صفحتيهما (نموذج ضمن القائمة) — لا مسار /create
+              مستقل، فالاختصار يقصد القائمة حيث زرّ الإنشاء (لا رابط ميت). */}
+          <Link href="/finance/purchase-requests" className="border rounded p-2 text-center hover:bg-muted/30 transition flex flex-col items-center gap-1">
             <MessageCircle className="h-4 w-4" />
             <div className="text-xs font-semibold">طلب شراء</div>
           </Link>
-          <Link href="/finance/custodies/create" className="border rounded p-2 text-center hover:bg-muted/30 transition flex flex-col items-center gap-1">
+          <Link href="/finance/custodies" className="border rounded p-2 text-center hover:bg-muted/30 transition flex flex-col items-center gap-1">
             <ShieldCheck className="h-4 w-4" />
             <div className="text-xs font-semibold">عهدة</div>
           </Link>

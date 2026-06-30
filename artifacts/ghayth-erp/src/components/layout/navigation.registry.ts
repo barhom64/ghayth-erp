@@ -268,6 +268,7 @@ export const allNavSections: NavSection[] = [
         { label: "الرواتب والمستحقات", path: "/hr/payroll", icon: DollarSign, children: [
           { label: "مسيرات الرواتب", path: "/hr/payroll", icon: DollarSign, subKey: "payroll" },
           { label: "مكونات الرواتب", path: "/hr/payroll/salary-components", icon: Percent, subKey: "payroll" },
+          { label: "معدّلات أجر السائق", path: "/hr/driver-pay-rates", icon: Percent, subKey: "payroll", perm: "hr.driver_pay:list" },
           { label: "سلف الموظفين", path: "/hr/loans", icon: Wallet, subKey: "payroll" },
           { label: "مكافأة نهاية الخدمة", path: "/hr/gratuity", icon: Banknote, subKey: "payroll" },
           { label: "الاستحقاقات الشهرية", path: "/hr/accruals", icon: ListChecks, subKey: "payroll" },
@@ -350,6 +351,11 @@ export const allNavSections: NavSection[] = [
           { label: "تقويم الدورية", path: "/finance/recurring-calendar", icon: Calendar },
         ]},
         { label: "الفواتير والسندات", path: "/finance/invoices", icon: Receipt, children: [
+          // الإدخال الموحّد — «تسجيل واقعة مالية» (قبض/صرف · مبيعات · مشتريات في صفحة
+          // واحدة بتبويبات). المدخل الأساسي للإنشاء المالي، ظاهر في القائمة لا مخفيًّا
+          // خلف أزرار القوائم فقط. يستخدم مسار «record-event» الودود (نظير «تسجيل واقعة
+          // مركبة» /fleet/record-event) لا /create — احترامًا لحارس «لا إنشاء في القائمة».
+          { label: "تسجيل واقعة مالية", path: "/finance/record-event", icon: ClipboardCheck },
           { label: "الفواتير", path: "/finance/invoices", icon: Receipt },
           { label: "فواتير متكررة", path: "/finance/recurring-invoices", icon: CalendarClock },
           { label: "صف الإرسال", path: "/finance/invoice-send-queue", icon: Send },
@@ -592,6 +598,7 @@ export const allNavSections: NavSection[] = [
           // البند ٤ — «تسجيل واقعة مركبة» الموحّدة (الكيان يقود: وقود/صيانة/تأمين معًا).
           { label: "تسجيل واقعة مركبة", path: "/fleet/record-event", icon: ClipboardCheck, perm: "fleet.vehicles:update" },
           { label: "السائقين", path: "/fleet/drivers", icon: User, perm: "fleet.vehicles:list" },
+          { label: "ساعات عمل السائق", path: "/fleet/driver-work-hours", icon: Clock, perm: "fleet.driver_hours:list" },
           { label: "فحوص المركبات", path: "/fleet/inspections", icon: ClipboardCheck, perm: "fleet.vehicles:list" },
           { label: "الرحلات", path: "/fleet/trips", icon: Navigation, perm: "fleet.trips:list" },
           { label: "استهلاك الوقود", path: "/fleet/fuel", icon: Fuel, perm: "fleet.trips:list" },

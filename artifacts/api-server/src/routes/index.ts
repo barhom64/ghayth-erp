@@ -95,6 +95,7 @@ import { transportBookingsRouter } from "./transport-bookings.js";
 import { vehicleProfileRouter } from "./vehicle-profile.js";
 import { transportPricingRouter } from "./transport-pricing.js";
 import { transportPlanningRouter } from "./transport-planning.js";
+import { fleetDriverHoursRouter } from "./fleet-driver-hours.js"; // أجر السائق بالساعة — الدفعة 1
 import { transportCalendarRouter } from "./transport-calendar.js"; // TR-022
 import { fleetOptimizerRouter } from "./fleet-optimizer.js"; // TA-T18-VRP Phase 2
 import { transportIntegrationRouter } from "./transport-integration.js";
@@ -206,6 +207,7 @@ import disciplineRouter from "./hr-discipline.js";
 import orgRouter from "./org.js";
 import loansRouter from "./hr-loans.js";
 import overtimeRouter from "./hr-overtime.js";
+import driverPayRouter from "./hr-driver-pay.js"; // معدّلات أجر السائق — الدفعة 2
 import exitRouter from "./hr-exit.js";
 import wpsRouter from "./hr-wps.js";
 import complianceRouter from "./hr-compliance.js";
@@ -489,6 +491,7 @@ router.use("/hr", requireModule("hr"), hrRouter);
 router.use("/hr/discipline", requireModule("hr"), disciplineRouter);
 router.use("/hr", requireModule("hr"), loansRouter);
 router.use("/hr", requireModule("hr"), overtimeRouter);
+router.use("/hr", requireModule("hr"), driverPayRouter); // معدّلات أجر السائق — الدفعة 2
 router.use("/hr", requireModule("hr"), exitRouter);
 router.use("/hr", requireModule("hr"), wpsRouter);
 router.use("/hr", requireModule("hr"), complianceRouter);
@@ -577,6 +580,7 @@ router.use(transportBookingsRouter);
 router.use(vehicleProfileRouter);
 router.use(transportPricingRouter);
 router.use(transportPlanningRouter);
+router.use(fleetDriverHoursRouter);  // أجر السائق بالساعة — ساعات العمل (الدفعة 1)
 router.use(transportCalendarRouter); // TR-022 unified transport calendar
 router.use(fleetOptimizerRouter);    // TA-T18-VRP Phase 2 batch optimizer
 router.use(transportIntegrationRouter);

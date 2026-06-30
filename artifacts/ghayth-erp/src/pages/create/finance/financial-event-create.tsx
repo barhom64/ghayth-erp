@@ -19,7 +19,7 @@ import { NumberField, FormFieldWrapper, TextField } from "@/components/shared/fo
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { FinanceCreateTabs } from "@/components/shared/finance-create-tabs";
+import { FinanceStartFromDocument } from "@/components/shared/finance-start-from-document";
 
 /**
  * تسجيل واقعة مالية — م١-ب. الواجهة تشغيلية: يدخل المستخدم (الكيان/الطرف + ما حدث +
@@ -48,7 +48,7 @@ const lineTotal = (l: DocLine) => roundMoney(lineNet(l) + lineVat(l));
 
 type PreviewLeg = { accountCode: string; debit: number; credit: number };
 
-export default function FinancialEventCreate() {
+export default function FinancialEventCreate({ embedded = false }: { embedded?: boolean } = {}) {
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const [preview, setPreview] = useState<PreviewLeg[] | null>(null);
@@ -151,8 +151,8 @@ export default function FinancialEventCreate() {
     saveMut.mutate(buildPayload());
   }
 
-  return (
-    <CreatePageLayout title="تسجيل واقعة مالية" subtitle="أدخل ما حدث والبنود، والنظام يشتقّ القيد تلقائيًا" backPath="/finance/vouchers">
+  const inner = (
+    <>
       {hasDraft && (
         <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
@@ -161,22 +161,8 @@ export default function FinancialEventCreate() {
       )}
       <div dir="rtl">
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* شريط الأنواع الموحّد — يعرض صفحات الإنشاء المالية كسطح تبويبي واحد (مترابط). */}
-          <FinanceCreateTabs active="event" />
-
-          {/* اختصار «ابدأ من مستند» — يُبرز محرّك قراءة المستندات (OCR) وبوابة الاستيراد
-              في مكان تسجيل الواقعة: امسح ورقة/فاتورة ضوئيًّا (محرّك OCR، تأكيد بشري) أو
-              استورد Excel/CSV، بدل الإدخال اليدوي. كلاهما يمرّ على نفس محرّك القيد. */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-dashed bg-surface-subtle px-3 py-2 text-sm">
-            <span className="text-muted-foreground">عندك المستند جاهز؟ ابدأ منه:</span>
-            <button type="button" className="text-primary hover:underline font-medium" onClick={() => navigate("/documents/ocr/review")}>
-              قراءة ضوئية (OCR) ←
-            </button>
-            <span className="text-muted-foreground" aria-hidden>·</span>
-            <button type="button" className="text-primary hover:underline font-medium" onClick={() => navigate("/finance/documents/import")}>
-              استيراد Excel/CSV ←
-            </button>
-          </div>
+          {/* اختصار «ابدأ من مستند» (قراءة ضوئية OCR + استيراد Excel/CSV) — مكوّن مشترك (DRY). */}
+          <FinanceStartFromDocument />
 
           {/* النوع: تصنيف/اختصار لا إلزام — لكن الاتجاه واضح بصريًّا (لون + سهم + لافتة)
               فلا يلتبس قبض (مال داخل) بصرف (مال خارج). النظام يضع القيد في اتجاهه تلقائيًّا. */}
@@ -317,6 +303,12 @@ export default function FinancialEventCreate() {
           </div>
         </form>
       </div>
+    </>
+  );
+  // مضمّن داخل الصفحة الموحّدة (FinanceCreatePage يوفّر القشرة + التبويبات)، أو مستقلًّا.
+  return embedded ? inner : (
+    <CreatePageLayout title="تسجيل واقعة مالية" subtitle="أدخل ما حدث والبنود، والنظام يشتقّ القيد تلقائيًا" backPath="/finance/vouchers">
+      {inner}
     </CreatePageLayout>
   );
 }

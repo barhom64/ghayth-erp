@@ -567,7 +567,12 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // final carve); manualOnly net-unchanged — the new file is manual-scope
       // (+1) while umrah-entities.ts became a pure aggregator and dropped out
       // (−1). total counts the route file either way.
-      total: 154,
+      // +1 total: routes/fleet-driver-hours.ts (أجر السائق بالساعة، الدفعة 1).
+      // وحدة تحكّم رفيعة — كل وصول للبيانات والعزل الإيجاري في lib/fleet/driverHours.ts،
+      // فالراوت بلا scope مباشر (manualOnly دون تغيير).
+      // +1 total: routes/hr-driver-pay.ts (معدّلات أجر السائق، الدفعة 2). وحدة
+      // تحكّم رفيعة كذلك — العزل في lib/hr/driverPayRates.ts (manualOnly دون تغيير).
+      total: 156,
       helperUsers: 39,
       manualOnly: 110,
     });
