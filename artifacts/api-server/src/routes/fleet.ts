@@ -799,22 +799,26 @@ router.post("/me/fuel-logs", authorize({ feature: "fleet.driver.me", action: "up
     const mileageAtFuel = Number(b.mileageAtFuel || b.mileage) || null;
     const stationName = b.stationName || b.station || null;
 
-    const { insertId } = await rawExecute(
-      `INSERT INTO fleet_fuel_logs ("companyId","vehicleId","driverId","fuelDate",liters,"costPerLiter","totalCost","mileageAtFuel","stationName","tripId")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [driver.companyId, resolvedVehicleId, driver.id, fuelDate, liters, costPerLiter, totalCost, mileageAtFuel, stationName, validatedTripId]);
-    assertInsert(insertId, "fleet_fuel_logs");
-
-    // Advance the vehicle odometer to the fuel reading (monotonic — GREATEST,
-    // never decreases), so currentMileage stays fresh and the next form
-    // auto-fills the true reading. Mirrors the trip-completion update pattern.
-    if (mileageAtFuel != null) {
-      await rawExecute(
-        `UPDATE fleet_vehicles SET "currentMileage" = GREATEST(COALESCE("currentMileage", 0), $1), "updatedAt" = NOW()
-          WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
-        [mileageAtFuel, resolvedVehicleId, driver.companyId],
-      ).catch((e) => logger.error(e, "[fleet] fuel-log odometer update failed (non-fatal)"));
-    }
+    // Fuel-log INSERT + odometer advance are wrapped in one transaction so the
+    // two writes are atomic (no partial state if the second fails). The inner
+    // rawExecute calls auto-join the ambient transaction via ALS.
+    const insertId = await withTransaction(async () => {
+      const ins = await rawExecute(
+        `INSERT INTO fleet_fuel_logs ("companyId","vehicleId","driverId","fuelDate",liters,"costPerLiter","totalCost","mileageAtFuel","stationName","tripId")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [driver.companyId, resolvedVehicleId, driver.id, fuelDate, liters, costPerLiter, totalCost, mileageAtFuel, stationName, validatedTripId]);
+      assertInsert(ins.insertId, "fleet_fuel_logs");
+      // Advance the vehicle odometer to the fuel reading (monotonic — GREATEST,
+      // never decreases), so currentMileage stays fresh and the next form
+      // auto-fills the true reading. Mirrors the trip-completion update pattern.
+      if (mileageAtFuel != null) {
+        await rawExecute(
+          `UPDATE fleet_vehicles SET "currentMileage" = GREATEST(COALESCE("currentMileage", 0), $1), "updatedAt" = NOW()
+            WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
+          [mileageAtFuel, resolvedVehicleId, driver.companyId]);
+      }
+      return ins.insertId;
+    });
 
     // مرشّح مصروف للمالية (لا ترحيل مباشر للدفتر) — يُجسّده المحاسب لاحقًا.
     if (totalCost > 0) {
