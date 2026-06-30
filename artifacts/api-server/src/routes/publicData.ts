@@ -386,11 +386,18 @@ router.post("/leads", publicLimiter, async (req, res) => {
     const notesParts = [b.message?.trim(), b.subject?.trim() ? `الموضوع: ${b.subject.trim()}` : null].filter(Boolean);
     const notes = notesParts.length ? notesParts.join("\n") : null;
 
-    const { insertId } = await rawExecute(
-      `INSERT INTO crm_opportunities ("companyId",title,"contactName","contactPhone","contactEmail",source,stage,notes)
-       VALUES ($1,$2,$3,$4,$5,$6,'lead',$7)`,
-      [companyId, title, b.name, b.phone, b.email ?? null, b.source?.trim() || "website", notes],
-    );
+    // ملكية الكتابة في crm_opportunities تبقى في المسار القائد (CRM) — نمرّر عبر
+    // عقد CRM الخادم بدل الكتابة المباشرة (حدّ المجال). نفس الجدول، لا backend مكرر.
+    const { createOpportunityFromInboundComm } = await import("./crm.js");
+    const insertId = await createOpportunityFromInboundComm({
+      companyId,
+      title,
+      contactName: b.name,
+      contactPhone: b.phone,
+      contactEmail: b.email ?? null,
+      source: b.source?.trim() || "website",
+      notes,
+    });
 
     // إشعار فريق المبيعات بالفرصة الجديدة (إرسال فقط — لا سياسة).
     void sendNotification({
