@@ -295,6 +295,9 @@ export const financeRoutes = [
   // صفحة واحدة بدل ثلاث، «ادمجها كلها»). المساران القديمان للفاتورتين يعرضان **نفس
   // الصفحة** بالنوع المناسب مُسبَقًا (يُشتَقّ من المسار) — لا إعادة توجيه، لا وميض.
   { path: "/finance/documents/create", component: FinanceCreatePage },
+  // مسار ودود للقائمة (نظير /fleet/record-event) — يعرض نفس الصفحة الموحّدة. يبقى
+  // /documents/create المسار الكنسي للإنشاء؛ هذا للظهور في القائمة بلا /create.
+  { path: "/finance/record-event", component: FinanceCreatePage },
   { path: "/finance/documents/import", component: FinancialImportGateway },
   { path: "/finance/collect", component: CustomerCollection },
   { path: "/finance/documents/invoice", component: FinanceCreatePage },

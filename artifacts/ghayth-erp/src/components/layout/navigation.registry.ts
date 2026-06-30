@@ -351,6 +351,11 @@ export const allNavSections: NavSection[] = [
           { label: "تقويم الدورية", path: "/finance/recurring-calendar", icon: Calendar },
         ]},
         { label: "الفواتير والسندات", path: "/finance/invoices", icon: Receipt, children: [
+          // الإدخال الموحّد — «تسجيل واقعة مالية» (قبض/صرف · مبيعات · مشتريات في صفحة
+          // واحدة بتبويبات). المدخل الأساسي للإنشاء المالي، ظاهر في القائمة لا مخفيًّا
+          // خلف أزرار القوائم فقط. يستخدم مسار «record-event» الودود (نظير «تسجيل واقعة
+          // مركبة» /fleet/record-event) لا /create — احترامًا لحارس «لا إنشاء في القائمة».
+          { label: "تسجيل واقعة مالية", path: "/finance/record-event", icon: ClipboardCheck },
           { label: "الفواتير", path: "/finance/invoices", icon: Receipt },
           { label: "فواتير متكررة", path: "/finance/recurring-invoices", icon: CalendarClock },
           { label: "صف الإرسال", path: "/finance/invoice-send-queue", icon: Send },
