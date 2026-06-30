@@ -390,6 +390,8 @@ function AuthGate() {
       <Stack.Screen name="hr/my-space" options={{ title: 'مساحتي' }} />
       <Stack.Screen name="hr/field-tracking" options={{ title: 'التتبع الميداني' }} />
       <Stack.Screen name="finance/operations-center" options={{ title: 'مركز العمليات' }} />
+      <Stack.Screen name="settings/custom-fields" options={{ title: 'الحقول المخصصة' }} />
+      <Stack.Screen name="hr/org-structure" options={{ title: 'الهيكل التنظيمي' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
