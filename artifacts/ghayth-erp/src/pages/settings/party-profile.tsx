@@ -2,10 +2,12 @@
 // السجلات التي يظهر فيها نفس الشخص/الجهة عبر النظام. يحلّ شكوى «الشخص الواحد
 // عبر كل الجداول»: موظف هو أيضًا سائق هو أيضًا عميل = طرف واحد، ملف واحد.
 import { useParams, Link } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { GuardedButton } from "@/components/shared/permission-gate";
+import { useToast } from "@/hooks/use-toast";
 import {
   User, Building2, Phone, Mail, IdCard, ArrowLeft, Link2, Briefcase,
 } from "lucide-react";
@@ -40,9 +42,29 @@ const ROLE_META: Record<string, { label: string; href?: (id: number) => string }
 export default function PartyProfile() {
   const params = useParams();
   const id = params.id;
-  const { data, isLoading, error } = useApiQuery<Party360>(
+  const { data, isLoading, error, refetch } = useApiQuery<Party360>(
     ["party-360", String(id ?? "")],
     id ? `/parties/${id}/360` : null,
+  );
+  const { toast } = useToast();
+
+  // Operator-triggered backfill: links the EXISTING (pre-wiring) entity rows
+  // into the registry, so the registry covers historical data too — not only
+  // entities created after the create-path wiring. Idempotent (fills gaps only).
+  const backfill = useApiMutation<{ totals: { scanned: number; linked: number } }>(
+    "/parties/backfill",
+    "POST",
+    [["party-360", String(id ?? "")]],
+    {
+      onSuccess: (res) => {
+        toast({
+          title: "اكتملت تعبئة السجل الموحّد",
+          description: `رُبط ${res?.totals?.linked ?? 0} سجلًا جديدًا (مسح ${res?.totals?.scanned ?? 0}).`,
+        });
+        refetch();
+      },
+      onError: () => toast({ title: "تعذّرت تعبئة السجل", variant: "destructive" }),
+    },
   );
 
   const party = data?.party;
@@ -52,6 +74,18 @@ export default function PartyProfile() {
     <PageShell
       title="الملف الموحّد (360°)"
       subtitle="هوية واحدة عبر كل سجلات النظام — نفس الشخص/الجهة أينما ظهر"
+      actions={
+        <GuardedButton
+          perm="settings:update"
+          size="sm"
+          variant="outline"
+          onClick={() => backfill.mutate({})}
+          disabled={backfill.isPending}
+          deniedTooltip="يتطلب صلاحية إعدادات"
+        >
+          {backfill.isPending ? "جاري التعبئة…" : "تعبئة السجل للبيانات السابقة"}
+        </GuardedButton>
+      }
     >
       {isLoading && (
         <div className="text-sm text-muted-foreground">جاري التحميل…</div>
