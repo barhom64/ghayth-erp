@@ -48,7 +48,7 @@ export default function ExpensesScreen() {
         contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
         onRefresh={refetch}
         refreshing={isLoading}
-        ListEmptyComponent={<GEmptyState icon="cash-outline" title="لا توجد مصروفات" description="" />}
+        ListEmptyComponent={<GEmptyState icon="barcode-outline" title="لا توجد مصروفات" description="" />}
         renderItem={({ item }) => (
           <Pressable
             onPress={() => router.push({ pathname: '/finance/expense-detail' as never, params: { id: item.id } })}

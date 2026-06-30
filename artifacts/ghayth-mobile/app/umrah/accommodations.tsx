@@ -50,7 +50,7 @@ export default function AccommodationsScreen() {
         contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
         onRefresh={refetch}
         refreshing={isLoading}
-        ListEmptyComponent={<GEmptyState icon="bed-outline" title="لا توجد إقامات" description="" />}
+        ListEmptyComponent={<GEmptyState icon="grid-outline" title="لا توجد إقامات" description="" />}
         renderItem={({ item }) => (
           <Pressable
             onPress={() => router.push({ pathname: '/umrah/accommodation-detail' as never, params: { id: item.id } })}

@@ -43,7 +43,7 @@ export default function ItineraryDetailScreen() {
   const { data: itin, isLoading } = useList<Itinerary>(`/api/transport/itineraries/${id}`);
 
   if (isLoading) return <GLoadingState text="جارٍ تحميل خط السير…" />;
-  if (!itin) return <GEmptyState icon="map-outline" title="غير موجود" description="لم يُعثر على خط السير" />;
+  if (!itin) return <GEmptyState icon="layers-outline" title="غير موجود" description="لم يُعثر على خط السير" />;
 
   const legs = itin.legs ?? [];
   const st = statusBadge(itin.status ?? '');
@@ -99,7 +99,7 @@ export default function ItineraryDetailScreen() {
             </GCard>
           </>
         ) : (
-          <GEmptyState icon="navigate-outline" title="لا توجد محطات" description="لم تُضف محطات لهذا الخط بعد" />
+          <GEmptyState icon="compass-outline" title="لا توجد محطات" description="لم تُضف محطات لهذا الخط بعد" />
         )}
       </View>
     </ScrollView>

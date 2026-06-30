@@ -199,7 +199,7 @@ export default function PilgrimDetailScreen() {
             style={{ marginBottom: 8 }}
           />
           {payLoading ? <ActivityIndicator color={c.brand} style={{ marginTop: 40 }} /> :
-          payments.length === 0 ? <GEmptyState icon="cash-outline" title="لا دفعات" description="لم يتم تسجيل أي دفعات لهذا المعتمر" /> :
+          payments.length === 0 ? <GEmptyState icon="barcode-outline" title="لا دفعات" description="لم يتم تسجيل أي دفعات لهذا المعتمر" /> :
           <GCard style={{ gap: 0, padding: 0 }}>
             {payments.map((p, i) => {
               const st = statusBadge(p.status ?? '');

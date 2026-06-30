@@ -90,7 +90,7 @@ export default function AccommodationDetailScreen() {
         {/* كتل الغرف */}
         <GText variant="subheading" style={{ fontWeight: '700' }}>كتل الغرف</GText>
         {blockList.length === 0 ? (
-          <GEmptyState icon="bed-outline" title="لا توجد كتل غرف" description="لم تُضف كتل غرف لهذه المجموعة بعد" />
+          <GEmptyState icon="grid-outline" title="لا توجد كتل غرف" description="لم تُضف كتل غرف لهذه المجموعة بعد" />
         ) : (
           <GCard style={{ gap: 0, padding: 0 }}>
             {blockList.map((block, i) => {

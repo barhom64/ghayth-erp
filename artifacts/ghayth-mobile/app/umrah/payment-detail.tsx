@@ -51,7 +51,7 @@ export default function UmrahPaymentDetailScreen() {
   const { data: pay, isLoading } = useList<UmrahPayment>(`/api/umrah/payments/${id}`);
 
   if (isLoading) return <GLoadingState text="جارٍ تحميل بيانات الدفعة…" />;
-  if (!pay) return <GEmptyState icon="cash-outline" title="دفعة غير موجودة" description="تعذّر العثور على بيانات الدفعة" />;
+  if (!pay) return <GEmptyState icon="barcode-outline" title="دفعة غير موجودة" description="تعذّر العثور على بيانات الدفعة" />;
 
   const st = statusBadge(pay.status ?? '');
   const confirmed = pay.status === 'confirmed' || pay.status === 'settled';
@@ -95,7 +95,7 @@ export default function UmrahPaymentDetailScreen() {
           </GCard>
         ) : null}
 
-        <GButton title="دفعة جديدة" icon="cash-outline" variant="secondary" onPress={() => router.push('/umrah/payment-new' as never)} />
+        <GButton title="دفعة جديدة" icon="barcode-outline" variant="secondary" onPress={() => router.push('/umrah/payment-new' as never)} />
       </View>
     </ScrollView>
   );

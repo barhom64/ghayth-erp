@@ -42,7 +42,7 @@ export default function SalaryComponentsScreen() {
         contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
         onRefresh={refetch}
         refreshing={isLoading}
-        ListEmptyComponent={<GEmptyState icon="cash-outline" title="لا توجد مكونات" description="" />}
+        ListEmptyComponent={<GEmptyState icon="barcode-outline" title="لا توجد مكونات" description="" />}
         renderItem={({ item }) => (
           <Pressable
             onPress={() => router.push({ pathname: '/hr/salary-component-detail' as never, params: { id: item.id } })}

@@ -42,7 +42,7 @@ export default function RoomBlocksScreen() {
         contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
         onRefresh={refetch}
         refreshing={isLoading}
-        ListEmptyComponent={<GEmptyState icon="bed-outline" title="لا توجد كتل غرف" description="" />}
+        ListEmptyComponent={<GEmptyState icon="grid-outline" title="لا توجد كتل غرف" description="" />}
         renderItem={({ item }) => (
           <Pressable style={{ backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, padding: 14 }}>
             <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 8, marginBottom: 4 }}>

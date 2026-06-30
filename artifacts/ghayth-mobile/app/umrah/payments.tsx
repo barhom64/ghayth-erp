@@ -49,7 +49,7 @@ export default function UmrahPaymentsScreen() {
         contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
         onRefresh={refetch}
         refreshing={isLoading}
-        ListEmptyComponent={<GEmptyState icon="cash-outline" title="لا توجد مدفوعات" description="" />}
+        ListEmptyComponent={<GEmptyState icon="barcode-outline" title="لا توجد مدفوعات" description="" />}
         renderItem={({ item }) => (
           <Pressable
             onPress={() => router.push({ pathname: '/umrah/payment-detail' as never, params: { id: item.id } })}

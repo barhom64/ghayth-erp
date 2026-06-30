@@ -114,7 +114,7 @@ export default function SalaryAdvanceDetailScreen() {
           </GCard>
         ) : null}
 
-        <GButton title="سلفة راتب جديدة" icon="cash-outline" variant="secondary" onPress={() => router.push('/finance/salary-advance-new' as never)} />
+        <GButton title="سلفة راتب جديدة" icon="barcode-outline" variant="secondary" onPress={() => router.push('/finance/salary-advance-new' as never)} />
       </View>
     </ScrollView>
   );

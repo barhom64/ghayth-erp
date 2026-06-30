@@ -134,7 +134,7 @@ export default function BiDashboardScreen() {
               <GText variant="subheading" style={{ fontWeight: '700' }}>المؤشرات الرئيسية</GText>
               <View style={styles.kpiGrid}>
                 <KPICard label="إجمالي الإيرادات" value={fmtMoney(kpis.totalRevenue)} color="#22C55E" icon="trending-up-outline" c={c} />
-                <KPICard label="صافي الربح" value={fmtMoney(kpis.netProfit)} color={(kpis.netProfit ?? 0) >= 0 ? '#22C55E' : '#EF4444'} icon="cash-outline" c={c} />
+                <KPICard label="صافي الربح" value={fmtMoney(kpis.netProfit)} color={(kpis.netProfit ?? 0) >= 0 ? '#22C55E' : '#EF4444'} icon="barcode-outline" c={c} />
                 <KPICard label="المصروفات" value={fmtMoney(kpis.totalExpenses)} color="#EF4444" icon="trending-down-outline" c={c} />
                 <KPICard label="الموظفون" value={String(kpis.totalEmployees ?? 0)} color="#3B82F6" icon="people-outline" c={c} />
                 <KPICard label="حاضر اليوم" value={String(kpis.presentToday ?? 0)} color="#22C55E" icon="finger-print-outline" c={c} />
@@ -157,7 +157,7 @@ export default function BiDashboardScreen() {
                 <KPICard label="سلف معلقة" value={String(hr.pendingLoans ?? 0)} color="#EF4444" icon="card-outline" c={c} />
                 <KPICard label="وقت إضافي معلق" value={String(hr.pendingOvertimes ?? 0)} color="#8B5CF6" icon="time-outline" c={c} />
                 <KPICard label="موظفون جدد" value={String(hr.newHires ?? 0)} color="#22C55E" icon="person-add-outline" c={c} />
-                <KPICard label="متوسط الراتب" value={fmtMoney(hr.averageSalary)} color="#3B82F6" icon="cash-outline" c={c} />
+                <KPICard label="متوسط الراتب" value={fmtMoney(hr.averageSalary)} color="#3B82F6" icon="barcode-outline" c={c} />
               </View>
             </>
           )}
@@ -169,7 +169,7 @@ export default function BiDashboardScreen() {
               <View style={styles.kpiGrid}>
                 <KPICard label="الإيرادات" value={fmtMoney(finance.totalRevenue)} color="#22C55E" icon="trending-up-outline" c={c} />
                 <KPICard label="المصروفات" value={fmtMoney(finance.totalExpenses)} color="#EF4444" icon="trending-down-outline" c={c} />
-                <KPICard label="صافي الربح" value={fmtMoney(finance.netProfit)} color={(finance.netProfit ?? 0) >= 0 ? '#22C55E' : '#EF4444'} icon="cash-outline" c={c} />
+                <KPICard label="صافي الربح" value={fmtMoney(finance.netProfit)} color={(finance.netProfit ?? 0) >= 0 ? '#22C55E' : '#EF4444'} icon="barcode-outline" c={c} />
                 <KPICard label="ذمم مدينة" value={fmtMoney(finance.accountsReceivable)} color="#3B82F6" icon="receipt-outline" c={c} />
                 <KPICard label="ذمم دائنة" value={fmtMoney(finance.accountsPayable)} color="#F59E0B" icon="card-outline" c={c} />
                 <KPICard label="النقد والبنوك" value={fmtMoney(finance.cashAndBank)} color="#22C55E" icon="wallet-outline" c={c} />

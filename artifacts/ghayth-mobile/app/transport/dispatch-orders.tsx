@@ -48,7 +48,7 @@ export default function DispatchOrdersScreen() {
         contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
         onRefresh={refetch}
         refreshing={isLoading}
-        ListEmptyComponent={<GEmptyState icon="navigate-outline" title="لا توجد أوامر توزيع" description="" />}
+        ListEmptyComponent={<GEmptyState icon="compass-outline" title="لا توجد أوامر توزيع" description="" />}
         renderItem={({ item }) => (
           <Pressable
             onPress={() => router.push({ pathname: '/transport/dispatch-order-detail' as never, params: { id: item.id } })}

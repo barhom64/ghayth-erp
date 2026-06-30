@@ -41,7 +41,7 @@ export default function PaymentRunsScreen() {
         contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
         onRefresh={refetch}
         refreshing={isLoading}
-        ListEmptyComponent={<GEmptyState icon="cash-outline" title="لا توجد دفعات دفع" description="" />}
+        ListEmptyComponent={<GEmptyState icon="barcode-outline" title="لا توجد دفعات دفع" description="" />}
         renderItem={({ item }) => (
           <Pressable style={{ backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, padding: 14 }}>
             <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 8, marginBottom: 4 }}>

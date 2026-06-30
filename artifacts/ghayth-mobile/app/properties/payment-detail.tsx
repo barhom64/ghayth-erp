@@ -46,7 +46,7 @@ export default function RentPaymentDetailScreen() {
   const { data: pmt, isLoading } = useList<RentPayment>(`/api/properties/payments/${id}`);
 
   if (isLoading) return <GLoadingState text="جارٍ تحميل بيانات الدفعة…" />;
-  if (!pmt) return <GEmptyState icon="cash-outline" title="دفعة غير موجودة" description="تعذّر العثور على بيانات دفعة الإيجار" />;
+  if (!pmt) return <GEmptyState icon="barcode-outline" title="دفعة غير موجودة" description="تعذّر العثور على بيانات دفعة الإيجار" />;
 
   const st = statusBadge(pmt.status ?? '');
   const dueDate = pmt.dueDate ? new Date(pmt.dueDate) : null;
@@ -102,7 +102,7 @@ export default function RentPaymentDetailScreen() {
           </GCard>
         ) : null}
 
-        <GButton title="دفعة إيجار جديدة" icon="cash-outline" variant="secondary" onPress={() => router.push('/properties/payment-new' as never)} />
+        <GButton title="دفعة إيجار جديدة" icon="barcode-outline" variant="secondary" onPress={() => router.push('/properties/payment-new' as never)} />
       </View>
     </ScrollView>
   );

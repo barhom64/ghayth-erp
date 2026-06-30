@@ -52,7 +52,7 @@ export default function FxRatesScreen() {
         contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
         onRefresh={refetch}
         refreshing={isLoading}
-        ListEmptyComponent={<GEmptyState icon="cash-outline" title="لا توجد أسعار صرف" description="" />}
+        ListEmptyComponent={<GEmptyState icon="barcode-outline" title="لا توجد أسعار صرف" description="" />}
         renderItem={({ item }) => (
           <View style={{ backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, padding: 14, flexDirection: 'row-reverse', alignItems: 'center', gap: 12 }}>
             <View style={{ flex: 1 }}>

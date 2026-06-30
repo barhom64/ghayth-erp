@@ -123,7 +123,7 @@ export default function TripDetailScreen() {
           </GCard>
         ) : null}
 
-        <GButton title="رحلة جديدة" icon="navigate-outline" variant="secondary" onPress={() => router.push('/fleet/trip-new' as never)} />
+        <GButton title="رحلة جديدة" icon="compass-outline" variant="secondary" onPress={() => router.push('/fleet/trip-new' as never)} />
       </View>
     </ScrollView>
   );

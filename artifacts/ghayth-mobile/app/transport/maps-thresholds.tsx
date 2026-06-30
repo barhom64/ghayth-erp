@@ -32,7 +32,7 @@ export default function TransportMapsThresholdsScreen() {
         contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
         onRefresh={refetch}
         refreshing={isLoading}
-        ListEmptyComponent={<GEmptyState icon="map-outline" title="لا توجد حدود" description="" />}
+        ListEmptyComponent={<GEmptyState icon="layers-outline" title="لا توجد حدود" description="" />}
         renderItem={({ item }) => (
           <View style={{ backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, padding: 14 }}>
             <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' }}>

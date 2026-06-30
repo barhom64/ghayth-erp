@@ -33,7 +33,7 @@ export default function GlPayrollLiabilityScreen() {
         contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
         onRefresh={refetch}
         refreshing={isLoading}
-        ListEmptyComponent={<GEmptyState icon="cash-outline" title="لا توجد التزامات معلّقة" description="" />}
+        ListEmptyComponent={<GEmptyState icon="barcode-outline" title="لا توجد التزامات معلّقة" description="" />}
         renderItem={({ item }) => (
           <Pressable style={{ backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, borderRightWidth: 3, borderRightColor: '#F59E0B', padding: 14 }}>
             <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', marginBottom: 8 }}>

@@ -50,7 +50,7 @@ export default function TripsScreen() {
         contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
         onRefresh={refetch}
         refreshing={isLoading}
-        ListEmptyComponent={<GEmptyState icon="navigate-outline" title="لا توجد رحلات" description="" />}
+        ListEmptyComponent={<GEmptyState icon="compass-outline" title="لا توجد رحلات" description="" />}
         renderItem={({ item }) => (
           <Pressable
             onPress={() => router.push({ pathname: '/fleet/trip-detail' as never, params: { id: item.id } })}

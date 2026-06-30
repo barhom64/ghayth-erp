@@ -182,7 +182,7 @@ export default function PropertyContractDetailScreen() {
 
         {tab === 'payments' && (
           payments.length === 0
-            ? <GEmptyState icon="cash-outline" title="لا توجد دفعات" description="لم يتم تسجيل أي دفعات لهذا العقد" />
+            ? <GEmptyState icon="barcode-outline" title="لا توجد دفعات" description="لم يتم تسجيل أي دفعات لهذا العقد" />
             : payments.map((pay, i) => {
               const isPaid = pay.status === 'paid';
               return (

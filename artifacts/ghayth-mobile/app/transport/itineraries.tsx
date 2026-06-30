@@ -48,7 +48,7 @@ export default function TransportItinerariesScreen() {
         contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
         onRefresh={refetch}
         refreshing={isLoading}
-        ListEmptyComponent={<GEmptyState icon="map-outline" title="لا توجد خطط رحلات" description="" />}
+        ListEmptyComponent={<GEmptyState icon="layers-outline" title="لا توجد خطط رحلات" description="" />}
         renderItem={({ item }) => (
           <Pressable
             onPress={() => router.push({ pathname: '/transport/itinerary-detail' as never, params: { id: item.id } })}

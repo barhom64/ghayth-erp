@@ -110,7 +110,7 @@ export default function WarehouseOverviewScreen() {
             <>
               <View style={styles.kpiGrid}>
                 <KPIBox label="إجمالي المنتجات" value={String(summary.totalProducts ?? 0)} color="#3B82F6" icon="cube-outline" c={c} />
-                <KPIBox label="قيمة المخزون" value={fmtMoney(summary.totalValue)} color="#22C55E" icon="cash-outline" c={c} />
+                <KPIBox label="قيمة المخزون" value={fmtMoney(summary.totalValue)} color="#22C55E" icon="barcode-outline" c={c} />
                 <KPIBox label="مخزون منخفض" value={String(summary.lowStockItems ?? 0)} color="#F59E0B" icon="warning-outline" c={c} />
                 <KPIBox label="نفد المخزون" value={String(summary.outOfStockItems ?? 0)} color="#EF4444" icon="close-circle-outline" c={c} />
                 <KPIBox label="مستودعات" value={String(summary.totalWarehouses ?? 0)} color="#8B5CF6" icon="business-outline" c={c} />

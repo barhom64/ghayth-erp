@@ -63,7 +63,7 @@ export default function CommissionDetailScreen() {
   };
 
   if (isLoading) return <GLoadingState text="جارٍ تحميل العمولة…" />;
-  if (!comm) return <GEmptyState icon="cash-outline" title="غير موجودة" description="لم يُعثر على العمولة" />;
+  if (!comm) return <GEmptyState icon="barcode-outline" title="غير موجودة" description="لم يُعثر على العمولة" />;
 
   const st = statusBadge(comm.status ?? '');
   const isPending = comm.status === 'pending' || comm.status === 'approved';

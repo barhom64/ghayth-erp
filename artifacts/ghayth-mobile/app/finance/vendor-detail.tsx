@@ -193,7 +193,7 @@ export default function VendorDetailScreen() {
             style={{ marginBottom: 8 }}
           />
           {payments.length === 0
-            ? <GEmptyState icon="cash-outline" title="لا توجد مدفوعات" description="لم يتم تسجيل أي مدفوعات لهذا المورد" />
+            ? <GEmptyState icon="barcode-outline" title="لا توجد مدفوعات" description="لم يتم تسجيل أي مدفوعات لهذا المورد" />
             : payments.map((pay, i) => (
               <GCard key={pay.id ?? i} style={{ gap: 4 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>

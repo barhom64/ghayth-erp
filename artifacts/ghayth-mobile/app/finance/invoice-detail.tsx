@@ -202,7 +202,7 @@ export default function InvoiceDetailScreen() {
         {isPayable && (
           <GButton
             title="تسجيل دفعة"
-            icon="cash-outline"
+            icon="barcode-outline"
             variant="secondary"
             onPress={() => router.push({ pathname: '/finance/payment-new' as never, params: { invoiceId: id } })}
           />

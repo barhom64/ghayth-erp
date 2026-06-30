@@ -112,7 +112,7 @@ export default function VendorAdvanceDetailScreen() {
           </GCard>
         ) : null}
 
-        <GButton title="دفعة مقدمة للمورد" icon="cash-outline" variant="secondary" onPress={() => router.push('/finance/vendor-advance-new' as never)} />
+        <GButton title="دفعة مقدمة للمورد" icon="barcode-outline" variant="secondary" onPress={() => router.push('/finance/vendor-advance-new' as never)} />
       </View>
     </ScrollView>
   );

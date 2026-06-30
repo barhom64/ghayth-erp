@@ -185,7 +185,7 @@ export default function VehicleDetailScreen() {
             style={{ marginBottom: 8 }}
           />
           {tripsLoading ? <ActivityIndicator color={c.brand} style={{ marginTop: 40 }} /> :
-          trips.length === 0 ? <GEmptyState icon="navigate-outline" title="لا رحلات" description="لا توجد رحلات مسجّلة لهذه المركبة" /> :
+          trips.length === 0 ? <GEmptyState icon="compass-outline" title="لا رحلات" description="لا توجد رحلات مسجّلة لهذه المركبة" /> :
           <GCard style={{ gap: 0, padding: 0 }}>
             {trips.map((trip, i) => {
               const st = statusBadge(trip.status ?? '');

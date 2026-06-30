@@ -236,7 +236,7 @@ export default function EmployeeDetailScreen() {
         {/* ─── تبويب الرواتب ─── */}
         {tab === 'payroll' && (
           payLoading ? <ActivityIndicator color={c.brand} style={{ marginTop: 40 }} /> :
-          payData.length === 0 ? <GEmptyState icon="cash-outline" title="لا كشوف رواتب" description="لم يُعثر على كشوف رواتب لهذا الموظف" /> :
+          payData.length === 0 ? <GEmptyState icon="barcode-outline" title="لا كشوف رواتب" description="لم يُعثر على كشوف رواتب لهذا الموظف" /> :
           <GCard style={{ gap: 0, padding: 0 }}>
             {payData.map((p, i) => {
               const st = statusBadge(p.status ?? '');

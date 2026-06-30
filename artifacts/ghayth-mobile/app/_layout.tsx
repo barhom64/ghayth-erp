@@ -1045,6 +1045,39 @@ function AuthGate() {
       <Stack.Screen name="governance/module-policies" options={{ title: 'سياسات الوحدة' }} />
       <Stack.Screen name="governance/policy-compliance-actions" options={{ title: 'إجراءات امتثال السياسة' }} />
       <Stack.Screen name="documents/document-versions" options={{ title: 'إصدارات المستند' }} />
+      <Stack.Screen name="fleet/vehicle-components" options={{ title: 'مكونات المركبة' }} />
+      <Stack.Screen name="fleet/vehicle-driver-assignments" options={{ title: 'تعيينات سائقي المركبة' }} />
+      <Stack.Screen name="fleet/vehicle-maintenance-schedules" options={{ title: 'جداول صيانة المركبة' }} />
+      <Stack.Screen name="fleet/cargo-manifest-timeline" options={{ title: 'الجدول الزمني للبيان' }} />
+      <Stack.Screen name="transport/booking-confirmation" options={{ title: 'تأكيد الحجز' }} />
+      <Stack.Screen name="transport/dispatch-navigation" options={{ title: 'تنقل أمر الإرسال' }} />
+      <Stack.Screen name="transport/driver-navigation" options={{ title: 'ملاحة السائق' }} />
+      <Stack.Screen name="umrah/sub-agent-journey" options={{ title: 'رحلة الوكيل الفرعي' }} />
+      <Stack.Screen name="umrah/group-journey" options={{ title: 'رحلة المجموعة' }} />
+      <Stack.Screen name="umrah/import-batch-changes" options={{ title: 'تغييرات دفعة الاستيراد' }} />
+      <Stack.Screen name="umrah/import-batch-unlinked" options={{ title: 'سجلات غير مرتبطة' }} />
+      <Stack.Screen name="umrah/employee-umrah-assignments" options={{ title: 'تعيينات موظف العمرة' }} />
+      <Stack.Screen name="umrah/room-block-allocations" options={{ title: 'تخصيصات كتلة الغرف' }} />
+      <Stack.Screen name="finance/fixed-asset-schedule" options={{ title: 'جدول إهلاك الأصل' }} />
+      <Stack.Screen name="finance/cip-detail" options={{ title: 'تفاصيل العمل الجاري' }} />
+      <Stack.Screen name="finance/inventory-costing-product" options={{ title: 'تكلفة منتج المخزون' }} />
+      <Stack.Screen name="properties/owner-statement" options={{ title: 'كشف حساب المالك' }} />
+      <Stack.Screen name="properties/owner-payouts" options={{ title: 'مدفوعات المالك' }} />
+      <Stack.Screen name="crm/opportunity-related" options={{ title: 'الفرص المرتبطة' }} />
+      <Stack.Screen name="crm/opportunity-activities" options={{ title: 'أنشطة الفرصة' }} />
+      <Stack.Screen name="crm/client-portal" options={{ title: 'حساب بوابة العميل' }} />
+      <Stack.Screen name="projects/project-risks" options={{ title: 'مخاطر المشروع' }} />
+      <Stack.Screen name="projects/project-milestones" options={{ title: 'معالم المشروع' }} />
+      <Stack.Screen name="projects/manager-workload" options={{ title: 'حِمل المدير' }} />
+      <Stack.Screen name="governance/policy-module-links" options={{ title: 'روابط وحدات السياسة' }} />
+      <Stack.Screen name="hr/employee-finance-summary" options={{ title: 'الملخص المالي للموظف' }} />
+      <Stack.Screen name="hr/employee-documents" options={{ title: 'وثائق الموظفين' }} />
+      <Stack.Screen name="properties/tenant-letters" options={{ title: 'خطابات المستأجر' }} />
+      <Stack.Screen name="properties/contract-schedule" options={{ title: 'جدول الدفعات' }} />
+      <Stack.Screen name="finance/reports-entities" options={{ title: 'تقرير الكيانات' }} />
+      <Stack.Screen name="legal/session-detail" options={{ title: 'تفاصيل الجلسة' }} />
+      <Stack.Screen name="legal/judgment-detail" options={{ title: 'تفاصيل الحكم' }} />
+      <Stack.Screen name="legal/correspondence-detail" options={{ title: 'تفاصيل المراسلة' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>

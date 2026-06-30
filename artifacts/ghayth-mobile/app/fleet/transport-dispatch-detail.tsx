@@ -49,7 +49,7 @@ export default function TransportDispatchDetailScreen() {
   const { data: dispatch, isLoading } = useList<DispatchOrder>(`/api/transport/dispatch-orders/${id}`);
 
   if (isLoading) return <GLoadingState text="جارٍ تحميل بيانات الإرسال…" />;
-  if (!dispatch) return <GEmptyState icon="navigate-outline" title="أمر غير موجود" description="تعذّر العثور على بيانات أمر الإرسال" />;
+  if (!dispatch) return <GEmptyState icon="compass-outline" title="أمر غير موجود" description="تعذّر العثور على بيانات أمر الإرسال" />;
 
   const st = statusBadge(dispatch.status ?? '');
   const headerColor = STATUS_COLORS[dispatch.status ?? ''] ?? '#6B7280';
@@ -103,7 +103,7 @@ export default function TransportDispatchDetailScreen() {
           </GCard>
         ) : null}
 
-        <GButton title="بدء رحلة جديدة" icon="navigate-outline" variant="secondary" onPress={() => router.push('/fleet/trip-new' as never)} />
+        <GButton title="بدء رحلة جديدة" icon="compass-outline" variant="secondary" onPress={() => router.push('/fleet/trip-new' as never)} />
       </View>
     </ScrollView>
   );
