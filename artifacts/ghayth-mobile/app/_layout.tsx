@@ -1193,6 +1193,10 @@ function AuthGate() {
       <Stack.Screen name="admin/ai-prompt-test-cases" options={{ title: 'حالات الاختبار' }} />
       <Stack.Screen name="admin/pbx-ivr-detail" options={{ title: 'قائمة IVR' }} />
       <Stack.Screen name="admin/vendor-settings-detail" options={{ title: 'إعداد المورد' }} />
+      <Stack.Screen name="bi/sla-delays" options={{ title: 'تأخيرات SLA' }} />
+      <Stack.Screen name="bi/rejection-rate" options={{ title: 'معدل الرفض' }} />
+      <Stack.Screen name="bi/bottleneck" options={{ title: 'نقاط الاختناق' }} />
+      <Stack.Screen name="bi/employee-productivity" options={{ title: 'إنتاجية الموظفين' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
