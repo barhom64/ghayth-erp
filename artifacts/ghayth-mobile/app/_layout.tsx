@@ -668,6 +668,16 @@ function AuthGate() {
       <Stack.Screen name="warehouse/expiring" options={{ title: 'دُفعات مشارفة على الانتهاء' }} />
       <Stack.Screen name="warehouse/lot-aging" options={{ title: 'تقادم الدُفعات' }} />
       <Stack.Screen name="warehouse/cycle-count-accuracy" options={{ title: 'دقة جرد الدورة' }} />
+      <Stack.Screen name="finance/transport-billing" options={{ title: 'مرشحات فوترة النقل' }} />
+      <Stack.Screen name="bi/exec-dashboard" options={{ title: 'اللوحة التنفيذية' }} />
+      <Stack.Screen name="bi/overdue-invoices" options={{ title: 'الفواتير المتأخرة' }} />
+      <Stack.Screen name="bi/kpi-metrics" options={{ title: 'قياسات مؤشرات الأداء' }} />
+      <Stack.Screen name="admin/scheduled-report-history" options={{ title: 'سجل تنفيذ التقارير' }} />
+      <Stack.Screen name="admin/pbx-recordings" options={{ title: 'تسجيلات المكالمات' }} />
+      <Stack.Screen name="admin/ai-providers" options={{ title: 'مزودو الذكاء الاصطناعي' }} />
+      <Stack.Screen name="admin/observability" options={{ title: 'لوحة مراقبة النظام' }} />
+      <Stack.Screen name="requests/workflows" options={{ title: 'تدفقات الطلبات' }} />
+      <Stack.Screen name="documents/retention-due" options={{ title: 'وثائق مستحقة الحذف' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
