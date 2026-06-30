@@ -1229,6 +1229,8 @@ function AuthGate() {
             <Stack.Screen name="intelligence/recommendations" options={{ title: 'التوصيات الذكية' }} />
             <Stack.Screen name="intelligence/insights-summary" options={{ title: 'ملخص الرؤى الذكية' }} />
             <Stack.Screen name="intelligence/proactive-insights" options={{ title: 'الرؤى الاستباقية' }} />
+            <Stack.Screen name="admin/cron-jobs" options={{ title: 'وظائف الجدولة' }} />
+            <Stack.Screen name="governance/expiring-iqama" options={{ title: 'إقامات منتهية الصلاحية' }} />
             <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
