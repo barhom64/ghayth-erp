@@ -711,6 +711,9 @@ function AuthGate() {
       <Stack.Screen name="dashboards/legal-module" options={{ title: 'لوحة القانونية' }} />
       <Stack.Screen name="dashboards/crm-module" options={{ title: 'لوحة CRM' }} />
       <Stack.Screen name="dashboards/projects-module" options={{ title: 'لوحة المشاريع' }} />
+      <Stack.Screen name="store/stats" options={{ title: 'إحصاءات المتجر' }} />
+      <Stack.Screen name="marketing/stats" options={{ title: 'إحصاءات التسويق' }} />
+      <Stack.Screen name="support/stats" options={{ title: 'إحصاءات الدعم' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
