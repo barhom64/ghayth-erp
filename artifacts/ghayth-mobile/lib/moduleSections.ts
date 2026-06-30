@@ -1934,6 +1934,8 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
         write: { moduleKey: "umrah", noDetail: true, createFields: [] },
         detailRoute: "/umrah/import-batch" as never,
       },
+      { key: "refunds", label: "طلبات الاسترداد", icon: "return-down-back-outline", endpoint: "/api/umrah/refund-requests", titleFields: ["pilgrimName"], subtitleFields: ["reason"], statusField: "status", dateFields: ["createdAt"], detailRoute: "/umrah/refunds" as never },
+      { key: "pricing", label: "التسعيرة", icon: "pricetag-outline", endpoint: "/api/umrah/pricing", titleFields: ["packageType"], subtitleFields: ["season"], dateFields: ["validFrom"], detailRoute: "/umrah/pricing" as never },
     ],
   },
   crm: {
@@ -2865,6 +2867,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       { key: "integrations", label: "التكاملات", icon: "link-outline", endpoint: "/api/admin/integrations", titleFields: ["name"], subtitleFields: ["type"], statusField: "status", dateFields: ["lastTestedAt"], detailRoute: "/admin/integrations" as never },
       { key: "system-health", label: "صحة النظام", icon: "pulse-outline", endpoint: "/api/admin/system-health", titleFields: ["status"], write: { moduleKey: "admin", noDetail: true, createFields: [] }, detailRoute: "/admin/system-health" as never },
       { key: "workspace", label: "بيئة العمل", icon: "people-outline", endpoint: "/api/workspace/feed", titleFields: ["action", "description"], subtitleFields: ["actorName"], dateFields: ["createdAt"], detailRoute: "/admin/workspace" as never, write: { moduleKey: "admin", noDetail: true, createFields: [] } },
+      { key: "intelligence-alerts", label: "تنبيهات النظام", icon: "alert-circle-outline", endpoint: "/api/intelligence/alerts", titleFields: ["title"], subtitleFields: ["source", "severity"], dateFields: ["createdAt"], detailRoute: "/admin/intelligence-alerts" as never },
       { key: "activity-log", label: "سجل الأنشطة", icon: "list-outline", endpoint: "/api/activity-log", titleFields: ["event", "description"], subtitleFields: ["userName", "module"], dateFields: ["createdAt"] },
       {
         key: "job-titles", label: "المسميات الوظيفية", icon: "id-card-outline", endpoint: "/api/admin/job-titles",
@@ -2978,6 +2981,31 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           { name: "email", label: "عنوان البريد", type: "text", required: true },
           { name: "type", label: "النوع", type: "select", required: true, options: [{ value: "imap", label: "IMAP" }, { value: "smtp", label: "SMTP" }, { value: "exchange", label: "Exchange" }] },
         ] } },
+    ],
+  },
+  store: {
+    key: "store",
+    label: "المتجر",
+    sections: [
+      { key: "products", label: "المنتجات", icon: "bag-outline", endpoint: "/api/store/products", titleFields: ["name"], subtitleFields: ["sku", "category"], statusField: "isActive", dateFields: [], detailRoute: "/store/products" as never,
+        write: { moduleKey: "store", createFields: [
+          { name: "name", label: "اسم المنتج", type: "text", required: true },
+          { name: "sku", label: "رمز المنتج", type: "text" },
+          { name: "price", label: "سعر البيع", type: "number", required: true },
+          { name: "costPrice", label: "سعر التكلفة", type: "number" },
+          { name: "stock", label: "الكمية", type: "number" },
+          { name: "unit", label: "الوحدة", type: "text" },
+          { name: "category", label: "الفئة", type: "text" },
+          { name: "description", label: "الوصف", type: "textarea" },
+        ] } },
+      { key: "orders", label: "الطلبات", icon: "receipt-outline", endpoint: "/api/store/orders", titleFields: ["orderNumber"], subtitleFields: ["clientName"], statusField: "status", dateFields: ["createdAt"], detailRoute: "/store/orders" as never },
+    ],
+  },
+  notifications: {
+    key: "notifications",
+    label: "الإشعارات",
+    sections: [
+      { key: "list", label: "الإشعارات", icon: "notifications-outline", endpoint: "/api/notifications", titleFields: ["title"], subtitleFields: ["body"], statusField: "isRead", dateFields: ["createdAt"], detailRoute: "/notifications/index" as never },
     ],
   },
 };
