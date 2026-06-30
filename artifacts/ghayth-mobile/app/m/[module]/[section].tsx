@@ -166,9 +166,15 @@ export default function SectionListScreen() {
       <Stack.Screen
         options={{
           title: def.label,
-          headerRight: hasModuleAccess && (def.write?.createFields?.length ?? 0) > 0 ? () => (
+          headerRight: hasModuleAccess && (def.createRoute || (def.write?.createFields?.length ?? 0) > 0) ? () => (
             <Pressable
-              onPress={() => router.push({ pathname: '/m/[module]/[section]/form', params: { module, section } })}
+              onPress={() => {
+                if (def.createRoute) {
+                  router.push(def.createRoute as never);
+                } else {
+                  router.push({ pathname: '/m/[module]/[section]/form', params: { module, section } });
+                }
+              }}
               style={{ marginLeft: 12 }}
             >
               <Ionicons name="add-circle-outline" size={26} color={c.brand} />

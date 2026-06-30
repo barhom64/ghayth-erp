@@ -166,6 +166,8 @@ export interface ModuleSection {
   write?: SectionWriteConfig;
   /** If set, tapping a row navigates to this route with `{ id }` param instead of generic /record. */
   detailRoute?: string;
+  /** If set, the + button navigates to this dedicated create screen instead of the inline form. */
+  createRoute?: string;
 }
 
 export interface ModuleDef {
@@ -182,7 +184,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "employees", label: "الموظفون", icon: "people-outline", endpoint: "/api/employees",
         titleFields: ["name", "fullName"], subtitleFields: ["jobTitle", "empNumber", "branchName"], statusField: "status",
-        detailRoute: "/hr/employee-detail",
+        detailRoute: "/hr/employee-detail", createRoute: "/hr/employee-new",
         write: {
           moduleKey: "hr",
           canDelete: true,
@@ -263,7 +265,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       },
       {
         key: "leave-requests", label: "طلبات الإجازة", icon: "calendar-outline", endpoint: "/api/hr/leave-requests",
-        titleFields: ["employeeName"], subtitleFields: ["leaveType", "empNumber"], statusField: "status", dateFields: ["startDate", "createdAt"], detailRoute: "/hr/leave-request-detail",
+        titleFields: ["employeeName"], subtitleFields: ["leaveType", "empNumber"], statusField: "status", dateFields: ["startDate", "createdAt"], detailRoute: "/hr/leave-request-detail", createRoute: "/hr/leave-request-new",
         write: {
           moduleKey: "hr",
           detailPath: (id) => `/api/hr/leaves/${id}`,
@@ -419,7 +421,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           { key: "post", label: "ترحيل المسيرة", icon: "git-commit-outline", method: "POST", path: (id) => `/api/hr/payroll/${id}/post`, confirm: "سيتم ترحيل المسيرة محاسبيًا. متابعة؟", successText: "تم ترحيل المسيرة", showWhenStatus: ["approved"] },
         ] } },
       { key: "payslips", label: "كشوف الرواتب", icon: "document-text-outline", endpoint: "/api/hr/payroll/slips", detailRoute: "/hr/payslip-detail", titleFields: ["employeeName"], subtitleFields: ["period", "month"], statusField: "status", amountFields: ["netSalary"] },
-      { key: "exit-requests", label: "طلبات إنهاء الخدمة", icon: "log-out-outline", endpoint: "/api/hr/transfers", detailRoute: "/hr/exit-request-detail", titleFields: ["employeeName"], subtitleFields: ["exitType", "reason"], statusField: "status", dateFields: ["requestDate"],
+      { key: "exit-requests", label: "طلبات إنهاء الخدمة", icon: "log-out-outline", endpoint: "/api/hr/transfers", detailRoute: "/hr/exit-request-detail", createRoute: "/hr/exit-request-new", titleFields: ["employeeName"], subtitleFields: ["exitType", "reason"], statusField: "status", dateFields: ["requestDate"],
         write: { moduleKey: "hr", actions: [
           { key: "approve", label: "اعتماد الطلب", icon: "checkmark-circle-outline", method: "PATCH", path: (id) => `/api/hr/transfers/${id}/approve`, body: { approved: true }, confirm: "هل تريد اعتماد طلب إنهاء الخدمة؟", successText: "تم اعتماد الطلب", showWhenStatus: ["pending"] },
         ] } },
@@ -457,7 +459,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           { name: "seats", label: "عدد المقاعد", type: "number" },
           { name: "description", label: "الوصف", type: "textarea" },
         ] } },
-      { key: "recruitment", label: "الوظائف الشاغرة", icon: "person-add-outline", endpoint: "/api/hr/recruitment/postings", titleFields: ["title"], subtitleFields: ["department", "location"], statusField: "status", dateFields: ["closingDate"], detailRoute: "/hr/recruitment-detail",
+      { key: "recruitment", label: "الوظائف الشاغرة", icon: "person-add-outline", endpoint: "/api/hr/recruitment/postings", titleFields: ["title"], subtitleFields: ["department", "location"], statusField: "status", dateFields: ["closingDate"], detailRoute: "/hr/recruitment-detail", createRoute: "/hr/recruitment-new",
         write: { moduleKey: "hr", createFields: [
           { name: "title", label: "المسمى الوظيفي", type: "text", required: true },
           { name: "department", label: "القسم", type: "text", required: true },
@@ -523,7 +525,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "invoices", label: "الفواتير", icon: "receipt-outline", endpoint: "/api/finance/invoices",
         titleFields: ["ref", "invoiceNumber", "number"], subtitleFields: ["clientName", "customerName"], statusField: "status", amountFields: ["total", "amount"], dateFields: ["issueDate", "createdAt", "date"],
-        detailRoute: "/finance/invoice-detail",
+        detailRoute: "/finance/invoice-detail", createRoute: "/finance/invoice-new",
         write: {
           moduleKey: "finance",
           detailPath: (id) => `/api/finance/invoices/${id}`,
@@ -537,7 +539,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "journal", label: "القيود اليومية", icon: "book-outline", endpoint: "/api/finance/journal",
         titleFields: ["ref", "entryNumber"], subtitleFields: ["description"], statusField: "status", amountFields: ["totalAmount", "amount", "total"], dateFields: ["date", "createdAt"],
-        detailRoute: "/finance/journal-detail",
+        detailRoute: "/finance/journal-detail", createRoute: "/finance/journal-new",
         write: {
           moduleKey: "finance",
           detailPath: (id) => `/api/finance/journal/${id}`,
@@ -653,7 +655,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
-      { key: "purchase-requests", label: "طلبات الشراء", icon: "clipboard-outline", endpoint: "/api/finance/purchase-requests", titleFields: ["ref"], subtitleFields: ["supplierName", "requestedByName"], statusField: "status", amountFields: ["totalAmount"], dateFields: ["createdAt"], detailRoute: "/finance/purchase-request-detail",
+      { key: "purchase-requests", label: "طلبات الشراء", icon: "clipboard-outline", endpoint: "/api/finance/purchase-requests", titleFields: ["ref"], subtitleFields: ["supplierName", "requestedByName"], statusField: "status", amountFields: ["totalAmount"], dateFields: ["createdAt"], detailRoute: "/finance/purchase-request-detail", createRoute: "/finance/purchase-request-new",
         write: { moduleKey: "finance", createFields: [
           { name: "vendorId", label: "المورد", type: "text", required: true },
           { name: "totalAmount", label: "إجمالي المبلغ", type: "currency", required: true },
@@ -666,7 +668,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           { key: "approve", label: "اعتماد الطلب", icon: "checkmark-circle-outline" as never, method: "PATCH" as const, path: (id: string | number) => `/api/finance/purchase-requests/${id}/approve`, confirm: "هل تريد اعتماد طلب الشراء؟", successText: "تم اعتماد الطلب", showWhenStatus: ["pending", "submitted"] },
           { key: "reject", label: "رفض الطلب", icon: "close-circle-outline" as never, method: "PATCH" as const, path: (id: string | number) => `/api/finance/purchase-requests/${id}/reject`, confirm: "هل تريد رفض طلب الشراء؟", successText: "تم رفض الطلب", tone: "danger" as const, showWhenStatus: ["pending", "submitted"] },
         ] } },
-      { key: "vendor-invoices", label: "فواتير الموردين", icon: "documents-outline", endpoint: "/api/finance/vendor-invoices", titleFields: ["ref", "supplierInvoiceRef"], subtitleFields: ["supplierName"], statusField: "status", amountFields: ["totalAmount"], dateFields: ["invoicedDate"], detailRoute: "/finance/vendor-invoice-detail",
+      { key: "vendor-invoices", label: "فواتير الموردين", icon: "documents-outline", endpoint: "/api/finance/vendor-invoices", titleFields: ["ref", "supplierInvoiceRef"], subtitleFields: ["supplierName"], statusField: "status", amountFields: ["totalAmount"], dateFields: ["invoicedDate"], detailRoute: "/finance/vendor-invoice-detail", createRoute: "/finance/vendor-invoice-new",
         write: { moduleKey: "finance", createFields: [
           { name: "vendorId", label: "المورد", type: "text", required: true },
           { name: "supplierInvoiceRef", label: "رقم فاتورة المورد", type: "text", required: true },
@@ -900,7 +902,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
         },
       },
       {
-        key: "trips", label: "الرحلات", icon: "navigate-outline", endpoint: "/api/fleet/trips", titleFields: ["destination", "ref", "origin"], subtitleFields: ["driverName", "vehiclePlate"], statusField: "status", dateFields: ["tripDate", "startTime", "date"], detailRoute: "/fleet/trip-detail",
+        key: "trips", label: "الرحلات", icon: "navigate-outline", endpoint: "/api/fleet/trips", titleFields: ["destination", "ref", "origin"], subtitleFields: ["driverName", "vehiclePlate"], statusField: "status", dateFields: ["tripDate", "startTime", "date"], detailRoute: "/fleet/trip-detail", createRoute: "/fleet/trip-new",
         write: {
           moduleKey: "fleet",
           createFields: [
@@ -1244,7 +1246,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       },
       {
         key: "movements", label: "حركات المخزون", icon: "swap-horizontal-outline", endpoint: "/api/warehouse/movements",
-        detailRoute: "/warehouse/movement-detail",
+        detailRoute: "/warehouse/movement-detail", createRoute: "/warehouse/movement-new",
         titleFields: ["ref", "movementNumber"], subtitleFields: ["type", "fromWarehouse", "toWarehouse"], statusField: "status", dateFields: ["date", "createdAt"],
         write: {
           moduleKey: "warehouse",
@@ -1312,7 +1314,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
         ], actions: [
           { key: "approve", label: "اعتماد أمر الشراء", icon: "checkmark-circle-outline" as never, method: "PATCH" as const, path: (id: string | number) => `/api/warehouse/purchase-orders/${id}/approve`, confirm: "هل تريد اعتماد أمر الشراء؟", successText: "تم الاعتماد", showWhenStatus: ["pending", "draft"] },
         ] } },
-      { key: "cycle-counts", label: "جرد المخزون", icon: "calculator-outline", endpoint: "/api/warehouse/cycle-counts", titleFields: ["ref", "cycle"], subtitleFields: ["location", "status"], statusField: "status", dateFields: ["startDate"], detailRoute: "/warehouse/cycle-count-detail",
+      { key: "cycle-counts", label: "جرد المخزون", icon: "calculator-outline", endpoint: "/api/warehouse/cycle-counts", titleFields: ["ref", "cycle"], subtitleFields: ["location", "status"], statusField: "status", dateFields: ["startDate"], detailRoute: "/warehouse/cycle-count-detail", createRoute: "/warehouse/cycle-count-new",
         write: { moduleKey: "warehouse", createFields: [
           { name: "location", label: "الموقع / المستودع", type: "text", required: true },
           { name: "startDate", label: "تاريخ البدء", type: "date", required: true },
@@ -1391,7 +1393,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
     label: "العمرة",
     sections: [
       {
-        key: "pilgrims", label: "المعتمرون", icon: "people-outline", endpoint: "/api/umrah/pilgrims", detailRoute: "/umrah/pilgrim-detail",
+        key: "pilgrims", label: "المعتمرون", icon: "people-outline", endpoint: "/api/umrah/pilgrims", detailRoute: "/umrah/pilgrim-detail", createRoute: "/umrah/pilgrim-new",
         titleFields: ["name", "fullName"], subtitleFields: ["passportNumber", "groupName"], statusField: "status",
         write: {
           moduleKey: "umrah",
@@ -1738,7 +1740,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "clients", label: "العملاء", icon: "person-outline", endpoint: "/api/clients",
         titleFields: ["name", "clientName"], subtitleFields: ["phone", "email"], statusField: "status",
-        detailRoute: "/crm/client-detail",
+        detailRoute: "/crm/client-detail", createRoute: "/crm/client-new",
         write: {
           moduleKey: "crm",
           canDelete: true,
@@ -1790,7 +1792,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
         },
       },
       {
-        key: "opportunities", label: "الفرص البيعية", icon: "trending-up-outline", endpoint: "/api/crm/opportunities", detailRoute: "/crm/opportunity-detail",
+        key: "opportunities", label: "الفرص البيعية", icon: "trending-up-outline", endpoint: "/api/crm/opportunities", detailRoute: "/crm/opportunity-detail", createRoute: "/crm/opportunity-new",
         titleFields: ["title", "name"], subtitleFields: ["clientName"], statusField: "status", amountFields: ["estimatedValue", "value"], dateFields: ["closingDate"],
         write: {
           moduleKey: "crm",
@@ -1987,7 +1989,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "tickets", label: "التذاكر", icon: "help-buoy-outline", endpoint: "/api/support/tickets",
         titleFields: ["subject", "title"], subtitleFields: ["ticketNumber", "clientName", "priority"], statusField: "status", dateFields: ["createdAt"],
-        detailRoute: "/support/ticket-detail",
+        detailRoute: "/support/ticket-detail", createRoute: "/support/ticket-new",
         write: {
           moduleKey: "support",
           statuses: [
@@ -2137,7 +2139,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "contracts", label: "عقود الإيجار", icon: "document-text-outline", endpoint: "/api/properties/contracts",
         titleFields: ["contractNumber", "ref"], subtitleFields: ["tenantName", "clientName"], statusField: "status", amountFields: ["totalAmount", "total"], dateFields: ["startDate"],
-        detailRoute: "/properties/contract-detail",
+        detailRoute: "/properties/contract-detail", createRoute: "/properties/contract-new",
         write: {
           moduleKey: "property",
           createFields: [
@@ -2268,7 +2270,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "cases", label: "القضايا", icon: "hammer-outline", endpoint: "/api/legal/cases",
         titleFields: ["title", "caseNumber"], subtitleFields: ["court", "caseNumber"], statusField: "status", dateFields: ["filingDate"],
-        detailRoute: "/legal/case-detail",
+        detailRoute: "/legal/case-detail", createRoute: "/legal/case-new",
         write: {
           moduleKey: "legal",
           createFields: [
@@ -2434,7 +2436,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       },
       {
         key: "risks", label: "المخاطر", icon: "alert-circle-outline", endpoint: "/api/governance/risks",
-        titleFields: ["title"], subtitleFields: ["category", "severity"], statusField: "status", detailRoute: "/governance/risk-detail",
+        titleFields: ["title"], subtitleFields: ["category", "severity"], statusField: "status", detailRoute: "/governance/risk-detail", createRoute: "/governance/risk-new",
         write: {
           moduleKey: "governance",
           createFields: [
