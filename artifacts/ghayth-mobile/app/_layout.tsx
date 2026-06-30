@@ -1165,6 +1165,12 @@ function AuthGate() {
       <Stack.Screen name="hr/employee-evaluation-history" options={{ title: 'تاريخ التقييمات' }} />
       <Stack.Screen name="hr/transfer-detail" options={{ title: 'تفاصيل طلب النقل' }} />
       <Stack.Screen name="fleet/optimizer-run-detail" options={{ title: 'تفاصيل تشغيل المحسّن' }} />
+      <Stack.Screen name="finance/custody-report" options={{ title: 'تقرير العهد' }} />
+      <Stack.Screen name="finance/custody-summary" options={{ title: 'ملخص العهد' }} />
+      <Stack.Screen name="finance/gl-helpers" options={{ title: 'مساعدات دفتر الأستاذ' }} />
+      <Stack.Screen name="finance/entity-pnl" options={{ title: 'ربح وخسارة الكيان' }} />
+      <Stack.Screen name="finance/subsidiary-substitution-state" options={{ title: 'حالة استبدال الفروع' }} />
+      <Stack.Screen name="finance/cash-in-transit" options={{ title: 'النقد في الطريق' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
