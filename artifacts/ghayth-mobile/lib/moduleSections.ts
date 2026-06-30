@@ -881,6 +881,18 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
         },
       },
       {
+        key: "deferred-revenue", label: "الإيراد المؤجّل", icon: "calendar-clear-outline", endpoint: "/api/finance/deferred-revenue/schedules",
+        titleFields: ["description"], subtitleFields: ["sourceType", "sourceRef"], statusField: "status", amountFields: ["remainingAmount"], dateFields: ["endDate"],
+        write: { moduleKey: "finance", noDetail: true, createFields: [] },
+        detailRoute: "/finance/deferred-revenue" as never,
+      },
+      {
+        key: "cash-in-transit", label: "النقد في الطريق", icon: "swap-horizontal-outline", endpoint: "/api/finance/cash-in-transit",
+        titleFields: ["reference"], subtitleFields: ["sourceAccountCode", "destinationAccountCode"], statusField: "status", amountFields: ["amount"], dateFields: ["sentDate"],
+        write: { moduleKey: "finance", noDetail: true, createFields: [] },
+        detailRoute: "/finance/cash-in-transit" as never,
+      },
+      {
         key: "commitments", label: "الالتزامات التعاقدية", icon: "link-outline", endpoint: "/api/finance/commitments",
         detailRoute: "/finance/commitment-detail", createRoute: "/finance/commitment-new", titleFields: ["ref", "description"], subtitleFields: ["counterparty", "type"], statusField: "status", amountFields: ["amount"], dateFields: ["startDate"],
         write: {
@@ -1442,6 +1454,12 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           { key: "start", label: "بدء الجرد", icon: "play-circle-outline" as never, method: "POST" as const, path: (id: string | number) => `/api/warehouse/cycle-counts/${id}/start`, confirm: "هل تريد بدء عملية الجرد؟", successText: "تم بدء الجرد", showWhenStatus: ["pending", "draft"] },
           { key: "complete", label: "إنهاء الجرد", icon: "checkmark-done-circle-outline" as never, method: "POST" as const, path: (id: string | number) => `/api/warehouse/cycle-counts/${id}/complete`, confirm: "هل تريد إنهاء وتأكيد نتائج الجرد؟", successText: "تم إنهاء الجرد", showWhenStatus: ["in_progress"] },
         ] } },
+      {
+        key: "advanced", label: "المخزون المتقدم", icon: "layers-outline", endpoint: "/api/warehouse/lots",
+        titleFields: ["lotNumber"], subtitleFields: ["productName"], statusField: "status", dateFields: ["expiryDate"],
+        write: { moduleKey: "warehouse", noDetail: true, createFields: [] },
+        detailRoute: "/warehouse/advanced" as never,
+      },
     ],
   },
   operations: {
@@ -1898,6 +1916,12 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
         write: { moduleKey: "umrah", noDetail: true, createFields: [] },
         detailRoute: "/umrah/reports" as never,
       },
+      {
+        key: "import-batches", label: "دُفعات الاستيراد", icon: "cloud-upload-outline", endpoint: "/api/umrah/import/batches",
+        titleFields: ["batchNumber", "fileName"], subtitleFields: ["groupName"], statusField: "status", dateFields: ["createdAt"],
+        write: { moduleKey: "umrah", noDetail: true, createFields: [] },
+        detailRoute: "/umrah/import-batch" as never,
+      },
     ],
   },
   crm: {
@@ -2206,7 +2230,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
     sections: [
       {
         key: "campaigns", label: "الحملات", icon: "megaphone-outline", endpoint: "/api/marketing/campaigns",
-        detailRoute: "/crm/campaign-detail", createRoute: "/crm/campaign-new",
+        detailRoute: "/marketing/campaign-detail", createRoute: "/marketing/campaign-new",
         titleFields: ["name", "title"], statusField: "status", amountFields: ["budget"], dateFields: ["startDate"],
         write: {
           moduleKey: "marketing",

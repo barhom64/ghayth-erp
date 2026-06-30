@@ -353,6 +353,15 @@ function AuthGate() {
       <Stack.Screen name="governance/pdpl" options={{ title: 'حماية البيانات' }} />
       <Stack.Screen name="comms/correspondence" options={{ title: 'المراسلات الرسمية' }} />
       <Stack.Screen name="governance/digital-signatures" options={{ title: 'التوقيعات الرقمية' }} />
+      <Stack.Screen name="marketing/campaigns" options={{ title: 'حملات التسويق' }} />
+      <Stack.Screen name="marketing/campaign-detail" options={{ title: 'الحملة' }} />
+      <Stack.Screen name="marketing/campaign-new" options={{ title: 'حملة جديدة' }} />
+      <Stack.Screen name="finance/deferred-revenue" options={{ title: 'الإيراد المؤجّل' }} />
+      <Stack.Screen name="finance/cash-in-transit" options={{ title: 'النقد في الطريق' }} />
+      <Stack.Screen name="warehouse/advanced" options={{ title: 'المخزون المتقدم' }} />
+      <Stack.Screen name="umrah/import-batch" options={{ title: 'دُفعات استيراد المعتمرين' }} />
+      <Stack.Screen name="umrah/import-batch-detail" options={{ title: 'تفاصيل الدُّفعة' }} />
+      <Stack.Screen name="umrah/sub-agent-statement" options={{ title: 'كشف حساب الوكيل' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
