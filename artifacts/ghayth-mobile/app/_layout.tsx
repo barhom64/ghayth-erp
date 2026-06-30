@@ -1188,6 +1188,11 @@ function AuthGate() {
       <Stack.Screen name="hr/discipline-auto-detection-settings" options={{ title: 'إعدادات الكشف التلقائي' }} />
       <Stack.Screen name="umrah/settings" options={{ title: 'إعدادات العمرة' }} />
       <Stack.Screen name="admin/effective-permissions" options={{ title: 'الصلاحيات الفعلية' }} />
+      <Stack.Screen name="admin/ai-prompt-detail" options={{ title: 'تفاصيل الـ Prompt' }} />
+      <Stack.Screen name="admin/ai-prompt-reviews" options={{ title: 'مراجعات الـ Prompt' }} />
+      <Stack.Screen name="admin/ai-prompt-test-cases" options={{ title: 'حالات الاختبار' }} />
+      <Stack.Screen name="admin/pbx-ivr-detail" options={{ title: 'قائمة IVR' }} />
+      <Stack.Screen name="admin/vendor-settings-detail" options={{ title: 'إعداد المورد' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
