@@ -3,19 +3,21 @@
  * البيانات من /api/my-space → pendingApprovals
  */
 import React, { useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { GScreen, GCard, GText, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList, apiFetch } from '@/hooks/useApi';
 import { useQueryClient } from '@tanstack/react-query';
+import { canApprove } from '@/lib/modules';
+import { useAuth } from '@/context/AuthContext';
 import { statusBadge } from '@/lib/moduleSections';
 
-type FilterType = 'الكل' | 'إجازات' | 'سلف' | 'وقت إضافي' | 'نهاية خدمة';
+type FilterType = 'الكل' | 'إجازات' | 'سلف' | 'وقت إضافي' | 'نهاية خدمة' | 'استئذان';
 
 interface ApprovalItem {
   id: number;
   title: string;
-  type: 'leave' | 'loan' | 'overtime' | 'exit';
+  type: 'leave' | 'loan' | 'overtime' | 'exit' | 'excuse';
   employeeName: string;
   status: string;
   createdAt: string;
@@ -25,18 +27,29 @@ interface MySpaceData {
   pendingApprovals?: ApprovalItem[];
 }
 
+interface ExcuseItem {
+  id: number;
+  employeeName?: string;
+  excuseDate?: string;
+  excuseType?: string;
+  status: string;
+  createdAt: string;
+}
+interface ExcuseResp { data?: ExcuseItem[] }
+
 function formatDateAr(val: string): string {
   if (!val) return '';
   try { return new Date(val).toLocaleDateString('ar-SA', { year: 'numeric', month: 'short', day: 'numeric' }); }
   catch { return val; }
 }
 
-const FILTERS: FilterType[] = ['الكل', 'إجازات', 'سلف', 'وقت إضافي', 'نهاية خدمة'];
+const FILTERS: FilterType[] = ['الكل', 'إجازات', 'سلف', 'وقت إضافي', 'نهاية خدمة', 'استئذان'];
 const typeToFilter: Record<string, FilterType> = {
   leave: 'إجازات',
   loan: 'سلف',
   overtime: 'وقت إضافي',
   exit: 'نهاية خدمة',
+  excuse: 'استئذان',
 };
 
 function approveEndpoint(item: ApprovalItem, approved: boolean): string | null {
@@ -45,6 +58,7 @@ function approveEndpoint(item: ApprovalItem, approved: boolean): string | null {
     case 'loan':     return `/api/hr/loans/${item.id}/${approved ? 'approve' : 'reject'}`;
     case 'overtime': return `/api/hr/overtime/${item.id}/${approved ? 'approve' : 'reject'}`;
     case 'exit':     return `/api/hr/transfers/${item.id}/approve`;
+    case 'excuse':   return `/api/hr/excuse-requests/${item.id}/approve`;
     default:         return null;
   }
 }
@@ -52,16 +66,33 @@ function approveEndpoint(item: ApprovalItem, approved: boolean): string | null {
 export default function ApprovalsScreen() {
   const c = useColors();
   const qc = useQueryClient();
+  const { user } = useAuth();
   const [filter, setFilter] = useState<FilterType>('الكل');
   const [inFlight, setInFlight] = useState<number | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<ApprovalItem | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
   const { data, isLoading, isError, refetch } = useList<MySpaceData>('/api/my-space');
+  const isManager = canApprove(user?.userRoles);
+  const { data: excuseResp } = useList<ExcuseResp>('/api/hr/excuse-requests', isManager ? { status: 'pending' } : undefined, { enabled: isManager });
 
-  const items = data?.pendingApprovals ?? [];
+  const pendingExcuses: ApprovalItem[] = isManager
+    ? (excuseResp?.data ?? []).map((e: ExcuseItem) => ({
+        id: e.id,
+        title: `استئذان ${e.excuseType ?? ''} — ${e.excuseDate ?? ''}`,
+        type: 'excuse' as const,
+        employeeName: e.employeeName ?? '',
+        status: e.status,
+        createdAt: e.createdAt,
+      }))
+    : [];
+
+  const items = [...(data?.pendingApprovals ?? []), ...pendingExcuses]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const filtered = items.filter(item =>
     filter === 'الكل' ? true : typeToFilter[item.type] === filter,
   );
 
-  const handleAction = async (item: ApprovalItem, approved: boolean) => {
+  const doAction = async (item: ApprovalItem, approved: boolean, rejectionReason?: string) => {
     const endpoint = approveEndpoint(item, approved);
     if (!endpoint) {
       Alert.alert('خطأ', `نوع طلب غير مدعوم: ${item.type}`);
@@ -69,25 +100,72 @@ export default function ApprovalsScreen() {
     }
     setInFlight(item.id);
     try {
-      await apiFetch(endpoint, {
-        method: 'PATCH',
-        body: JSON.stringify({ approved }),
-      });
+      const body: Record<string, unknown> = { approved };
+      if (!approved && rejectionReason) body.rejectionReason = rejectionReason;
+      await apiFetch(endpoint, { method: 'PATCH', body: JSON.stringify(body) });
       await qc.invalidateQueries({ queryKey: ['/api/my-space'] });
+      await qc.invalidateQueries({ queryKey: ['/api/hr/excuse-requests'] });
       await refetch();
     } catch (e: unknown) {
       Alert.alert('خطأ', e instanceof Error ? e.message : 'تعذّر تنفيذ الإجراء');
-    }
-    finally {
+    } finally {
       setInFlight(null);
     }
+  };
+
+  const handleAction = (item: ApprovalItem, approved: boolean) => {
+    if (!approved && item.type === 'excuse') {
+      setRejectTarget(item);
+      setRejectReason('');
+      return;
+    }
+    doAction(item, approved);
+  };
+
+  const submitRejectExcuse = () => {
+    if (!rejectTarget || !rejectReason.trim()) return;
+    doAction(rejectTarget, false, rejectReason.trim());
+    setRejectTarget(null);
+    setRejectReason('');
   };
 
   if (isLoading) return <GLoadingState text="جارٍ تحميل الطلبات…" />;
   if (isError) return <GEmptyState icon="alert-circle-outline" title="تعذّر تحميل الطلبات" description="تحقق من اتصالك وحاول مجدداً" />;
 
+  const RejectModal = (
+    <Modal visible={!!rejectTarget} transparent animationType="fade" onRequestClose={() => setRejectTarget(null)}>
+      <Pressable style={styles.modalOverlay} onPress={() => setRejectTarget(null)} />
+      <View style={[styles.modalBox, { backgroundColor: c.surface }]}>
+        <Text style={{ fontSize: 16, fontWeight: '700', color: c.text, textAlign: 'right', marginBottom: 12 }}>سبب الرفض</Text>
+        <TextInput
+          value={rejectReason}
+          onChangeText={setRejectReason}
+          placeholder="اكتب سبب الرفض..."
+          placeholderTextColor={c.textFaint}
+          style={[styles.rejectInput, { borderColor: c.inputBorder, backgroundColor: c.inputBg, color: c.text }]}
+          multiline
+          autoFocus
+          textAlign="right"
+        />
+        <View style={styles.modalActions}>
+          <Pressable onPress={() => setRejectTarget(null)} style={[styles.modalBtn, { backgroundColor: c.surfaceAlt }]}>
+            <Text style={{ color: c.textMuted, fontWeight: '600' }}>إلغاء</Text>
+          </Pressable>
+          <Pressable
+            onPress={submitRejectExcuse}
+            style={[styles.modalBtn, { backgroundColor: !rejectReason.trim() ? '#FECACA' : '#EF4444', opacity: !rejectReason.trim() ? 0.6 : 1 }]}
+            disabled={!rejectReason.trim()}
+          >
+            <Text style={{ color: '#FFF', fontWeight: '700' }}>رفض</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
+
   return (
     <GScreen>
+      {RejectModal}
       <View style={[styles.header, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
         <GText variant="heading" style={{ paddingHorizontal: 16, paddingTop: 16 }}>مركز الاعتماد</GText>
         {/* فلاتر */}
@@ -161,4 +239,9 @@ const styles = StyleSheet.create({
   itemMeta: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
   actions: { flexDirection: 'row', gap: 8, marginTop: 12 },
   actionBtn: { flex: 1, paddingVertical: 10, borderRadius: 8, borderWidth: 1, alignItems: 'center' },
+  modalOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: '#00000060' },
+  modalBox: { position: 'absolute', bottom: 0, left: 0, right: 0, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 40 },
+  rejectInput: { borderWidth: 1, borderRadius: 8, padding: 12, fontSize: 14, minHeight: 80, textAlignVertical: 'top', marginBottom: 16 },
+  modalActions: { flexDirection: 'row', gap: 10 },
+  modalBtn: { flex: 1, paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
 });

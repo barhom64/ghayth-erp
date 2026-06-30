@@ -2,7 +2,7 @@
  * طلب وقت إضافي — يُرسل إلى POST /api/hr/overtime
  */
 import React, { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { GCard, GButton, GInput, GText } from '@workspace/ui-native';
@@ -18,7 +18,7 @@ export default function OvertimeNewScreen() {
   const c = useColors();
   const router = useRouter();
   const qc = useQueryClient();
-  const { user } = useAuth();
+  const { user, assignments } = useAuth();
 
   const [overtimeDate, setOvertimeDate] = useState('');
   const [startTime, setStartTime] = useState('');
@@ -27,7 +27,6 @@ export default function OvertimeNewScreen() {
   const [reason, setReason] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const { assignments } = useAuth();
   const activeAssignment = assignments.find(a => a.companyId === user?.companyId);
   const mutation = useMutation('/api/hr/overtime', 'POST');
 
@@ -44,9 +43,13 @@ export default function OvertimeNewScreen() {
 
   const onSubmit = async () => {
     if (!validate()) return;
+    if (!activeAssignment?.id) {
+      Alert.alert('خطأ', 'تعذّر تحديد تعيينك الحالي. تحقق من حسابك.');
+      return;
+    }
     try {
       await mutation.mutateAsync({
-        assignmentId: activeAssignment?.id ?? user?.id,
+        assignmentId: activeAssignment.id,
         overtimeDate,
         startTime,
         endTime,
