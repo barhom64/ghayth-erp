@@ -929,6 +929,12 @@ function AuthGate() {
       <Stack.Screen name="admin/comm-overview" options={{ title: 'نظرة عامة على الاتصالات' }} />
       <Stack.Screen name="admin/comm-validation" options={{ title: 'تحقق قنوات الاتصال' }} />
       <Stack.Screen name="admin/comm-inbox" options={{ title: 'صندوق وارد الاتصالات' }} />
+      <Stack.Screen name="projects/stats-overview" options={{ title: 'نظرة عامة على المشاريع' }} />
+      <Stack.Screen name="legal/judgments-financial" options={{ title: 'تقرير الأحكام المالية' }} />
+      <Stack.Screen name="calendar/upcoming" options={{ title: 'الأحداث القادمة' }} />
+      <Stack.Screen name="bi/approval-timeliness" options={{ title: 'توقيت الاعتمادات' }} />
+      <Stack.Screen name="bi/avg-completion-time" options={{ title: 'متوسط وقت الإنجاز' }} />
+      <Stack.Screen name="bi/ops-trend" options={{ title: 'اتجاه العمليات' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
