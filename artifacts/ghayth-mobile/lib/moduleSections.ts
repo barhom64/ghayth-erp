@@ -521,8 +521,33 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       { key: "accounts", label: "شجرة الحسابات", icon: "git-branch-outline", endpoint: "/api/finance/accounts", titleFields: ["name", "accountName"], subtitleFields: ["code", "type"], statusField: "status", amountFields: ["balance"] },
       { key: "budget", label: "الموازنات", icon: "pie-chart-outline", endpoint: "/api/finance/budget", titleFields: ["accountName"], subtitleFields: ["accountCode", "period"], statusField: "status", amountFields: ["amount"] },
       { key: "cost-centers", label: "مراكز التكلفة", icon: "layers-outline", endpoint: "/api/finance/cost-centers", titleFields: ["name"], subtitleFields: ["code"], statusField: "status" },
-      { key: "custodies", label: "العُهد", icon: "briefcase-outline", endpoint: "/api/finance/custodies", titleFields: ["ref"], subtitleFields: ["employeeName", "description"], statusField: "status", amountFields: ["amount"], dateFields: ["date"], detailRoute: "/finance/custody-detail" },
-      { key: "salary-advances", label: "سلف الرواتب", icon: "wallet-outline", endpoint: "/api/finance/salary-advances", titleFields: ["ref"], subtitleFields: ["employeeName"], statusField: "status", amountFields: ["amount"], dateFields: ["createdAt"], detailRoute: "/finance/salary-advance-detail" },
+      {
+        key: "custodies", label: "العُهد", icon: "briefcase-outline", endpoint: "/api/finance/custodies", titleFields: ["ref"], subtitleFields: ["employeeName", "description"], statusField: "status", amountFields: ["amount"], dateFields: ["date"], detailRoute: "/finance/custody-detail",
+        write: {
+          moduleKey: "finance",
+          createFields: [
+            { name: "employeeId", label: "الموظف", type: "text", required: true },
+            { name: "amount", label: "المبلغ", type: "text", required: true },
+            { name: "description", label: "البيان", type: "text", required: true },
+            { name: "date", label: "التاريخ", type: "date" },
+            { name: "notes", label: "ملاحظات", type: "textarea" },
+          ],
+        },
+      },
+      {
+        key: "salary-advances", label: "سلف الرواتب", icon: "wallet-outline", endpoint: "/api/finance/salary-advances", titleFields: ["ref"], subtitleFields: ["employeeName"], statusField: "status", amountFields: ["amount"], dateFields: ["createdAt"], detailRoute: "/finance/salary-advance-detail",
+        write: {
+          moduleKey: "finance",
+          createFields: [
+            { name: "employeeId", label: "الموظف", type: "text", required: true },
+            { name: "amount", label: "المبلغ", type: "text", required: true },
+            { name: "reason", label: "السبب", type: "textarea" },
+          ],
+          actions: [
+            { key: "approve", label: "اعتماد السلفة", icon: "checkmark-circle-outline", method: "PATCH", path: (id) => `/api/finance/salary-advances/${id}/approve`, body: { approved: true }, confirm: "هل تريد اعتماد سلفة الراتب؟", successText: "تم الاعتماد", showWhenStatus: ["pending"] },
+          ],
+        },
+      },
       { key: "recurring-journals", label: "القيود الدورية", icon: "repeat-outline", endpoint: "/api/finance/recurring-journals", titleFields: ["name"], subtitleFields: ["frequency"], dateFields: ["nextRunDate"] },
       { key: "obligations", label: "الالتزامات", icon: "checkmark-circle-outline", endpoint: "/api/obligations", titleFields: ["title"], subtitleFields: ["obligationType", "entityType"], statusField: "status", dateFields: ["dueAt"], detailRoute: "/finance/obligation-detail" },
       { key: "bank-reconciliation", label: "تسوية البنوك", icon: "swap-horizontal-outline", endpoint: "/api/finance/bank-reconciliation", titleFields: ["ref", "bankAccount"], subtitleFields: ["bankName"], statusField: "status", dateFields: ["statementDate"] },
@@ -597,7 +622,21 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
-      { key: "trips", label: "الرحلات", icon: "navigate-outline", endpoint: "/api/fleet/trips", titleFields: ["destination", "ref", "origin"], subtitleFields: ["driverName", "vehiclePlate"], statusField: "status", dateFields: ["tripDate", "startTime", "date"], detailRoute: "/fleet/trip-detail" },
+      {
+        key: "trips", label: "الرحلات", icon: "navigate-outline", endpoint: "/api/fleet/trips", titleFields: ["destination", "ref", "origin"], subtitleFields: ["driverName", "vehiclePlate"], statusField: "status", dateFields: ["tripDate", "startTime", "date"], detailRoute: "/fleet/trip-detail",
+        write: {
+          moduleKey: "fleet",
+          createFields: [
+            { name: "vehicleId", label: "المركبة", type: "text", required: true },
+            { name: "driverId", label: "السائق", type: "text" },
+            { name: "origin", label: "نقطة الانطلاق", type: "text", required: true },
+            { name: "destination", label: "الوجهة", type: "text", required: true },
+            { name: "tripDate", label: "تاريخ الرحلة", type: "date", required: true },
+            { name: "startOdometer", label: "قراءة العداد (بداية)", type: "text" },
+            { name: "notes", label: "ملاحظات", type: "textarea" },
+          ],
+        },
+      },
       {
         key: "rental-contracts", label: "عقود التأجير", icon: "document-text-outline", endpoint: "/api/fleet/rental-contracts",
         titleFields: ["contractNumber", "ref"], subtitleFields: ["customerName", "clientName"], statusField: "status", amountFields: ["totalAmount", "total"], dateFields: ["startDate"],
@@ -925,9 +964,51 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
     label: "العمليات والمشاريع",
     sections: [
       { key: "projects", label: "المشاريع", icon: "briefcase-outline", endpoint: "/api/projects", titleFields: ["name", "projectName"], subtitleFields: ["code"], statusField: "status", amountFields: ["budget"], dateFields: ["startDate"], detailRoute: "/projects/project-detail" },
-      { key: "tasks", label: "المهام", icon: "checkbox-outline", endpoint: "/api/tasks", titleFields: ["title", "name"], subtitleFields: ["assigneeName", "priority"], statusField: "status", dateFields: ["dueDate"], detailRoute: "/projects/task-detail" },
-      { key: "milestones", label: "المعالم والإنجازات", icon: "flag-outline", endpoint: "/api/projects/milestones", titleFields: ["title", "name"], subtitleFields: ["projectName"], statusField: "status", amountFields: ["budget"], dateFields: ["dueDate"], detailRoute: "/projects/milestone-detail" },
-      { key: "issues", label: "المشاكل والعوائق", icon: "alert-circle-outline", endpoint: "/api/projects/issues", titleFields: ["title", "description"], subtitleFields: ["projectName", "severity"], statusField: "status", dateFields: ["createdAt"], detailRoute: "/projects/issue-detail" },
+      {
+        key: "tasks", label: "المهام", icon: "checkbox-outline", endpoint: "/api/tasks", titleFields: ["title", "name"], subtitleFields: ["assigneeName", "priority"], statusField: "status", dateFields: ["dueDate"], detailRoute: "/projects/task-detail",
+        write: {
+          moduleKey: "operations",
+          createFields: [
+            { name: "title", label: "عنوان المهمة", type: "text", required: true },
+            { name: "projectId", label: "المشروع", type: "text" },
+            { name: "assigneeId", label: "المسؤول", type: "text" },
+            { name: "priority", label: "الأولوية", type: "select", options: [{ label: "عالية", value: "high" }, { label: "متوسطة", value: "medium" }, { label: "منخفضة", value: "low" }] },
+            { name: "dueDate", label: "تاريخ الاستحقاق", type: "date" },
+            { name: "description", label: "الوصف", type: "textarea" },
+          ],
+          actions: [
+            { key: "complete", label: "إغلاق المهمة", icon: "checkmark-circle-outline", method: "PATCH", path: (id) => `/api/tasks/${id}`, body: { status: "done" }, confirm: "هل تريد إغلاق المهمة؟", successText: "تم إغلاق المهمة", showWhenStatus: ["todo", "in_progress", "review"] },
+          ],
+        },
+      },
+      {
+        key: "milestones", label: "المعالم والإنجازات", icon: "flag-outline", endpoint: "/api/projects/milestones", titleFields: ["title", "name"], subtitleFields: ["projectName"], statusField: "status", amountFields: ["budget"], dateFields: ["dueDate"], detailRoute: "/projects/milestone-detail",
+        write: {
+          moduleKey: "operations",
+          createFields: [
+            { name: "name", label: "اسم المعلم", type: "text", required: true },
+            { name: "projectId", label: "المشروع", type: "text", required: true },
+            { name: "dueDate", label: "تاريخ الاستحقاق", type: "date" },
+            { name: "description", label: "الوصف", type: "textarea" },
+          ],
+        },
+      },
+      {
+        key: "issues", label: "المشاكل والعوائق", icon: "alert-circle-outline", endpoint: "/api/projects/issues", titleFields: ["title", "description"], subtitleFields: ["projectName", "severity"], statusField: "status", dateFields: ["createdAt"], detailRoute: "/projects/issue-detail",
+        write: {
+          moduleKey: "operations",
+          createFields: [
+            { name: "title", label: "وصف المشكلة", type: "text", required: true },
+            { name: "projectId", label: "المشروع", type: "text", required: true },
+            { name: "priority", label: "الأولوية", type: "select", options: [{ label: "حرجة", value: "critical" }, { label: "عالية", value: "high" }, { label: "متوسطة", value: "medium" }, { label: "منخفضة", value: "low" }] },
+            { name: "impact", label: "الأثر", type: "textarea" },
+            { name: "description", label: "التفاصيل", type: "textarea" },
+          ],
+          actions: [
+            { key: "resolve", label: "إغلاق المشكلة", icon: "checkmark-circle-outline", method: "PATCH", path: (id) => `/api/projects/issues/${id}`, body: { status: "resolved" }, confirm: "هل تريد إغلاق المشكلة؟", successText: "تم إغلاق المشكلة", showWhenStatus: ["open", "in_progress"] },
+          ],
+        },
+      },
       { key: "operations-center", label: "مركز العمليات", icon: "construct-outline", endpoint: "/api/operations-center/dashboard", titleFields: ["title", "summary"], subtitleFields: ["status", "assigneeName"], statusField: "status", dateFields: ["date"] },
     ],
   },
