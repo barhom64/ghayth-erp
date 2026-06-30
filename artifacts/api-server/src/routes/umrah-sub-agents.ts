@@ -35,6 +35,7 @@ import {
 } from "../lib/errorHandler.js";
 import { emitEvent, auditFromRequest } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
+import { registerEntityParty } from "../lib/partyService.js";
 
 const router = Router();
 
@@ -132,6 +133,10 @@ router.post("/sub-agents", authorize({ feature: "umrah", action: "create" }), as
     if (!rows[0]) throw new NotFoundError("فشل في إنشاء الوكيل الفرعي");
     auditFromRequest(req, "create", "umrah_sub_agents", rows[0].id, { after: { name: b.name } }).catch((e) => logger.error(e, "umrah-sub-agents background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.sub_agent.created", entity: "umrah_sub_agents", entityId: rows[0].id, details: JSON.stringify({ name: b.name, nuskCode: b.nuskCode }) }).catch((e) => logger.error(e, "umrah-sub-agents background task failed"));
+    // Master-data identity (migration 249) — link the sub-agent to ONE party. Non-fatal.
+    registerEntityParty(scope.companyId, "umrah_sub_agents", Number(rows[0].id), "sub_agent", {
+      displayName: b.name, phone: b.phone ?? null, email: b.email ?? null, kind: "organization",
+    }).catch((e) => logger.error(e, "[partyService] umrah_sub_agents registration failed"));
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create sub-agent"); }
 });
