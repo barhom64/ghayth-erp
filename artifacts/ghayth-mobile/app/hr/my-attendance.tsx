@@ -45,14 +45,6 @@ const STATUS_LABELS: Record<string, string> = {
   holiday: 'إجازة رسمية',
 };
 
-const STATUS_BADGE: Record<string, string> = {
-  present: 'active',
-  absent: 'rejected',
-  late: 'pending',
-  on_leave: 'approved',
-  excused: 'approved',
-  holiday: 'draft',
-};
 
 function formatTime(val?: string | null): string {
   if (!val) return '—';
@@ -154,7 +146,7 @@ export default function MyAttendanceScreen() {
       renderItem={({ item }) => (
         <GCard style={styles.dayCard}>
           <View style={styles.dayHeader}>
-            <GStatusBadge status={STATUS_BADGE[item.status] ?? 'pending'} size="sm" />
+            <GStatusBadge status={STATUS_LABELS[item.status] ?? item.status} size="sm" />
             <GText variant="label">{formatDateShort(item.date)}</GText>
           </View>
           <View style={styles.dayRow}>

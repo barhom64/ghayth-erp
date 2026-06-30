@@ -10,10 +10,28 @@ interface GStatusBadgeProps {
 
 function statusToTone(status: string): 'default' | 'success' | 'warning' | 'danger' | 'info' {
   switch (status) {
-    case 'معتمد': case 'نشط': case 'مكتمل': return 'success';
-    case 'مرفوض': case 'ملغى': return 'danger';
-    case 'قيد المراجعة': return 'warning';
-    case 'مسودة': case 'مغلق': case 'غير نشط': return 'default';
+    // success — green
+    case 'معتمد': case 'نشط': case 'مكتمل': case 'حاضر':
+    case 'مدفوع': case 'ناجحة': case 'متاح': case 'مرحّل':
+    case 'تم الحل':
+      return 'success';
+    // danger — red
+    case 'مرفوض': case 'ملغى': case 'ملغي': case 'غائب':
+    case 'منتهٍ': case 'خاسرة': case 'معكوس': case 'موقوف':
+      return 'danger';
+    // warning — orange/yellow
+    case 'قيد المراجعة': case 'معلّق': case 'متأخر':
+    case 'مدفوع جزئيًا': case 'مجدول': case 'صيانة': case 'مشغول':
+    case 'غير مدفوع':
+      return 'warning';
+    // default — gray
+    case 'مسودة': case 'مغلق': case 'غير نشط':
+    case 'إجازة رسمية':
+      return 'default';
+    // info — blue
+    case 'قيد التنفيذ': case 'جديد': case 'مفتوح':
+    case 'إجازة': case 'مستأذن':
+      return 'info';
     default: return 'info';
   }
 }
