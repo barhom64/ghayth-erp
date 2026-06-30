@@ -14,10 +14,31 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "sa.door.ghayth",
+      "infoPlist": {
+        "NSCameraUsageDescription": "يحتاج التطبيق إلى الكاميرا لتصوير الحضور والمستندات",
+        "NSLocationWhenInUseUsageDescription": "يحتاج التطبيق إلى موقعك لتسجيل الحضور الميداني",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "يحتاج التطبيق إلى موقعك لتسجيل الحضور الميداني",
+        "NSPhotoLibraryUsageDescription": "يحتاج التطبيق إلى معرض الصور لرفع المستندات"
+      }
     },
     "android": {
-      "package": "sa.door.ghayth"
+      "package": "sa.door.ghayth",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE",
+        "POST_NOTIFICATIONS"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#F97316"
+      }
     },
     "web": {
       "favicon": "./assets/images/icon.png",
@@ -37,11 +58,17 @@
         }
       ],
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "ghayth-erp-mobile"
+      }
     }
   }
 }
