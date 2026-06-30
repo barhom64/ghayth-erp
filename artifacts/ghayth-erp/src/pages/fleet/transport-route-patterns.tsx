@@ -501,7 +501,7 @@ export default function TransportRoutePatternsPage() {
   return (
     <PageShell
       title="قوالب المسارات المتكررة"
-      subtitle="قوالب الحجوزات الدورية للشحن — تُوَلِّد حجوزات transport_bookings بمصدر recurring_schedule"
+      subtitle="قوالب الحجوزات الدورية للشحن — تُوَلِّد حجوزات نقل تلقائيًا بمصدر «جدول دوري»"
       breadcrumbs={[
         { href: "/fleet", label: "الأسطول" },
         { label: "قوالب المسارات" },
