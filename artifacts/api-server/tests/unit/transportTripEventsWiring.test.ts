@@ -24,6 +24,7 @@ const MIGRATION_433 = read(MIGRATION_433_PATH);
 const MIGRATION_434_PATH = join(apiSrc, "migrations/434_transport_deduction_candidates.sql");
 const MIGRATION_434 = read(MIGRATION_434_PATH);
 const HELPER = read(join(apiSrc, "lib/transport/tripEvents.ts"));
+const DEDUCTIONS = read(join(apiSrc, "lib/transport/deductions.ts"));
 const BOOKINGS = read(join(apiSrc, "routes/transport-bookings.ts"));
 const PLANNING = read(join(apiSrc, "routes/transport-planning.ts"));
 const RECORDER = read(join(spaSrc, "components/shared/trip-event-recorder.tsx"));
@@ -92,7 +93,7 @@ describe("سطح المشغّل — /transport/bookings/:id/events", () => {
   });
   it("تفاصيل الحجز تُدرج tripEvents (غير المُبطَلة) في الرد", () => {
     expect(BOOKINGS).toMatch(/FROM fleet_trip_events[\s\S]+?"voidedAt" IS NULL/);
-    expect(BOOKINGS).toContain("dispatchOrders, tripEvents, deductions, sourceContext");
+    expect(BOOKINGS).toContain("dispatchOrders, tripEvents, deductions, deductionRates, sourceContext");
   });
 });
 
@@ -198,26 +199,47 @@ describe("شريحة 4 — خصم النقص/التأخير (مرشّح → ما
     expect(MIGRATION_434).toContain('"recordedByAssignmentId"'); // القاعدة الذهبية
   });
 
-  it("النقل يُنشئ المرشّح فقط (تشغيلي) — لا ترحيل دفتر من النقل", () => {
+  it("المنطق المشترك يُنشئ المرشّح فقط (تشغيلي) — لا ترحيل دفتر", () => {
+    expect(DEDUCTIONS).toContain("export async function createDeductionCandidate");
+    expect(DEDUCTIONS).toContain("INSERT INTO transport_deduction_candidates");
+    expect(DEDUCTIONS).toContain("نقص الوزن (كغم) مطلوب");
+    expect(DEDUCTIONS).toContain('action: "deduction_candidate_created"');
+    // قفل الحدود: لا يكتب الدفتر ولا جداول المالية في النقل ولا المُساعد.
+    for (const src of [BOOKINGS, DEDUCTIONS, PLANNING]) {
+      expect(src).not.toContain("INSERT INTO credit_memos");
+      expect(src).not.toContain("postJournalEntry");
+    }
+  });
+
+  it("المبلغ يُحسب من المعدّل المُعدّ عند غيابه (resolveDeductionRates)", () => {
+    expect(DEDUCTIONS).toContain("export async function resolveDeductionRates");
+    expect(DEDUCTIONS).toContain("fleet.deduction.shortageRatePerKg");
+    expect(DEDUCTIONS).toContain("fleet.deduction.delayRatePerHour");
+    expect(DEDUCTIONS).toMatch(/measure \* rate/);
+    expect(DEDUCTIONS).toContain("لا معدّل خصم مُعدّ");
+  });
+
+  it("سطحا المشغّل والسائق يستدعيان المنطق المشترك + التفاصيل تُدرج deductionRates", () => {
     expect(BOOKINGS).toContain('"/transport/bookings/:id/deductions"');
-    expect(BOOKINGS).toContain("INSERT INTO transport_deduction_candidates");
-    // قفل الحدود: النقل لا يكتب الدفتر ولا جداول المالية.
-    expect(BOOKINGS).not.toContain("INSERT INTO credit_memos");
-    expect(BOOKINGS).not.toContain("postJournalEntry");
+    expect(BOOKINGS).toContain("createDeductionCandidate(scope, id, b)");
+    expect(BOOKINGS).toContain("tripEvents, deductions, deductionRates, sourceContext");
+    expect(PLANNING).toContain('"/transport/dispatch-orders/:id/deduction"');
+    expect(PLANNING).toMatch(/deduction"[\s\S]{0,120}fleet\.dispatch/);
+    expect(PLANNING).toContain("createDeductionCandidate(scope, d.bookingId, b)");
   });
 
-  it("يتحقّق من القياس حسب الأساس + يُسجّل Audit + يُدرج الخصومات في التفاصيل", () => {
-    expect(BOOKINGS).toContain("نقص الوزن (كغم) مطلوب");
-    expect(BOOKINGS).toContain("ساعات التأخّر مطلوبة");
-    expect(BOOKINGS).toContain('action: "deduction_candidate_created"');
-    expect(BOOKINGS).toContain("tripEvents, deductions, sourceContext");
-  });
-
-  it("صفحة الحجز تعرض نموذج الخصم وتستدعي endpoint الخصومات", () => {
+  it("صفحة الحجز تعرض نموذج الخصم + اقتراح المبلغ من المعدّل", () => {
     expect(DETAIL).toContain("خصومات النقص/التأخير");
     expect(DETAIL).toMatch(/\/transport\/bookings\/\$\{id\}\/deductions/);
     expect(DETAIL).toContain("submitDeduction");
-    expect(DETAIL).toContain("إشعارًا دائنًا"); // يوضّح أنّ المالية تُصدر الإشعار
+    expect(DETAIL).toContain("إشعارًا دائنًا");
+    expect(DETAIL).toContain("deductionRates"); // اقتراح المبلغ
+  });
+
+  it("تطبيق السائق يُبلّغ عن خصم على endpoint السائق", () => {
+    expect(DRIVER).toContain("إبلاغ خصم");
+    expect(DRIVER).toContain("submitDriverDeduction");
+    expect(DRIVER).toMatch(/dispatch-orders\/\$\{session\.dispatchOrderId\}\/deduction`/);
   });
 
   it("نقص الوزن يُشتقّ من الأوزان المسجّلة (computeWeightShortage) ويُقترح في النموذج", () => {

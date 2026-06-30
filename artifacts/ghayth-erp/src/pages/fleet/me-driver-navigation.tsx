@@ -102,6 +102,12 @@ export default function MeDriverNavigation() {
   const [handoverNotes, setHandoverNotes] = useState("");
   const [uploadingHandover, setUploadingHandover] = useState(false);
   const [submittingHandover, setSubmittingHandover] = useState(false);
+  // شريحة 4 — إبلاغ السائق عن خصم نقص/تأخير (المبلغ يُحسب من المعدّل المُعدّ).
+  const [showDriverDeduction, setShowDriverDeduction] = useState(false);
+  const [ddBasis, setDdBasis] = useState<"weight_shortage" | "delay">("weight_shortage");
+  const [ddMeasure, setDdMeasure] = useState("");
+  const [ddReason, setDdReason] = useState("");
+  const [submittingDd, setSubmittingDd] = useState(false);
 
   const { data, isLoading, isError, refetch } = useApiQuery<{ data: NavigationSession | null }>(
     ["me-driver-navigation"],
@@ -266,6 +272,33 @@ export default function MeDriverNavigation() {
       toast({ variant: "destructive", title: "تعذّر تسليم العهدة", description: getErrorMessage(e) });
     } finally {
       setSubmittingHandover(false);
+    }
+  }
+
+  async function submitDriverDeduction() {
+    if (!session) return;
+    const measure = Number(ddMeasure);
+    if (!(measure > 0)) {
+      toast({ variant: "destructive", title: ddBasis === "weight_shortage" ? "أدخل النقص (كغم)" : "أدخل التأخّر (ساعة)" });
+      return;
+    }
+    if (!ddReason.trim()) { toast({ variant: "destructive", title: "أدخل السبب" }); return; }
+    setSubmittingDd(true);
+    try {
+      await apiFetch(`/transport/dispatch-orders/${session.dispatchOrderId}/deduction`, {
+        method: "POST",
+        body: JSON.stringify({
+          basis: ddBasis,
+          ...(ddBasis === "weight_shortage" ? { shortageKg: measure } : { delayHours: measure }),
+          reason: ddReason.trim(),
+        }),
+      });
+      toast({ title: "تم إبلاغ الخصم" });
+      setShowDriverDeduction(false); setDdMeasure(""); setDdReason("");
+    } catch (e) {
+      toast({ variant: "destructive", title: "تعذّر الإبلاغ", description: getErrorMessage(e) });
+    } finally {
+      setSubmittingDd(false);
     }
   }
 
@@ -459,6 +492,53 @@ export default function MeDriverNavigation() {
               />
               <Button size="sm" onClick={submitHandover} disabled={submittingHandover || uploadingHandover}>
                 {submittingHandover ? "جاري التسليم…" : "تأكيد تسليم العهدة"}
+              </Button>
+            </CardContent>
+          )}
+        </Card>
+      )}
+
+      {/* شريحة 4 — إبلاغ السائق عن خصم نقص/تأخير (المبلغ يُحسب من المعدّل؛
+          المالية تُصدر إشعار الدائن). مرشّح تشغيلي — لا قيد من السائق. */}
+      {!isFinished && (
+        <Card className="mt-3">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center justify-between">
+              <span>إبلاغ خصم (نقص/تأخّر)</span>
+              <Button
+                size="sm"
+                variant={showDriverDeduction ? "default" : "outline"}
+                onClick={() => setShowDriverDeduction(!showDriverDeduction)}
+              >
+                {showDriverDeduction ? "إلغاء" : "إبلاغ"}
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          {showDriverDeduction && (
+            <CardContent className="p-3 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="text-xs text-muted-foreground w-20">السبب</label>
+                <select
+                  className="h-8 text-sm border rounded-md px-2 bg-background"
+                  value={ddBasis}
+                  onChange={(e) => setDdBasis(e.target.value as "weight_shortage" | "delay")}
+                >
+                  <option value="weight_shortage">نقص وزن</option>
+                  <option value="delay">تأخّر</option>
+                </select>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="text-xs text-muted-foreground w-20">
+                  {ddBasis === "weight_shortage" ? "النقص (كغم)" : "التأخّر (ساعة)"}
+                </label>
+                <Input type="number" min="0" value={ddMeasure} onChange={(e) => setDdMeasure(e.target.value)} className="w-32 h-8" />
+              </div>
+              <Input value={ddReason} onChange={(e) => setDdReason(e.target.value)} placeholder="السبب التفصيلي" className="h-8 text-sm" />
+              <div className="text-[11px] text-muted-foreground">
+                يُحسب المبلغ من المعدّل المُعدّ؛ المالية تُصدر إشعار الدائن.
+              </div>
+              <Button size="sm" onClick={submitDriverDeduction} disabled={submittingDd}>
+                {submittingDd ? "جاري الإبلاغ…" : "إرسال الإبلاغ"}
               </Button>
             </CardContent>
           )}

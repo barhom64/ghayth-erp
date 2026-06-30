@@ -68,6 +68,7 @@ interface BookingDetail {
   dispatchOrders: DispatchOrder[];
   tripEvents: TripEvent[];
   deductions: DeductionCandidate[];
+  deductionRates?: { shortagePerKg: number | null; delayPerHour: number | null };
   // #2475-follow-up — resolved booking-cancel policy (guard|cascade), used by
   // the confirmation/preview dialog. Defaults to "guard" when absent.
   cancelPolicy?: "guard" | "cascade";
@@ -843,6 +844,23 @@ export default function TransportBookingDetail() {
               <div className="flex flex-wrap items-center gap-2">
                 <label className="text-xs text-muted-foreground w-20">المبلغ (ريال)</label>
                 <Input type="number" min="0" value={dedAmount} onChange={(e) => setDedAmount(e.target.value)} className="w-32 h-8" />
+                {/* اقتراح المبلغ من المعدّل المُعدّ (قياس × معدّل). */}
+                {(() => {
+                  const rate = dedBasis === "weight_shortage"
+                    ? b.deductionRates?.shortagePerKg
+                    : b.deductionRates?.delayPerHour;
+                  const measure = Number(dedMeasure);
+                  if (rate == null || !(measure > 0)) return null;
+                  const suggested = Math.round(measure * rate * 100) / 100;
+                  return (
+                    <Button
+                      type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs"
+                      onClick={() => setDedAmount(String(suggested))}
+                    >
+                      اقتراح: {suggested} ريال
+                    </Button>
+                  );
+                })()}
               </div>
               <Input value={dedReason} onChange={(e) => setDedReason(e.target.value)} placeholder="السبب التفصيلي" className="h-8 text-sm" />
               <div className="text-[11px] text-muted-foreground">
