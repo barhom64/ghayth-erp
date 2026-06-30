@@ -2,7 +2,7 @@
  * لوحة القيادة — الصفحة الرئيسية للتطبيق
  */
 import React from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { GScreen, GCard, GText, GLoadingState, GEmptyState } from '@workspace/ui-native';
@@ -10,6 +10,7 @@ import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { useAuth } from '@/context/AuthContext';
 import { canApprove } from '@/lib/modules';
+import { useRefresh } from '@/hooks/useRefresh';
 import type { ComponentProps } from 'react';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -85,6 +86,7 @@ export default function DashboardScreen() {
   const { data, isLoading, isError } = useList<DashboardData>('/api/dashboard/summary');
   const { data: insightsResp } = useList<InsightsResp>('/api/me/proactive-insights');
   const isManager = canApprove(user?.userRoles);
+  const { refreshing, onRefresh } = useRefresh([['/api/dashboard/summary'], ['/api/me/proactive-insights']]);
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'صباح الخير' : hour < 17 ? 'مساء الخير' : 'مساء النور';
@@ -101,7 +103,7 @@ export default function DashboardScreen() {
   );
 
   return (
-    <GScreen scrollable>
+    <GScreen scrollable refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
       {/* تحية المستخدم */}
       <View style={[styles.greetingBox, { backgroundColor: c.primary }]}>
         <Text style={[styles.greeting, { color: c.onPrimary }]}>{greeting} {user?.name ?? ''}</Text>

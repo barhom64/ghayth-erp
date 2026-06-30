@@ -9,7 +9,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import React, { useEffect } from 'react';
-import { I18nManager, Platform } from 'react-native';
+import { I18nManager, Platform, Text, View } from 'react-native';
+import { useOffline } from '@/hooks/useOffline';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -90,9 +91,17 @@ function AuthGate() {
     });
   }, [status]);
 
+  const { isOffline } = useOffline();
+
   if (status === 'loading') return <GLoadingState text="جارٍ تحميل غيث…" />;
 
   return (
+    <>
+      {isOffline && (
+        <View style={{ backgroundColor: '#374151', paddingVertical: 6, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
+          <Text style={{ fontSize: 12, color: '#FFF', fontWeight: '600' }}>⚠ لا يوجد اتصال بالإنترنت — وضع عرض فقط</Text>
+        </View>
+      )}
     <Stack
       screenOptions={{
         headerStyle: { backgroundColor: c.surface },
@@ -226,6 +235,7 @@ function AuthGate() {
       <Stack.Screen name="hr/employee-detail" options={{ title: 'ملف الموظف' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
+    </>
   );
 }
 

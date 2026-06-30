@@ -1,5 +1,5 @@
 import React, { type ReactNode } from 'react';
-import { ScrollView, View, type ViewStyle } from 'react-native';
+import { RefreshControl, ScrollView, View, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from './useTheme';
 
@@ -8,9 +8,10 @@ interface GScreenProps {
   scrollable?: boolean;
   style?: ViewStyle;
   contentStyle?: ViewStyle;
+  refreshControl?: React.ReactElement<React.ComponentProps<typeof RefreshControl>>;
 }
 
-export function GScreen({ children, scrollable = false, style, contentStyle }: GScreenProps) {
+export function GScreen({ children, scrollable = false, style, contentStyle, refreshControl }: GScreenProps) {
   const { colors } = useTheme();
   const bg = { backgroundColor: colors.bg, flex: 1 };
 
@@ -21,6 +22,7 @@ export function GScreen({ children, scrollable = false, style, contentStyle }: G
           contentContainerStyle={[{ paddingBottom: 32 }, contentStyle]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          refreshControl={refreshControl}
         >
           {children}
         </ScrollView>

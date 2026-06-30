@@ -2,7 +2,7 @@
  * مساحتي — بطاقة الموظف والاختصارات الشخصية
  */
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
@@ -10,6 +10,7 @@ import { GScreen, GCard, GAvatar, GText, GStatusBadge } from '@workspace/ui-nati
 import { useColors } from '@/hooks/useColors';
 import { useList, apiFetch } from '@/hooks/useApi';
 import { useAuth, type Assignment } from '@/context/AuthContext';
+import { useRefresh } from '@/hooks/useRefresh';
 import { statusBadge } from '@/lib/moduleSections';
 import { canApprove } from '@/lib/modules';
 import type { ComponentProps } from 'react';
@@ -83,6 +84,7 @@ export default function MeScreen() {
   const router = useRouter();
   const qc = useQueryClient();
   const { data, isLoading } = useList<MySpaceData>('/api/my-space');
+  const { refreshing, onRefresh } = useRefresh([['/api/my-space']]);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [switching, setSwitching] = useState(false);
   const [savingPref, setSavingPref] = useState(false);
@@ -125,7 +127,7 @@ export default function MeScreen() {
   };
 
   return (
-    <GScreen scrollable>
+    <GScreen scrollable refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
       {/* بطاقة الموظف */}
       <GCard style={[styles.empCard, { backgroundColor: c.primary }]}>
         <View style={styles.empRow}>
