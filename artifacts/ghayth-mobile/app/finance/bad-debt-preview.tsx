@@ -5,11 +5,11 @@ import { GLoadingState, GEmptyState } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 
-interface EmpStatus { id?: number; name?: string; status?: string; department?: string; }
+interface BadDebtItem { id?: number; clientName?: string; invoiceRef?: string; amount?: number; provision?: number; }
 
-export default function EmployeesStatusScreen() {
+export default function BadDebtPreviewScreen() {
   const c = useColors();
-  const { data, isLoading, isError, refetch } = useList<EmpStatus[]>('/api/hr/employees-status');
+  const { data, isLoading, isError, refetch } = useList<BadDebtItem[]>('/api/finance/bad-debt/preview');
   const list = Array.isArray(data) ? data : [];
   if (isLoading) return <GLoadingState text="جارٍ تحميل…" />;
   if (isError) return (
@@ -18,16 +18,24 @@ export default function EmployeesStatusScreen() {
   );
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Stack.Screen options={{ title: 'حالة الموظفين' }} />
+      <Stack.Screen options={{ title: 'معاينة مخصص الديون المشكوك فيها' }} />
       <FlatList data={list} keyExtractor={(item, i) => String(item.id ?? i)}
         contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
         onRefresh={refetch} refreshing={isLoading}
-        ListEmptyComponent={<GEmptyState icon="person-outline" title="لا توجد بيانات" description="" />}
+        ListEmptyComponent={<GEmptyState icon="alert" title="لا توجد بيانات" description="" />}
         renderItem={({ item }) => (
           <View style={{ backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, padding: 14 }}>
-            <Text style={{ color: c.text, fontSize: 14 }}>{item.name ?? String(item.id ?? '')}</Text>
-            {item.status && <Text style={{ color: c.textMuted, fontSize: 12, marginTop: 4 }}>{item.status}</Text>}
-            {item.department && <Text style={{ color: c.textMuted, fontSize: 12 }}>{item.department}</Text>}
+            <Text style={{ color: c.text, fontSize: 14 }}>{item.clientName ?? item.invoiceRef ?? String(item.id ?? '')}</Text>
+            {item.amount != null && (
+              <Text style={{ color: c.textMuted, fontSize: 12, marginTop: 4 }}>
+                المبلغ: {item.amount.toLocaleString('ar-SA')} ر.س
+              </Text>
+            )}
+            {item.provision != null && (
+              <Text style={{ color: c.textMuted, fontSize: 12 }}>
+                المخصص: {item.provision.toLocaleString('ar-SA')} ر.س
+              </Text>
+            )}
           </View>
         )}
       />

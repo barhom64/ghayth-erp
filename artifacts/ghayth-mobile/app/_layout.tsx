@@ -1078,6 +1078,16 @@ function AuthGate() {
       <Stack.Screen name="legal/session-detail" options={{ title: 'تفاصيل الجلسة' }} />
       <Stack.Screen name="legal/judgment-detail" options={{ title: 'تفاصيل الحكم' }} />
       <Stack.Screen name="legal/correspondence-detail" options={{ title: 'تفاصيل المراسلة' }} />
+      <Stack.Screen name="hr/employees-status" options={{ title: 'حالة الموظفين' }} />
+      <Stack.Screen name="hr/evaluation-cycle-report" options={{ title: 'تقرير دورة التقييم' }} />
+      <Stack.Screen name="hr/evaluation-cycle-summary" options={{ title: 'ملخص دورة التقييم' }} />
+      <Stack.Screen name="hr/leave-request-stages" options={{ title: 'مراحل طلب الإجازة' }} />
+      <Stack.Screen name="hr/payroll-lines" options={{ title: 'سطور مسيرة الرواتب' }} />
+      <Stack.Screen name="finance/purchase-order-receipts" options={{ title: 'إيصالات أمر الشراء' }} />
+      <Stack.Screen name="finance/purchase-order-match" options={{ title: 'مطابقة أمر الشراء' }} />
+      <Stack.Screen name="finance/collection-history" options={{ title: 'سجل التحصيل' }} />
+      <Stack.Screen name="finance/invoice-memos" options={{ title: 'مذكرات الفاتورة' }} />
+      <Stack.Screen name="finance/bad-debt-preview" options={{ title: 'معاينة مخصص الديون' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>

@@ -5,11 +5,11 @@ import { GLoadingState, GEmptyState } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 
-interface EmpStatus { id?: number; name?: string; status?: string; department?: string; }
+interface Memo { id?: number; type?: string; amount?: number; date?: string; reason?: string; }
 
-export default function EmployeesStatusScreen() {
+export default function InvoiceMemosScreen() {
   const c = useColors();
-  const { data, isLoading, isError, refetch } = useList<EmpStatus[]>('/api/hr/employees-status');
+  const { data, isLoading, isError, refetch } = useList<Memo[]>('/api/finance/invoices/0/memos');
   const list = Array.isArray(data) ? data : [];
   if (isLoading) return <GLoadingState text="جارٍ تحميل…" />;
   if (isError) return (
@@ -18,16 +18,20 @@ export default function EmployeesStatusScreen() {
   );
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Stack.Screen options={{ title: 'حالة الموظفين' }} />
+      <Stack.Screen options={{ title: 'مذكرات الفاتورة' }} />
       <FlatList data={list} keyExtractor={(item, i) => String(item.id ?? i)}
         contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
         onRefresh={refetch} refreshing={isLoading}
-        ListEmptyComponent={<GEmptyState icon="person-outline" title="لا توجد بيانات" description="" />}
+        ListEmptyComponent={<GEmptyState icon="document-outline" title="لا توجد مذكرات" description="" />}
         renderItem={({ item }) => (
           <View style={{ backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, padding: 14 }}>
-            <Text style={{ color: c.text, fontSize: 14 }}>{item.name ?? String(item.id ?? '')}</Text>
-            {item.status && <Text style={{ color: c.textMuted, fontSize: 12, marginTop: 4 }}>{item.status}</Text>}
-            {item.department && <Text style={{ color: c.textMuted, fontSize: 12 }}>{item.department}</Text>}
+            <Text style={{ color: c.text, fontSize: 14 }}>{item.type ?? String(item.id ?? '')}</Text>
+            {item.amount != null && (
+              <Text style={{ color: c.textMuted, fontSize: 12, marginTop: 4 }}>
+                {item.amount.toLocaleString('ar-SA')} ر.س
+              </Text>
+            )}
+            {item.reason && <Text style={{ color: c.textMuted, fontSize: 12 }}>{item.reason}</Text>}
           </View>
         )}
       />
