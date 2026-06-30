@@ -387,6 +387,9 @@ function AuthGate() {
       <Stack.Screen name="projects/obligations" options={{ title: 'الالتزامات التعاقدية' }} />
       <Stack.Screen name="hr/recruitment-applications" options={{ title: 'طلبات التوظيف' }} />
       <Stack.Screen name="bi/kpis" options={{ title: 'مؤشرات الأداء' }} />
+      <Stack.Screen name="hr/my-space" options={{ title: 'مساحتي' }} />
+      <Stack.Screen name="hr/field-tracking" options={{ title: 'التتبع الميداني' }} />
+      <Stack.Screen name="finance/operations-center" options={{ title: 'مركز العمليات' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
