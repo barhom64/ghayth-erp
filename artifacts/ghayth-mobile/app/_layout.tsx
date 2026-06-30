@@ -645,6 +645,9 @@ function AuthGate() {
       <Stack.Screen name="admin/subscription" options={{ title: 'الاشتراك' }} />
       <Stack.Screen name="umrah/season-portfolio" options={{ title: 'محفظة الموسم' }} />
       <Stack.Screen name="umrah/agent-balances" options={{ title: 'أرصدة وكلاء العمرة' }} />
+      <Stack.Screen name="hr/monthly-attendance" options={{ title: 'الحضور الشهري' }} />
+      <Stack.Screen name="hr/turnover-report" options={{ title: 'تقرير الدوران الوظيفي' }} />
+      <Stack.Screen name="hr/accruals-preview" options={{ title: 'معاينة الاستحقاقات' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
