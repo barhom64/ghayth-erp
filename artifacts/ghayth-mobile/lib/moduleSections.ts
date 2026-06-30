@@ -907,7 +907,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
     key: "operations",
     label: "العمليات والمشاريع",
     sections: [
-      { key: "projects", label: "المشاريع", icon: "briefcase-outline", endpoint: "/api/projects", titleFields: ["name", "projectName"], subtitleFields: ["code"], statusField: "status", amountFields: ["budget"], dateFields: ["startDate"] },
+      { key: "projects", label: "المشاريع", icon: "briefcase-outline", endpoint: "/api/projects", titleFields: ["name", "projectName"], subtitleFields: ["code"], statusField: "status", amountFields: ["budget"], dateFields: ["startDate"], detailRoute: "/projects/project-detail" },
       { key: "tasks", label: "المهام", icon: "checkbox-outline", endpoint: "/api/tasks", titleFields: ["title", "name"], subtitleFields: ["assigneeName", "priority"], statusField: "status", dateFields: ["dueDate"] },
       { key: "milestones", label: "المعالم والإنجازات", icon: "flag-outline", endpoint: "/api/projects/milestones", titleFields: ["title", "name"], subtitleFields: ["projectName"], statusField: "status", amountFields: ["budget"], dateFields: ["dueDate"] },
       { key: "issues", label: "المشاكل والعوائق", icon: "alert-circle-outline", endpoint: "/api/projects/issues", titleFields: ["title", "description"], subtitleFields: ["projectName", "severity"], statusField: "status", dateFields: ["createdAt"] },
@@ -1459,6 +1459,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "buildings", label: "المباني", icon: "business-outline", endpoint: "/api/properties/buildings",
         titleFields: ["name"], subtitleFields: ["city", "type"], statusField: "status",
+        detailRoute: "/properties/property-detail",
         write: {
           moduleKey: "property",
           canDelete: true,
@@ -1524,6 +1525,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "cases", label: "القضايا", icon: "hammer-outline", endpoint: "/api/legal/cases",
         titleFields: ["title", "caseNumber"], subtitleFields: ["court", "caseNumber"], statusField: "status", dateFields: ["filingDate"],
+        detailRoute: "/legal/case-detail",
         write: {
           moduleKey: "legal",
           createFields: [
