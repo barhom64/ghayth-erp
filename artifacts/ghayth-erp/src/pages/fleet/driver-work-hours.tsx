@@ -14,7 +14,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { toast } from "@/hooks/use-toast";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { CheckCircle, Clock } from "lucide-react";
-import { todayLocal } from "@/lib/formatters";
+import { todayLocal, currentPeriodRiyadh } from "@/lib/formatters";
 
 interface HoursRow {
   id: number;
@@ -36,8 +36,8 @@ interface HoursRow {
 }
 
 function monthStart(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+  // أول الشهر الحالي بتوقيت الرياض (لا UTC) — حارس finance-period-drift.
+  return `${currentPeriodRiyadh()}-01`;
 }
 function num(v: unknown): number | null {
   if (v == null || v === "") return null;
