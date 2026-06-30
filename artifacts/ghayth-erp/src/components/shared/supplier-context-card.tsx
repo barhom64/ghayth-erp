@@ -6,6 +6,7 @@ import {
   Building2, Phone, Mail, FileText, ShoppingCart, AlertTriangle, Calendar,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ContextCardSkeleton, ContextStat, ContextWarning } from "./context-card-kit";
 
 export interface SupplierContextCardProps {
   supplierId: string | number | null | undefined;
@@ -41,18 +42,7 @@ export function SupplierContextCard({
 
   if (!hasId) return null;
 
-  if (isLoading) {
-    return (
-      <Card className={cn("border-border bg-surface-subtle/50 animate-pulse", className)}>
-        <CardContent className="p-4">
-          <div className="h-4 w-32 bg-gray-200 rounded mb-3" />
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {[1, 2, 3, 4].map((i) => <div key={i} className="h-12 bg-gray-100 rounded" />)}
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
+  if (isLoading) return <ContextCardSkeleton className={className} />;
 
   if (!supplier) return null;
 
@@ -88,47 +78,27 @@ export function SupplierContextCard({
 
         {/* Info grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          <div className="bg-white rounded p-2 border border-border">
-            <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">
-              <Phone className="h-3 w-3" />
-              <span>جهة الاتصال</span>
-            </p>
-            <p className="text-sm font-semibold text-gray-800 truncate">
-              {supplier.contactPerson || "—"}
-            </p>
-          </div>
-          <div className="bg-white rounded p-2 border border-border">
-            <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">
-              <ShoppingCart className="h-3 w-3" />
-              <span>طلبات نشطة</span>
-            </p>
-            <p className={cn(
-              "text-sm font-semibold",
-              activeOrders > 0 ? "text-status-info-foreground" : "text-gray-800"
-            )}>
-              {activeOrders}
-            </p>
-          </div>
-          <div className="bg-white rounded p-2 border border-border">
-            <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">
-              <FileText className="h-3 w-3" />
-              <span>إجمالي المشتريات</span>
-            </p>
-            <p className="text-sm font-semibold text-gray-800">
-              {totalPurchases > 0 ? formatCurrency(totalPurchases) : "—"}
-            </p>
-          </div>
-          <div className="bg-white rounded p-2 border border-border">
-            <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">
-              <Calendar className="h-3 w-3" />
-              <span>آخر طلب</span>
-            </p>
-            <p className="text-sm font-semibold text-gray-800">
-              {supplier.lastOrderAt
-                ? new Date(supplier.lastOrderAt).toLocaleDateString("ar-SA")
-                : "—"}
-            </p>
-          </div>
+          <ContextStat
+            icon={Phone}
+            label="جهة الاتصال"
+            value={<span className="block truncate">{supplier.contactPerson || "—"}</span>}
+          />
+          <ContextStat
+            icon={ShoppingCart}
+            label="طلبات نشطة"
+            tone={activeOrders > 0 ? "text-status-info-foreground" : undefined}
+            value={activeOrders}
+          />
+          <ContextStat
+            icon={FileText}
+            label="إجمالي المشتريات"
+            value={totalPurchases > 0 ? formatCurrency(totalPurchases) : "—"}
+          />
+          <ContextStat
+            icon={Calendar}
+            label="آخر طلب"
+            value={supplier.lastOrderAt ? new Date(supplier.lastOrderAt).toLocaleDateString("ar-SA") : "—"}
+          />
         </div>
 
         {/* Contact row */}
@@ -154,10 +124,9 @@ export function SupplierContextCard({
 
         {/* Warnings */}
         {inactive && (
-          <div className="flex items-center gap-1.5 text-xs text-status-error-foreground bg-status-error-surface border border-status-error-surface rounded p-1.5">
-            <AlertTriangle className="h-3 w-3" />
-            <span>المورد غير نشط — لا يمكن إنشاء طلبات شراء جديدة</span>
-          </div>
+          <ContextWarning icon={AlertTriangle}>
+            المورد غير نشط — لا يمكن إنشاء طلبات شراء جديدة
+          </ContextWarning>
         )}
       </CardContent>
     </Card>
