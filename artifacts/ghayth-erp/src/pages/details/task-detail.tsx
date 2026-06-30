@@ -30,9 +30,9 @@ const STATUS_LABELS: Record<string, string> = {
 
 const PRIORITY_LABELS: Record<string, string> = {
   low: "منخفضة",
-  normal: "عادية",
+  medium: "متوسطة",
   high: "عالية",
-  urgent: "عاجلة",
+  critical: "حرجة",
 };
 
 type Tone = "default" | "success" | "warning" | "destructive" | "info" | "muted";
@@ -48,7 +48,7 @@ function statusTone(status?: string | null): Tone {
 
 function priorityTone(priority?: string | null): Tone {
   if (!priority) return "default";
-  if (priority === "urgent") return "destructive";
+  if (priority === "critical") return "destructive";
   if (priority === "high") return "warning";
   if (priority === "normal") return "default";
   return "muted";
@@ -58,7 +58,7 @@ const taskEditSchema = z.object({
   title: z.string().min(1, "العنوان مطلوب"),
   description: z.string().optional().default(""),
   type: z.string().optional().default(""),
-  priority: z.enum(["low", "medium", "high", "urgent"]),
+  priority: z.enum(["low", "medium", "high", "critical"]),
   status: z.enum(["pending", "in_progress", "completed", "cancelled"]),
   scheduledDate: z.string().optional().default(""),
   notes: z.string().optional().default(""),
@@ -351,7 +351,7 @@ export default function TaskDetail() {
               { value: "low", label: "منخفضة" },
               { value: "medium", label: "متوسطة" },
               { value: "high", label: "عالية" },
-              { value: "urgent", label: "عاجلة" },
+              { value: "critical", label: "حرجة" },
             ]}
           />
           <FormSelectField
