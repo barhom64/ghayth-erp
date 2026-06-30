@@ -1441,11 +1441,126 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
-      { key: "violations", label: "المخالفات", icon: "warning-outline", endpoint: "/api/umrah/violations", titleFields: ["type"], subtitleFields: ["mutamerName", "agentName"], statusField: "status", amountFields: ["penaltyAmount"], dateFields: ["detectedAt"], detailRoute: "/umrah/violation-detail" },
-      { key: "penalties", label: "الغرامات", icon: "alert-circle-outline", endpoint: "/api/umrah/penalties", titleFields: ["type"], subtitleFields: ["pilgrimName", "agentName"], statusField: "status", amountFields: ["amount"], dateFields: ["createdAt"], detailRoute: "/umrah/penalty-detail" },
-      { key: "invoices", label: "فواتير المبيعات", icon: "receipt-outline", endpoint: "/api/umrah/invoices", titleFields: ["ref"], subtitleFields: ["subAgentName", "clientName"], statusField: "status", amountFields: ["total"], dateFields: ["createdAt"], detailRoute: "/umrah/invoice-detail" },
+      {
+        key: "violations", label: "المخالفات", icon: "warning-outline", endpoint: "/api/umrah/violations",
+        titleFields: ["type"], subtitleFields: ["mutamerName", "agentName"], statusField: "status", amountFields: ["penaltyAmount"], dateFields: ["detectedAt"],
+        detailRoute: "/umrah/violation-detail",
+        write: {
+          moduleKey: "umrah",
+          createFields: [
+            {
+              name: "pilgrimId", label: "المعتمر", type: "reference", required: true,
+              refEndpoint: "/api/umrah/pilgrims", refLabelFields: ["name", "nameAr"], refValueField: "id",
+            },
+            { name: "detectedAt", label: "تاريخ الاكتشاف", type: "date", required: true },
+            {
+              name: "type", label: "نوع المخالفة", type: "select", required: true,
+              options: [
+                { value: "visa_violation", label: "مخالفة تأشيرة" },
+                { value: "stay_violation", label: "مخالفة إقامة" },
+                { value: "conduct_violation", label: "مخالفة سلوكية" },
+                { value: "other", label: "أخرى" },
+              ],
+            },
+            { name: "penaltyAmount", label: "مبلغ الغرامة", type: "currency" },
+            { name: "notes", label: "ملاحظات", type: "textarea" },
+          ],
+        },
+      },
+      {
+        key: "penalties", label: "الغرامات", icon: "alert-circle-outline", endpoint: "/api/umrah/penalties",
+        titleFields: ["type"], subtitleFields: ["pilgrimName", "agentName"], statusField: "status", amountFields: ["amount"], dateFields: ["createdAt"],
+        detailRoute: "/umrah/penalty-detail",
+        write: {
+          moduleKey: "umrah",
+          createFields: [
+            {
+              name: "pilgrimId", label: "المعتمر", type: "reference", required: true,
+              refEndpoint: "/api/umrah/pilgrims", refLabelFields: ["name", "nameAr"], refValueField: "id",
+            },
+            {
+              name: "type", label: "نوع الغرامة", type: "select", required: true,
+              options: [
+                { value: "overstay", label: "تجاوز مدة الإقامة" },
+                { value: "no_show", label: "عدم الحضور" },
+                { value: "cancellation", label: "إلغاء" },
+                { value: "other", label: "أخرى" },
+              ],
+            },
+            { name: "amount", label: "مبلغ الغرامة", type: "currency", required: true },
+            { name: "notes", label: "ملاحظات", type: "textarea" },
+          ],
+        },
+      },
+      {
+        key: "invoices", label: "فواتير المبيعات", icon: "receipt-outline", endpoint: "/api/umrah/invoices",
+        titleFields: ["ref"], subtitleFields: ["subAgentName", "clientName"], statusField: "status", amountFields: ["total"], dateFields: ["createdAt"],
+        detailRoute: "/umrah/invoice-detail",
+        write: {
+          moduleKey: "umrah",
+          createFields: [
+            {
+              name: "groupId", label: "المجموعة", type: "reference", required: true,
+              refEndpoint: "/api/umrah/groups", refLabelFields: ["name", "groupNumber"], refValueField: "id",
+            },
+            {
+              name: "subAgentId", label: "الوكيل الفرعي", type: "reference",
+              refEndpoint: "/api/umrah/sub-agents", refLabelFields: ["name"], refValueField: "id",
+            },
+            { name: "total", label: "الإجمالي", type: "currency", required: true },
+            { name: "notes", label: "ملاحظات", type: "textarea" },
+          ],
+          actions: [
+            { key: "approve", label: "اعتماد الفاتورة", icon: "checkmark-circle-outline", method: "PATCH", path: (id) => `/api/umrah/invoices/${id}/approve`, confirm: "هل تريد اعتماد الفاتورة؟", successText: "تم اعتماد الفاتورة", showWhenStatus: ["draft", "pending"] },
+          ],
+        },
+      },
       { key: "nusk-invoices", label: "فواتير نُسك", icon: "documents-outline", endpoint: "/api/umrah/nusk-invoices", titleFields: ["nuskInvoiceNumber"], subtitleFields: ["agentName"], statusField: "nuskStatus", amountFields: ["totalAmount"], dateFields: ["createdAt"], detailRoute: "/umrah/nusk-invoice-detail" },
-      { key: "payments", label: "المدفوعات", icon: "cash-outline", endpoint: "/api/umrah/payments", titleFields: ["reference"], subtitleFields: ["subAgentName", "method"], amountFields: ["sarAmount"], dateFields: ["paymentDate"], detailRoute: "/umrah/payment-detail" },
+      {
+        key: "payments", label: "المدفوعات", icon: "cash-outline", endpoint: "/api/umrah/payments",
+        titleFields: ["reference"], subtitleFields: ["subAgentName", "method"], amountFields: ["sarAmount"], dateFields: ["paymentDate"],
+        detailRoute: "/umrah/payment-detail",
+        write: {
+          moduleKey: "umrah",
+          createFields: [
+            {
+              name: "subAgentId", label: "الوكيل الفرعي", type: "reference",
+              refEndpoint: "/api/umrah/sub-agents", refLabelFields: ["name"], refValueField: "id",
+            },
+            { name: "paymentDate", label: "تاريخ الدفع", type: "date", required: true },
+            { name: "sarAmount", label: "المبلغ (ريال)", type: "currency", required: true },
+            {
+              name: "method", label: "طريقة الدفع", type: "select",
+              options: [
+                { value: "bank_transfer", label: "تحويل بنكي" },
+                { value: "cash", label: "نقدًا" },
+                { value: "check", label: "شيك" },
+              ],
+            },
+            { name: "reference", label: "رقم المرجع", type: "text" },
+            { name: "notes", label: "ملاحظات", type: "textarea" },
+          ],
+        },
+      },
+      {
+        key: "agent-invoices", label: "فواتير الوكلاء", icon: "receipt-outline", endpoint: "/api/umrah/agent-invoices",
+        detailRoute: "/umrah/agent-invoice-detail", titleFields: ["ref", "invoiceNumber"], subtitleFields: ["agentName"], statusField: "status", amountFields: ["total", "amount"], dateFields: ["date", "createdAt"],
+        write: {
+          moduleKey: "umrah",
+          createFields: [
+            {
+              name: "agentId", label: "الوكيل", type: "reference", required: true,
+              refEndpoint: "/api/umrah/agents", refLabelFields: ["name"], refValueField: "id",
+            },
+            { name: "date", label: "تاريخ الفاتورة", type: "date", required: true },
+            { name: "total", label: "الإجمالي", type: "currency", required: true },
+            { name: "notes", label: "ملاحظات", type: "textarea" },
+          ],
+          actions: [
+            { key: "approve", label: "اعتماد", icon: "checkmark-circle-outline", method: "PATCH", path: (id) => `/api/umrah/agent-invoices/${id}/approve`, confirm: "هل تريد اعتماد الفاتورة؟", successText: "تم", showWhenStatus: ["draft", "pending"] },
+          ],
+        },
+      },
     ],
   },
   crm: {
@@ -1566,7 +1681,33 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           { name: "dueDate", label: "تاريخ الاستحقاق", type: "date" },
           { name: "notes", label: "ملاحظات", type: "textarea" },
         ] } },
-      { key: "contracts", label: "العقود التجارية", icon: "document-text-outline", endpoint: "/api/crm/contracts", detailRoute: "/crm/contract-detail", titleFields: ["title", "ref"], subtitleFields: ["clientName"], statusField: "status", amountFields: ["value"], dateFields: ["startDate"] },
+      {
+        key: "contracts", label: "العقود التجارية", icon: "document-text-outline", endpoint: "/api/crm/contracts",
+        detailRoute: "/crm/contract-detail", titleFields: ["title", "ref"], subtitleFields: ["clientName"], statusField: "status", amountFields: ["value"], dateFields: ["startDate"],
+        write: {
+          moduleKey: "crm",
+          createFields: [
+            { name: "title", label: "عنوان العقد", type: "text", required: true },
+            {
+              name: "clientId", label: "العميل", type: "reference", required: true,
+              refEndpoint: "/api/clients", refLabelFields: ["name", "nameAr"], refValueField: "id",
+            },
+            { name: "startDate", label: "تاريخ البداية", type: "date", required: true },
+            { name: "endDate", label: "تاريخ النهاية", type: "date" },
+            { name: "value", label: "قيمة العقد", type: "currency" },
+            {
+              name: "type", label: "نوع العقد", type: "select",
+              options: [
+                { value: "service", label: "خدمات" },
+                { value: "supply", label: "توريد" },
+                { value: "maintenance", label: "صيانة" },
+                { value: "other", label: "أخرى" },
+              ],
+            },
+            { name: "notes", label: "ملاحظات", type: "textarea" },
+          ],
+        },
+      },
     ],
   },
   documents: {
@@ -1644,7 +1785,17 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
     label: "الدعم",
     sections: [
       { key: "sla", label: "اتفاقيات مستوى الخدمة", icon: "speedometer-outline", endpoint: "/api/support/sla", titleFields: ["name", "title"], subtitleFields: ["category", "priority"], statusField: "status" },
-      { key: "categories", label: "تصنيفات الدعم", icon: "list-outline", endpoint: "/api/support/categories", titleFields: ["name"], subtitleFields: ["parentName"] },
+      {
+        key: "categories", label: "تصنيفات الدعم", icon: "list-outline", endpoint: "/api/support/categories",
+        titleFields: ["name"], subtitleFields: ["parentName"],
+        write: {
+          moduleKey: "support",
+          createFields: [
+            { name: "name", label: "اسم التصنيف", type: "text", required: true },
+            { name: "description", label: "الوصف", type: "textarea" },
+          ],
+        },
+      },
       {
         key: "tickets", label: "التذاكر", icon: "help-buoy-outline", endpoint: "/api/support/tickets",
         titleFields: ["subject", "title"], subtitleFields: ["ticketNumber", "clientName", "priority"], statusField: "status", dateFields: ["createdAt"],
@@ -2131,7 +2282,30 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
-      { key: "kpis", label: "مؤشرات الأداء", icon: "speedometer-outline", endpoint: "/api/governance/kpis", titleFields: ["title", "name"], subtitleFields: ["category", "unit"], statusField: "status", amountFields: ["current", "target"] },
+      {
+        key: "kpis", label: "مؤشرات الأداء", icon: "speedometer-outline", endpoint: "/api/governance/kpis",
+        titleFields: ["title", "name"], subtitleFields: ["category", "unit"], statusField: "status", amountFields: ["current", "target"],
+        write: {
+          moduleKey: "governance",
+          createFields: [
+            { name: "title", label: "اسم المؤشر", type: "text", required: true },
+            { name: "category", label: "التصنيف", type: "text", required: true },
+            { name: "unit", label: "وحدة القياس", type: "text" },
+            { name: "target", label: "القيمة المستهدفة", type: "number", required: true },
+            {
+              name: "frequency", label: "دورية القياس", type: "select",
+              options: [
+                { value: "daily", label: "يومي" },
+                { value: "weekly", label: "أسبوعي" },
+                { value: "monthly", label: "شهري" },
+                { value: "quarterly", label: "ربع سنوي" },
+                { value: "annually", label: "سنوي" },
+              ],
+            },
+            { name: "description", label: "الوصف", type: "textarea" },
+          ],
+        },
+      },
     ],
   },
   bi: {
