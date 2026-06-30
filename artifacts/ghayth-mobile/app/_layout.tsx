@@ -767,6 +767,14 @@ function AuthGate() {
       <Stack.Screen name="hr/training-stats" options={{ title: 'إحصاءات التدريب' }} />
       <Stack.Screen name="notifications/preferences" options={{ title: 'تفضيلات الإشعارات' }} />
       <Stack.Screen name="notifications/quiet-hours" options={{ title: 'أوقات الهدوء' }} />
+      <Stack.Screen name="admin/intelligence-overview" options={{ title: 'نظرة عامة — الذكاء' }} />
+      <Stack.Screen name="admin/suggestions" options={{ title: 'الاقتراحات الذكية' }} />
+      <Stack.Screen name="admin/seasonal-patterns" options={{ title: 'الأنماط الموسمية' }} />
+      <Stack.Screen name="admin/recommendations" options={{ title: 'التوصيات الذكية' }} />
+      <Stack.Screen name="admin/insights-summary" options={{ title: 'ملخص الرؤى' }} />
+      <Stack.Screen name="admin/client-analytics" options={{ title: 'تحليلات العملاء' }} />
+      <Stack.Screen name="careers/my-applications" options={{ title: 'طلباتي الوظيفية' }} />
+      <Stack.Screen name="transport/cargo-manifests" options={{ title: 'بيانات الشحن' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
