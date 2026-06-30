@@ -443,6 +443,25 @@ export const STATUS_MAP = {
     warranty_repair:      { label: "إصلاح بالضمان",   tone: "warning"  },
     scrapped:             { label: "متلف",            tone: "muted"    },
   },
+
+  // ── Fleet: inspection review (مراجعة فحص المركبة) ──────────────────
+  // Local STATUS_AR/STATUS_VARIANT in fleet/inspections-review.tsx.
+  // Labels preserved verbatim; `submitted` reads "قيد المراجعة" (في
+  // انتظار مراجعة الفاحص) لا "مُقدَّم" المشترك — لذا نطاق خاص.
+  inspection: {
+    pending:              { label: "قيد الانتظار",    tone: "warning"  },
+    submitted:            { label: "قيد المراجعة",    tone: "info"     },
+    approved:             { label: "معتمد",           tone: "success"  },
+    rejected:             { label: "مرفوض",           tone: "danger"   },
+  },
+
+  // ── Fleet: vehicle alerts (تنبيهات الأسطول) ────────────────────────
+  fleet_alert: {
+    active:               { label: "نشط",             tone: "danger"   },
+    acknowledged:         { label: "تمت المعاينة",    tone: "info"     },
+    resolved:             { label: "تم الحل",         tone: "success"  },
+    dismissed:            { label: "مُتجاهَل",         tone: "muted"    },
+  },
 } as const satisfies Record<string, Record<string, StatusDef>>;
 
 export type StatusDomain = keyof typeof STATUS_MAP;
