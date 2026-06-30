@@ -610,6 +610,8 @@ function AuthGate() {
       <Stack.Screen name="finance/amortization" options={{ title: 'جداول الإطفاء' }} />
       <Stack.Screen name="finance/accounting-mappings" options={{ title: 'تعيينات المحاسبة' }} />
       <Stack.Screen name="bi/operations" options={{ title: 'تأخيرات SLA' }} />
+      <Stack.Screen name="governance/expiring-docs" options={{ title: 'إقامات منتهية الصلاحية' }} />
+      <Stack.Screen name="admin/pdpl-retention" options={{ title: 'سياسات الاحتفاظ بالبيانات' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
