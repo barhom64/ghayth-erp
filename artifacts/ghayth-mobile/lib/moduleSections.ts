@@ -2226,7 +2226,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
-      { key: "tenants", label: "المستأجرون", icon: "person-outline", endpoint: "/api/properties/tenants", titleFields: ["name", "tenantName"], subtitleFields: ["phone", "email", "nationalId"], statusField: "status", detailRoute: "/properties/tenant-detail",
+      { key: "tenants", label: "المستأجرون", icon: "person-outline", endpoint: "/api/properties/tenants", titleFields: ["name", "tenantName"], subtitleFields: ["phone", "email", "nationalId"], statusField: "status", detailRoute: "/properties/tenant-detail", createRoute: "/properties/tenant-new",
         write: { moduleKey: "property", createFields: [
           { name: "name", label: "اسم المستأجر", type: "text", required: true },
           { name: "nationalId", label: "رقم الهوية", type: "text", required: true },
@@ -2244,7 +2244,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           { name: "paymentMethod", label: "طريقة الدفع", type: "select", options: [{ value: "bank_transfer", label: "تحويل بنكي" }, { value: "cash", label: "نقدي" }, { value: "check", label: "شيك" }, { value: "card", label: "بطاقة" }] },
           { name: "notes", label: "ملاحظات", type: "textarea" },
         ] } },
-      { key: "owners", label: "الملاك", icon: "people-circle-outline", endpoint: "/api/properties/owners", detailRoute: "/properties/owner-detail", titleFields: ["name", "ownerName"], subtitleFields: ["phone", "email"], statusField: "status",
+      { key: "owners", label: "الملاك", icon: "people-circle-outline", endpoint: "/api/properties/owners", detailRoute: "/properties/owner-detail", createRoute: "/properties/owner-new", titleFields: ["name", "ownerName"], subtitleFields: ["phone", "email"], statusField: "status",
         write: { moduleKey: "property", createFields: [
           { name: "name", label: "اسم المالك", type: "text", required: true },
           { name: "nationalId", label: "رقم الهوية", type: "text" },
@@ -2253,7 +2253,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           { name: "bankAccount", label: "رقم الحساب البنكي", type: "text" },
           { name: "notes", label: "ملاحظات", type: "textarea" },
         ] } },
-      { key: "inspections", label: "عمليات الفحص", icon: "eye-outline", endpoint: "/api/properties/inspections", detailRoute: "/properties/inspection-detail", titleFields: ["ref", "type"], subtitleFields: ["unitName", "inspectorName"], statusField: "status", dateFields: ["inspectionDate"],
+      { key: "inspections", label: "عمليات الفحص", icon: "eye-outline", endpoint: "/api/properties/inspections", detailRoute: "/properties/inspection-detail", createRoute: "/properties/inspection-new", titleFields: ["ref", "type"], subtitleFields: ["unitName", "inspectorName"], statusField: "status", dateFields: ["inspectionDate"],
         write: { moduleKey: "property", createFields: [
           { name: "unitId", label: "الوحدة", type: "text", required: true },
           { name: "inspectionDate", label: "تاريخ الفحص", type: "date", required: true },

@@ -5,8 +5,8 @@
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge, GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -51,6 +51,7 @@ function fmtMoney(val?: number, currency?: string): string {
 export default function UnitDetailScreen() {
   const c = useColors();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const [tab, setTab] = useState<Tab>('info');
 
   const { data: unit, isLoading } = useList<PropertyUnit>(`/api/properties/units/${id}`);
@@ -157,7 +158,10 @@ export default function UnitDetailScreen() {
         )}
 
         {tab === 'maintenance' && (
-          maintenanceList.length === 0
+          <>
+          <GButton title="طلب صيانة جديد" icon="add-circle-outline" variant="secondary" onPress={() => router.push({ pathname: '/properties/maintenance-new' as never, params: { unitId: id } })} style={{ marginBottom: 8 }} />
+          <GButton title="تسجيل فحص" icon="search-outline" variant="secondary" onPress={() => router.push({ pathname: '/properties/inspection-new' as never, params: { unitId: id } })} style={{ marginBottom: 8 }} />
+          {maintenanceList.length === 0
             ? <GEmptyState icon="construct-outline" title="لا توجد طلبات صيانة" description="لم يتم تسجيل طلبات صيانة لهذه الوحدة" />
             : maintenanceList.map((req, i) => {
               const rs = statusBadge(req.status ?? '');
@@ -170,7 +174,8 @@ export default function UnitDetailScreen() {
                   <Text style={{ fontSize: 12, color: c.textMuted, textAlign: 'right' }}>{fmtDate(req.date)}</Text>
                 </GCard>
               );
-            })
+            })}
+          </>
         )}
       </View>
     </ScrollView>
