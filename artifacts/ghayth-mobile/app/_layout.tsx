@@ -269,6 +269,8 @@ function AuthGate() {
       <Stack.Screen name="warehouse/cycle-count-new" options={{ title: 'جرد مخزون جديد' }} />
       <Stack.Screen name="governance/risk-new" options={{ title: 'مخاطرة جديدة' }} />
       <Stack.Screen name="hr/recruitment-new" options={{ title: 'إعلان وظيفي جديد' }} />
+      <Stack.Screen name="legal/session-new" options={{ title: 'جلسة تقاضي جديدة' }} />
+      <Stack.Screen name="umrah/payment-new" options={{ title: 'تسجيل دفعة معتمر' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>

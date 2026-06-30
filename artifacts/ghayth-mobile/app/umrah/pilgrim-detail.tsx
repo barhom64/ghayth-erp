@@ -7,8 +7,8 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GLoadingState, GEmptyState, GStatusBadge, GAvatar } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GButton, GLoadingState, GEmptyState, GStatusBadge, GAvatar } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -73,6 +73,7 @@ function fmtMoney(val?: number): string {
 
 export default function PilgrimDetailScreen() {
   const c = useColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [tab, setTab] = useState<Tab>('info');
 
@@ -189,7 +190,15 @@ export default function PilgrimDetailScreen() {
         )}
 
         {tab === 'payments' && (
-          payLoading ? <ActivityIndicator color={c.brand} style={{ marginTop: 40 }} /> :
+          <>
+          <GButton
+            title="تسجيل دفعة جديدة"
+            icon="add-circle-outline"
+            variant="secondary"
+            onPress={() => router.push({ pathname: '/umrah/payment-new' as never, params: { pilgrimId: id } })}
+            style={{ marginBottom: 8 }}
+          />
+          {payLoading ? <ActivityIndicator color={c.brand} style={{ marginTop: 40 }} /> :
           payments.length === 0 ? <GEmptyState icon="cash-outline" title="لا دفعات" description="لم يتم تسجيل أي دفعات لهذا المعتمر" /> :
           <GCard style={{ gap: 0, padding: 0 }}>
             {payments.map((p, i) => {
@@ -206,7 +215,8 @@ export default function PilgrimDetailScreen() {
                 </View>
               );
             })}
-          </GCard>
+          </GCard>}
+          </>
         )}
 
         {tab === 'documents' && (

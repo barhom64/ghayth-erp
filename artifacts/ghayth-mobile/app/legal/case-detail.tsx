@@ -7,8 +7,8 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GButton, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -59,6 +59,7 @@ function fmtDate(val?: string): string {
 
 export default function LegalCaseDetailScreen() {
   const c = useColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [tab, setTab] = useState<Tab>('info');
 
@@ -141,7 +142,15 @@ export default function LegalCaseDetailScreen() {
         )}
 
         {tab === 'hearings' && (
-          hearLoading ? <ActivityIndicator color={c.brand} style={{ marginTop: 40 }} /> :
+          <>
+          <GButton
+            title="إضافة جلسة جديدة"
+            icon="add-circle-outline"
+            variant="secondary"
+            onPress={() => router.push({ pathname: '/legal/session-new' as never, params: { caseId: id } })}
+            style={{ marginBottom: 8 }}
+          />
+          {hearLoading ? <ActivityIndicator color={c.brand} style={{ marginTop: 40 }} /> :
           hearings.length === 0 ? <GEmptyState icon="calendar-outline" title="لا جلسات" description="لا توجد جلسات مسجّلة لهذه القضية" /> :
           <GCard style={{ gap: 0, padding: 0 }}>
             {hearings.map((h, i) => {
@@ -157,7 +166,8 @@ export default function LegalCaseDetailScreen() {
                 </View>
               );
             })}
-          </GCard>
+          </GCard>}
+          </>
         )}
 
         {tab === 'documents' && (

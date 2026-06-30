@@ -5,8 +5,8 @@
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GButton, GText, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -56,6 +56,7 @@ function fmtMoney(val?: number, currency?: string): string {
 
 export default function UmrahGroupDetailScreen() {
   const c = useColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [tab, setTab] = useState<Tab>('info');
 
@@ -136,7 +137,15 @@ export default function UmrahGroupDetailScreen() {
         )}
 
         {tab === 'pilgrims' && (
-          pilgrimList.length === 0
+          <>
+          <GButton
+            title="تسجيل معتمر جديد"
+            icon="add-circle-outline"
+            variant="secondary"
+            onPress={() => router.push({ pathname: '/umrah/pilgrim-new' as never, params: { groupId: id } })}
+            style={{ marginBottom: 8 }}
+          />
+          {pilgrimList.length === 0
             ? <GEmptyState icon="people-outline" title="لا يوجد معتمرون" description="لم يتم تسجيل أي معتمرين في هذه المجموعة" />
             : pilgrimList.map((p, i) => (
               <GCard key={p.id ?? i} style={{ gap: 4 }}>
@@ -151,7 +160,8 @@ export default function UmrahGroupDetailScreen() {
                   {p.status ? <GStatusBadge status={p.status} size="sm" /> : null}
                 </View>
               </GCard>
-            ))
+            ))}
+          </>
         )}
 
         {tab === 'financials' && (
