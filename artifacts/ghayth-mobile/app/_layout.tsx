@@ -926,6 +926,9 @@ function AuthGate() {
       <Stack.Screen name="hr/my-loans" options={{ title: 'قروضي' }} />
       <Stack.Screen name="hr/discipline-regulation" options={{ title: 'لائحة الجزاءات' }} />
       <Stack.Screen name="hr/discipline-auto-summary" options={{ title: 'ملخص الاكتشاف التلقائي' }} />
+      <Stack.Screen name="admin/comm-overview" options={{ title: 'نظرة عامة على الاتصالات' }} />
+      <Stack.Screen name="admin/comm-validation" options={{ title: 'تحقق قنوات الاتصال' }} />
+      <Stack.Screen name="admin/comm-inbox" options={{ title: 'صندوق وارد الاتصالات' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
