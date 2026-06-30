@@ -187,12 +187,12 @@ export default function YoyComparisonPage() {
 
   return (
     <PageShell
-      title="مقارنة YTD سنة بسنة"
+      title="مقارنة منذ بداية السنة (YTD) سنة بسنة"
       subtitle="هل نمت الإيرادات؟ هل تضخمت المصروفات؟ مقارنة من-بداية-السنة حتى شهر معيّن، عبر سنتين"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
         { href: "/finance/reports", label: "التقارير" },
-        { label: "مقارنة YTD" },
+        { label: "مقارنة منذ بداية السنة" },
       ]}
       actions={
         <div className="flex items-center gap-2">
