@@ -10,6 +10,10 @@ import {
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
+// أجر السائق بالساعة (الدفعة 3): الأسطول يوفّر الساعات المعتمدة + ختمها؛
+// الموارد البشرية تحلّ المعدّل. الكتابة في جدول الأسطول تبقى في مكتبته.
+import { getApprovedDriverHoursForPeriod, markDriverHoursConsumed } from "../lib/fleet/driverHours.js";
+import { buildDriverRateResolver } from "../lib/hr/driverPayRates.js";
 import { resolveAttendancePolicy } from "../lib/attendancePolicyEngine.js";
 import { fieldPingSchema, getFieldEligibility, recordFieldPing } from "../lib/fieldTrackingService.js";
 import { requireAnyPermission } from "../middlewares/permissionMiddleware.js";
@@ -3262,6 +3266,14 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
       commissionIdsByEmployee.set(eId, idsList);
     }
 
+    // أجر السائق بالساعة (الدفعة 3) — الساعات المعتمدة (من الأسطول) + محلِّل
+    // المعدّل (من HR) دفعةً واحدة. الأثر صفر لغير السائقين/غير الساعيين.
+    const driverHoursMap = new Map<number, { drivingHours: number; stopHours: number; rowIds: number[] }>();
+    for (const dh of await getApprovedDriverHoursForPeriod(scope.companyId, targetPeriod)) {
+      driverHoursMap.set(dh.assignmentId, { drivingHours: dh.drivingHours, stopHours: dh.stopHours, rowIds: dh.rowIds });
+    }
+    const resolveDriverRate = await buildDriverRateResolver(scope.companyId);
+
     // ── Build per-assignment payroll lines (12 items each) ──
     let totalNet = 0;
     let totalGosiEmployer = 0;
@@ -3277,6 +3289,10 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
       // ZATCA WHT amount per line — persisted on payroll_lines.whtAmount
       // and aggregated to a WHT-payable CR on the run JE.
       whtAmount: number;
+      // أجر السائق بالساعة (الدفعة 3): ساعات معتمدة × معدّل HR. subledger +
+      // سطر مدين 5220. driverRowIds: صفوف الساعات المُستهلكة (تُختم بعد الإدراج).
+      drivingHours: number; drivingHoursAmount: number;
+      stopHours: number; stopHoursAmount: number; driverRowIds: number[];
       // Departmental dimension carried through to journal_lines.departmentId
       // on the per-employee payroll breakdown.
       departmentId: number | null; branchId: number | null;
@@ -3319,12 +3335,27 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
       const absenceDeduction = roundTo2(absentDays * (basic / 30));
       const violationDeduction = (penaltyMap.get(aId) ?? 0) + (violationMap.get(aId) ?? 0);
       const loanDeduction = loanMap.get(aId) ?? 0;
-      // GOSI Article 19: contribution wage = basic + housing allowance,
-      // capped at GOSI_CEILING. Transport & "other" earnings are NOT
-      // included in the contribution base.
-      const gosiContributionWage = GOSI_INCLUDE_HOUSING
-        ? basic + housingAllowance
-        : basic;
+
+      // أجر السائق بالساعة (الدفعة 3): ساعات معتمدة × معدّل HR — للسائق بنوع
+      // دفع «بالساعة» فقط. صفر لكل من سواه (لا أثر على راتبه ولا قيده ولا GOSI).
+      const dh = driverHoursMap.get(aId);
+      const dRate = dh ? resolveDriverRate(aId) : null;
+      let drivingHours = 0, stopHours = 0, drivingHoursAmount = 0, stopHoursAmount = 0;
+      let driverRowIds: number[] = [];
+      if (dh && dRate && dRate.payType === "hourly") {
+        drivingHours = dh.drivingHours;
+        stopHours = dh.stopHours;
+        drivingHoursAmount = roundTo2(drivingHours * (dRate.drivingHourlyRate ?? 0));
+        stopHoursAmount = roundTo2(stopHours * (dRate.stopHourlyRate ?? 0));
+        driverRowIds = dh.rowIds;
+      }
+      const driverHoursAmount = roundTo2(drivingHoursAmount + stopHoursAmount);
+
+      // GOSI Article 19: contribution wage = basic + housing allowance, capped
+      // at GOSI_CEILING. أجر السائق بالساعة يخضع لـGOSI (قرار إبراهيم 2026-06-30)
+      // — يُضاف للوعاء للسائق الساعي فقط (driverHoursAmount=0 لغيره ⇒ بلا تغيير).
+      const gosiContributionWage =
+        (GOSI_INCLUDE_HOUSING ? basic + housingAllowance : basic) + driverHoursAmount;
       const gosiBase = Math.min(gosiContributionWage, GOSI_CEILING);
       const gosiEmployee = roundTo2(gosiBase * GOSI_EMPLOYEE_RATE);
       const gosiEmployer = roundTo2(gosiBase * GOSI_EMPLOYER_RATE);
@@ -3350,10 +3381,11 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
 
       const isNonResident = Boolean(asn.isNonResident);
       const whtRate = isNonResident && asn.whtRate != null ? Number(asn.whtRate) / 100 : 0;
-      const whtAmount = whtRate > 0 ? roundTo2((gross + overtime + commission) * whtRate) : 0;
+      // أجر السائق بالساعة أجرٌ (remuneration) فينضمّ لوعاء WHT لغير المقيم.
+      const whtAmount = whtRate > 0 ? roundTo2((gross + overtime + commission + driverHoursAmount) * whtRate) : 0;
 
       const totalDeductions = lateDeduction + absenceDeduction + violationDeduction + loanDeduction + gosiEmployee + whtAmount;
-      const net = Math.max(0, roundTo2(gross + overtime + commission - totalDeductions));
+      const net = Math.max(0, roundTo2(gross + overtime + commission + driverHoursAmount - totalDeductions));
       totalNet += net;
 
       lines.push({
@@ -3363,6 +3395,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
         violationDeduction, loanDeduction, overtime, overtimeHours, net,
         commission,
         whtAmount,
+        drivingHours, drivingHoursAmount, stopHours, stopHoursAmount, driverRowIds,
         departmentId: asn.departmentId != null ? Number(asn.departmentId) : null,
         branchId: asn.branchId != null ? Number(asn.branchId) : null,
       });
@@ -3382,6 +3415,8 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
     const totalWht = roundTo2(lines.reduce((s, l) => s + l.whtAmount, 0));
     const totalBankPayoutNetOfWht = roundTo2(totalBankPayout - totalWht);
     const totalCommission = roundTo2(lines.reduce((s, l) => s + l.commission, 0));
+    // أجر السائق بالساعة — إجمالي بند القيادة + التوقف عبر السطور (الدفعة 3).
+    const totalDriverWages = roundTo2(lines.reduce((s, l) => s + l.drivingHoursAmount + l.stopHoursAmount, 0));
     // HR-002 (atomicity) — resolve the engine before the tx so the accrual GL is
     // posted INSIDE it. The old flow posted after commit, so a GL failure left a
     // committed run with consumed loans/overtime but no ledger entry.
@@ -3425,7 +3460,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
         // reproduce per-employee withholding from payroll_lines without
         // re-running the calc. commission carries the umrah commission
         // earning (راتب + عمولة) consumed from approved calculations.
-        const COLS_PER_ROW = 18;
+        const COLS_PER_ROW = 22;
         const valuesSql: string[] = [];
         const params: unknown[] = [];
         for (const l of lines) {
@@ -3437,13 +3472,14 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
             newRunId, l.assignmentId, l.employeeId, l.basic, l.housingAllowance, l.transportAllowance,
             l.gross, l.gosiEmployee, l.gosiEmployer, l.lateDeduction, l.absenceDeduction,
             l.violationDeduction, l.loanDeduction, l.overtime, l.overtimeHours, l.net,
-            l.whtAmount, l.commission
+            l.whtAmount, l.commission,
+            l.drivingHours, l.drivingHoursAmount, l.stopHours, l.stopHoursAmount
           );
         }
         const inserted = await client.query(
-          `INSERT INTO payroll_lines ("runId","assignmentId","employeeId",basic,"housingAllowance","transportAllowance","grossSalary",gosi,"gosiEmployer","lateDeduction","absenceDeduction","violationDeduction","loanDeduction","overtime","overtimeHours","netSalary","whtAmount",commission)
+          `INSERT INTO payroll_lines ("runId","assignmentId","employeeId",basic,"housingAllowance","transportAllowance","grossSalary",gosi,"gosiEmployer","lateDeduction","absenceDeduction","violationDeduction","loanDeduction","overtime","overtimeHours","netSalary","whtAmount",commission,"drivingHours","drivingHoursAmount","stopHours","stopHoursAmount")
            VALUES ${valuesSql.join(",")}
-           RETURNING id, "employeeId"`,
+           RETURNING id, "employeeId", "assignmentId"`,
           params
         );
 
@@ -3468,6 +3504,21 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
               [lineId, calcIds, scope.companyId]
             );
           }
+        }
+
+        // أجر السائق بالساعة (الدفعة 3) — ختم صفوف الساعات المُستهلكة بـ
+        // payrollLineId داخل نفس المعاملة (منع الازدواج، البوابة payrollLineId
+        // IS NULL). الكتابة في مكتبة الأسطول (markDriverHoursConsumed) لا في
+        // راوت HR — قفل الحدود؛ rawExecute ينضمّ لمعاملة المسيّر عبر txStore.
+        const lineIdByAssignment = new Map<number, number>();
+        for (const r of inserted.rows) {
+          lineIdByAssignment.set(Number(r.assignmentId), Number(r.id));
+        }
+        for (const l of lines) {
+          if (l.driverRowIds.length === 0) continue;
+          const lineId = lineIdByAssignment.get(l.assignmentId);
+          if (!lineId) continue;
+          await markDriverHoursConsumed(scope.companyId, l.driverRowIds, lineId);
         }
       }
 
@@ -3567,6 +3618,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
             totalOtherDeductions,
             totalWht,
             totalCommission,
+            totalDriverWages,
             // Per-employee breakdown — splits salary + OT + GOSI + commission DR
             // lines per employee (departmentId/branchId stamped) so payroll cost
             // is dimensional; liabilities stay aggregated. #2303 deduction split:
@@ -3581,6 +3633,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
               gosiEmployer: l.gosiEmployer,
               whtAmount: l.whtAmount,
               commission: l.commission,
+              driverWages: roundTo2(l.drivingHoursAmount + l.stopHoursAmount),
               loanRepayment: l.loanDeduction,
               lateDeduction: l.lateDeduction,
               absenceDeduction: l.absenceDeduction,
