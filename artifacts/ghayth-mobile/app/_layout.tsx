@@ -950,6 +950,10 @@ function AuthGate() {
       <Stack.Screen name="admin/workflows-pending" options={{ title: 'سير العمل المعلّقة' }} />
       <Stack.Screen name="admin/workflows-stats" options={{ title: 'إحصائيات سير العمل' }} />
       <Stack.Screen name="comms/correspondence-stats" options={{ title: 'إحصائيات المراسلات' }} />
+      <Stack.Screen name="finance/intercompany-consolidation" options={{ title: 'التوحيد الداخلي' }} />
+      <Stack.Screen name="finance/cost-center-report" options={{ title: 'تقرير مراكز التكلفة' }} />
+      <Stack.Screen name="finance/allocation-override-log" options={{ title: 'سجل تجاوزات التوزيع' }} />
+      <Stack.Screen name="finance/subsidiary-accounts" options={{ title: 'الحسابات الفرعية' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
