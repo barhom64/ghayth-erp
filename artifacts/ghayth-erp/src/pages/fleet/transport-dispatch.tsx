@@ -13,6 +13,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
+import { useVehicleDriverDefault } from "@/hooks/use-vehicle-driver-default";
 import { statusLabel, statusDict } from "@/lib/transport-status-labels";
 
 // The dispatch-order PATCH endpoint is an ACTION state-machine
@@ -88,6 +89,8 @@ export default function TransportDispatchBoard() {
   const [rescheduling, setRescheduling] = useState<number | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState({ bookingLineId: "", vehicleId: "", driverId: "", scheduledStartAt: "", scheduledEndAt: "" });
+  // الكيان يقود التجربة: اختيار المركبة يُعبّئ سائقها الحالي تلقائيًا (قابل للتغيير).
+  useVehicleDriverDefault(createForm.vehicleId, createForm.driverId, (v) => setCreateForm((f) => ({ ...f, driverId: v })));
   const [editingOrder, setEditingOrder] = useState<DispatchOrderRow | null>(null);
   const [editStatus, setEditStatus] = useState("");
 
