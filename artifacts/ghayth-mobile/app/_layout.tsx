@@ -781,6 +781,14 @@ function AuthGate() {
       <Stack.Screen name="admin/pbx-transcripts" options={{ title: 'نصوص المكالمات' }} />
       <Stack.Screen name="admin/numbering-schemes" options={{ title: 'مخططات الترقيم' }} />
       <Stack.Screen name="admin/vendor-settings" options={{ title: 'إعدادات الموردين' }} />
+      <Stack.Screen name="properties/deposits" options={{ title: 'تأمينات الإيجار' }} />
+      <Stack.Screen name="properties/occupancy-report" options={{ title: 'تقرير الإشغال' }} />
+      <Stack.Screen name="umrah/nusk-invoices" options={{ title: 'فواتير النسك' }} />
+      <Stack.Screen name="umrah/sales-invoices-summary" options={{ title: 'ملخص فواتير البيع' }} />
+      <Stack.Screen name="umrah/import-errors-summary" options={{ title: 'أخطاء الاستيراد' }} />
+      <Stack.Screen name="umrah/compliance" options={{ title: 'تقرير الامتثال' }} />
+      <Stack.Screen name="umrah/transport-report" options={{ title: 'تقرير نقل الحجاج' }} />
+      <Stack.Screen name="umrah/group-portfolio" options={{ title: 'محفظة المجموعات' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
