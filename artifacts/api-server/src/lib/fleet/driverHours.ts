@@ -366,3 +366,60 @@ export async function getApprovedDriverHours(
   }
   return { drivingHours: round2(drivingHours), stopHours: round2(stopHours), rowIds };
 }
+
+export interface PeriodDriverHours {
+  assignmentId: number;
+  drivingHours: number;
+  stopHours: number;
+  rowIds: number[];
+}
+
+/**
+ * عقد دفعة 3 (batch): الساعات المعتمدة غير المُستهلكة لكل تعيين سائق في فترة
+ * (YYYY-MM). يستهلكه مسيّر الرواتب مرة واحدة (يتجنّب N+1). نطاق الشهر يُحسب في
+ * SQL (لا new Date) فلا انجراف توقيت ولا تاريخ غير صالح. الأسطول يملك الحساب.
+ */
+export async function getApprovedDriverHoursForPeriod(
+  companyId: number,
+  period: string,
+): Promise<PeriodDriverHours[]> {
+  const rows = await rawQuery<{ assignmentId: number; d: string | null; s: string | null; rowIds: number[] }>(
+    `SELECT "assignmentId",
+            COALESCE(SUM("approvedDrivingHours"), 0) AS d,
+            COALESCE(SUM("approvedStopHours"), 0)    AS s,
+            array_agg(id) AS "rowIds"
+       FROM fleet_driver_work_hours
+      WHERE "companyId" = $1 AND status = 'approved' AND "payrollLineId" IS NULL
+        AND "deletedAt" IS NULL AND "assignmentId" IS NOT NULL
+        AND "workDate" >= ($2 || '-01')::date
+        AND "workDate" <  (($2 || '-01')::date + INTERVAL '1 month')
+      GROUP BY "assignmentId"`,
+    [companyId, period],
+  );
+  return rows.map((r) => ({
+    assignmentId: Number(r.assignmentId),
+    drivingHours: round2(Number(r.d ?? 0)),
+    stopHours: round2(Number(r.s ?? 0)),
+    rowIds: (r.rowIds ?? []).map(Number),
+  }));
+}
+
+/**
+ * يختم صفوف الساعات بـ payrollLineId بعد ترحيلها في المسيّر (منع الازدواج).
+ * كتابة جدول الأسطول تعيش هنا (المكتبة)، يستدعيها مسيّر HR داخل معاملته —
+ * فلا كتابة عابرة للنطاق من راوت HR. rawExecute ينضمّ للمعاملة الجارية (txStore).
+ */
+export async function markDriverHoursConsumed(
+  companyId: number,
+  rowIds: number[],
+  payrollLineId: number,
+): Promise<void> {
+  if (!rowIds.length) return;
+  await rawExecute(
+    `UPDATE fleet_driver_work_hours
+        SET "payrollLineId" = $1, "updatedAt" = NOW()
+      WHERE id = ANY($2::int[]) AND "companyId" = $3
+        AND status = 'approved' AND "payrollLineId" IS NULL`,
+    [payrollLineId, rowIds, companyId],
+  );
+}

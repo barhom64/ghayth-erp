@@ -62,6 +62,44 @@ export async function resolveDriverPayRate(
   };
 }
 
+export interface ResolvedRate {
+  payType: string;
+  drivingHourlyRate: number | null;
+  stopHourlyRate: number | null;
+}
+
+/**
+ * يبني محلِّل معدّلات للشركة باستعلام واحد (يتجنّب N+1 في مسيّر الرواتب).
+ * يُعيد دالة: تعيين → معدّل فعّال (تجاوز التعيين ← افتراضي الشركة).
+ */
+export async function buildDriverRateResolver(
+  companyId: number,
+): Promise<(assignmentId: number) => ResolvedRate | null> {
+  const rows = await rawQuery<{
+    assignmentId: number | null;
+    payType: string;
+    drivingHourlyRate: string | null;
+    stopHourlyRate: string | null;
+  }>(
+    `SELECT "assignmentId", "payType", "drivingHourlyRate", "stopHourlyRate"
+       FROM hr_driver_pay_rates
+      WHERE "companyId" = $1 AND "isActive" = true AND "deletedAt" IS NULL`,
+    [companyId],
+  );
+  let companyDefault: ResolvedRate | null = null;
+  const byAssignment = new Map<number, ResolvedRate>();
+  for (const r of rows) {
+    const v: ResolvedRate = {
+      payType: r.payType,
+      drivingHourlyRate: n(r.drivingHourlyRate),
+      stopHourlyRate: n(r.stopHourlyRate),
+    };
+    if (r.assignmentId == null) companyDefault = v;
+    else byAssignment.set(Number(r.assignmentId), v);
+  }
+  return (assignmentId: number) => byAssignment.get(assignmentId) ?? companyDefault;
+}
+
 /** قائمة المعدّلات: الافتراضي أولًا ثم التجاوزات (مع اسم الموظف). */
 export async function listDriverPayRates(scope: HrScope) {
   return rawQuery<Record<string, unknown>>(
