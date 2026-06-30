@@ -120,6 +120,10 @@ function AuthGate() {
       <Stack.Screen name="hr/my-attendance" options={{ title: 'سجل حضوري' }} />
       <Stack.Screen name="hr/my-documents" options={{ title: 'وثائقي' }} />
       <Stack.Screen name="hr/my-performance" options={{ title: 'تقييماتي' }} />
+      <Stack.Screen name="search" options={{ title: 'البحث العام' }} />
+      <Stack.Screen name="calendar" options={{ title: 'التقويم الموحّد' }} />
+      <Stack.Screen name="assistant" options={{ title: 'المساعد الذكي' }} />
+      <Stack.Screen name="exec-dashboard" options={{ title: 'لوحة المدير التنفيذي' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
   );

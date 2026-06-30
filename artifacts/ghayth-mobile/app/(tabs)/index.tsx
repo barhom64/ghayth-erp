@@ -54,6 +54,10 @@ const QUICK_LINKS: QuickLink[] = [
   { label: 'طلب استئذان',   icon: 'hand-left-outline',             route: '/hr/excuse-new' },
   { label: 'طلباتي',         icon: 'list-outline',                  route: '/hr/my-requests' },
   { label: 'مركز الاعتماد', icon: 'checkmark-done-circle-outline', route: '/(tabs)/approvals', managerOnly: true },
+  { label: 'لوحة المدير',    icon: 'stats-chart-outline',           route: '/exec-dashboard',   managerOnly: true },
+  { label: 'البحث',          icon: 'search-outline',                route: '/search' },
+  { label: 'التقويم',        icon: 'calendar-number-outline',       route: '/calendar' },
+  { label: 'المساعد الذكي',  icon: 'sparkles-outline',             route: '/assistant' },
   { label: 'الإشعارات',     icon: 'notifications-outline',         route: '/(tabs)/notifications' },
 ];
 
