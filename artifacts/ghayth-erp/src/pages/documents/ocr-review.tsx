@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useLocation } from "wouter";
-import { apiFetch, API_BASE, nativeAuthHeaders } from "@/lib/api";
-import { notifyRateLimited, RateLimitError } from "@/lib/rate-limit-toast";
+import { apiFetch } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -130,17 +129,12 @@ export default function OcrReviewPage() {
     }
     setUploading(true);
     try {
-      // ١) رابط رفع مُوقَّع
-      const urlRes = await fetch(`${API_BASE}/api/storage/uploads/request-url`, {
-        method: "POST",
-        headers: { ...nativeAuthHeaders(), "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
-      });
-      if (urlRes.status === 429) throw new RateLimitError(notifyRateLimited(urlRes));
-      if (!urlRes.ok) throw new Error("فشل الحصول على رابط الرفع");
-      const { uploadURL, objectPath } = await urlRes.json();
-      // ٢) رفع البايتات
+      // ١) رابط رفع مُوقَّع — عبر apiFetch (المسار الآمن لـnative: Bearer + CSRF + 401-refresh)
+      const { uploadURL, objectPath } = await apiFetch<{ uploadURL: string; objectPath: string }>(
+        "/storage/uploads/request-url",
+        { method: "POST", body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }) },
+      );
+      // ٢) رفع البايتات إلى الرابط المُوقَّع الخارجي (PUT خام — ليس مسار API، لا يحتاج توكن)
       const putRes = await fetch(uploadURL, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
       if (!putRes.ok) throw new Error("فشل رفع الملف");
       // ٣) تسجيل المستند في مسار الوثائق
@@ -166,7 +160,6 @@ export default function OcrReviewPage() {
       setFile(null);
       await load();
     } catch (err: any) {
-      if (err instanceof RateLimitError) { setUploading(false); return; }
       toast({ variant: "destructive", title: "تعذّر الرفع والقراءة", description: err?.message });
     } finally {
       setUploading(false);
