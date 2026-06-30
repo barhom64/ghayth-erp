@@ -1187,7 +1187,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "transport-dispatch", label: "أوامر التشغيل", icon: "git-network-outline", endpoint: "/api/transport/dispatch-orders",
         titleFields: ["bookingNumber", "fromLocationText"], subtitleFields: ["vehiclePlate", "driverName"], statusField: "status", dateFields: ["scheduledStartAt"],
-        detailRoute: "/fleet/transport-dispatch-detail",
+        detailRoute: "/fleet/transport-dispatch-detail", createRoute: "/fleet/transport-dispatch-new",
         write: {
           moduleKey: "fleet",
           createFields: [
@@ -1478,7 +1478,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       },
       {
         key: "packages", label: "الباقات", icon: "cube-outline", endpoint: "/api/umrah/packages",
-        detailRoute: "/umrah/package-detail",
+        detailRoute: "/umrah/package-detail", createRoute: "/umrah/package-new",
         titleFields: ["name"], subtitleFields: ["seasonTitle", "duration"], amountFields: ["sellPrice"],
         write: {
           moduleKey: "umrah",
