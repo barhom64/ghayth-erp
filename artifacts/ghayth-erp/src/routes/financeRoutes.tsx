@@ -59,12 +59,12 @@ const ZatcaReportsHub = lazy(() => import("@/pages/finance/zatca-reports-hub"));
 const VatReconciliation = lazy(() => import("@/pages/finance/vat-reconciliation"));
 const VatFilingReadiness = lazy(() => import("@/pages/finance/vat-filing-readiness"));
 const Vouchers = lazy(() => import("@/pages/finance/vouchers"));
-// م٨ — vouchers-create محوّلة بـ redirect إلى المستند الموحّد (الملف مُبقًى، doc 25 §٨).
-const FinancialEventCreate = lazy(() => import("@/pages/create/finance/financial-event-create"));
+// الصفحة الموحّدة لتسجيل الواقعة المالية (تبويبات: قبض/صرف · مبيعات · مشتريات — تبدّل
+// النوع في المكان). تضمّ نماذج الأنواع الثلاثة، وكلٌّ يبقى على منفذه القائم (doc 25
+// §١١.٢: روحان لنفس السجل — لا نقل منطق، لا هجرة، لا مساس بالدفتر).
+const FinanceCreatePage = lazy(() => import("@/pages/create/finance/finance-create-page"));
 const FinancialImportGateway = lazy(() => import("@/pages/create/finance/financial-import-gateway"));
 const CustomerCollection = lazy(() => import("@/pages/create/finance/customer-collection"));
-const FinancialInvoiceCreate = lazy(() => import("@/pages/create/finance/financial-invoice-create"));
-const FinancialVendorInvoiceCreate = lazy(() => import("@/pages/create/finance/financial-vendor-invoice-create"));
 const VoucherDetail = lazy(() => import("@/pages/details/voucher-detail"));
 const Journal = lazy(() => import("@/pages/finance/journal"));
 const JournalDetail = lazy(() => import("@/pages/finance/journal-detail"));
@@ -291,11 +291,13 @@ export const financeRoutes = [
   // م٨ — التبديل: سند القبض/الصرف القديم يُحوَّل إلى «تسجيل واقعة» الموحّد (يشمله
   // كحالة قبض/صرف بجدول بنود + توزيع + مرفقات). doc 25 §٨ (تحويل لا حذف).
   { path: "/finance/vouchers/create", component: redirectTo("/finance/documents/create") },
-  { path: "/finance/documents/create", component: FinancialEventCreate },
+  // الصفحة الموحّدة (تبويبات قبض/صرف · مبيعات · مشتريات في المكان). المساران القديمان
+  // للفاتورتين يُحوَّلان إليها بنوع مُسبَق (?type=) — صفحة واحدة بدل ثلاث (ادمجها كلها).
+  { path: "/finance/documents/create", component: FinanceCreatePage },
   { path: "/finance/documents/import", component: FinancialImportGateway },
   { path: "/finance/collect", component: CustomerCollection },
-  { path: "/finance/documents/invoice", component: FinancialInvoiceCreate },
-  { path: "/finance/documents/vendor-invoice", component: FinancialVendorInvoiceCreate },
+  { path: "/finance/documents/invoice", component: redirectTo("/finance/documents/create?type=sales") },
+  { path: "/finance/documents/vendor-invoice", component: redirectTo("/finance/documents/create?type=purchase") },
   { path: "/finance/vouchers/:id", component: VoucherDetail },
   { path: "/finance/journal", component: Journal },
   { path: "/finance/journal/activity", component: PostingActivity },
