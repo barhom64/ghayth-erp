@@ -138,6 +138,11 @@ function AuthGate() {
       <Stack.Screen name="warehouse/overview" options={{ title: 'المستودعات' }} />
       <Stack.Screen name="finance/invoice-detail" options={{ title: 'الفاتورة' }} />
       <Stack.Screen name="finance/purchase-order-detail" options={{ title: 'أمر الشراء' }} />
+      <Stack.Screen name="finance/vendor-detail" options={{ title: 'ملف المورد' }} />
+      <Stack.Screen name="hr/loan-detail" options={{ title: 'تفاصيل السلفة' }} />
+      <Stack.Screen name="hr/violation-detail" options={{ title: 'المخالفة التأديبية' }} />
+      <Stack.Screen name="umrah/group-detail" options={{ title: 'مجموعة العمرة' }} />
+      <Stack.Screen name="properties/contract-detail" options={{ title: 'عقد الإيجار' }} />
       <Stack.Screen name="manager-workspace" options={{ title: 'مساحة عمل المدير' }} />
       <Stack.Screen name="finance/reports" options={{ title: 'التقارير المالية' }} />
       <Stack.Screen name="hr/employee-detail" options={{ title: 'ملف الموظف' }} />

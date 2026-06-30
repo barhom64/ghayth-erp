@@ -291,6 +291,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "loans", label: "السلف والقروض", icon: "card-outline", endpoint: "/api/hr/loans",
         titleFields: ["loanNumber"], subtitleFields: ["employeeName", "empNumber"], statusField: "status", amountFields: ["amount"], dateFields: ["createdAt"],
+        detailRoute: "/hr/loan-detail",
         write: {
           moduleKey: "hr",
           detailPath: (id) => `/api/hr/loans/${id}`,
@@ -338,6 +339,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
         },
       },
       { key: "exit", label: "إنهاء الخدمة", icon: "exit-outline", endpoint: "/api/hr/transfers", titleFields: ["transferNumber", "exitNumber"], subtitleFields: ["employeeName", "exitType"], statusField: "status", amountFields: ["netSettlement"], dateFields: ["requestDate"] },
+      { key: "violations", label: "المخالفات التأديبية", icon: "warning-outline", endpoint: "/api/hr/violations", titleFields: ["ref", "violationType", "typeLabel"], subtitleFields: ["employeeName"], statusField: "status", amountFields: ["penaltyAmount"], dateFields: ["incidentDate"], detailRoute: "/hr/violation-detail" },
       {
         key: "contracts", label: "عقود الموظفين", icon: "document-text-outline", endpoint: "/api/hr/contracts",
         titleFields: ["ref"], subtitleFields: ["employeeName", "contractType"], statusField: "approvalStatus", amountFields: ["salary"], dateFields: ["startDate"],
@@ -488,6 +490,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "vendors", label: "الموردون", icon: "business-outline", endpoint: "/api/finance/vendors",
         titleFields: ["name", "vendorName"], subtitleFields: ["taxNumber", "phone"], statusField: "status", amountFields: ["balance"],
+        detailRoute: "/finance/vendor-detail",
         write: {
           moduleKey: "finance",
           detailPath: (id) => `/api/finance/vendors/${id}`,
@@ -964,6 +967,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "groups", label: "المجموعات", icon: "albums-outline", endpoint: "/api/umrah/groups",
         titleFields: ["name", "groupNumber"], subtitleFields: ["pilgrimCount"], statusField: "status", dateFields: ["arrivalDate"],
+        detailRoute: "/umrah/group-detail",
         write: {
           moduleKey: "umrah",
           createFields: [
@@ -1429,6 +1433,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "contracts", label: "عقود الإيجار", icon: "document-text-outline", endpoint: "/api/properties/contracts",
         titleFields: ["contractNumber", "ref"], subtitleFields: ["tenantName", "clientName"], statusField: "status", amountFields: ["totalAmount", "total"], dateFields: ["startDate"],
+        detailRoute: "/properties/contract-detail",
         write: {
           moduleKey: "property",
           createFields: [
