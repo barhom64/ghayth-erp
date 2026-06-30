@@ -28,9 +28,10 @@ interface QuickAction { label: string; icon: IoniconName; route: string; manager
 const QUICK_ACTIONS: QuickAction[] = [
   { label: 'تسجيل الحضور', icon: 'finger-print-outline',      route: '/hr/attendance' },
   { label: 'طلب إجازة',     icon: 'calendar-outline',          route: '/hr/leave-new' },
-  { label: 'طلباتي',          icon: 'list-outline',              route: '/hr/my-requests' },
   { label: 'وقت إضافي',     icon: 'alarm-outline',             route: '/hr/overtime-new' },
+  { label: 'طلب سلفة',      icon: 'card-outline',              route: '/hr/loan-new' },
   { label: 'كشف الراتب',    icon: 'document-text-outline',     route: '/hr/payslip' },
+  { label: 'طلباتي',         icon: 'list-outline',              route: '/hr/my-requests' },
 ];
 
 function AssignmentSwitcherModal({ assignments, currentCompanyId, onSwitch, onClose }: {

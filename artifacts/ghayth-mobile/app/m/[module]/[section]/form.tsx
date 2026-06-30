@@ -14,6 +14,7 @@ import { GCard, GButton, GInput, GSelect, GLoadingState, GEmptyState } from '@wo
 import { useColors } from '@/hooks/useColors';
 import { apiFetch } from '@/hooks/useApi';
 import { takePhoto } from '@/hooks/useNative';
+import { DateInput } from '@/components/DateInput';
 import {
   createEndpointFor,
   detailEndpointFor,
@@ -301,16 +302,25 @@ function FieldInput({ field, value, error, onChange }: {
       />
     );
   }
+  if (field.type === 'date') {
+    return (
+      <DateInput
+        label={field.required ? `${field.label} *` : field.label}
+        value={value}
+        onChange={onChange}
+        error={error}
+      />
+    );
+  }
   const keyboardType =
     field.type === 'number' || field.type === 'currency' ? 'decimal-pad' as const
-    : field.type === 'date' ? 'numbers-and-punctuation' as const
     : undefined;
   return (
     <GInput
       label={field.required ? `${field.label} *` : field.label}
       value={value}
       onChangeText={onChange}
-      placeholder={field.placeholder ?? (field.type === 'date' ? 'YYYY-MM-DD' : undefined)}
+      placeholder={field.placeholder}
       keyboardType={keyboardType}
       autoCapitalize="none"
       multiline={field.type === 'textarea'}

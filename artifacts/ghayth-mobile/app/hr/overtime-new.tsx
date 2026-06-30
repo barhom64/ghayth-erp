@@ -6,6 +6,7 @@ import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet } from 'r
 import { Stack, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { GCard, GButton, GInput, GText } from '@workspace/ui-native';
+import { DateInput } from '@/components/DateInput';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
 import { useMutation } from '@/hooks/useApi';
@@ -70,12 +71,10 @@ export default function OvertimeNewScreen() {
             أدخل تفاصيل الوقت الإضافي للحصول على اعتماد المدير
           </GText>
 
-          <GInput
+          <DateInput
             label="تاريخ العمل الإضافي *"
             value={overtimeDate}
-            onChangeText={setOvertimeDate}
-            placeholder="YYYY-MM-DD"
-            keyboardType="numbers-and-punctuation"
+            onChange={setOvertimeDate}
             error={errors.overtimeDate}
           />
           <GInput

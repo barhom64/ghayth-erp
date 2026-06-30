@@ -8,6 +8,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { GCard, GButton, GInput, GSelect, GText, GLoadingState, GEmptyState } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList, useMutation } from '@/hooks/useApi';
+import { DateInput } from '@/components/DateInput';
 
 interface LeaveBalance { leaveTypeId: number; remaining: number; name: string }
 interface MySpaceData { leaveBalances?: LeaveBalance[] }
@@ -84,20 +85,16 @@ export default function LeaveNewScreen() {
             </GText>
           )}
 
-          <GInput
+          <DateInput
             label="تاريخ البداية *"
             value={startDate}
-            onChangeText={setStartDate}
-            placeholder="YYYY-MM-DD"
-            keyboardType="numbers-and-punctuation"
+            onChange={setStartDate}
             error={errors.startDate}
           />
-          <GInput
+          <DateInput
             label="تاريخ الانتهاء *"
             value={endDate}
-            onChangeText={setEndDate}
-            placeholder="YYYY-MM-DD"
-            keyboardType="numbers-and-punctuation"
+            onChange={setEndDate}
             error={errors.endDate}
           />
           <GInput
