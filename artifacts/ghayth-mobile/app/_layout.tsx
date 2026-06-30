@@ -1203,6 +1203,8 @@ function AuthGate() {
       <Stack.Screen name="portal/invoice-detail" options={{ title: 'تفاصيل الفاتورة' }} />
       <Stack.Screen name="portal/ticket-detail" options={{ title: 'تفاصيل التذكرة' }} />
       <Stack.Screen name="portal/kb-detail" options={{ title: 'مقالة المعرفة' }} />
+      <Stack.Screen name="fleet/rental-contract-detail" options={{ title: 'عقد الإيجار' }} />
+      <Stack.Screen name="fleet/vehicle-tco" options={{ title: 'تكلفة ملكية المركبة' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
