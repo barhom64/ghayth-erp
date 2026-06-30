@@ -531,6 +531,7 @@ function AuthGate() {
       <Stack.Screen name="crm/opportunities" options={{ title: 'فرص البيع' }} />
       <Stack.Screen name="admin/companies" options={{ title: 'الشركات' }} />
       <Stack.Screen name="admin/branches" options={{ title: 'الفروع' }} />
+      <Stack.Screen name="finance/pricing-rules" options={{ title: 'قواعد التسعير' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
