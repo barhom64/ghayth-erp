@@ -678,6 +678,10 @@ function AuthGate() {
       <Stack.Screen name="admin/observability" options={{ title: 'لوحة مراقبة النظام' }} />
       <Stack.Screen name="requests/workflows" options={{ title: 'تدفقات الطلبات' }} />
       <Stack.Screen name="documents/retention-due" options={{ title: 'وثائق مستحقة الحذف' }} />
+      <Stack.Screen name="umrah/reconciliation" options={{ title: 'تسوية العمرة' }} />
+      <Stack.Screen name="umrah/exempt-pilgrims" options={{ title: 'المعتمرون المعفيون' }} />
+      <Stack.Screen name="properties/technicians" options={{ title: 'الفنيون' }} />
+      <Stack.Screen name="crm/analytics" options={{ title: 'تحليلات CRM' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
