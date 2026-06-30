@@ -4,7 +4,7 @@ import { useApiQuery, asList, apiFetch } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
 import { WarehouseTabsNav } from "@/components/shared/warehouse-tabs-nav";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { PageStatusBadge, STATUS_MAP } from "@workspace/ui-core";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DataTable, type DataTableColumn, AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";
@@ -14,13 +14,8 @@ import { formatDateAr, formatNumber, todayLocal } from "@/lib/formatters";
 import { FormShell, FormTextField, FormDateField, FormGrid } from "@workspace/ui-core";
 import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 
-const STATUS_LABELS: Record<string, { label: string; variant: any }> = {
-  active:     { label: "نشط",       variant: "default" },
-  quarantine: { label: "حجر صحي",   variant: "secondary" },
-  expired:    { label: "منتهي",     variant: "destructive" },
-  recalled:   { label: "مستدعى",    variant: "destructive" },
-  disposed:   { label: "متلف",      variant: "outline" },
-};
+// خيارات الفلترة مشتقّة من المصدر القانوني للحالات (لا قائمة محلية تنحرف).
+const LOT_STATUS_OPTIONS = Object.entries(STATUS_MAP.lot).map(([value, s]) => ({ value, label: s.label }));
 
 const receiveSchema = z.object({
   productId: z.coerce.number().int().positive("المنتج مطلوب"),
@@ -55,10 +50,7 @@ export default function WarehouseLotsPage() {
     { key: "warehouseName", header: "المخزن", cell: (r: any) => r.warehouseName ?? `#${r.warehouseId}` },
     { key: "quantity", header: "الكمية", cell: (r: any) => formatNumber(Number(r.quantity)) },
     { key: "expiryDate", header: "الصلاحية", cell: (r: any) => r.expiryDate ? formatDateAr(r.expiryDate) : "—" },
-    { key: "status", header: "الحالة", cell: (r: any) => {
-      const s = STATUS_LABELS[r.status] ?? { label: r.status, variant: "outline" };
-      return <Badge variant={s.variant}>{s.label}</Badge>;
-    } },
+    { key: "status", header: "الحالة", cell: (r: any) => <PageStatusBadge status={r.status} domain="lot" /> },
     { key: "actions", header: "إجراءات", cell: (r: any) => (
       <div className="flex gap-2">
         {r.status === "quarantine" && (
@@ -126,7 +118,7 @@ export default function WarehouseLotsPage() {
       <AdvancedFilters
         config={{
           searchPlaceholder: "بحث برقم الدفعة أو المنتج أو المخزن...",
-          statuses: Object.entries(STATUS_LABELS).map(([value, s]) => ({ value, label: s.label })),
+          statuses: LOT_STATUS_OPTIONS,
           showDateRange: false,
         }}
         values={filters}

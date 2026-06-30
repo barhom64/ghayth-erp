@@ -3,21 +3,13 @@ import { useApiQuery, asList, apiFetch } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
 import { WarehouseTabsNav } from "@/components/shared/warehouse-tabs-nav";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { ClipboardCheck, Plus, Wand2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { formatDateAr, formatNumber, todayLocal } from "@/lib/formatters";
-
-const STATUS_LABELS: Record<string, { label: string; variant: any }> = {
-  pending:     { label: "معلق",      variant: "secondary" },
-  in_progress: { label: "قيد التنفيذ", variant: "default" },
-  reviewed:    { label: "مراجَع",      variant: "default" },
-  approved:    { label: "معتمد",       variant: "default" },
-  rejected:    { label: "مرفوض",       variant: "destructive" },
-};
+import { PageStatusBadge } from "@workspace/ui-core";
 
 export default function CycleCountsPage() {
   const [warehouseId, setWarehouseId] = useState("");
@@ -74,10 +66,7 @@ export default function CycleCountsPage() {
     { key: "lineCount", header: "الأسطر", cell: (r: any) => formatNumber(Number(r.lineCount ?? 0)) },
     { key: "netVarianceValue", header: "صافي الفرق (ر.س)", cell: (r: any) => formatNumber(Number(r.netVarianceValue ?? 0)) },
     { key: "planId", header: "خطة", cell: (r: any) => r.planId ? `#${r.planId}` : "—" },
-    { key: "status", header: "الحالة", cell: (r: any) => {
-      const s = STATUS_LABELS[r.status] ?? { label: r.status, variant: "outline" };
-      return <Badge variant={s.variant}>{s.label}</Badge>;
-    } },
+    { key: "status", header: "الحالة", cell: (r: any) => <PageStatusBadge status={r.status} domain="cycle_count" /> },
     { key: "actions", header: "إجراءات", cell: (r: any) => (
       <div className="flex gap-2">
         {r.status === "in_progress" && <Button size="sm" variant="outline" onClick={() => submit(r.id)}>إرسال للمراجعة</Button>}
