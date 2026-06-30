@@ -3280,8 +3280,12 @@ router.post("/maintenance", authorize({ feature: "fleet.maintenance", action: "c
     );
     const assignedMechanic = b.performedBy || (mechanics[0]?.name ?? null);
 
-    const defaultNextDate = new Date();
-    defaultNextDate.setMonth(defaultNextDate.getMonth() + 3);
+    // Next-service reminder = 3 months from the Riyadh wall-clock date (not the
+    // UTC `new Date()` "now", which drifts the date across the day boundary in
+    // +03). Derived from currentDateInTz so the reminder is anchored to local
+    // time; setUTCMonth on the parsed midnight is calendar-correct.
+    const defaultNextDate = new Date(`${currentDateInTz("Asia/Riyadh")}T00:00:00Z`);
+    defaultNextDate.setUTCMonth(defaultNextDate.getUTCMonth() + 3);
     const effectiveNextServiceDate = b.nextServiceDate || toDateISO(defaultNextDate);
 
     const insertId = await withTransaction(async (client) => {
