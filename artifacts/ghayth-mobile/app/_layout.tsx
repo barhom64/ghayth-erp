@@ -965,6 +965,16 @@ function AuthGate() {
       <Stack.Screen name="admin/event-log-stats" options={{ title: 'إحصائيات سجل الأحداث' }} />
       <Stack.Screen name="admin/event-outbox-stats" options={{ title: 'إحصائيات صندوق الصادر' }} />
       <Stack.Screen name="admin/event-journeys" options={{ title: 'رحلات الأحداث' }} />
+      <Stack.Screen name="fleet/me-fuel-logs" options={{ title: 'سجلات الوقود' }} />
+      <Stack.Screen name="fleet/me-breakdowns" options={{ title: 'بلاغات أعطالي' }} />
+      <Stack.Screen name="fleet/me-accidents" options={{ title: 'حوادثي' }} />
+      <Stack.Screen name="fleet/me-trips" options={{ title: 'رحلاتي' }} />
+      <Stack.Screen name="fleet/me-cargo" options={{ title: 'بضائعي' }} />
+      <Stack.Screen name="admin/gov-integration-links" options={{ title: 'روابط التكاملات الحكومية' }} />
+      <Stack.Screen name="print/assignments" options={{ title: 'تعيينات قوالب الطباعة' }} />
+      <Stack.Screen name="print/reprint-requests" options={{ title: 'طلبات إعادة الطباعة' }} />
+      <Stack.Screen name="bi/alert-fatigue-settings" options={{ title: 'إعدادات التعب التنبيهي' }} />
+      <Stack.Screen name="bi/alert-fatigue-daily" options={{ title: 'الإحصاء اليومي للتنبيهات' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
