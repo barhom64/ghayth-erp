@@ -5,19 +5,20 @@ import { GLoadingState, GEmptyState } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 
-interface RbacFeature {
-  key?: string;
-  label?: string;
-  module?: string;
-  actions?: string[];
+interface NumberingAssignment {
+  id?: number;
+  entityType?: string;
+  schemeCode?: string;
+  branchName?: string;
+  companyName?: string;
 }
 
-export default function AdminRbacFeaturesScreen() {
+export default function AdminNumberingAssignmentsScreen() {
   const c = useColors();
-  const { data, isLoading, isError, refetch } = useList<RbacFeature[]>('/api/rbac/features');
+  const { data, isLoading, isError, refetch } = useList<NumberingAssignment[]>('/api/numbering/assignments');
   const list = Array.isArray(data) ? data : [];
 
-  if (isLoading) return <GLoadingState text="جارٍ تحميل ميزات RBAC…" />;
+  if (isLoading) return <GLoadingState text="جارٍ تحميل تعيينات الترقيم…" />;
   if (isError) return (
     <GEmptyState icon="alert-circle-outline" title="تعذّر التحميل" description="تحقق من الاتصال"
       actionLabel="إعادة المحاولة" onAction={refetch} />
@@ -25,23 +26,24 @@ export default function AdminRbacFeaturesScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Stack.Screen options={{ title: 'ميزات RBAC' }} />
+      <Stack.Screen options={{ title: 'تعيينات الترقيم' }} />
       <FlatList
         data={list}
-        keyExtractor={(item, i) => item.key ?? String(i)}
+        keyExtractor={(item, i) => String(item.id ?? i)}
         contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
         onRefresh={refetch}
         refreshing={isLoading}
-        ListEmptyComponent={<GEmptyState icon="key-outline" title="لا توجد ميزات" description="" />}
+        ListEmptyComponent={<GEmptyState icon="keypad-outline" title="لا توجد تعيينات" description="" />}
         renderItem={({ item }) => (
           <View style={{ backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, padding: 14 }}>
             <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={{ fontSize: 14, fontWeight: '600', color: c.text }}>{item.label ?? item.key ?? '—'}</Text>
-              {item.module ? <Text style={{ fontSize: 11, color: c.brand }}>{item.module}</Text> : null}
+              <Text style={{ fontSize: 14, fontWeight: '600', color: c.text }}>{item.entityType ?? '—'}</Text>
+              <Text style={{ fontSize: 12, color: c.brand }}>{item.schemeCode ?? '—'}</Text>
             </View>
-            {item.key ? <Text style={{ fontSize: 11, color: c.textFaint, marginTop: 2, textAlign: 'right' }}>{item.key}</Text> : null}
-            {item.actions && item.actions.length > 0 ? (
-              <Text style={{ fontSize: 11, color: c.textMuted, marginTop: 4, textAlign: 'right' }}>{item.actions.join(' · ')}</Text>
+            {(item.branchName || item.companyName) ? (
+              <Text style={{ fontSize: 12, color: c.textMuted, marginTop: 4, textAlign: 'right' }}>
+                {[item.companyName, item.branchName].filter(Boolean).join(' / ')}
+              </Text>
             ) : null}
           </View>
         )}

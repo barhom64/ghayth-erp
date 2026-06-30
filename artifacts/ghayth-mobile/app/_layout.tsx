@@ -910,6 +910,14 @@ function AuthGate() {
       <Stack.Screen name="settings/administrations" options={{ title: 'الإدارات' }} />
       <Stack.Screen name="settings/org-tree" options={{ title: 'الهيكل التنظيمي' }} />
       <Stack.Screen name="settings/resolved" options={{ title: 'الإعدادات المحلولة' }} />
+      <Stack.Screen name="admin/infra-alerts" options={{ title: 'تنبيهات البنية التحتية' }} />
+      <Stack.Screen name="admin/infra-alert-settings" options={{ title: 'إعدادات تنبيهات البنية التحتية' }} />
+      <Stack.Screen name="admin/rules-logs" options={{ title: 'سجلات القواعد' }} />
+      <Stack.Screen name="admin/rbac-features" options={{ title: 'ميزات RBAC' }} />
+      <Stack.Screen name="admin/rbac-levels" options={{ title: 'مستويات الصلاحيات' }} />
+      <Stack.Screen name="admin/numbering-assignments" options={{ title: 'تعيينات الترقيم' }} />
+      <Stack.Screen name="admin/numbering-audit" options={{ title: 'سجل تدقيق الترقيم' }} />
+      <Stack.Screen name="admin/numbering-health" options={{ title: 'صحة الترقيم' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
