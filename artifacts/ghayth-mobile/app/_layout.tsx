@@ -578,6 +578,18 @@ function AuthGate() {
       <Stack.Screen name="finance/receivables" options={{ title: 'الذمم المدينة' }} />
       <Stack.Screen name="finance/payables" options={{ title: 'الذمم الدائنة' }} />
       <Stack.Screen name="finance/financial-requests" options={{ title: 'الطلبات المالية' }} />
+      <Stack.Screen name="finance/tax-declarations" options={{ title: 'إقرارات الضريبة' }} />
+      <Stack.Screen name="admin/cron-logs" options={{ title: 'سجلات المجدول' }} />
+      <Stack.Screen name="admin/automation-logs" options={{ title: 'سجلات الأتمتة' }} />
+      <Stack.Screen name="comms/inbox-threads" options={{ title: 'المحادثات' }} />
+      <Stack.Screen name="comms/inbox-calls" options={{ title: 'سجل المكالمات' }} />
+      <Stack.Screen name="comms/inbox-drafts" options={{ title: 'المسودات' }} />
+      <Stack.Screen name="comms/inbox-templates" options={{ title: 'قوالب الرسائل' }} />
+      <Stack.Screen name="admin/workflows" options={{ title: 'سير العمل' }} />
+      <Stack.Screen name="admin/workflow-definitions" options={{ title: 'تعريفات سير العمل' }} />
+      <Stack.Screen name="admin/workflow-sla" options={{ title: 'تعريفات SLA' }} />
+      <Stack.Screen name="admin/proactive-rules" options={{ title: 'القواعد الاستباقية' }} />
+      <Stack.Screen name="finance/zatca" options={{ title: 'إرسالات زاتكا' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
