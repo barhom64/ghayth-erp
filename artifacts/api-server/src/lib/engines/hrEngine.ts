@@ -239,6 +239,12 @@ class HREngineImpl implements DomainEngine {
        *  وطرحُه من رقم الراتب المُشتقّ يُبقي القيد متوازنًا. يُحلّ الحساب فقط
        *  حين > 0 (الشركات بلا أجر سائقين لا تمسّ الحساب). */
       totalDriverWages?: number;
+      /** مكافآت حركات النقل المُستهلكة في هذا المسيّر (الدفعة ب). حين > 0،
+       *  يُصدَر سطر مدين «مصروف مكافآت السائقين» (`payroll_driver_bonus_expense`،
+       *  الافتراضي 5245) — منفصل عن الراتب، حافز لا يخضع لـGOSI. المستدعي أضافه
+       *  للصافي (→ totalBankPayout)؛ وطرحُه من الراتب المُشتقّ يُبقي القيد متوازنًا.
+       *  يُحلّ الحساب فقط حين > 0. */
+      totalBonuses?: number;
       /**
        * Optional per-employee breakdown. When provided, the salary +
        * GOSI expense + overtime DR lines are split per employee with
@@ -264,6 +270,8 @@ class HREngineImpl implements DomainEngine {
         commission?: number;
         /** أجر السائق بالساعة للموظف — يقسّم مدين 5220 لكل موظف (dimensional). */
         driverWages?: number;
+        /** مكافأة حركات النقل للموظف — تقسّم مدين 5245 لكل موظف (dimensional). */
+        bonus?: number;
         /** #2303 — per-employee deduction split. Each is CREDITED to its own
          *  account (per-employee, dimensional) instead of bundling into the
          *  generic deductions-payable clearing (2150):
@@ -317,6 +325,15 @@ class HREngineImpl implements DomainEngine {
         ctx.companyId, "payroll_driver_wages_expense", "debit", "5220",
       );
     }
+    const totalBonuses = roundTo2(payroll.totalBonuses ?? 0);
+    // مكافآت حركات النقل (الدفعة ب) — يُحلّ الحساب فقط حين > 0 (صفر مخاطرة على
+    // الشركات بلا مكافآت). حافز لا يخضع لـGOSI.
+    let bonusExpenseCode: string | null = null;
+    if (totalBonuses > 0) {
+      bonusExpenseCode = await financialEngine.resolveAccountCode(
+        ctx.companyId, "payroll_driver_bonus_expense", "debit", "5245",
+      );
+    }
 
     // The six payroll aggregates are each rounded independently, so Σdebit
     // can drift a sub-cent from Σcredit. The salary-expense debit is DERIVED
@@ -337,7 +354,7 @@ class HREngineImpl implements DomainEngine {
     // subtracted here to keep salary expense pure.
     // أجر السائق بالساعة طرفُ مدين مستقلّ (5220) أُضيف لصافي السطر (→ bankPayout)،
     // فيُطرح من الراتب المُشتقّ ليبقى القيد متوازنًا (نفس منطق العمولة).
-    const totalGross = roundTo2(bankPayout + gosiPayable + otherDeductions + totalWht - totalOvertime - gosiEmployer - totalCommission - totalDriverWages);
+    const totalGross = roundTo2(bankPayout + gosiPayable + otherDeductions + totalWht - totalOvertime - gosiEmployer - totalCommission - totalDriverWages - totalBonuses);
 
     // Build debit lines — per-employee when breakdown is provided,
     // otherwise the legacy aggregate. salary_payable + gosi_payable stay
@@ -354,27 +371,29 @@ class HREngineImpl implements DomainEngine {
       // Validate the breakdown sums match the aggregates within a
       // small rounding tolerance. If they diverge by more than a
       // cent the breakdown is unreliable — fall back to aggregate.
-      let sumBasic = 0, sumOT = 0, sumGosi = 0, sumCommission = 0, sumDriverWages = 0;
+      let sumBasic = 0, sumOT = 0, sumGosi = 0, sumCommission = 0, sumDriverWages = 0, sumBonuses = 0;
       for (const e of payroll.breakdown) {
         sumBasic += roundTo2(e.basic);
         sumOT += roundTo2(e.overtime);
         sumGosi += roundTo2(e.gosiEmployer);
         sumCommission += roundTo2(e.commission ?? 0);
         sumDriverWages += roundTo2(e.driverWages ?? 0);
+        sumBonuses += roundTo2(e.bonus ?? 0);
       }
       const grossDiff = Math.abs(roundTo2(sumBasic) - totalGross);
       const otDiff = Math.abs(roundTo2(sumOT) - totalOvertime);
       const gosiDiff = Math.abs(roundTo2(sumGosi) - gosiEmployer);
       const commissionDiff = Math.abs(roundTo2(sumCommission) - totalCommission);
       const driverWagesDiff = Math.abs(roundTo2(sumDriverWages) - totalDriverWages);
-      breakdownTrusted = grossDiff < 0.5 && otDiff < 0.5 && gosiDiff < 0.5 && commissionDiff < 0.5 && driverWagesDiff < 0.5;
+      const bonusDiff = Math.abs(roundTo2(sumBonuses) - totalBonuses);
+      breakdownTrusted = grossDiff < 0.5 && otDiff < 0.5 && gosiDiff < 0.5 && commissionDiff < 0.5 && driverWagesDiff < 0.5 && bonusDiff < 0.5;
 
       if (breakdownTrusted) {
         // Per-employee DR lines for salary + overtime + GOSI + commission.
         // The rounding remainder lands on the LAST employee row in
         // each bucket so the bucket total stays exact.
         const lastIdx = payroll.breakdown.length - 1;
-        let runningBasic = 0, runningOT = 0, runningGosi = 0, runningCommission = 0, runningDriverWages = 0;
+        let runningBasic = 0, runningOT = 0, runningGosi = 0, runningCommission = 0, runningDriverWages = 0, runningBonus = 0;
         for (let i = 0; i < payroll.breakdown.length; i++) {
           const e = payroll.breakdown[i];
           const basicRounded = i === lastIdx
@@ -392,6 +411,9 @@ class HREngineImpl implements DomainEngine {
           const driverWagesRounded = i === lastIdx
             ? roundTo2(totalDriverWages - runningDriverWages)
             : roundTo2(e.driverWages ?? 0);
+          const bonusRounded = i === lastIdx
+            ? roundTo2(totalBonuses - runningBonus)
+            : roundTo2(e.bonus ?? 0);
           if (basicRounded > 0) {
             debitLines.push({
               accountCode: salaryExpenseCode, debit: basicRounded, credit: 0,
@@ -434,6 +456,16 @@ class HREngineImpl implements DomainEngine {
             });
             runningDriverWages = roundTo2(runningDriverWages + driverWagesRounded);
           }
+          // مكافأة حركات النقل (5245) — مدين لكل موظف، dimensional. الحساب
+          // مُحلّ فقط حين totalBonuses > 0.
+          if (bonusExpenseCode && bonusRounded > 0) {
+            debitLines.push({
+              accountCode: bonusExpenseCode, debit: bonusRounded, credit: 0,
+              employeeId: e.employeeId,
+              ...(e.departmentId != null ? { departmentId: e.departmentId } : {}),
+            });
+            runningBonus = roundTo2(runningBonus + bonusRounded);
+          }
         }
       } else {
         // Breakdown didn't reconcile — fall back to aggregate lines
@@ -447,6 +479,9 @@ class HREngineImpl implements DomainEngine {
         );
         if (driverWagesExpenseCode && totalDriverWages > 0) {
           debitLines.push({ accountCode: driverWagesExpenseCode, debit: totalDriverWages, credit: 0 });
+        }
+        if (bonusExpenseCode && totalBonuses > 0) {
+          debitLines.push({ accountCode: bonusExpenseCode, debit: totalBonuses, credit: 0 });
         }
       }
     } else {
