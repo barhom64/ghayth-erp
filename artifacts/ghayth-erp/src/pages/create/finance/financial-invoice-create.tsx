@@ -13,6 +13,7 @@ import { LineItemsTable } from "@/components/shared/line-items-table";
 import { ClientSelect, BranchSelect, ProjectSelect, VehicleSelect, UnitSelect } from "@/components/shared/entity-selects";
 import { NumberField, FormFieldWrapper, TextField } from "@/components/shared/form-field-wrapper";
 import { ArrowDownLeft } from "lucide-react";
+import { FinanceStartFromDocument } from "@/components/shared/finance-start-from-document";
 
 /**
  * فاتورة مبيعات — الروح التشغيلية (م٤، docs/25 §٧.٤ + §١١.٢). نفس جدول البنود
@@ -163,17 +164,8 @@ export default function FinancialInvoiceCreate({ embedded = false }: { embedded?
       )}
       <div dir="rtl">
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* اختصار «ابدأ من مستند» — مطابقة لصفحة الواقعة (نفس محرّك القراءة/الاستيراد). */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-dashed bg-surface-subtle px-3 py-2 text-sm">
-            <span className="text-muted-foreground">عندك المستند جاهز؟ ابدأ منه:</span>
-            <button type="button" className="text-primary hover:underline font-medium" onClick={() => navigate("/documents/ocr/review")}>
-              قراءة ضوئية (OCR) ←
-            </button>
-            <span className="text-muted-foreground" aria-hidden>·</span>
-            <button type="button" className="text-primary hover:underline font-medium" onClick={() => navigate("/finance/documents/import")}>
-              استيراد Excel/CSV ←
-            </button>
-          </div>
+          {/* اختصار «ابدأ من مستند» — مكوّن مشترك (DRY، مطابق لصفحة الواقعة). */}
+          <FinanceStartFromDocument />
 
           {/* لافتة الاتجاه — مبيعات = قبض (إيراد على العميل)، بنفس نمط الواقعة. */}
           <div className="flex items-start gap-2 rounded-lg border border-status-success-foreground/30 bg-status-success-surface px-3 py-2 text-sm text-status-success-foreground">
