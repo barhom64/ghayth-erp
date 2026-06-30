@@ -650,6 +650,24 @@ function AuthGate() {
       <Stack.Screen name="hr/accruals-preview" options={{ title: 'معاينة الاستحقاقات' }} />
       <Stack.Screen name="hr/employees-status" options={{ title: 'حالة الموظفين' }} />
       <Stack.Screen name="finance/gl-pending" options={{ title: 'قيود GL المعلّقة' }} />
+      <Stack.Screen name="finance/gl-cycle-count" options={{ title: 'جرد دورة — معلّق' }} />
+      <Stack.Screen name="finance/gl-realized-fx" options={{ title: 'FX محقَّق — السجل' }} />
+      <Stack.Screen name="finance/gl-lot-writeoff" options={{ title: 'شطب دُفعات — معلّق' }} />
+      <Stack.Screen name="finance/gl-payroll-liability" options={{ title: 'التزامات رواتب — معلّقة' }} />
+      <Stack.Screen name="umrah/import-logs" options={{ title: 'سجلات الاستيراد — عمرة' }} />
+      <Stack.Screen name="umrah/unassigned" options={{ title: 'معتمرون غير مسنَّدين' }} />
+      <Stack.Screen name="umrah/nusk-wallet" options={{ title: 'محفظة نُسك' }} />
+      <Stack.Screen name="finance/accounts-gaps" options={{ title: 'فجوات استخدام الحسابات' }} />
+      <Stack.Screen name="finance/allocation-rules" options={{ title: 'قواعد توزيع التكاليف' }} />
+      <Stack.Screen name="finance/allocation-results" options={{ title: 'نتائج توزيع التكاليف' }} />
+      <Stack.Screen name="finance/wht-categories" options={{ title: 'فئات WHT' }} />
+      <Stack.Screen name="finance/dso-trend" options={{ title: 'اتجاه DSO' }} />
+      <Stack.Screen name="finance/dimensional-coverage" options={{ title: 'تغطية أبعاد القيود' }} />
+      <Stack.Screen name="finance/dormant-entities" options={{ title: 'الكيانات الخاملة' }} />
+      <Stack.Screen name="transport/ops-dashboard" options={{ title: 'لوحة عمليات النقل' }} />
+      <Stack.Screen name="warehouse/expiring" options={{ title: 'دُفعات مشارفة على الانتهاء' }} />
+      <Stack.Screen name="warehouse/lot-aging" options={{ title: 'تقادم الدُفعات' }} />
+      <Stack.Screen name="warehouse/cycle-count-accuracy" options={{ title: 'دقة جرد الدورة' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
