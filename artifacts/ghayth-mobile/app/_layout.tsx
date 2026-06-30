@@ -277,6 +277,8 @@ function AuthGate() {
       <Stack.Screen name="governance/capa-new" options={{ title: 'إجراء تصحيحي / وقائي' }} />
       <Stack.Screen name="fleet/fuel-log-new" options={{ title: 'تسجيل مصروف وقود' }} />
       <Stack.Screen name="properties/unit-new" options={{ title: 'وحدة جديدة' }} />
+      <Stack.Screen name="hr/discipline-new" options={{ title: 'إجراء تأديبي' }} />
+      <Stack.Screen name="warehouse/supplier-new" options={{ title: 'إضافة مورد جديد' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>

@@ -470,7 +470,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           { name: "description", label: "وصف الوظيفة", type: "textarea" },
         ] } },
       {
-        key: "discipline", label: "المخالفات التأديبية", icon: "warning-outline", endpoint: "/api/hr/discipline/memos", titleFields: ["memoNumber"], subtitleFields: ["employeeName", "incidentType"], statusField: "status", dateFields: ["incidentDate"], detailRoute: "/hr/discipline-detail",
+        key: "discipline", label: "المخالفات التأديبية", icon: "warning-outline", endpoint: "/api/hr/discipline/memos", titleFields: ["memoNumber"], subtitleFields: ["employeeName", "incidentType"], statusField: "status", dateFields: ["incidentDate"], detailRoute: "/hr/discipline-detail", createRoute: "/hr/discipline-new",
         write: { moduleKey: "hr", createFields: [
           { name: "employeeId", label: "الموظف", type: "text", required: true },
           { name: "incidentDate", label: "تاريخ الحادثة", type: "date", required: true },
@@ -1276,7 +1276,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       },
       {
         key: "suppliers", label: "الموردون", icon: "business-outline", endpoint: "/api/warehouse/suppliers",
-        detailRoute: "/warehouse/supplier-detail",
+        detailRoute: "/warehouse/supplier-detail", createRoute: "/warehouse/supplier-new",
         titleFields: ["name"], subtitleFields: ["contactPerson", "phone"],
         write: {
           moduleKey: "warehouse",
