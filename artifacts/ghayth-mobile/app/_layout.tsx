@@ -897,6 +897,9 @@ function AuthGate() {
       <Stack.Screen name="org/supervision-lines" options={{ title: 'خطوط الإشراف' }} />
       <Stack.Screen name="org/approval-authorities" options={{ title: 'صلاحيات الاعتماد' }} />
       <Stack.Screen name="org/scoring-ranking" options={{ title: 'ترتيب التقييم' }} />
+      <Stack.Screen name="comms/inbox-signatures" options={{ title: 'توقيعات البريد' }} />
+      <Stack.Screen name="settings/inbox-routing" options={{ title: 'إعدادات توجيه البريد' }} />
+      <Stack.Screen name="settings/task-sla" options={{ title: 'إعدادات SLA المهام' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
