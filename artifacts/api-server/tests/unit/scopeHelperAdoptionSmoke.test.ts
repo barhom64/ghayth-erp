@@ -572,7 +572,9 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // فالراوت بلا scope مباشر (manualOnly دون تغيير).
       // +1 total: routes/hr-driver-pay.ts (معدّلات أجر السائق، الدفعة 2). وحدة
       // تحكّم رفيعة كذلك — العزل في lib/hr/driverPayRates.ts (manualOnly دون تغيير).
-      total: 156,
+      // +1 total: routes/fleet-movement-bonuses.ts (مكافآت حركات النقل، الدفعة أ).
+      // وحدة تحكّم رفيعة — العزل في lib/fleet/movementBonuses.ts (manualOnly دون تغيير).
+      total: 157,
       helperUsers: 39,
       manualOnly: 110,
     });
