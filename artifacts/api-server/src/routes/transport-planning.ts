@@ -1547,6 +1547,36 @@ transportPlanningRouter.post(
         }
       })().catch(() => undefined);
 
+      // أجر السائق بالساعة (الدفعة 1) — اشتقاق ساعات يوم الجلسة فور إنهائها.
+      // best-effort ومعزول: فشل الاشتقاق لا يمنع إنهاء السائق للجلسة. الصفّ
+      // يُنشأ بحالة pending بانتظار الاعتماد البشري (لا أثر على الراتب هنا).
+      (async () => {
+        try {
+          const [sess] = await rawQuery<{ driverId: number; day: string }>(
+            `SELECT "driverId", to_char("startedAt", 'YYYY-MM-DD') AS day
+               FROM driver_navigation_sessions
+              WHERE "dispatchOrderId" = $1 AND "companyId" = $2
+              ORDER BY id DESC LIMIT 1`,
+            [dispatchOrderId, scope.companyId],
+          );
+          if (sess) {
+            const { upsertDerivedDriverHours } = await import("../lib/fleet/driverHours.js");
+            await upsertDerivedDriverHours(
+              {
+                companyId: scope.companyId,
+                branchId: scope.branchId ?? null,
+                userId: scope.userId,
+                activeAssignmentId: scope.activeAssignmentId ?? null,
+              },
+              sess.driverId,
+              sess.day,
+            );
+          }
+        } catch (e) {
+          logger.warn({ err: e, dispatchOrderId }, "post-complete driver-hours derive failed");
+        }
+      })().catch(() => undefined);
+
       res.json({ ok: true });
     } catch (err) {
       handleRouteError(err, res, "Complete navigation error:");

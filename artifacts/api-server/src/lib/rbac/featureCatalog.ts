@@ -339,6 +339,14 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
     icon: "Calendar",
     availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],
     approvableActions: ["approve"], displayOrder: 333 },
+  // أجر السائق بالساعة (الدفعة 1). ساعات القيادة/التوقف اليومية: مشتقّة من
+  // التتبع + يدوية، باعتماد بشري. `approve` منفصل عن `update` لفصل الإدخال عن
+  // الاعتماد (نفس نمط fleet.bookings:approve — منع اعتماد المُدخِل لساعاته).
+  // نطاق `self` يتيح للسائق رؤية ساعاته فقط.
+  { key: "fleet.driver_hours", parentKey: "fleet", moduleKey: "fleet", labelAr: "ساعات عمل السائق",
+    icon: "Clock",
+    availableActions: ALL_ACTIONS, availableScopes: ["self", "branch", "company"],
+    approvableActions: ["approve"], displayOrder: 334 },
   // Self-service driver surface (#1354). Granted to the "driver" role
   // and only the "driver" role — replaces the standalone driver portal
   // that lived under a separate JWT type. The driver logs in with the

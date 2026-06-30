@@ -6072,7 +6072,42 @@ export async function generateDailyInspectionRequests(): Promise<string> {
   return `fleet_daily_inspection_requests: created ${created} daily request(s); notified ${notified} driver(s)`;
 }
 
+// أجر السائق بالساعة (الدفعة 1) — تسوية ليلية: تشتقّ ساعات «أمس» لكل سائق له
+// جلسات ملاحة ذلك اليوم. تكمّل خطّاف إنهاء الجلسة (الذي يشتقّ فورًا) فتلتقط أي
+// يوم فات. الاشتقاق idempotent: يحدّث الصفوف pending فقط ولا يمسّ المعتمدة.
+// فاعل نظام (userId=0) — لا يكتب الدفتر ولا الأجر، تشغيلي بحت.
+async function reconcileDriverWorkHours(): Promise<string> {
+  const { upsertDerivedDriverHours } = await import("./fleet/driverHours.js");
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
+  let derived = 0;
+  for (const company of companies) {
+    const pairs = await rawQuery<{ driverId: number; day: string }>(
+      `SELECT DISTINCT "driverId", to_char("startedAt", 'YYYY-MM-DD') AS day
+         FROM driver_navigation_sessions
+        WHERE "companyId" = $1
+          AND "startedAt" >= (CURRENT_DATE - INTERVAL '1 day')
+          AND "startedAt" <  CURRENT_DATE
+          AND status <> 'cancelled'`,
+      [company.id],
+    );
+    for (const p of pairs) {
+      try {
+        await upsertDerivedDriverHours(
+          { companyId: company.id, branchId: null, userId: 0, activeAssignmentId: null },
+          p.driverId,
+          p.day,
+        );
+        derived++;
+      } catch (e) {
+        logger.warn({ err: e, companyId: company.id, driverId: p.driverId }, "[cron] driver-hours derive failed");
+      }
+    }
+  }
+  return `fleet_driver_hours_reconcile: derived ${derived} driver-day hour row(s)`;
+}
+
 const JOB_DEFINITIONS: CronJobDef[] = [
+  { name: "fleet_driver_hours_reconcile", description: "تسوية ليلية لاشتقاق ساعات قيادة/توقف السائق من جلسات الملاحة (أساس الأجر بالساعة، الدفعة 1)", schedule: "30 1 * * *", handler: reconcileDriverWorkHours },
   { name: "fleet_daily_inspection_requests", description: "إنشاء طلب فحص يومي (تصوير عداد + حالة) لكل مركبة مُسنَدة لسائق + تذكير السائق", schedule: "0 6 * * *", handler: generateDailyInspectionRequests },
   { name: "financial_posting_failure_auto_retry", description: "آلية منع التفاقم — إعادة ترحيل تراكم فشل القيد المالي تلقائياً وإغلاق السجلات الناجحة لكل شركة", schedule: "*/15 * * * *", handler: financialPostingFailureAutoRetry },
   { name: "inbox_task_sla_reminder_scan", description: "تذكير المسؤولين بمهام صندوق الوارد قبل تجاوز موعد الاستجابة (SLA)", schedule: "*/15 * * * *", handler: inboxTaskSlaReminderScan },
