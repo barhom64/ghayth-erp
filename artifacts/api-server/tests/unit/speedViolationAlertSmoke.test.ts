@@ -47,15 +47,15 @@ const SRC = readFileSync(
   "utf8",
 );
 const LIMIT_MIG = readFileSync(
-  join(import.meta.dirname!, "..", "..", "src", "migrations", "433_vehicle_speed_limits_table.sql"),
+  join(import.meta.dirname!, "..", "..", "src", "migrations", "435_vehicle_speed_limits_table.sql"),
   "utf8",
 );
 const TMPL_MIG = readFileSync(
-  join(import.meta.dirname!, "..", "..", "src", "migrations", "434_seed_speed_violation_template.sql"),
+  join(import.meta.dirname!, "..", "..", "src", "migrations", "436_seed_speed_violation_template.sql"),
   "utf8",
 );
 const ALERTS_MIG = readFileSync(
-  join(import.meta.dirname!, "..", "..", "src", "migrations", "435_speed_violation_alerts_table.sql"),
+  join(import.meta.dirname!, "..", "..", "src", "migrations", "437_speed_violation_alerts_table.sql"),
   "utf8",
 );
 
@@ -67,7 +67,7 @@ function section(marker: string, len = 10000): string {
 describe("Vehicle speed-violation alert (daily) — spec ملف 04", () => {
   const cron = section("async function dailySpeedViolationCheck");
 
-  it("migration 433 creates vehicle_speed_limits with company default + per-vehicle override slots", () => {
+  it("migration 435 creates vehicle_speed_limits with company default + per-vehicle override slots", () => {
     expect(LIMIT_MIG).toMatch(/CREATE TABLE IF NOT EXISTS vehicle_speed_limits/);
     expect(LIMIT_MIG).toContain('"companyId"');
     // vehicleId is NULLABLE — NULL = company default.
@@ -81,7 +81,7 @@ describe("Vehicle speed-violation alert (daily) — spec ملف 04", () => {
     expect(LIMIT_MIG).toMatch(/"toleranceKph"\s+BETWEEN\s+0\s+AND\s+30/);
   });
 
-  it("migration 434 seeds the template as ar+en email, GLOBAL default", () => {
+  it("migration 436 seeds the template as ar+en email, GLOBAL default", () => {
     const key = "'fleet.speed.violation'";
     const count = TMPL_MIG.split(key).length - 1;
     expect(count, "template should appear ≥2× (ar+en)").toBeGreaterThanOrEqual(2);
@@ -90,13 +90,13 @@ describe("Vehicle speed-violation alert (daily) — spec ملف 04", () => {
     expect(TMPL_MIG).toContain('nt."companyId" IS NULL');
   });
 
-  it("migration 434 has the 9 placeholders the cron sends", () => {
+  it("migration 436 has the 9 placeholders the cron sends", () => {
     for (const ph of ["managerName", "driverName", "plateNumber", "vehicleName", "maxSpeedKph", "limitKph", "toleranceKph", "violationCount", "violationDate"]) {
       expect(TMPL_MIG, `template missing {{${ph}}}`).toContain(`{{${ph}}}`);
     }
   });
 
-  it("migration 434 ONLY uses email channel (no in_app / sms / whatsapp)", () => {
+  it("migration 436 ONLY uses email channel (no in_app / sms / whatsapp)", () => {
     expect(TMPL_MIG).not.toMatch(/'fleet\.speed\.violation',\s*'in_app'/);
     expect(TMPL_MIG).not.toMatch(/'fleet\.speed\.violation',\s*'sms'/);
     expect(TMPL_MIG).not.toMatch(/'fleet\.speed\.violation',\s*'whatsapp'/);
@@ -104,7 +104,7 @@ describe("Vehicle speed-violation alert (daily) — spec ملف 04", () => {
     expect(TMPL_MIG).toMatch(/'fleet\.speed\.violation',\s*'email',\s*'en'/);
   });
 
-  it("migration 435 creates fleet_speed_violation_alerts with PK (vehicleId, violationDate) + count check", () => {
+  it("migration 437 creates fleet_speed_violation_alerts with PK (vehicleId, violationDate) + count check", () => {
     expect(ALERTS_MIG).toMatch(/CREATE TABLE IF NOT EXISTS fleet_speed_violation_alerts/);
     expect(ALERTS_MIG).toMatch(/PRIMARY KEY\s*\(\s*"vehicleId",\s*"violationDate"\s*\)/);
     expect(ALERTS_MIG).toMatch(/"violationCount"\s*>=\s*1/);
