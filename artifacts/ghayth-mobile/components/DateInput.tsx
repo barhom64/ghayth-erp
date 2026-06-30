@@ -44,9 +44,6 @@ export function DateInput({ label, value, onChange, error, minDate, maxDate, pla
   const [selMonth, setSelMonth] = useState(parsed?.m ?? now.getMonth() + 1);
   const [selDay, setSelDay]     = useState(parsed?.d ?? now.getDate());
 
-  const minP = parseDate(minDate ?? '');
-  const maxP = parseDate(maxDate ?? '');
-
   // سنوات: من 3 سنوات مضت إلى سنة قادمة
   const years = useMemo(() => {
     const base = now.getFullYear();

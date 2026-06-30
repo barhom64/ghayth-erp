@@ -7,7 +7,6 @@ import { Stack, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { GCard, GButton, GInput, GSelect } from '@workspace/ui-native';
 import { DateInput } from '@/components/DateInput';
-import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
 import { useMutation } from '@/hooks/useApi';
 
