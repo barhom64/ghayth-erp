@@ -154,14 +154,16 @@ describe("UmrahSalesInvoicesSummaryReport page — registration + UX", () => {
     expect(PAGE).toContain("data-testid={`sales-invoices-recent-row-${r.id}`}");
   });
 
-  it("Arabic status labels match the schema enum (7 states)", () => {
-    expect(PAGE).toContain("مسودة");        // draft
-    expect(PAGE).toContain("معتمدة");       // approved
-    expect(PAGE).toContain("مُرسلة");        // sent
-    expect(PAGE).toContain("مدفوعة جزئياً"); // partially_paid
-    expect(PAGE).toContain("مدفوعة");       // paid
-    expect(PAGE).toContain("متأخّرة");      // overdue
-    expect(PAGE).toContain("ملغاة");        // cancelled
+  it("surfaces all 7 invoice states via the canonical status source (domain=invoice)", () => {
+    // Post-unification: the Arabic labels come from the single source
+    // STATUS_MAP (domain="invoice") via PageStatusBadge / resolveStatus,
+    // not local literals. Assert the page wires all 7 schema states
+    // through the canonical source + badge. The Arabic label text itself
+    // is validated by the frontend page-status-badge test.
+    expect(PAGE).toContain('domain="invoice"');
+    for (const k of ["draft", "approved", "sent", "partially_paid", "paid", "overdue", "cancelled"]) {
+      expect(PAGE).toContain(`"${k}"`);
+    }
   });
 
   it("CSV export uses the unified export helper (audit + letterhead path)", () => {
