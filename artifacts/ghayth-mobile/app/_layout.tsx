@@ -1243,6 +1243,8 @@ function AuthGate() {
             <Stack.Screen name="hr/lifecycle-history" options={{ title: 'سجل دورة حياة الموظف' }} />
             <Stack.Screen name="admin/my-sessions" options={{ title: 'جلسات الدخول' }} />
             <Stack.Screen name="admin/two-fa-status" options={{ title: 'حالة المصادقة الثنائية' }} />
+            <Stack.Screen name="fleet/telematics-sync-logs" options={{ title: 'سجلات المزامنة' }} />
+            <Stack.Screen name="fleet/telematics-video-access-logs" options={{ title: 'سجلات وصول الفيديو' }} />
             <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
