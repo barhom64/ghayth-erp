@@ -733,6 +733,17 @@ function AuthGate() {
       <Stack.Screen name="bi/property-occupancy" options={{ title: 'إشغال الأملاك' }} />
       <Stack.Screen name="bi/training-roi" options={{ title: 'عائد الاستثمار في التدريب' }} />
       <Stack.Screen name="bi/umrah-season-summary" options={{ title: 'ملخص موسم العمرة' }} />
+      <Stack.Screen name="admin/policy-audit" options={{ title: 'مراجعة السياسات' }} />
+      <Stack.Screen name="admin/rbac-matrix" options={{ title: 'مصفوفة الصلاحيات' }} />
+      <Stack.Screen name="admin/event-catalog" options={{ title: 'فهرس الأحداث' }} />
+      <Stack.Screen name="admin/event-dlq" options={{ title: 'قائمة أحداث الأخطاء' }} />
+      <Stack.Screen name="admin/system-guards" options={{ title: 'حراس النظام' }} />
+      <Stack.Screen name="admin/domain-registry" options={{ title: 'سجل النطاقات' }} />
+      <Stack.Screen name="admin/gl-reconciliation" options={{ title: 'تسوية دفتر الأستاذ' }} />
+      <Stack.Screen name="admin/lifecycle-machines" options={{ title: 'آلات دورة الحياة' }} />
+      <Stack.Screen name="admin/predefined-roles" options={{ title: 'الأدوار المعرّفة' }} />
+      <Stack.Screen name="admin/system-stops" options={{ title: 'إيقافات النظام' }} />
+      <Stack.Screen name="admin/role-strategies" options={{ title: 'استراتيجيات الأدوار' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
