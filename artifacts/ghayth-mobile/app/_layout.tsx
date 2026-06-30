@@ -432,6 +432,10 @@ function AuthGate() {
       <Stack.Screen name="warehouse/purchase-orders" options={{ title: 'أوامر الشراء' }} />
       <Stack.Screen name="admin/system-logs" options={{ title: 'سجلات النظام' }} />
       <Stack.Screen name="properties/leases" options={{ title: 'عقود الإيجار' }} />
+      <Stack.Screen name="finance/period-close" options={{ title: 'إقفال الفترات المالية' }} />
+      <Stack.Screen name="fleet/routes" options={{ title: 'مسارات الأسطول' }} />
+      <Stack.Screen name="hr/attendance-shifts" options={{ title: 'الورديات والجداول' }} />
+      <Stack.Screen name="crm/leads" options={{ title: 'العملاء المحتملون' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
