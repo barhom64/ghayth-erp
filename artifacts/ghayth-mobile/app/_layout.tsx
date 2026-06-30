@@ -184,6 +184,17 @@ function AuthGate() {
       <Stack.Screen name="umrah/agent-detail" options={{ title: 'الوكيل' }} />
       <Stack.Screen name="fleet/maintenance-detail" options={{ title: 'أمر الصيانة' }} />
       <Stack.Screen name="projects/task-detail" options={{ title: 'المهمة' }} />
+      <Stack.Screen name="projects/milestone-detail" options={{ title: 'المعلم' }} />
+      <Stack.Screen name="projects/issue-detail" options={{ title: 'المشكلة' }} />
+      <Stack.Screen name="umrah/violation-detail" options={{ title: 'مخالفة العمرة' }} />
+      <Stack.Screen name="umrah/penalty-detail" options={{ title: 'الغرامة' }} />
+      <Stack.Screen name="umrah/invoice-detail" options={{ title: 'فاتورة العمرة' }} />
+      <Stack.Screen name="umrah/nusk-invoice-detail" options={{ title: 'فاتورة نُسك' }} />
+      <Stack.Screen name="umrah/payment-detail" options={{ title: 'دفعة العمرة' }} />
+      <Stack.Screen name="fleet/transport-booking-detail" options={{ title: 'حجز النقل' }} />
+      <Stack.Screen name="fleet/transport-dispatch-detail" options={{ title: 'أمر التشغيل' }} />
+      <Stack.Screen name="hr/official-letter-detail" options={{ title: 'الخطاب الرسمي' }} />
+      <Stack.Screen name="hr/excuse-request-detail" options={{ title: 'طلب الاستئذان' }} />
       <Stack.Screen name="hr/overtime-detail" options={{ title: 'الوقت الإضافي' }} />
       <Stack.Screen name="finance/expense-detail" options={{ title: 'المصروف' }} />
       <Stack.Screen name="warehouse/product-detail" options={{ title: 'الصنف' }} />
