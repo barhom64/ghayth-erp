@@ -1199,6 +1199,10 @@ function AuthGate() {
       <Stack.Screen name="bi/employee-productivity" options={{ title: 'إنتاجية الموظفين' }} />
       <Stack.Screen name="tasks/task-detail" options={{ title: 'تفاصيل المهمة' }} />
       <Stack.Screen name="tasks/entity-search" options={{ title: 'بحث المهام بالكيانات' }} />
+      <Stack.Screen name="careers/job-detail" options={{ title: 'تفاصيل الوظيفة' }} />
+      <Stack.Screen name="portal/invoice-detail" options={{ title: 'تفاصيل الفاتورة' }} />
+      <Stack.Screen name="portal/ticket-detail" options={{ title: 'تفاصيل التذكرة' }} />
+      <Stack.Screen name="portal/kb-detail" options={{ title: 'مقالة المعرفة' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
