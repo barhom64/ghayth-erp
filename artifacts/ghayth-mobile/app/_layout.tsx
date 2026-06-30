@@ -991,6 +991,17 @@ function AuthGate() {
       <Stack.Screen name="finance/fx-revaluation" options={{ title: 'إعادة تقييم العملات الأجنبية' }} />
       <Stack.Screen name="hr/my-overtime" options={{ title: 'إضافي خاص بي' }} />
       <Stack.Screen name="hr/my-loans" options={{ title: 'قروضي' }} />
+      <Stack.Screen name="fleet/me-inspections" options={{ title: 'فحوصاتي' }} />
+      <Stack.Screen name="fleet/telematics-video-sessions" options={{ title: 'جلسات الفيديو' }} />
+      <Stack.Screen name="notifications/engine-preferences" options={{ title: 'تفضيلات محرك الإشعارات' }} />
+      <Stack.Screen name="notifications/engine-routing-rules" options={{ title: 'قواعد توجيه الإشعارات' }} />
+      <Stack.Screen name="notifications/engine-templates" options={{ title: 'قوالب محرك الإشعارات' }} />
+      <Stack.Screen name="admin/rbac-templates" options={{ title: 'قوالب الأدوار' }} />
+      <Stack.Screen name="inbox/folder-counts" options={{ title: 'عدد الرسائل بالمجلدات' }} />
+      <Stack.Screen name="inbox/snoozed" options={{ title: 'الرسائل المؤجلة' }} />
+      <Stack.Screen name="inbox/unread-count" options={{ title: 'الرسائل غير المقروءة' }} />
+      <Stack.Screen name="admin/rbac-v2-users" options={{ title: 'مستخدمو الأدوار' }} />
+      <Stack.Screen name="admin/rbac-jit-my" options={{ title: 'طلباتي JIT' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
