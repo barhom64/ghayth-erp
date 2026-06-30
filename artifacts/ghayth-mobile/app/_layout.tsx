@@ -775,6 +775,12 @@ function AuthGate() {
       <Stack.Screen name="admin/client-analytics" options={{ title: 'تحليلات العملاء' }} />
       <Stack.Screen name="careers/my-applications" options={{ title: 'طلباتي الوظيفية' }} />
       <Stack.Screen name="transport/cargo-manifests" options={{ title: 'بيانات الشحن' }} />
+      <Stack.Screen name="admin/comm-readiness" options={{ title: 'جاهزية الاتصالات' }} />
+      <Stack.Screen name="admin/dlp-rules" options={{ title: 'قواعد حماية البيانات' }} />
+      <Stack.Screen name="admin/master-plan" options={{ title: 'الخطة الرئيسية' }} />
+      <Stack.Screen name="admin/pbx-transcripts" options={{ title: 'نصوص المكالمات' }} />
+      <Stack.Screen name="admin/numbering-schemes" options={{ title: 'مخططات الترقيم' }} />
+      <Stack.Screen name="admin/vendor-settings" options={{ title: 'إعدادات الموردين' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
