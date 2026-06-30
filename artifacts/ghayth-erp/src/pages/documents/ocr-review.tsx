@@ -334,7 +334,7 @@ export default function OcrReviewPage() {
             </div>
           </div>
           <Button onClick={handleUpload} disabled={uploading || !file} className="h-9" rateLimitAware>
-            {uploading ? "جارٍ القراءة…" : "ارفع واقرأ"}
+            {uploading ? "جاري القراءة…" : "ارفع واقرأ"}
           </Button>
         </div>
         {/* مؤشّر اتجاه المال — يجعل قبض/صرف واضحًا قبل الرفع (سدّ «ما تفرق بين القبض والصرف») */}
