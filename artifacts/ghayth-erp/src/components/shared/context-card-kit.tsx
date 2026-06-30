@@ -43,12 +43,15 @@ export function ContextStat({
   value,
   tone,
   borderTone,
+  truncate,
 }: {
   icon?: IconType;
   label: ReactNode;
   value: ReactNode;
   tone?: string;
   borderTone?: string;
+  /** Clip an over-long value to one line (driver names, vehicle type, …). */
+  truncate?: boolean;
 }) {
   return (
     <div className={cn("bg-white rounded p-2 border", borderTone ?? "border-border")}>
@@ -56,7 +59,7 @@ export function ContextStat({
         {Icon && <Icon className="h-3 w-3" />}
         <span>{label}</span>
       </p>
-      <p className={cn("text-sm font-semibold", tone ?? "text-gray-800")}>{value}</p>
+      <p className={cn("text-sm font-semibold", tone ?? "text-gray-800", truncate && "truncate")}>{value}</p>
     </div>
   );
 }
