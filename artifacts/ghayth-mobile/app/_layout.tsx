@@ -691,6 +691,15 @@ function AuthGate() {
       <Stack.Screen name="legal/renewal-alerts" options={{ title: 'تنبيهات تجديد العقود' }} />
       <Stack.Screen name="governance/compliance-dashboard" options={{ title: 'لوحة الامتثال' }} />
       <Stack.Screen name="governance/compliance-actions" options={{ title: 'إجراءات الامتثال' }} />
+      <Stack.Screen name="governance/stats" options={{ title: 'إحصاءات الحوكمة' }} />
+      <Stack.Screen name="documents/stats" options={{ title: 'إحصاءات المستندات' }} />
+      <Stack.Screen name="documents/ocr-extractions" options={{ title: 'مستخلصات OCR' }} />
+      <Stack.Screen name="warehouse/cycle-count-plans" options={{ title: 'خطط الجرد الدوري' }} />
+      <Stack.Screen name="umrah/commission-calculations" options={{ title: 'احتساب العمولات' }} />
+      <Stack.Screen name="umrah/unlinked-agents" options={{ title: 'وكلاء غير مرتبطين' }} />
+      <Stack.Screen name="finance/subsidiary-state" options={{ title: 'حالة إحلال الحسابات' }} />
+      <Stack.Screen name="finance/dimensional-health" options={{ title: 'صحة التوجيه الأبعادي' }} />
+      <Stack.Screen name="finance/entity-ranking" options={{ title: 'تصنيف الكيانات ربحيةً' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
