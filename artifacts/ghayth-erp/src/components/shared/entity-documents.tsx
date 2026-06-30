@@ -30,13 +30,16 @@ const uploadDocSchema = z.object({
 
 type DocCategory = { value: string; label: string };
 
+// القيم تطابق تعداد DOCUMENT_CATEGORIES الخلفي (وعليه تُحسب فترة الحفظ) — وإلا يُرفض
+// الرفع (Invalid enum). official/financial/other لم تكن ضمنه فكان الرفع بها يفشل؛
+// صُحّحت (التسميات العربية كما هي).
 const CATEGORIES: DocCategory[] = [
   { value: "contracts", label: "عقود" },
-  { value: "official", label: "وثائق رسمية" },
-  { value: "financial", label: "مالية" },
+  { value: "compliance", label: "وثائق رسمية" },
+  { value: "finance", label: "مالية" },
   { value: "hr", label: "موارد بشرية" },
   { value: "legal", label: "قانونية" },
-  { value: "other", label: "أخرى" },
+  { value: "general", label: "أخرى" },
 ];
 
 /**

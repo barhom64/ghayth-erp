@@ -11,15 +11,15 @@ import userEvent from "@testing-library/user-event";
 
 const DOCS = [
   // expired (retentionUntil in the past) + active status + a rejecting verdict with note
-  { id: 1, title: "هوية", fileName: "id.png", fileSize: 1024, category: "official", status: "active", currentVersion: 1, mimeType: "image/png", storageKey: "k1", createdAt: "2026-01-01", retentionUntil: "2020-01-01", reviewStatus: "rejected", reviewNote: "الصورة غير واضحة" },
+  { id: 1, title: "هوية", fileName: "id.png", fileSize: 1024, category: "compliance", status: "active", currentVersion: 1, mimeType: "image/png", storageKey: "k1", createdAt: "2026-01-01", retentionUntil: "2020-01-01", reviewStatus: "rejected", reviewNote: "الصورة غير واضحة" },
   { id: 2, title: "عقد", fileName: "c.pdf", fileSize: 2048, category: "contracts", status: "approved", currentVersion: 2, mimeType: "application/pdf", storageKey: "k2", createdAt: "2026-01-02", reviewStatus: "new" },
 ];
 
-// Requirements: «صورة الهوية» (category official → present) and «عقد موقّع»
-// (category contracts → present), plus «شهادة ضريبية» (compliance → missing).
+// Requirements: «صورة الهوية» (category compliance → present, matches doc 1) and
+// «شهادة ضريبية» (category finance → missing). Labels resolve via shared CATEGORIES.
 const REQS = [
-  { id: 10, entityType: "employee", label: "صورة الهوية", docCategory: "official", required: true, isActive: true },
-  { id: 11, entityType: "employee", label: "شهادة ضريبية", docCategory: "compliance", required: true, isActive: true },
+  { id: 10, entityType: "employee", label: "صورة الهوية", docCategory: "compliance", required: true, isActive: true },
+  { id: 11, entityType: "employee", label: "شهادة ضريبية", docCategory: "finance", required: true, isActive: true },
 ];
 
 // Mutable holder so individual tests can swap the document set (e.g. duplicates).
@@ -121,9 +121,9 @@ describe("Batch H2 — attachment review surface", () => {
 describe("Batch L — likely-duplicate detection", () => {
   it("flags «مكرر محتمل» on attachments sharing fileName + fileSize", () => {
     const dupDocs = [
-      { id: 5, title: "إيصال أ", fileName: "receipt.pdf", fileSize: 900, category: "financial", status: "active", currentVersion: 1, storageKey: "a" },
-      { id: 6, title: "إيصال ب", fileName: "receipt.pdf", fileSize: 900, category: "financial", status: "active", currentVersion: 1, storageKey: "b" },
-      { id: 7, title: "فريد", fileName: "unique.pdf", fileSize: 123, category: "financial", status: "active", currentVersion: 1, storageKey: "c" },
+      { id: 5, title: "إيصال أ", fileName: "receipt.pdf", fileSize: 900, category: "finance", status: "active", currentVersion: 1, storageKey: "a" },
+      { id: 6, title: "إيصال ب", fileName: "receipt.pdf", fileSize: 900, category: "finance", status: "active", currentVersion: 1, storageKey: "b" },
+      { id: 7, title: "فريد", fileName: "unique.pdf", fileSize: 123, category: "finance", status: "active", currentVersion: 1, storageKey: "c" },
     ];
     apiMock.docs = dupDocs;
     render(<EntityDocuments entityType="employee" entityId={1} />);
@@ -138,7 +138,7 @@ describe("Batch I2 — requirements completeness card", () => {
     render(<EntityDocuments entityType="employee" entityId={1} />);
     const card = screen.getByTestId("requirements-card");
     expect(card).toBeInTheDocument();
-    // «صورة الهوية» (official) is present; «شهادة ضريبية» (compliance) is missing
+    // «صورة الهوية» (compliance) is present; «شهادة ضريبية» (finance) is missing
     expect(within(card).getByText("صورة الهوية")).toBeInTheDocument();
     expect(within(card).getByText("شهادة ضريبية")).toBeInTheDocument();
     expect(within(card).getByText("متوفر")).toBeInTheDocument();

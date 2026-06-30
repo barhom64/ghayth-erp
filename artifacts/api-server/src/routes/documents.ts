@@ -119,7 +119,14 @@ export const DOCUMENT_CATEGORIES = [
   "marketing",
   "general",
 ] as const;
-const documentCategorySchema = z.enum(DOCUMENT_CATEGORIES).optional();
+// تصنيف المستند: إمّا فئة مسار من DOCUMENT_CATEGORIES (تقود فترة الحفظ في
+// RETENTION_HORIZONS_YEARS أدناه)، أو **نوع مستند دقيق** خاص بمسار — مرفقات
+// العقارات/العمرة تستخدم قيمًا دقيقة (property_photo · title_deed · payment_receipt …)
+// مشروعة وتُعرض في الواجهة. كان z.enum يرفض هذه الدقيقة فيفشل رفعها (Invalid enum)؛
+// خُفِّف إلى نص مقيَّد. الكنس (retention/backfill) يطبّق الآفاق على فئات المسار المعروفة
+// فقط، فالقيم الدقيقة تُحفَظ تحفّظيًّا بلا كنس آلي (لا حذف مبكّر — آمن).
+// DOCUMENT_CATEGORIES يبقى المرجع المعتمد لفئات المسار وخريطة الحفظ.
+const documentCategorySchema = z.string().trim().max(64).optional();
 
 // M5 retention policy enforcement on document write paths. Maps
 // category → default retention horizon (years). The cron at retention-
