@@ -3,13 +3,15 @@
 // المشرف يمنح مكافأة على حركة (أمر توزيع) بمبلغ مقطوع (افتراضه إعداد، قابل
 // للتعديل)، باعتماد بشري منفصل قبل ترحيلها للراتب (الدفعة ب). لا قيد هنا.
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useApiQuery, asList, apiFetch, getErrorMessage } from "@/lib/api";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { SearchableSelect, type SelectOption } from "@/components/shared/searchable-select";
+import { formatDateAr } from "@/lib/formatters";
 import { toast } from "@/hooks/use-toast";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { CheckCircle, Award } from "lucide-react";
@@ -26,6 +28,27 @@ interface BonusRow {
   payrollLineId: number | null;
   createdAt: string;
 }
+
+interface EligibleMovement {
+  id: number;
+  status: string;
+  scheduledStartAt: string | null;
+  completedAt: string | null;
+  driverId: number | null;
+  driverName: string | null;
+  vehiclePlate: string | null;
+  bookingId: number | null;
+  bookingNumber: string | null;
+  fromLocationText: string | null;
+  toLocationText: string | null;
+  hasBonus: boolean;
+}
+
+const MOVE_STATUS_LABEL: Record<string, string> = {
+  executing: "جارية",
+  completed: "مكتملة",
+  closed: "مغلقة",
+};
 
 const STATUS_LABEL: Record<string, string> = {
   pending: "قيد المراجعة",
@@ -45,14 +68,43 @@ export default function MovementBonusesPage() {
   );
   const rows: BonusRow[] = asList(data?.data || data);
 
+  // منتقي الحركات المؤهَّلة (executing/completed/closed) — بدل الإدخال اليدوي.
+  const { data: movesData, isLoading: movesLoading, refetch: refetchMoves } = useApiQuery<any>(
+    ["movement-bonuses", "eligible"],
+    "/fleet/movement-bonuses/eligible-movements",
+  );
+  const moves: EligibleMovement[] = asList(movesData?.data || movesData);
+
   const [dispatchOrderId, setDispatchOrderId] = useState<string>("");
   const [amount, setAmount] = useState<string>("");
   const [reason, setReason] = useState<string>("");
   const [busy, setBusy] = useState(false);
 
+  const moveOptions: SelectOption[] = useMemo(
+    () =>
+      moves.map((m) => {
+        const route =
+          m.fromLocationText || m.toLocationText
+            ? `${m.fromLocationText ?? "—"} ← ${m.toLocationText ?? "—"}`
+            : "بلا مسار";
+        const parts = [
+          formatDateAr(m.scheduledStartAt),
+          MOVE_STATUS_LABEL[m.status] ?? m.status,
+          m.vehiclePlate ?? null,
+          m.hasBonus ? "· له مكافأة سابقة" : null,
+        ].filter(Boolean);
+        return {
+          value: String(m.id),
+          label: `#${m.id} · ${m.driverName ?? "بلا سائق"} · ${route}`,
+          sublabel: parts.join(" · "),
+        };
+      }),
+    [moves],
+  );
+
   async function award() {
     if (!dispatchOrderId || !reason.trim()) {
-      toast({ variant: "destructive", title: "أدخل رقم الحركة والسبب" });
+      toast({ variant: "destructive", title: "اختر الحركة وأدخل السبب" });
       return;
     }
     setBusy(true);
@@ -67,7 +119,7 @@ export default function MovementBonusesPage() {
       });
       toast({ title: "تم منح المكافأة" });
       setDispatchOrderId(""); setAmount(""); setReason("");
-      refetch();
+      refetch(); refetchMoves();
     } catch (e) {
       toast({ variant: "destructive", title: "تعذّر المنح", description: getErrorMessage(e) });
     } finally {
@@ -119,10 +171,18 @@ export default function MovementBonusesPage() {
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-base">منح مكافأة على حركة</CardTitle></CardHeader>
         <CardContent className="flex flex-wrap items-end gap-3">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-muted-foreground">رقم الحركة (أمر التوزيع)</label>
-            <Input type="number" min="1" value={dispatchOrderId} onChange={(e) => setDispatchOrderId(e.target.value)}
-              className="h-8 w-40" placeholder="من لوحة التوزيع" />
+          <div className="flex flex-col gap-1 min-w-[20rem]">
+            <label className="text-xs text-muted-foreground">الحركة (أمر التوزيع)</label>
+            <SearchableSelect
+              options={moveOptions}
+              value={dispatchOrderId}
+              onValueChange={setDispatchOrderId}
+              disabled={movesLoading}
+              placeholder={movesLoading ? "جاري التحميل…" : "اختر حركة"}
+              searchPlaceholder="ابحث بالسائق أو الحجز أو المسار…"
+              emptyText="لا توجد حركات مؤهَّلة"
+              className="h-8"
+            />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs text-muted-foreground">المبلغ (ر.س)</label>

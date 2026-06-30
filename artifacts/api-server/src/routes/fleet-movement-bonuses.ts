@@ -21,6 +21,7 @@ import {
   awardMovementBonus,
   approveMovementBonus,
   listMovementBonuses,
+  listEligibleMovements,
 } from "../lib/fleet/movementBonuses.js";
 
 export const fleetMovementBonusesRouter = Router();
@@ -51,6 +52,26 @@ fleetMovementBonusesRouter.get(
       res.json({ data: rows });
     } catch (err) {
       handleRouteError(err, res, "List movement bonuses error:");
+    }
+  },
+);
+
+// منتقي الحركات — الحركات المؤهَّلة للمكافأة (قراءة فقط). يسبق `/:id/approve`
+// (مسار مميّز) فلا تعارض توجيه. صلاحية القائمة نفسها.
+fleetMovementBonusesRouter.get(
+  "/fleet/movement-bonuses/eligible-movements",
+  authorize({ feature: "fleet.movement_bonus", action: "list" }),
+  async (req, res) => {
+    try {
+      const q = req.query as Record<string, string | undefined>;
+      const rows = await listEligibleMovements(fleetScope(req), {
+        driverId: q.driverId ? Number(q.driverId) : undefined,
+        search: q.search,
+        limit: q.limit ? Number(q.limit) : undefined,
+      });
+      res.json({ data: rows });
+    } catch (err) {
+      handleRouteError(err, res, "List eligible movements error:");
     }
   },
 );
