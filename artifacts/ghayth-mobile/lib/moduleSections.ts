@@ -472,7 +472,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
-      { key: "vouchers", label: "سندات الصرف", icon: "cash-outline", endpoint: "/api/finance/vouchers", titleFields: ["ref"], subtitleFields: ["payee", "description"], statusField: "status", amountFields: ["amount"], dateFields: ["createdAt"] },
+      { key: "vouchers", label: "سندات الصرف", icon: "cash-outline", endpoint: "/api/finance/vouchers", titleFields: ["ref"], subtitleFields: ["payee", "description"], statusField: "status", amountFields: ["amount"], dateFields: ["createdAt"], detailRoute: "/finance/voucher-detail" },
       { key: "customer-advances", label: "دفعات العملاء المقدمة", icon: "arrow-down-circle-outline", endpoint: "/api/finance/customer-advances", titleFields: ["ref"], subtitleFields: ["clientName", "method"], statusField: "status", amountFields: ["amount"], dateFields: ["receivedDate"] },
       { key: "collection", label: "التحصيل", icon: "alert-circle-outline", endpoint: "/api/finance/collection", titleFields: ["ref"], subtitleFields: ["clientName", "currentStageName"], statusField: "status", amountFields: ["total"], dateFields: ["dueDate"] },
       {
@@ -488,8 +488,8 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
-      { key: "purchase-requests", label: "طلبات الشراء", icon: "clipboard-outline", endpoint: "/api/finance/purchase-requests", titleFields: ["ref"], subtitleFields: ["supplierName", "requestedByName"], statusField: "status", amountFields: ["totalAmount"], dateFields: ["createdAt"] },
-      { key: "vendor-invoices", label: "فواتير الموردين", icon: "documents-outline", endpoint: "/api/finance/vendor-invoices", titleFields: ["ref", "supplierInvoiceRef"], subtitleFields: ["supplierName"], statusField: "status", amountFields: ["totalAmount"], dateFields: ["invoicedDate"] },
+      { key: "purchase-requests", label: "طلبات الشراء", icon: "clipboard-outline", endpoint: "/api/finance/purchase-requests", titleFields: ["ref"], subtitleFields: ["supplierName", "requestedByName"], statusField: "status", amountFields: ["totalAmount"], dateFields: ["createdAt"], detailRoute: "/finance/purchase-request-detail" },
+      { key: "vendor-invoices", label: "فواتير الموردين", icon: "documents-outline", endpoint: "/api/finance/vendor-invoices", titleFields: ["ref", "supplierInvoiceRef"], subtitleFields: ["supplierName"], statusField: "status", amountFields: ["totalAmount"], dateFields: ["invoicedDate"], detailRoute: "/finance/vendor-invoice-detail" },
       { key: "vendor-advances", label: "دفعات الموردين المقدمة", icon: "arrow-up-circle-outline", endpoint: "/api/finance/vendor-advances", titleFields: ["ref"], subtitleFields: ["supplierName", "method"], statusField: "status", amountFields: ["amount"], dateFields: ["paidDate"] },
       {
         key: "vendors", label: "الموردون", icon: "business-outline", endpoint: "/api/finance/vendors",
@@ -526,7 +526,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       { key: "recurring-journals", label: "القيود الدورية", icon: "repeat-outline", endpoint: "/api/finance/recurring-journals", titleFields: ["name"], subtitleFields: ["frequency"], dateFields: ["nextRunDate"] },
       { key: "obligations", label: "الالتزامات", icon: "checkmark-circle-outline", endpoint: "/api/obligations", titleFields: ["title"], subtitleFields: ["obligationType", "entityType"], statusField: "status", dateFields: ["dueAt"] },
       { key: "bank-reconciliation", label: "تسوية البنوك", icon: "swap-horizontal-outline", endpoint: "/api/finance/bank-reconciliation", titleFields: ["ref", "bankAccount"], subtitleFields: ["bankName"], statusField: "status", dateFields: ["statementDate"] },
-      { key: "fixed-assets", label: "الأصول الثابتة", icon: "home-outline", endpoint: "/api/finance/fixed-assets", titleFields: ["name", "assetCode"], subtitleFields: ["category", "location"], statusField: "status", amountFields: ["acquisitionCost", "bookValue"], dateFields: ["acquisitionDate"] },
+      { key: "fixed-assets", label: "الأصول الثابتة", icon: "home-outline", endpoint: "/api/finance/fixed-assets", titleFields: ["name", "assetCode"], subtitleFields: ["category", "location"], statusField: "status", amountFields: ["acquisitionCost", "bookValue"], dateFields: ["acquisitionDate"], detailRoute: "/finance/fixed-asset-detail" },
       { key: "ar-aging", label: "تقادم الذمم المدينة", icon: "trending-up-outline", endpoint: "/api/finance/ar-aging", titleFields: ["clientName"], subtitleFields: ["bucket"], amountFields: ["balance", "overdue"] },
       { key: "ap-aging", label: "تقادم الذمم الدائنة", icon: "trending-down-outline", endpoint: "/api/finance/ap-aging", titleFields: ["supplierName", "vendorName"], subtitleFields: ["bucket"], amountFields: ["balance", "overdue"] },
       { key: "bad-debt", label: "مخصص الديون المشكوك فيها", icon: "alert-circle-outline", endpoint: "/api/finance/bad-debt", titleFields: ["clientName"], subtitleFields: ["agingBucket"], amountFields: ["amount", "provision"], dateFields: ["dueDate"] },
