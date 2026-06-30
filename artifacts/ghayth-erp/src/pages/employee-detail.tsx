@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
-import { useRoute, Link } from "wouter";
+import { useRoute, Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -748,6 +748,7 @@ const STATUS_TONE: Record<TabStatus, string> = {
 
 export default function EmployeeDetail({ id: propId }: { id?: string }) {
   const [, params] = useRoute("/employees/:id");
+  const [, navigate] = useLocation();
   const id = propId || params?.id || "";
   const { hideTabs: registryHideTabs } = useRegistryTabs("employee", id ?? "");
   const { data: employee, isLoading, isError, error, refetch } = useApiQuery<any>(["employee", id], `/employees/${id}`, !!id);
@@ -2195,6 +2196,9 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
         actions={
           <div className="flex items-center gap-2 flex-wrap">
             <OperationalStatusBar employeeId={id} />
+            <GuardedButton perm="hr:update" size="sm" onClick={() => navigate(`/employees/${id}/edit`)}>
+              <Pencil className="h-4 w-4 me-1" />تعديل بيانات الموظف
+            </GuardedButton>
             <PrintButton entityType="employee" entityId={id ?? ""} label="بطاقة الموظف" />
             {id && <EntityPnlButton entityType="employee" entityId={Number(id)} />}
             <div className="relative">
