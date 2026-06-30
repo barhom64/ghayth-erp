@@ -336,6 +336,18 @@ function AuthGate() {
       <Stack.Screen name="fleet/inspection-new" options={{ title: 'فحص جديد' }} />
       <Stack.Screen name="hr/wps" options={{ title: 'نظام حماية الأجور' }} />
       <Stack.Screen name="fleet/field-tracking" options={{ title: 'التتبع الميداني' }} />
+      <Stack.Screen name="umrah/accommodation-detail" options={{ title: 'إقامة المجموعة' }} />
+      <Stack.Screen name="umrah/room-block-new" options={{ title: 'كتلة غرف جديدة' }} />
+      <Stack.Screen name="transport/itinerary-detail" options={{ title: 'خط السير' }} />
+      <Stack.Screen name="transport/itinerary-new" options={{ title: 'خط سير جديد' }} />
+      <Stack.Screen name="finance/recurring-invoice-detail" options={{ title: 'الفاتورة المتكررة' }} />
+      <Stack.Screen name="finance/recurring-invoice-new" options={{ title: 'فاتورة متكررة جديدة' }} />
+      <Stack.Screen name="finance/insurance-detail" options={{ title: 'وثيقة التأمين' }} />
+      <Stack.Screen name="finance/insurance-new" options={{ title: 'وثيقة تأمين جديدة' }} />
+      <Stack.Screen name="hr/compliance" options={{ title: 'امتثال الموارد البشرية' }} />
+      <Stack.Screen name="hr/org-chart" options={{ title: 'الهيكل التنظيمي' }} />
+      <Stack.Screen name="careers/portal" options={{ title: 'بوابة التوظيف' }} />
+      <Stack.Screen name="umrah/commission-detail" options={{ title: 'العمولة' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>

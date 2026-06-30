@@ -516,6 +516,16 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           { name: "purpose", label: "الغرض من اللجنة", type: "textarea" },
         ] },
       },
+      {
+        key: "hr-compliance", label: "امتثال الموارد البشرية", icon: "shield-checkmark-outline", endpoint: "/api/hr/compliance",
+        titleFields: ["type", "summary"], subtitleFields: ["employeeName", "severity"], statusField: "status", dateFields: ["reportedAt"],
+        write: { moduleKey: "hr", noDetail: true },
+      },
+      {
+        key: "wps", label: "حماية الأجور (WPS)", icon: "card-outline", endpoint: "/api/hr/wps/reports",
+        titleFields: ["period", "month"], subtitleFields: ["employeeCount", "status"], statusField: "status", amountFields: ["totalAmount"], dateFields: ["submittedAt"],
+        write: { moduleKey: "hr", noDetail: true },
+      },
     ],
   },
   finance: {
@@ -816,6 +826,60 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       },
       { key: "tax-returns", label: "الإقرارات الضريبية", icon: "document-text-outline", endpoint: "/api/finance/tax-returns", titleFields: ["period", "ref"], subtitleFields: ["type"], statusField: "status", amountFields: ["vatAmount", "totalAmount"], dateFields: ["dueDate"] },
       { key: "fiscal-periods", label: "الفترات المالية", icon: "calendar-outline", endpoint: "/api/finance/fiscal-periods-v2", titleFields: ["name", "period"], subtitleFields: ["year"], statusField: "status", dateFields: ["startDate", "endDate"] },
+      {
+        key: "recurring-invoices", label: "الفواتير المتكررة", icon: "repeat-outline", endpoint: "/api/finance/recurring-invoices",
+        detailRoute: "/finance/recurring-invoice-detail", createRoute: "/finance/recurring-invoice-new",
+        titleFields: ["ref", "clientName"], subtitleFields: ["frequency", "clientName"], statusField: "status", amountFields: ["amount"], dateFields: ["nextDueDate"],
+        write: {
+          moduleKey: "finance",
+          createFields: [
+            {
+              name: "clientId", label: "العميل", type: "reference", required: true,
+              refEndpoint: "/api/clients", refLabelFields: ["name", "clientName"], refValueField: "id",
+            },
+            {
+              name: "frequency", label: "الدورية", type: "select", required: true,
+              options: [
+                { value: "weekly", label: "أسبوعية" },
+                { value: "monthly", label: "شهرية" },
+                { value: "quarterly", label: "ربع سنوية" },
+                { value: "biannual", label: "نصف سنوية" },
+                { value: "annual", label: "سنوية" },
+              ],
+            },
+            { name: "amount", label: "المبلغ", type: "currency", required: true },
+            { name: "startDate", label: "تاريخ البداية", type: "date", required: true },
+            { name: "description", label: "الوصف", type: "textarea" },
+          ],
+        },
+      },
+      {
+        key: "insurance", label: "وثائق التأمين", icon: "shield-outline", endpoint: "/api/finance/insurance",
+        detailRoute: "/finance/insurance-detail", createRoute: "/finance/insurance-new",
+        titleFields: ["provider", "policyNumber"], subtitleFields: ["type", "insuredName"], statusField: "status", amountFields: ["premium"], dateFields: ["endDate"],
+        write: {
+          moduleKey: "finance",
+          createFields: [
+            {
+              name: "type", label: "نوع التأمين", type: "select",
+              options: [
+                { value: "property", label: "تأمين عقاري" },
+                { value: "medical", label: "تأمين طبي" },
+                { value: "vehicle", label: "تأمين مركبة" },
+                { value: "general", label: "تأمين عام" },
+              ],
+            },
+            { name: "provider", label: "شركة التأمين", type: "text", required: true },
+            { name: "policyNumber", label: "رقم الوثيقة", type: "text" },
+            { name: "insuredName", label: "المؤمَّن عليه", type: "text" },
+            { name: "premium", label: "قسط التأمين", type: "currency", required: true },
+            { name: "coverageAmount", label: "مبلغ التغطية", type: "currency" },
+            { name: "startDate", label: "تاريخ البداية", type: "date", required: true },
+            { name: "endDate", label: "تاريخ الانتهاء", type: "date", required: true },
+            { name: "notes", label: "ملاحظات", type: "textarea" },
+          ],
+        },
+      },
       {
         key: "commitments", label: "الالتزامات التعاقدية", icon: "link-outline", endpoint: "/api/finance/commitments",
         detailRoute: "/finance/commitment-detail", createRoute: "/finance/commitment-new", titleFields: ["ref", "description"], subtitleFields: ["counterparty", "type"], statusField: "status", amountFields: ["amount"], dateFields: ["startDate"],
@@ -1246,6 +1310,20 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
         key: "field-tracking", label: "التتبع الميداني", icon: "locate-outline", endpoint: "/api/fleet/telematics/live",
         titleFields: ["vehiclePlate", "plate"], subtitleFields: ["driverName", "speed"], statusField: "status", dateFields: ["lastUpdated"],
         write: { moduleKey: "fleet", noDetail: true },
+      },
+      {
+        key: "itineraries", label: "خطوط السير", icon: "map-outline", endpoint: "/api/transport/itineraries",
+        detailRoute: "/transport/itinerary-detail", createRoute: "/transport/itinerary-new",
+        titleFields: ["title"], subtitleFields: ["totalDistanceKm", "estimatedDurationMin"], statusField: "status",
+        write: {
+          moduleKey: "fleet",
+          createFields: [
+            { name: "title", label: "عنوان خط السير", type: "text", required: true },
+            { name: "description", label: "الوصف", type: "textarea" },
+            { name: "totalDistanceKm", label: "إجمالي المسافة (كم)", type: "number" },
+            { name: "estimatedDurationMin", label: "المدة التقديرية (دقيقة)", type: "number" },
+          ],
+        },
       },
     ],
   },
@@ -1783,6 +1861,34 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
               refEndpoint: "/api/umrah/groups", refLabelFields: ["name", "groupNumber"], refValueField: "id",
             },
             { name: "notes", label: "ملاحظات", type: "textarea" },
+          ],
+        },
+      },
+      {
+        key: "commissions", label: "العمولات", icon: "cash-outline", endpoint: "/api/umrah/commissions",
+        detailRoute: "/umrah/commission-detail", createRoute: undefined,
+        titleFields: ["ref", "agentName"], subtitleFields: ["groupName", "rate"], statusField: "status", amountFields: ["amount"], dateFields: ["dueDate"],
+        write: { moduleKey: "umrah", noDetail: false },
+      },
+      {
+        key: "accommodation", label: "الإقامة", icon: "bed-outline", endpoint: "/api/umrah/room-blocks",
+        detailRoute: "/umrah/accommodation-detail", createRoute: "/umrah/room-block-new",
+        titleFields: ["hotelName"], subtitleFields: ["roomType", "totalRooms"], statusField: "status", amountFields: ["pricePerNight"], dateFields: ["checkIn"],
+        write: {
+          moduleKey: "umrah",
+          createFields: [
+            {
+              name: "hotelId", label: "الفندق", type: "reference", required: true,
+              refEndpoint: "/api/umrah/hotels", refLabelFields: ["name"], refValueField: "id",
+            },
+            {
+              name: "groupId", label: "المجموعة", type: "reference",
+              refEndpoint: "/api/umrah/groups", refLabelFields: ["name", "groupNumber"], refValueField: "id",
+            },
+            { name: "totalRooms", label: "عدد الغرف", type: "number", required: true },
+            { name: "checkIn", label: "تاريخ الوصول", type: "date", required: true },
+            { name: "checkOut", label: "تاريخ المغادرة", type: "date", required: true },
+            { name: "pricePerNight", label: "السعر للغرفة/ليلة", type: "currency" },
           ],
         },
       },
