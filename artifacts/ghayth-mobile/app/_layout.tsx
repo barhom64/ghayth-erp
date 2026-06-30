@@ -394,6 +394,20 @@ function AuthGate() {
       <Stack.Screen name="hr/org-structure" options={{ title: 'الهيكل التنظيمي' }} />
       <Stack.Screen name="bi/reports" options={{ title: 'التقارير التحليلية' }} />
       <Stack.Screen name="properties/sales" options={{ title: 'مبيعات العقارات' }} />
+      <Stack.Screen name="admin/event-monitor" options={{ title: 'مراقب الأحداث' }} />
+      <Stack.Screen name="hr/training-programs" options={{ title: 'برامج التدريب' }} />
+      <Stack.Screen name="hr/training-enrollments" options={{ title: 'التسجيلات التدريبية' }} />
+      <Stack.Screen name="bi/dashboards" options={{ title: 'لوحات المؤشرات' }} />
+      <Stack.Screen name="comms/inbox" options={{ title: 'صندوق الوارد' }} />
+      <Stack.Screen name="hr/recruitment-postings" options={{ title: 'وظائف شاغرة' }} />
+      <Stack.Screen name="settings/branches" options={{ title: 'الفروع' }} />
+      <Stack.Screen name="settings/companies" options={{ title: 'الشركات' }} />
+      <Stack.Screen name="finance/approvals" options={{ title: 'موافقات مالية' }} />
+      <Stack.Screen name="hr/disciplinary" options={{ title: 'الجزاءات والمخالفات' }} />
+      <Stack.Screen name="crm/activities" options={{ title: 'نشاطات CRM' }} />
+      <Stack.Screen name="support/sla-report" options={{ title: 'تقرير مستوى الخدمة' }} />
+      <Stack.Screen name="fleet/violations" options={{ title: 'مخالفات الأسطول' }} />
+      <Stack.Screen name="projects/risks" options={{ title: 'مخاطر المشاريع' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
