@@ -56,7 +56,7 @@ describe("#1812 — backend loadSourceContext resolver", () => {
     // #2475-follow-up — the GET response also carries the resolved cancelPolicy
     // (for the SPA's policy-aware cancel confirmation); pin updated to match.
     // شريحة 1 — والآن tripEvents (الجدول الزمني لوقائع الرحلة) كذلك.
-    expect(block).toMatch(/res\.json\(maskFields\(req, \{ data: \{ \.\.\.booking, lines, dispatchOrders, tripEvents, deductions, sourceContext, cancelPolicy \} \}\)\)/);
+    expect(block).toMatch(/res\.json\(maskFields\(req, \{ data: \{ \.\.\.booking, lines, dispatchOrders, tripEvents, deductions, deductionRates, sourceContext, cancelPolicy \} \}\)\)/);
   });
 
   it("loader is defensive — wraps each query in catch", () => {
