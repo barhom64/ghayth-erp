@@ -435,7 +435,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           { name: "toDate", label: "تاريخ الانتهاء", type: "date", required: true },
           { name: "notes", label: "ملاحظات", type: "textarea" },
         ] } },
-      { key: "evaluations", label: "تقييمات الأداء", icon: "star-outline", endpoint: "/api/hr/evaluations", titleFields: ["employeeName"], subtitleFields: ["period", "evaluatorName"], statusField: "status", amountFields: ["score"], dateFields: ["evaluationDate"], detailRoute: "/hr/evaluation-detail" },
+      { key: "evaluations", label: "تقييمات الأداء", icon: "star-outline", endpoint: "/api/hr/evaluations", titleFields: ["employeeName"], subtitleFields: ["period", "evaluatorName"], statusField: "status", amountFields: ["score"], dateFields: ["evaluationDate"], detailRoute: "/hr/evaluation-detail", createRoute: "/hr/evaluation-new" },
       { key: "official-letters", label: "الخطابات الرسمية", icon: "mail-outline", endpoint: "/api/hr/official-letters", titleFields: ["subject", "letterNumber"], subtitleFields: ["employeeName", "type"], statusField: "status", dateFields: ["createdAt"], detailRoute: "/hr/official-letter-detail",
         write: { moduleKey: "hr", createFields: [
           { name: "subject", label: "الموضوع", type: "text", required: true },
@@ -1113,7 +1113,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       { key: "alerts", label: "التنبيهات", icon: "notifications-outline", endpoint: "/api/fleet/alerts", titleFields: ["alertType", "description"], subtitleFields: ["vehiclePlate", "severity"], statusField: "status", dateFields: ["resolvedAt"] },
       {
         key: "traffic-violations", label: "المخالفات المرورية", icon: "warning-outline", endpoint: "/api/fleet/traffic-violations",
-        detailRoute: "/fleet/violation-detail",
+        detailRoute: "/fleet/violation-detail", createRoute: "/fleet/violation-new",
         titleFields: ["violationNumber", "violationType"], subtitleFields: ["vehiclePlate", "driverName"], statusField: "status", amountFields: ["fineAmount"], dateFields: ["violationDate"],
         write: {
           moduleKey: "fleet",
@@ -1370,7 +1370,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
         },
       },
       {
-        key: "issues", label: "المشاكل والعوائق", icon: "alert-circle-outline", endpoint: "/api/projects/issues", titleFields: ["title", "description"], subtitleFields: ["projectName", "severity"], statusField: "status", dateFields: ["createdAt"], detailRoute: "/projects/issue-detail",
+        key: "issues", label: "المشاكل والعوائق", icon: "alert-circle-outline", endpoint: "/api/projects/issues", titleFields: ["title", "description"], subtitleFields: ["projectName", "severity"], statusField: "status", dateFields: ["createdAt"], detailRoute: "/projects/issue-detail", createRoute: "/projects/issue-new",
         write: {
           moduleKey: "operations",
           createFields: [

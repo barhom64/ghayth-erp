@@ -5,8 +5,8 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge, GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -40,6 +40,7 @@ function fmtMoney(val?: number, currency?: string): string {
 export default function MilestoneDetailScreen() {
   const c = useColors();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
 
   const { data: ms, isLoading } = useList<Milestone>(`/api/projects/milestones/${id}`);
 
@@ -106,6 +107,9 @@ export default function MilestoneDetailScreen() {
             <Text style={{ fontSize: 13, color: c.text, textAlign: 'right' }}>{ms.notes}</Text>
           </GCard>
         ) : null}
+
+        <GButton title="إضافة مهمة لهذه المرحلة" icon="add-circle-outline" variant="secondary" onPress={() => router.push({ pathname: '/projects/task-new' as never, params: { milestoneId: id } })} />
+        <GButton title="تسجيل مشكلة" icon="bug-outline" variant="secondary" onPress={() => router.push({ pathname: '/projects/issue-new' as never, params: { milestoneId: id } })} style={{ marginTop: 4 }} />
       </View>
     </ScrollView>
   );

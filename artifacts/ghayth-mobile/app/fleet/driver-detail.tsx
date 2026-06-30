@@ -5,8 +5,8 @@
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge, GAvatar } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge, GAvatar, GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -58,6 +58,7 @@ function fmtDate(val?: string): string {
 export default function DriverDetailScreen() {
   const c = useColors();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const [tab, setTab] = useState<Tab>('info');
 
   const { data: driver, isLoading } = useList<Driver>(`/api/fleet/drivers/${id}`);
@@ -150,7 +151,9 @@ export default function DriverDetailScreen() {
         )}
 
         {tab === 'trips' && (
-          trips.length === 0
+          <>
+          <GButton title="حجز رحلة جديدة" icon="add-circle-outline" variant="secondary" onPress={() => router.push({ pathname: '/fleet/trip-new' as never, params: { driverId: id } })} style={{ marginBottom: 8 }} />
+          {trips.length === 0
             ? <GEmptyState icon="car-outline" title="لا توجد رحلات" description="لم يتم تسجيل أي رحلات لهذا السائق" />
             : trips.map((trip, i) => (
               <GCard key={trip.id ?? i} style={{ gap: 4 }}>
@@ -163,11 +166,14 @@ export default function DriverDetailScreen() {
                   {trip.status ? <GStatusBadge status={trip.status} size="sm" /> : null}
                 </View>
               </GCard>
-            ))
+            ))}
+          </>
         )}
 
         {tab === 'violations' && (
-          violations.length === 0
+          <>
+          <GButton title="تسجيل مخالفة مرورية" icon="add-circle-outline" variant="secondary" onPress={() => router.push({ pathname: '/fleet/violation-new' as never, params: { vehicleId: id } })} style={{ marginBottom: 8 }} />
+          {violations.length === 0
             ? <GEmptyState icon="checkmark-circle-outline" title="لا توجد مخالفات" description="لا توجد مخالفات مسجّلة لهذا السائق" />
             : violations.map((v, i) => (
               <GCard key={v.id ?? i} style={{ gap: 4 }}>
@@ -180,7 +186,8 @@ export default function DriverDetailScreen() {
                   {v.status ? <GStatusBadge status={v.status} size="sm" /> : null}
                 </View>
               </GCard>
-            ))
+            ))}
+          </>
         )}
       </View>
     </ScrollView>

@@ -5,8 +5,8 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge, GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -42,6 +42,7 @@ function fmtDate(val?: string): string {
 export default function ProjectIssueDetailScreen() {
   const c = useColors();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
 
   const { data: issue, isLoading } = useList<ProjectIssue>(`/api/projects/issues/${id}`);
 
@@ -110,6 +111,8 @@ export default function ProjectIssueDetailScreen() {
             <Text style={{ fontSize: 13, color: c.text, textAlign: 'right' }}>{issue.notes}</Text>
           </GCard>
         ) : null}
+
+        <GButton title="إضافة مهمة مرتبطة" icon="add-circle-outline" variant="secondary" onPress={() => router.push({ pathname: '/projects/task-new' as never, params: { issueId: id } })} />
       </View>
     </ScrollView>
   );

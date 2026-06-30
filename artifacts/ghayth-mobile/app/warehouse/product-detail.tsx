@@ -5,8 +5,8 @@
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge, GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -64,6 +64,7 @@ const MOVEMENT_TYPE_LABEL: Record<string, string> = {
 export default function ProductDetailScreen() {
   const c = useColors();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const [tab, setTab] = useState<Tab>('info');
 
   const { data: product, isLoading } = useList<Product>(`/api/warehouse/products/${id}`);
@@ -167,7 +168,9 @@ export default function ProductDetailScreen() {
         )}
 
         {tab === 'movements' && (
-          movements.length === 0
+          <>
+          <GButton title="تسجيل حركة مخزون" icon="add-circle-outline" variant="secondary" onPress={() => router.push({ pathname: '/warehouse/movement-new' as never, params: { productId: id } })} style={{ marginBottom: 8 }} />
+          {movements.length === 0
             ? <GEmptyState icon="swap-horizontal-outline" title="لا توجد حركات" description="لم يتم تسجيل أي حركات مخزنية لهذا الصنف" />
             : movements.map((mov, i) => (
               <GCard key={mov.id ?? i} style={{ gap: 4 }}>
@@ -182,7 +185,8 @@ export default function ProductDetailScreen() {
                   <Text style={{ fontSize: 12, color: c.textMuted }}>{mov.ref ?? '—'}</Text>
                 </View>
               </GCard>
-            ))
+            ))}
+          </>
         )}
 
         {product.description ? (

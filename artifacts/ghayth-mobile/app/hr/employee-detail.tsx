@@ -171,6 +171,13 @@ export default function EmployeeDetailScreen() {
           </GCard>
         )}
 
+        {tab === 'info' && (
+          <View style={{ gap: 8, marginTop: 8 }}>
+            <GButton title="إجراء تأديبي" icon="warning-outline" variant="secondary" onPress={() => router.push({ pathname: '/hr/discipline-new' as never, params: { employeeId: id } })} />
+            <GButton title="تقييم الأداء" icon="star-outline" variant="secondary" onPress={() => router.push({ pathname: '/hr/evaluation-new' as never, params: { employeeId: id } })} />
+          </View>
+        )}
+
         {/* ─── تبويب الحضور ─── */}
         {tab === 'attendance' && (
           attLoading ? <ActivityIndicator color={c.brand} style={{ marginTop: 40 }} /> :

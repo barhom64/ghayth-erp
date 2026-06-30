@@ -4,8 +4,8 @@
  */
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState, GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 
@@ -33,6 +33,7 @@ function fmtMoney(val?: number, currency?: string): string {
 export default function SupplierDetailScreen() {
   const c = useColors();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
 
   const { data: supplier, isLoading } = useList<Supplier>(`/api/warehouse/suppliers/${id}`);
 
@@ -90,6 +91,8 @@ export default function SupplierDetailScreen() {
             </View>
           ))}
         </GCard>
+
+        <GButton title="طلب شراء جديد" icon="cart-outline" variant="secondary" onPress={() => router.push({ pathname: '/finance/purchase-request-new' as never, params: { supplierId: id } })} />
 
         {supplier.notes ? (
           <GCard>

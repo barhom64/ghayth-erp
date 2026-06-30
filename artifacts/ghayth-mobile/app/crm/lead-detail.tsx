@@ -5,8 +5,8 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge, GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -56,6 +56,7 @@ const ACTIVITY_ICONS: Record<string, string> = {
 export default function LeadDetailScreen() {
   const c = useColors();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
 
   const { data: lead, isLoading } = useList<Lead>(`/api/crm/pipeline/${id}`);
 
@@ -131,6 +132,11 @@ export default function LeadDetailScreen() {
             <Text style={{ fontSize: 13, color: c.text, textAlign: 'right', lineHeight: 20 }}>{lead.notes}</Text>
           </GCard>
         ) : null}
+
+        <View style={{ gap: 8 }}>
+          <GButton title="تسجيل نشاط متابعة" icon="add-circle-outline" variant="secondary" onPress={() => router.push({ pathname: '/crm/activity-new' as never, params: { leadId: id } })} />
+          <GButton title="تحويل لفرصة بيعية" icon="trending-up-outline" variant="secondary" onPress={() => router.push({ pathname: '/crm/opportunity-new' as never, params: { leadId: id } })} />
+        </View>
 
         {activities.length > 0 && (
           <GCard>
