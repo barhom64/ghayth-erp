@@ -1138,6 +1138,12 @@ function AuthGate() {
       <Stack.Screen name="admin/rules-log-stats" options={{ title: 'إحصائيات سجل القواعد' }} />
       <Stack.Screen name="admin/rules-journeys" options={{ title: 'رحلات القواعد' }} />
       <Stack.Screen name="bi/report-catalog" options={{ title: 'كتالوج التقارير' }} />
+      <Stack.Screen name="finance/posting-failures-summary" options={{ title: 'ملخص فشل الترحيل' }} />
+      <Stack.Screen name="finance/period-close-preview" options={{ title: 'معاينة إقفال الفترة' }} />
+      <Stack.Screen name="finance/journal-manual-detail" options={{ title: 'تفاصيل القيد اليدوي' }} />
+      <Stack.Screen name="finance/vendor-statement" options={{ title: 'كشف حساب المورد' }} />
+      <Stack.Screen name="finance/finance-projects" options={{ title: 'مشاريع المالية' }} />
+      <Stack.Screen name="finance/finance-project-costs" options={{ title: 'تكاليف المشروع المالي' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
