@@ -131,6 +131,16 @@ function AuthGate() {
       <Stack.Screen name="crm/opportunity-new" options={{ title: 'فرصة بيعية جديدة' }} />
       <Stack.Screen name="crm/activity-new" options={{ title: 'تسجيل نشاط متابعة' }} />
       <Stack.Screen name="finance/payment-new" options={{ title: 'تسجيل دفعة' }} />
+      <Stack.Screen name="fleet/trip-new" options={{ title: 'طلب رحلة جديدة' }} />
+      <Stack.Screen name="properties/maintenance-new" options={{ title: 'طلب صيانة جديد' }} />
+      <Stack.Screen name="warehouse/movement-new" options={{ title: 'حركة مخزون جديدة' }} />
+      <Stack.Screen name="projects/task-new" options={{ title: 'مهمة جديدة' }} />
+      <Stack.Screen name="documents/upload" options={{ title: 'رفع مستند' }} />
+      <Stack.Screen name="legal/case-new" options={{ title: 'قضية جديدة' }} />
+      <Stack.Screen name="finance/purchase-request-new" options={{ title: 'طلب شراء جديد' }} />
+      <Stack.Screen name="hr/training-enroll" options={{ title: 'التسجيل في برنامج تدريبي' }} />
+      <Stack.Screen name="fleet/maintenance-new" options={{ title: 'أمر صيانة جديد' }} />
+      <Stack.Screen name="umrah/pilgrim-new" options={{ title: 'تسجيل معتمر جديد' }} />
       <Stack.Screen name="hr/leave-balances" options={{ title: 'أرصدة الإجازات' }} />
       <Stack.Screen name="hr/change-password" options={{ title: 'تغيير كلمة المرور' }} />
       <Stack.Screen name="hr/my-attendance" options={{ title: 'سجل حضوري' }} />
