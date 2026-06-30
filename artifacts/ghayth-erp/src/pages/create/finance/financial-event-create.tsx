@@ -17,6 +17,8 @@ import { DocumentAttachmentsPanel, type DocAttachment } from "@/components/share
 import { BranchSelect, AccountSelect } from "@/components/shared/entity-selects";
 import { NumberField, FormFieldWrapper, TextField } from "@/components/shared/form-field-wrapper";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { ArrowDownLeft, ArrowUpRight } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 /**
  * تسجيل واقعة مالية — م١-ب. الواجهة تشغيلية: يدخل المستخدم (الكيان/الطرف + ما حدث +
@@ -163,7 +165,7 @@ export default function FinancialEventCreate() {
               استورد Excel/CSV، بدل الإدخال اليدوي. كلاهما يمرّ على نفس محرّك القيد. */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-dashed bg-surface-subtle px-3 py-2 text-sm">
             <span className="text-muted-foreground">عندك المستند جاهز؟ ابدأ منه:</span>
-            <button type="button" className="text-primary hover:underline font-medium" onClick={() => navigate("/documents/ocr-inbox")}>
+            <button type="button" className="text-primary hover:underline font-medium" onClick={() => navigate("/documents/ocr/review")}>
               قراءة ضوئية (OCR) ←
             </button>
             <span className="text-muted-foreground" aria-hidden>·</span>
@@ -172,18 +174,51 @@ export default function FinancialEventCreate() {
             </button>
           </div>
 
-          {/* النوع: تصنيف/اختصار لا إلزام — النظام يضع القيد في اتجاهه تلقائيًا */}
-          <div className="inline-flex rounded-lg border overflow-hidden">
-            {(["payment", "receipt"] as const).map((dir) => (
-              <button
-                key={dir}
-                type="button"
-                onClick={() => setForm((f) => ({ ...f, direction: dir }))}
-                className={`px-4 py-2 text-sm ${form.direction === dir ? "bg-primary text-primary-foreground" : "bg-surface-subtle"}`}
-              >
-                {dir === "receipt" ? "قبض (مال داخل)" : "صرف (مال خارج)"}
-              </button>
-            ))}
+          {/* النوع: تصنيف/اختصار لا إلزام — لكن الاتجاه واضح بصريًّا (لون + سهم + لافتة)
+              فلا يلتبس قبض (مال داخل) بصرف (مال خارج). النظام يضع القيد في اتجاهه تلقائيًّا. */}
+          <div className="space-y-2">
+            <div className="inline-flex rounded-lg border overflow-hidden">
+              {(["payment", "receipt"] as const).map((dir) => {
+                const active = form.direction === dir;
+                const isRcpt = dir === "receipt";
+                return (
+                  <button
+                    key={dir}
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, direction: dir }))}
+                    className={cn(
+                      "flex items-center gap-2 px-5 py-2.5 text-sm font-semibold transition-colors",
+                      active
+                        ? isRcpt
+                          ? "bg-status-success-surface text-status-success-foreground"
+                          : "bg-status-warning-surface text-status-warning-foreground"
+                        : "bg-surface-subtle text-muted-foreground hover:bg-muted",
+                    )}
+                  >
+                    {isRcpt ? <ArrowDownLeft className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
+                    {isRcpt ? "قبض (مال داخل)" : "صرف (مال خارج)"}
+                  </button>
+                );
+              })}
+            </div>
+            {/* لافتة الاتجاه — تشرح حركة المال بالعربية البسيطة فلا يلتبس القبض بالصرف */}
+            <div
+              className={cn(
+                "flex items-start gap-2 rounded-lg border px-3 py-2 text-sm",
+                isReceipt
+                  ? "border-status-success-foreground/30 bg-status-success-surface text-status-success-foreground"
+                  : "border-status-warning-foreground/30 bg-status-warning-surface text-status-warning-foreground",
+              )}
+            >
+              {isReceipt
+                ? <ArrowDownLeft className="mt-0.5 h-4 w-4 shrink-0" />
+                : <ArrowUpRight className="mt-0.5 h-4 w-4 shrink-0" />}
+              <span>
+                {isReceipt
+                  ? "قبض — المال يدخل خزنتك. تُسجّل مبلغًا استلمته (من عميل أو جهة)، والنظام يجعل الخزنة/البنك مدينًا تلقائيًّا."
+                  : "صرف — المال يخرج من خزنتك. تُسجّل مبلغًا دفعته (لمورّد أو مصروف)، والنظام يجعل الخزنة/البنك دائنًا تلقائيًّا."}
+              </span>
+            </div>
           </div>
 
           {/* م٣ — تحصيل العميل: «قبض» على فواتير عميل مفتوحة (مطابقة آلية FIFO). */}

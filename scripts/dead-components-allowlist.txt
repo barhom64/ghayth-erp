@@ -14,3 +14,8 @@ pages/create/finance/customer-receipt.tsx
 # وبياناتها صارت lib/journal-templates.ts؛ مسارها يُحوَّل بـ redirect إلى /finance/journal/create
 # (§٨ تحويل لا حذف، الملف مُبقى كـredirect stub). مُدرج أيضًا في scripts/src/audit-routes.mjs.
 pages/create/finance/journal-quick-templates.tsx
+# توحيد القراءة الضوئية — صندوق المسح القديم (documents-ocr-inbox) نسخة أضعف بلا رفع ملف
+# ولا تطبيق على كيان؛ وُحِّد في «قراءة المستندات (OCR)» (documents/ocr-review)، ومساره
+# /documents/ocr-inbox يُحوَّل بـ redirect إليها. الملف مُبقًى (تحويل لا حذف؛ تقاعده بقرار
+# مستقل من المالك). مُدرج أيضًا في scripts/src/audit-routes.mjs.
+pages/documents-ocr-inbox.tsx

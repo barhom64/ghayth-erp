@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -55,6 +55,33 @@ export default function FinancialInvoiceCreate() {
     successMessage: "تم إنشاء فاتورة المبيعات (مسودة)",
     onSuccess: () => { clearDraft(); navigate("/finance/invoices"); },
   });
+
+  // قبض من فاتورة ممسوحة (OCR) — تعبئة مسبقة من رابط «قراءة المستندات». نظير صفحة
+  // فاتورة المورد (صرف): لا إنشاء آلي؛ فقط نملأ النموذج (المبلغ/التاريخ/الرقم) ليراجعه
+  // البشر ويختار العميل ويحفظ عبر منفذ الفاتورة المُدقَّق. يعمل مرة واحدة عند وجود وسائط.
+  const [ocrPrefilled, setOcrPrefilled] = useState(false);
+  useEffect(() => {
+    if (ocrPrefilled) return;
+    const p = new URLSearchParams(window.location.search);
+    const invNo = p.get("ocrInvoiceNo");
+    const amount = Number(p.get("ocrAmount") || "") || 0;
+    const vat = Number(p.get("ocrVat") || "") || 0;
+    const date = p.get("ocrDate");
+    if (!invNo && !amount) return; // لا بيانات OCR في الرابط
+    setForm((f) => {
+      const net = vat > 0 && amount > vat ? roundMoney(amount - vat) : amount;
+      return {
+        ...f,
+        date: date || f.date,
+        description: invNo ? `فاتورة مبيعات ممسوحة رقم ${invNo}` : f.description,
+        vatRate: vat > 0 && net > 0 ? (Math.round((vat / net) * 100) || 15) : f.vatRate,
+        lines: amount > 0
+          ? [{ ...emptyLine(), itemName: "بند من فاتورة ممسوحة (راجع المبلغ)", quantity: 1, unitPrice: net }]
+          : f.lines,
+      };
+    });
+    setOcrPrefilled(true);
+  }, [ocrPrefilled, setForm]);
 
   const totalNet = roundMoney(form.lines.reduce((s, l) => s + lineNet(l), 0));
   const totalVat = roundMoney(totalNet * ((Number(form.vatRate) || 0) / 100));
