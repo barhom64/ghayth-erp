@@ -526,11 +526,20 @@ router.get("/vehicles", authorize({ feature: "fleet.vehicles", action: "list" })
          GROUP BY "vehicleId"
        )
        SELECT v.*,
+              COALESCE(av."driverId", v."assignedDriverId") AS "currentDriverId",
               d.name AS "driverName",
               COALESCE(gc."govLinkCount", 0)::int AS "govLinkCount",
               ie."insuranceExpiry"
        FROM fleet_vehicles v
-       LEFT JOIN fleet_drivers d ON d.id = v."assignedDriverId" AND d."deletedAt" IS NULL
+       LEFT JOIN LATERAL (
+         SELECT vda."driverId"
+           FROM vehicle_driver_assignments vda
+          WHERE vda."vehicleId" = v.id AND vda."companyId" = v."companyId"
+            AND vda.status = 'active' AND vda."assignmentType" = 'primary'
+          ORDER BY vda."startDate" DESC
+          LIMIT 1
+       ) av ON TRUE
+       LEFT JOIN fleet_drivers d ON d.id = COALESCE(av."driverId", v."assignedDriverId") AND d."deletedAt" IS NULL
        LEFT JOIN gov_counts gc ON gc."entityId" = v.id
        LEFT JOIN insurance_expiry ie ON ie."vehicleId" = v.id
        WHERE ${where} AND v."deletedAt" IS NULL
