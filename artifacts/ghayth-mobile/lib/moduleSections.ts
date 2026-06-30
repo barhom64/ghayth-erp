@@ -322,6 +322,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "overtime", label: "العمل الإضافي", icon: "alarm-outline", endpoint: "/api/hr/overtime",
         titleFields: ["requestNumber"], subtitleFields: ["employeeName", "empNumber"], statusField: "status", amountFields: ["totalAmount"], dateFields: ["overtimeDate"],
+        detailRoute: "/hr/overtime-detail",
         write: {
           moduleKey: "hr",
           createEndpoint: "/api/hr/overtime",
@@ -436,6 +437,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "expenses", label: "المصروفات", icon: "trending-down-outline", endpoint: "/api/finance/expenses",
         titleFields: ["ref", "description"], subtitleFields: ["accountName", "expenseType"], statusField: "status", amountFields: ["amount"], dateFields: ["createdAt"],
+        detailRoute: "/finance/expense-detail",
         write: {
           moduleKey: "finance",
           detailPath: (id) => `/api/finance/expenses/${id}`,
