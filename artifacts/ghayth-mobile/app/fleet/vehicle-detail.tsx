@@ -8,8 +8,8 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GButton, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -84,6 +84,7 @@ export default function VehicleDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [tab, setTab] = useState<Tab>('info');
 
+  const router = useRouter();
   const { data: vehicle, isLoading: vehLoading } = useList<Vehicle>(`/api/fleet/vehicles/${id}`);
   const { data: tripsResp, isLoading: tripsLoading } = useList<{ data?: Trip[] }>(
     `/api/fleet/vehicles/${id}/trips`, { pageSize: 10 }, { enabled: tab === 'trips' }
@@ -165,7 +166,15 @@ export default function VehicleDetailScreen() {
         )}
 
         {tab === 'trips' && (
-          tripsLoading ? <ActivityIndicator color={c.brand} style={{ marginTop: 40 }} /> :
+          <>
+          <GButton
+            title="حجز رحلة جديدة"
+            icon="add-circle-outline"
+            variant="secondary"
+            onPress={() => router.push({ pathname: '/fleet/trip-new' as never, params: { vehicleId: id } })}
+            style={{ marginBottom: 8 }}
+          />
+          {tripsLoading ? <ActivityIndicator color={c.brand} style={{ marginTop: 40 }} /> :
           trips.length === 0 ? <GEmptyState icon="navigate-outline" title="لا رحلات" description="لا توجد رحلات مسجّلة لهذه المركبة" /> :
           <GCard style={{ gap: 0, padding: 0 }}>
             {trips.map((trip, i) => {
@@ -184,11 +193,20 @@ export default function VehicleDetailScreen() {
                 </View>
               );
             })}
-          </GCard>
+          </GCard>}
+          </>
         )}
 
         {tab === 'maintenance' && (
-          maintLoading ? <ActivityIndicator color={c.brand} style={{ marginTop: 40 }} /> :
+          <>
+          <GButton
+            title="أمر صيانة جديد"
+            icon="add-circle-outline"
+            variant="secondary"
+            onPress={() => router.push({ pathname: '/fleet/maintenance-new' as never, params: { vehicleId: id } })}
+            style={{ marginBottom: 8 }}
+          />
+          {maintLoading ? <ActivityIndicator color={c.brand} style={{ marginTop: 40 }} /> :
           maintenance.length === 0 ? <GEmptyState icon="build-outline" title="لا صيانة" description="لا توجد سجلات صيانة لهذه المركبة" /> :
           <GCard style={{ gap: 0, padding: 0 }}>
             {maintenance.map((m, i) => {
@@ -206,7 +224,8 @@ export default function VehicleDetailScreen() {
                 </View>
               );
             })}
-          </GCard>
+          </GCard>}
+          </>
         )}
 
         {tab === 'violations' && (

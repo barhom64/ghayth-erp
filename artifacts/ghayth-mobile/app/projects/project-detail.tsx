@@ -8,8 +8,8 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GLoadingState, GEmptyState, GStatusBadge, GAvatar } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GButton, GLoadingState, GEmptyState, GStatusBadge, GAvatar } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -75,6 +75,7 @@ export default function ProjectDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [tab, setTab] = useState<Tab>('info');
 
+  const router = useRouter();
   const { data: project, isLoading: projLoading } = useList<Project>(`/api/projects/${id}`);
   const { data: msResp, isLoading: msLoading } = useList<{ data?: Milestone[] }>(
     `/api/projects/${id}/milestones`, { pageSize: 10 }, { enabled: tab === 'milestones' }
@@ -186,13 +187,22 @@ export default function ProjectDetailScreen() {
 
         {/* ─── المهام ─── */}
         {tab === 'tasks' && (
-          tasksLoading ? <ActivityIndicator color={c.brand} style={{ marginTop: 40 }} /> :
+          <>
+          <GButton
+            title="إضافة مهمة"
+            icon="add-circle-outline"
+            variant="secondary"
+            onPress={() => router.push({ pathname: '/projects/task-new' as never, params: { projectId: id } })}
+            style={{ marginBottom: 8 }}
+          />
+          {tasksLoading ? <ActivityIndicator color={c.brand} style={{ marginTop: 40 }} /> :
           tasks.length === 0 ? <GEmptyState icon="checkbox-outline" title="لا مهام" description="لا توجد مهام لهذا المشروع" /> :
           <GCard style={{ gap: 0, padding: 0 }}>
             {tasks.map((task, i) => {
               const st = statusBadge(task.status ?? '');
               return (
-                <View key={task.id} style={[styles.listRow, { borderBottomColor: c.border }, i === tasks.length - 1 && { borderBottomWidth: 0 }]}>
+                <Pressable key={task.id} onPress={() => router.push({ pathname: '/projects/task-detail' as never, params: { id: String(task.id) } })}
+                  style={[styles.listRow, { borderBottomColor: c.border }, i === tasks.length - 1 && { borderBottomWidth: 0 }]}>
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 14, fontWeight: '600', color: c.text, textAlign: 'right' }}>{task.title ?? task.name ?? '—'}</Text>
                     <Text style={{ fontSize: 12, color: c.textMuted, textAlign: 'right' }}>
@@ -200,10 +210,11 @@ export default function ProjectDetailScreen() {
                     </Text>
                   </View>
                   {st && <GStatusBadge status={st.label} size="sm" />}
-                </View>
+                </Pressable>
               );
             })}
-          </GCard>
+          </GCard>}
+          </>
         )}
 
         {/* ─── الفريق ─── */}
