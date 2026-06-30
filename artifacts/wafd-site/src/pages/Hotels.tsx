@@ -5,30 +5,38 @@ import { motion } from "framer-motion";
 import { useEffect } from "react";
 import { WAFD_PHONE } from "@/lib/wafd-constants";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useSiteData } from "@/contexts/SiteDataContext";
 
 const HOTEL_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/310419663030823861/YHZMogv6aVcNXaRZ3427z7/wafd-hotel-makkah-WYrvVrLjdJdmpSUqPRnpcC.webp";
 const MADINAH_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/310419663030823861/YHZMogv6aVcNXaRZ3427z7/wafd-madinah-mLYiJhvGYuvzquRMzJikST.webp";
 
+type HotelItem = { key: string; name: string; city: string; dist: string; stars: number; img: string };
+
 export default function Hotels() {
   const { t, dir } = useLanguage();
+  const { hotels: dbHotels } = useSiteData();
 
-  const hotels = [
-    { nameKey: "luxury_makkah", city: t.hotels.filterMakkah, dist: t.hotels.veryClose, stars: 5, img: HOTEL_IMG, badge: t.hotels.luxury },
-    { nameKey: "standard_makkah", city: t.hotels.filterMakkah, dist: t.hotels.nearGrandMosque, stars: 4, img: HOTEL_IMG, badge: t.hotels.standard },
-    { nameKey: "economy_makkah", city: t.hotels.filterMakkah, dist: t.hotels.withinHaramArea, stars: 3, img: HOTEL_IMG, badge: t.hotels.economy },
-    { nameKey: "luxury_madinah", city: t.hotels.filterMadinah, dist: t.hotels.nearProphetMosque, stars: 5, img: MADINAH_IMG, badge: t.hotels.luxury },
-    { nameKey: "standard_madinah", city: t.hotels.filterMadinah, dist: t.hotels.nearProphetMosque, stars: 4, img: MADINAH_IMG, badge: t.hotels.standard },
-    { nameKey: "economy_madinah", city: t.hotels.filterMadinah, dist: t.hotels.withinNabawi, stars: 3, img: MADINAH_IMG, badge: t.hotels.economy },
+  // القيم الاحتياطية (تظهر فقط عند تعذّر الجلب من غيث).
+  const fallbackHotels: HotelItem[] = [
+    { key: "luxury_makkah", name: t.hotels.luxuryMakkah, city: t.hotels.filterMakkah, dist: t.hotels.veryClose, stars: 5, img: HOTEL_IMG },
+    { key: "standard_makkah", name: t.hotels.standardMakkah, city: t.hotels.filterMakkah, dist: t.hotels.nearGrandMosque, stars: 4, img: HOTEL_IMG },
+    { key: "economy_makkah", name: t.hotels.economyMakkah, city: t.hotels.filterMakkah, dist: t.hotels.withinHaramArea, stars: 3, img: HOTEL_IMG },
+    { key: "luxury_madinah", name: t.hotels.luxuryMadinah, city: t.hotels.filterMadinah, dist: t.hotels.nearProphetMosque, stars: 5, img: MADINAH_IMG },
+    { key: "standard_madinah", name: t.hotels.standardMadinah, city: t.hotels.filterMadinah, dist: t.hotels.nearProphetMosque, stars: 4, img: MADINAH_IMG },
+    { key: "economy_madinah", name: t.hotels.economyMadinah, city: t.hotels.filterMadinah, dist: t.hotels.withinNabawi, stars: 3, img: MADINAH_IMG },
   ];
 
-  const hotelNames: Record<string, string> = {
-    luxury_makkah: t.hotels.luxuryMakkah,
-    standard_makkah: t.hotels.standardMakkah,
-    economy_makkah: t.hotels.economyMakkah,
-    luxury_madinah: t.hotels.luxuryMadinah,
-    standard_madinah: t.hotels.standardMadinah,
-    economy_madinah: t.hotels.economyMadinah,
-  };
+  // المحتوى الحيّ من غيث (يُحرَّر من لوحة التحكم).
+  const hotels: HotelItem[] = dbHotels.length
+    ? dbHotels.map((h) => ({
+        key: h.slug,
+        name: h.name,
+        city: h.city ?? "",
+        dist: h.distanceLabel ?? "",
+        stars: h.stars ?? 5,
+        img: h.imageUrl ?? HOTEL_IMG,
+      }))
+    : fallbackHotels;
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -106,11 +114,11 @@ export default function Hotels() {
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 opacity-50 pointer-events-none select-none">
               {hotels.slice(0, 3).map((hotel) => (
                 <div
-                  key={hotel.nameKey}
+                  key={hotel.key}
                   className="bg-white rounded-2xl overflow-hidden shadow-md border border-[oklch(0.90_0.006_80)]"
                 >
                   <div className="relative h-48 overflow-hidden">
-                    <img src={hotel.img} alt={hotelNames[hotel.nameKey]} className="w-full h-full object-cover" />
+                    <img src={hotel.img} alt={hotel.name} className="w-full h-full object-cover" />
                     <div className="absolute inset-0"
                       style={{ background: "linear-gradient(180deg, transparent 50%, oklch(0.14 0.005 0 / 0.6) 100%)" }} />
                     <span className={`absolute top-3 ${dir === "rtl" ? "right-3" : "left-3"} px-3 py-1 rounded-full text-xs font-bold text-white`}
@@ -126,7 +134,7 @@ export default function Hotels() {
                     </div>
                   </div>
                   <div className="p-5">
-                    <h3 className="font-black text-[oklch(0.14_0.005_0)] mb-1" style={{ fontFamily: "'Cairo', sans-serif" }}>{hotelNames[hotel.nameKey]}</h3>
+                    <h3 className="font-black text-[oklch(0.14_0.005_0)] mb-1" style={{ fontFamily: "'Cairo', sans-serif" }}>{hotel.name}</h3>
                     <div className={`flex items-center gap-1.5 text-xs text-[oklch(0.52_0.12_185)] mb-3 font-medium`} style={{ fontFamily: "'Cairo', sans-serif" }}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/>
