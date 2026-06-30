@@ -17,7 +17,7 @@ const restoreHandler = (() => {
 describe("vendors list — trash view", () => {
   it("GET /vendors honours deleted=true and shows ONLY soft-deleted rows", () => {
     expect(VENDORS).toMatch(/const showDeleted = \(req\.query as Record<string, string \| undefined>\)\.deleted === "true";/);
-    expect(VENDORS).toMatch(/showDeleted\s*\?\s*buildScopedWhere\(scope, filters\)\s*:\s*buildScopedWhere\(scope, filters, \{ softDeleteColumn: '"deletedAt"' \}\)/);
+    expect(VENDORS).toMatch(/showDeleted\s*\?\s*buildScopedWhere\(scope, filters, \{ disableBranchScope: true \}\)\s*:\s*buildScopedWhere\(scope, filters, \{ disableBranchScope: true, softDeleteColumn: '"deletedAt"' \}\)/);
     expect(VENDORS).toMatch(/finalWhere = showDeleted \? `\$\{where\} AND "deletedAt" IS NOT NULL` : where/);
   });
 });
