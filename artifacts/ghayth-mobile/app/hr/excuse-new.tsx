@@ -53,9 +53,13 @@ export default function ExcuseNewScreen() {
 
   const onSubmit = async () => {
     if (!validate()) return;
+    if (!activeAssignment?.id) {
+      Alert.alert('خطأ', 'تعذّر تحديد تعيينك الحالي. تحقق من حسابك.');
+      return;
+    }
     try {
       await mutation.mutateAsync({
-        assignmentId: activeAssignment?.id,
+        assignmentId: activeAssignment.id,
         excuseType,
         excuseDate,
         startTime: startTime || undefined,
