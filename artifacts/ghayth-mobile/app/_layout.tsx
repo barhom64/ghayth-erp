@@ -717,6 +717,12 @@ function AuthGate() {
       <Stack.Screen name="hr/attendance-stats" options={{ title: 'إحصاءات الحضور' }} />
       <Stack.Screen name="hr/violations-stats" options={{ title: 'إحصاءات المخالفات' }} />
       <Stack.Screen name="hr/payroll-summary" options={{ title: 'ملخص الرواتب' }} />
+      <Stack.Screen name="dashboards/finance-module" options={{ title: 'لوحة المالية' }} />
+      <Stack.Screen name="dashboards/properties-module" options={{ title: 'لوحة الأملاك' }} />
+      <Stack.Screen name="dashboards/store-module" options={{ title: 'لوحة المتجر' }} />
+      <Stack.Screen name="dashboards/support-module" options={{ title: 'لوحة الدعم' }} />
+      <Stack.Screen name="dashboards/tasks-module" options={{ title: 'لوحة المهام' }} />
+      <Stack.Screen name="dashboards/warehouse-module" options={{ title: 'لوحة المستودعات' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
