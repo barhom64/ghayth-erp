@@ -27,6 +27,7 @@ interface QuickAction { label: string; icon: IoniconName; route: string; manager
 
 const QUICK_ACTIONS: QuickAction[] = [
   { label: 'تسجيل الحضور', icon: 'finger-print-outline',      route: '/hr/attendance' },
+  { label: 'سجل حضوري',    icon: 'time-outline',              route: '/hr/my-attendance' },
   { label: 'طلب إجازة',     icon: 'calendar-outline',          route: '/hr/leave-new' },
   { label: 'أرصدة الإجازة', icon: 'pie-chart-outline',         route: '/hr/leave-balances' },
   { label: 'وقت إضافي',     icon: 'alarm-outline',             route: '/hr/overtime-new' },
