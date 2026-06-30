@@ -535,6 +535,33 @@ function AuthGate() {
       <Stack.Screen name="finance/clients" options={{ title: 'العملاء' }} />
       <Stack.Screen name="finance/cost-center-assignments" options={{ title: 'ربط مراكز التكلفة' }} />
       <Stack.Screen name="marketing/templates" options={{ title: 'قوالب التسويق' }} />
+      <Stack.Screen name="transport/price-rules" options={{ title: 'قواعد أسعار النقل' }} />
+      <Stack.Screen name="transport/service-lines" options={{ title: 'خطوط خدمة النقل' }} />
+      <Stack.Screen name="documents/folders" options={{ title: 'مجلدات الوثائق' }} />
+      <Stack.Screen name="documents/requirements" options={{ title: 'متطلبات الوثائق' }} />
+      <Stack.Screen name="comms/comm-log" options={{ title: 'سجل الاتصالات' }} />
+      <Stack.Screen name="comms/whatsapp" options={{ title: 'رسائل واتساب' }} />
+      <Stack.Screen name="comms/sms" options={{ title: 'الرسائل القصيرة' }} />
+      <Stack.Screen name="comms/pbx" options={{ title: 'سجل المكالمات' }} />
+      <Stack.Screen name="fleet/breakdowns" options={{ title: 'أعطال المركبات' }} />
+      <Stack.Screen name="fleet/accidents" options={{ title: 'حوادث المركبات' }} />
+      <Stack.Screen name="fleet/preventive-plans" options={{ title: 'خطط الصيانة الوقائية' }} />
+      <Stack.Screen name="fleet/tires" options={{ title: 'إدارة الإطارات' }} />
+      <Stack.Screen name="umrah/seasons" options={{ title: 'مواسم العمرة' }} />
+      <Stack.Screen name="umrah/agent-invoices" options={{ title: 'فواتير وكلاء العمرة' }} />
+      <Stack.Screen name="admin/security-log" options={{ title: 'سجل الأمان' }} />
+      <Stack.Screen name="admin/integration-logs" options={{ title: 'سجلات التكامل' }} />
+      <Stack.Screen name="hr/approval-chains" options={{ title: 'سلاسل الاعتماد' }} />
+      <Stack.Screen name="hr/approval-requests" options={{ title: 'طلبات الاعتماد' }} />
+      <Stack.Screen name="hr/shift-assignments" options={{ title: 'تعيينات الورديات' }} />
+      <Stack.Screen name="hr/deductions" options={{ title: 'الخصومات' }} />
+      <Stack.Screen name="hr/public-holidays" options={{ title: 'العطل الرسمية' }} />
+      <Stack.Screen name="hr/idp" options={{ title: 'خطط التطوير الفردية' }} />
+      <Stack.Screen name="hr/company-documents" options={{ title: 'وثائق الشركة' }} />
+      <Stack.Screen name="hr/expiring-documents" options={{ title: 'الوثائق المنتهية الصلاحية' }} />
+      <Stack.Screen name="hr/evaluation-cycles" options={{ title: 'دورات التقييم' }} />
+      <Stack.Screen name="finance/tax-codes" options={{ title: 'رموز الضريبة' }} />
+      <Stack.Screen name="support/csat" options={{ title: 'رضا العملاء' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
