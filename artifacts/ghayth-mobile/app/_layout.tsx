@@ -154,6 +154,11 @@ function AuthGate() {
       <Stack.Screen name="warehouse/product-detail" options={{ title: 'الصنف' }} />
       <Stack.Screen name="hr/contract-detail" options={{ title: 'عقد الموظف' }} />
       <Stack.Screen name="governance/policy-detail" options={{ title: 'السياسة' }} />
+      <Stack.Screen name="governance/risk-detail" options={{ title: 'المخاطرة' }} />
+      <Stack.Screen name="governance/audit-detail" options={{ title: 'عملية التدقيق' }} />
+      <Stack.Screen name="governance/capa-detail" options={{ title: 'الإجراء التصحيحي' }} />
+      <Stack.Screen name="legal/contract-detail" options={{ title: 'العقد القانوني' }} />
+      <Stack.Screen name="legal/judgment-detail" options={{ title: 'الحكم القضائي' }} />
       <Stack.Screen name="manager-workspace" options={{ title: 'مساحة عمل المدير' }} />
       <Stack.Screen name="finance/reports" options={{ title: 'التقارير المالية' }} />
       <Stack.Screen name="hr/employee-detail" options={{ title: 'ملف الموظف' }} />

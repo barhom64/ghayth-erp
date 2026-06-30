@@ -1574,7 +1574,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       },
       {
         key: "contracts", label: "العقود القانونية", icon: "document-text-outline", endpoint: "/api/legal/contracts",
-        titleFields: ["title", "contractNumber"], subtitleFields: ["contractNumber"], statusField: "status", dateFields: ["expiryDate"],
+        titleFields: ["title", "contractNumber"], subtitleFields: ["contractNumber"], statusField: "status", dateFields: ["expiryDate"], detailRoute: "/legal/contract-detail",
         write: {
           moduleKey: "legal",
           createFields: [
@@ -1601,7 +1601,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
         },
       },
       { key: "sessions", label: "جلسات التقاضي", icon: "calendar-outline", endpoint: "/api/legal/sessions/upcoming", titleFields: ["caseTitle", "caseNumber"], subtitleFields: ["location", "court"], statusField: "status", dateFields: ["sessionDate"] },
-      { key: "judgments", label: "الأحكام", icon: "ribbon-outline", endpoint: "/api/legal/judgments", titleFields: ["caseTitle", "ref"], subtitleFields: ["court", "judgmentType"], statusField: "status", dateFields: ["judgmentDate"] },
+      { key: "judgments", label: "الأحكام", icon: "ribbon-outline", endpoint: "/api/legal/judgments", titleFields: ["caseTitle", "ref"], subtitleFields: ["court", "judgmentType"], statusField: "status", dateFields: ["judgmentDate"], detailRoute: "/legal/judgment-detail" },
     ],
   },
   requests: {
@@ -1669,7 +1669,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       },
       {
         key: "risks", label: "المخاطر", icon: "alert-circle-outline", endpoint: "/api/governance/risks",
-        titleFields: ["title"], subtitleFields: ["category", "severity"], statusField: "status",
+        titleFields: ["title"], subtitleFields: ["category", "severity"], statusField: "status", detailRoute: "/governance/risk-detail",
         write: {
           moduleKey: "governance",
           createFields: [
@@ -1705,7 +1705,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       },
       {
         key: "audits", label: "عمليات التدقيق", icon: "search-outline", endpoint: "/api/governance/audits",
-        titleFields: ["title"], subtitleFields: ["type"], statusField: "status", dateFields: ["startDate"],
+        titleFields: ["title"], subtitleFields: ["type"], statusField: "status", dateFields: ["startDate"], detailRoute: "/governance/audit-detail",
         write: {
           moduleKey: "governance",
           createFields: [
@@ -1744,7 +1744,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       },
       {
         key: "capa", label: "الإجراءات التصحيحية", icon: "construct-outline", endpoint: "/api/governance/capa",
-        titleFields: ["title"], subtitleFields: ["source", "priority"], statusField: "status", dateFields: ["targetDate"],
+        titleFields: ["title"], subtitleFields: ["source", "priority"], statusField: "status", dateFields: ["targetDate"], detailRoute: "/governance/capa-detail",
         write: {
           moduleKey: "governance",
           noDetail: true,
