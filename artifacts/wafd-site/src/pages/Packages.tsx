@@ -7,22 +7,35 @@ import { Link } from "wouter";
 import { Check, Star, Phone, ArrowLeft, Shield, Clock, MapPin, Plane, Hotel, Bus, FileText } from "lucide-react";
 import { wafdWhatsAppLink, WAFD_PHONE_DISPLAY, WAFD_PHONE } from "../lib/wafd-constants";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useSiteData } from "@/contexts/SiteDataContext";
+
+type PkgItem = {
+  id: string;
+  name: string;
+  subtitle: string;
+  duration: string;
+  badge: string | null;
+  color: string;
+  features: { icon: typeof Check; text: string }[];
+  notIncluded: string[];
+  whatsappMsg: string;
+};
+
+const PKG_COLORS = ["from-slate-600 to-slate-800", "from-teal-600 to-teal-800", "from-amber-600 to-amber-800"];
 
 export default function Packages() {
   const { t, dir } = useLanguage();
+  const { packages: dbPackages } = useSiteData();
 
-  const packages = [
+  // القيم الاحتياطية (تظهر فقط عند تعذّر الجلب من غيث) — تحافظ على عمل الصفحة.
+  const fallbackPackages: PkgItem[] = [
     {
       id: "economy",
-      nameKey: "economy",
       name: t.packages.filterEconomy,
       subtitle: t.packages.economySubtitle,
-      price: "١٩٩٠",
-      currency: t.track.sar,
       duration: t.packages.days7,
       badge: null,
       color: "from-slate-600 to-slate-800",
-      accentColor: "oklch(0.52 0.12 185)",
       features: [
         { icon: FileText, text: t.packages.umrahVisa },
         { icon: Plane, text: t.packages.roundTrip },
@@ -30,25 +43,18 @@ export default function Packages() {
         { icon: Bus, text: t.packages.airportTransfers },
         { icon: MapPin, text: t.packages.visitMosques },
       ],
-      notIncluded: [
-        t.packages.privateGuide,
-        t.packages.mealsSimple,
-      ],
+      notIncluded: [t.packages.privateGuide, t.packages.mealsSimple],
       whatsappMsg: dir === "rtl"
-        ? "السلام عليكم، أود الاستفسار عن الباقة الاقتصادية للعمرة (١٩٩٠ ريال / ٧ أيام)"
-        : "Hello, I'd like to inquire about the Economy Umrah Package (1990 SAR / 7 days)",
+        ? "السلام عليكم، أود الاستفسار عن الباقة الاقتصادية للعمرة (٧ أيام)"
+        : "Hello, I'd like to inquire about the Economy Umrah Package (7 days)",
     },
     {
       id: "standard",
-      nameKey: "standard",
       name: t.packages.filterStandard,
       subtitle: t.packages.familySubtitle,
-      price: "٢٩٩٠",
-      currency: t.track.sar,
       duration: t.packages.days10,
       badge: t.packages.mostPopular,
       color: "from-teal-600 to-teal-800",
-      accentColor: "oklch(0.52 0.12 185)",
       features: [
         { icon: FileText, text: t.packages.umrahVisa },
         { icon: Plane, text: t.packages.roundTrip },
@@ -59,20 +65,16 @@ export default function Packages() {
       ],
       notIncluded: [t.packages.mealsSimple],
       whatsappMsg: dir === "rtl"
-        ? "السلام عليكم، أود الاستفسار عن الباقة الأساسية للعمرة (٢٩٩٠ ريال / ١٠ أيام)"
-        : "Hello, I'd like to inquire about the Standard Umrah Package (2990 SAR / 10 days)",
+        ? "السلام عليكم، أود الاستفسار عن الباقة الأساسية للعمرة (١٠ أيام)"
+        : "Hello, I'd like to inquire about the Standard Umrah Package (10 days)",
     },
     {
       id: "premium",
-      nameKey: "vip",
       name: t.packages.filterVIP,
       subtitle: t.packages.premiumSubtitle,
-      price: "٤٩٩٠",
-      currency: t.track.sar,
       duration: t.packages.days14,
       badge: "VIP",
       color: "from-amber-600 to-amber-800",
-      accentColor: "oklch(0.72 0.09 75)",
       features: [
         { icon: FileText, text: t.packages.expressVisa },
         { icon: Plane, text: t.packages.businessFlight },
@@ -85,10 +87,25 @@ export default function Packages() {
       ],
       notIncluded: [],
       whatsappMsg: dir === "rtl"
-        ? "السلام عليكم، أود الاستفسار عن الباقة المميزة VIP للعمرة (٤٩٩٠ ريال / ١٤ يوم)"
-        : "Hello, I'd like to inquire about the VIP Premium Umrah Package (4990 SAR / 14 days)",
+        ? "السلام عليكم، أود الاستفسار عن الباقة المميزة VIP للعمرة (١٤ يوم)"
+        : "Hello, I'd like to inquire about the VIP Premium Umrah Package (14 days)",
     },
   ];
+
+  // المحتوى الحيّ من غيث (يُحرَّر من لوحة التحكم) — يحلّ محل القيم الاحتياطية فور توفّره.
+  const packages: PkgItem[] = dbPackages.length
+    ? dbPackages.map((p, i) => ({
+        id: p.slug,
+        name: p.name,
+        subtitle: p.subtitle ?? "",
+        duration: p.durationLabel ?? "",
+        badge: p.badge && p.badge.trim() ? p.badge : null,
+        color: PKG_COLORS[i % PKG_COLORS.length],
+        features: (p.features ?? []).map((text) => ({ icon: Check, text })),
+        notIncluded: p.notIncluded ?? [],
+        whatsappMsg: `السلام عليكم، أود الاستفسار عن ${p.name}${p.durationLabel ? ` (${p.durationLabel})` : ""}`,
+      }))
+    : fallbackPackages;
 
   const faqs = [
     {
@@ -163,8 +180,8 @@ export default function Packages() {
         <div className="container max-w-5xl mx-auto">
           <div className="grid md:grid-cols-3 gap-8 items-start">
             {packages.map((pkg, i) => {
-              const isPopular = pkg.badge === t.packages.mostPopular;
-              const isVIP = pkg.badge === "VIP";
+              const isVIP = /vip/i.test(pkg.badge ?? "");
+              const isPopular = !!pkg.badge && !isVIP;
               return (
                 <motion.div
                   key={pkg.id}
