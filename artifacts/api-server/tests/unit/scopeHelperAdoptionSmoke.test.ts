@@ -570,7 +570,9 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // +1 total: routes/fleet-driver-hours.ts (أجر السائق بالساعة، الدفعة 1).
       // وحدة تحكّم رفيعة — كل وصول للبيانات والعزل الإيجاري في lib/fleet/driverHours.ts،
       // فالراوت بلا scope مباشر (manualOnly دون تغيير).
-      total: 155,
+      // +1 total: routes/hr-driver-pay.ts (معدّلات أجر السائق، الدفعة 2). وحدة
+      // تحكّم رفيعة كذلك — العزل في lib/hr/driverPayRates.ts (manualOnly دون تغيير).
+      total: 156,
       helperUsers: 39,
       manualOnly: 110,
     });

@@ -207,6 +207,7 @@ import disciplineRouter from "./hr-discipline.js";
 import orgRouter from "./org.js";
 import loansRouter from "./hr-loans.js";
 import overtimeRouter from "./hr-overtime.js";
+import driverPayRouter from "./hr-driver-pay.js"; // معدّلات أجر السائق — الدفعة 2
 import exitRouter from "./hr-exit.js";
 import wpsRouter from "./hr-wps.js";
 import complianceRouter from "./hr-compliance.js";
@@ -490,6 +491,7 @@ router.use("/hr", requireModule("hr"), hrRouter);
 router.use("/hr/discipline", requireModule("hr"), disciplineRouter);
 router.use("/hr", requireModule("hr"), loansRouter);
 router.use("/hr", requireModule("hr"), overtimeRouter);
+router.use("/hr", requireModule("hr"), driverPayRouter); // معدّلات أجر السائق — الدفعة 2
 router.use("/hr", requireModule("hr"), exitRouter);
 router.use("/hr", requireModule("hr"), wpsRouter);
 router.use("/hr", requireModule("hr"), complianceRouter);

@@ -268,6 +268,7 @@ export const allNavSections: NavSection[] = [
         { label: "الرواتب والمستحقات", path: "/hr/payroll", icon: DollarSign, children: [
           { label: "مسيرات الرواتب", path: "/hr/payroll", icon: DollarSign, subKey: "payroll" },
           { label: "مكونات الرواتب", path: "/hr/payroll/salary-components", icon: Percent, subKey: "payroll" },
+          { label: "معدّلات أجر السائق", path: "/hr/driver-pay-rates", icon: Percent, subKey: "payroll", perm: "hr.driver_pay:list" },
           { label: "سلف الموظفين", path: "/hr/loans", icon: Wallet, subKey: "payroll" },
           { label: "مكافأة نهاية الخدمة", path: "/hr/gratuity", icon: Banknote, subKey: "payroll" },
           { label: "الاستحقاقات الشهرية", path: "/hr/accruals", icon: ListChecks, subKey: "payroll" },
