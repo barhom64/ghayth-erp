@@ -2,13 +2,13 @@
  * مساحتي — بطاقة الموظف والاختصارات الشخصية
  */
 import React, { useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { GScreen, GCard, GAvatar, GText, GLoadingState, GStatusBadge, GEmptyState } from '@workspace/ui-native';
+import { GScreen, GCard, GAvatar, GText, GStatusBadge } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
-import { useList } from '@/hooks/useApi';
+import { useList, apiFetch } from '@/hooks/useApi';
 import { useAuth, type Assignment } from '@/context/AuthContext';
 import { statusBadge } from '@/lib/moduleSections';
 import { canApprove } from '@/lib/modules';
@@ -73,16 +73,14 @@ function AssignmentSwitcherModal({ assignments, currentCompanyId, onSwitch, onCl
 
 export default function MeScreen() {
   const c = useColors();
-  const { user, assignments, logout, switchAssignment } = useAuth();
+  const { user, assignments, logout, switchAssignment, refreshUser } = useAuth();
   const router = useRouter();
   const qc = useQueryClient();
-  const { data, isLoading, isError } = useList<MySpaceData>('/api/my-space');
+  const { data, isLoading } = useList<MySpaceData>('/api/my-space');
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [switching, setSwitching] = useState(false);
+  const [savingPref, setSavingPref] = useState(false);
   const isManager = canApprove(user?.userRoles);
-
-  if (isLoading) return <GLoadingState text="جارٍ التحميل…" />;
-  if (isError) return <GEmptyState icon="alert-circle-outline" title="تعذّر تحميل بياناتك" description="تحقق من اتصالك وحاول مجدداً" />;
 
   const att = data?.attendance;
   const annualLeave = data?.leaveBalances?.find(b =>
@@ -108,6 +106,16 @@ export default function MeScreen() {
       { text: 'إلغاء', style: 'cancel' },
       { text: 'خروج', style: 'destructive', onPress: logout },
     ]);
+  };
+
+  const handleCalendarToggle = async () => {
+    const next = user?.preferredCalendar === 'hijri' ? 'gregorian' : 'hijri';
+    setSavingPref(true);
+    try {
+      await apiFetch('/api/auth/preferences', { method: 'PATCH', body: JSON.stringify({ preferredCalendar: next }) });
+      await refreshUser();
+    } catch { /* silent — server may not have this endpoint yet */ }
+    finally { setSavingPref(false); }
   };
 
   return (
@@ -154,22 +162,25 @@ export default function MeScreen() {
       <View style={styles.cardsRow}>
         <GCard style={{ flex: 1 }}>
           <GText variant="caption" color={c.textMuted}>حضور اليوم</GText>
-          {att ? <GStatusBadge status={statusBadge(att.status)?.label ?? att.status} size="sm" /> : <GText variant="caption" color={c.textFaint}>—</GText>}
+          {isLoading ? <ActivityIndicator size="small" color={c.brand} style={{ marginTop: 4 }} /> :
+            att ? <GStatusBadge status={statusBadge(att.status)?.label ?? att.status} size="sm" /> : <GText variant="caption" color={c.textFaint}>—</GText>}
           {att?.checkIn ? <GText variant="caption" color={c.textMuted} style={{ marginTop: 4 }}>دخول: {att.checkIn}</GText> : null}
         </GCard>
         <GCard style={{ flex: 1 }}>
           <GText variant="caption" color={c.textMuted}>رصيد الإجازة</GText>
-          <GText variant="subheading" style={{ marginTop: 4 }}>{annualLeave?.remaining ?? '—'}</GText>
+          {isLoading ? <ActivityIndicator size="small" color={c.brand} style={{ marginTop: 4 }} /> :
+            <GText variant="subheading" style={{ marginTop: 4 }}>{annualLeave?.remaining ?? '—'}</GText>}
           <GText variant="caption" color={c.textFaint}>يوم متبقٍ</GText>
         </GCard>
         <GCard style={{ flex: 1 }}>
           <GText variant="caption" color={c.textMuted}>آخر راتب</GText>
-          {salary ? (
-            <>
-              <GText variant="subheading" style={{ marginTop: 4 }}>{Number(salary.netSalary ?? 0).toLocaleString('ar-SA')}</GText>
-              <GText variant="caption" color={c.textFaint}>{salary.currency ?? 'ر.س'} — {salary.period ?? '—'}</GText>
-            </>
-          ) : <GText variant="caption" color={c.textFaint}>—</GText>}
+          {isLoading ? <ActivityIndicator size="small" color={c.brand} style={{ marginTop: 4 }} /> :
+            salary ? (
+              <>
+                <GText variant="subheading" style={{ marginTop: 4 }}>{Number(salary.netSalary ?? 0).toLocaleString('ar-SA')}</GText>
+                <GText variant="caption" color={c.textFaint}>{salary.currency ?? 'ر.س'} — {salary.period ?? '—'}</GText>
+              </>
+            ) : <GText variant="caption" color={c.textFaint}>—</GText>}
         </GCard>
       </View>
 
@@ -223,6 +234,26 @@ export default function MeScreen() {
             <Ionicons name="shield-checkmark-outline" size={15} color={c.textFaint} />
           </View>
         ) : null}
+      </GCard>
+
+      {/* التفضيلات */}
+      <GCard style={{ marginHorizontal: 16, marginTop: 12 }}>
+        <GText variant="label" color={c.textMuted} style={{ textAlign: 'right', marginBottom: 8 }}>التفضيلات</GText>
+        <Pressable
+          onPress={handleCalendarToggle}
+          disabled={savingPref}
+          style={[styles.infoRow, { opacity: savingPref ? 0.6 : 1 }]}
+        >
+          {savingPref
+            ? <ActivityIndicator size="small" color={c.brand} />
+            : <Text style={{ fontSize: 13, color: c.brand, fontWeight: '600' }}>
+                {user?.preferredCalendar === 'hijri' ? 'هجري' : 'ميلادي'}
+              </Text>}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={{ fontSize: 13, color: c.text }}>التقويم</Text>
+            <Ionicons name="calendar-outline" size={15} color={c.textFaint} />
+          </View>
+        </Pressable>
       </GCard>
 
       {/* تسجيل الخروج */}
