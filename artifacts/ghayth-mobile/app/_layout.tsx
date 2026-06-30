@@ -1209,7 +1209,27 @@ function AuthGate() {
       <Stack.Screen name="transport/route-pattern-detail" options={{ title: 'نمط المسار' }} />
       <Stack.Screen name="warehouse/category-detail" options={{ title: 'تصنيف المستودع' }} />
       <Stack.Screen name="warehouse/serial-detail" options={{ title: 'الرقم التسلسلي' }} />
-      <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
+      <Stack.Screen name="recruitment/postings" options={{ title: 'الوظائف الشاغرة' }} />
+            <Stack.Screen name="recruitment/posting-detail" options={{ title: 'تفاصيل الوظيفة' }} />
+            <Stack.Screen name="recruitment/applications" options={{ title: 'طلبات التوظيف' }} />
+            <Stack.Screen name="recruitment/application-detail" options={{ title: 'تفاصيل الطلب' }} />
+            <Stack.Screen name="recruitment/stats" options={{ title: 'إحصائيات التوظيف' }} />
+            <Stack.Screen name="training/programs" options={{ title: 'برامج التدريب' }} />
+            <Stack.Screen name="training/program-detail" options={{ title: 'تفاصيل البرنامج' }} />
+            <Stack.Screen name="training/enrollments" options={{ title: 'تسجيلات التدريب' }} />
+            <Stack.Screen name="training/enrollment-detail" options={{ title: 'تفاصيل التسجيل' }} />
+            <Stack.Screen name="training/stats" options={{ title: 'إحصائيات التدريب' }} />
+            <Stack.Screen name="cargo/manifests" options={{ title: 'بيانات الشحن' }} />
+            <Stack.Screen name="cargo/manifest-detail" options={{ title: 'تفاصيل الشحنة' }} />
+            <Stack.Screen name="intelligence/alerts" options={{ title: 'تنبيهات الذكاء التشغيلي' }} />
+            <Stack.Screen name="intelligence/kpis" options={{ title: 'مؤشرات الأداء الرئيسية' }} />
+            <Stack.Screen name="intelligence/overview" options={{ title: 'نظرة عامة - الذكاء التشغيلي' }} />
+            <Stack.Screen name="intelligence/suggestions" options={{ title: 'اقتراحات الذكاء التشغيلي' }} />
+            <Stack.Screen name="intelligence/seasonal-patterns" options={{ title: 'الأنماط الموسمية' }} />
+            <Stack.Screen name="intelligence/recommendations" options={{ title: 'التوصيات الذكية' }} />
+            <Stack.Screen name="intelligence/insights-summary" options={{ title: 'ملخص الرؤى الذكية' }} />
+            <Stack.Screen name="intelligence/proactive-insights" options={{ title: 'الرؤى الاستباقية' }} />
+            <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
   );
