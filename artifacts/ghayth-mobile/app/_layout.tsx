@@ -512,6 +512,12 @@ function AuthGate() {
       <Stack.Screen name="crm/clients" options={{ title: 'عملاء CRM' }} />
       <Stack.Screen name="hr/excuse-requests" options={{ title: 'طلبات الاستئذان' }} />
       <Stack.Screen name="hr/violations" options={{ title: 'مخالفات الموارد البشرية' }} />
+      <Stack.Screen name="hr/disciplines" options={{ title: 'الإجراءات التأديبية' }} />
+      <Stack.Screen name="hr/evaluations" options={{ title: 'تقييمات الأداء' }} />
+      <Stack.Screen name="transport/itineraries" options={{ title: 'خطط الرحلات' }} />
+      <Stack.Screen name="transport/bookings" options={{ title: 'حجوزات النقل' }} />
+      <Stack.Screen name="transport/dispatch-orders" options={{ title: 'أوامر التوزيع' }} />
+      <Stack.Screen name="requests/requests" options={{ title: 'الطلبات' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
