@@ -47,6 +47,9 @@ export const NAV_MODULES: NavModule[] = [
   { key: "legal", label: "الشؤون القانونية", icon: "shield-checkmark-outline", built: true },
   { key: "requests", label: "الطلبات", icon: "file-tray-full-outline", built: true },
   { key: "governance", label: "الحوكمة", icon: "ribbon-outline", built: true },
+  { key: "comms", label: "التواصل", icon: "chatbubbles-outline", built: true },
+  { key: "bi", label: "التقارير والتحليلات", icon: "analytics-outline", built: true },
+  { key: "admin", label: "إدارة النظام", icon: "settings-outline", built: true },
 ];
 
 const ALWAYS_VISIBLE = new Set(["dashboard", "my-space", "notifications"]);
@@ -78,6 +81,9 @@ export function isModuleVisible(key: string, allowed: Set<string>, level = 0): b
   // Umrah nav is gated on the `operations` grant (routes use requireModule("operations")).
   if (key === "umrah") return allowed.has("operations") || allowed.has("umrah");
   if (key === "operations") return allowed.has("operations");
+  if (key === "admin") return level >= 90;
+  if (key === "bi") return level >= 50 && allowed.has("bi");
+  if (key === "comms") return allowed.has("comms");
   return allowed.has(key);
 }
 

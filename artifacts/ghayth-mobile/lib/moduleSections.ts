@@ -500,6 +500,16 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       { key: "salary-advances", label: "سلف الرواتب", icon: "wallet-outline", endpoint: "/api/finance/salary-advances", titleFields: ["ref"], subtitleFields: ["employeeName"], statusField: "status", amountFields: ["amount"], dateFields: ["createdAt"] },
       { key: "recurring-journals", label: "القيود الدورية", icon: "repeat-outline", endpoint: "/api/finance/recurring-journals", titleFields: ["name"], subtitleFields: ["frequency"], dateFields: ["nextRunDate"] },
       { key: "obligations", label: "الالتزامات", icon: "checkmark-circle-outline", endpoint: "/api/obligations", titleFields: ["title"], subtitleFields: ["obligationType", "entityType"], statusField: "status", dateFields: ["dueAt"] },
+      { key: "bank-reconciliation", label: "تسوية البنوك", icon: "swap-horizontal-outline", endpoint: "/api/finance/bank-reconciliation", titleFields: ["ref", "bankAccount"], subtitleFields: ["bankName"], statusField: "status", dateFields: ["statementDate"] },
+      { key: "fixed-assets", label: "الأصول الثابتة", icon: "home-outline", endpoint: "/api/finance/fixed-assets", titleFields: ["name", "assetCode"], subtitleFields: ["category", "location"], statusField: "status", amountFields: ["acquisitionCost", "bookValue"], dateFields: ["acquisitionDate"] },
+      { key: "ar-aging", label: "تقادم الذمم المدينة", icon: "trending-up-outline", endpoint: "/api/finance/ar-aging", titleFields: ["clientName"], subtitleFields: ["bucket"], amountFields: ["balance", "overdue"] },
+      { key: "ap-aging", label: "تقادم الذمم الدائنة", icon: "trending-down-outline", endpoint: "/api/finance/ap-aging", titleFields: ["supplierName", "vendorName"], subtitleFields: ["bucket"], amountFields: ["balance", "overdue"] },
+      { key: "bad-debt", label: "مخصص الديون المشكوك فيها", icon: "alert-circle-outline", endpoint: "/api/finance/bad-debt", titleFields: ["clientName"], subtitleFields: ["agingBucket"], amountFields: ["amount", "provision"], dateFields: ["dueDate"] },
+      { key: "cash-flow", label: "بيان التدفقات النقدية", icon: "cash-outline", endpoint: "/api/finance/cash-flow-statement", titleFields: ["period", "label"], subtitleFields: ["category"], amountFields: ["amount"] },
+      { key: "bank-accounts", label: "الحسابات البنكية", icon: "card-outline", endpoint: "/api/finance/bank-accounts", titleFields: ["bankName", "accountName"], subtitleFields: ["iban", "currency"], statusField: "status", amountFields: ["balance"] },
+      { key: "tax-returns", label: "الإقرارات الضريبية", icon: "document-text-outline", endpoint: "/api/finance/tax-returns", titleFields: ["period", "ref"], subtitleFields: ["type"], statusField: "status", amountFields: ["vatAmount", "totalAmount"], dateFields: ["dueDate"] },
+      { key: "fiscal-periods", label: "الفترات المالية", icon: "calendar-outline", endpoint: "/api/finance/fiscal-periods-v2", titleFields: ["name", "period"], subtitleFields: ["year"], statusField: "status", dateFields: ["startDate", "endDate"] },
+      { key: "commitments", label: "الالتزامات التعاقدية", icon: "link-outline", endpoint: "/api/finance/commitments", titleFields: ["ref", "description"], subtitleFields: ["counterparty", "type"], statusField: "status", amountFields: ["amount"], dateFields: ["startDate"] },
     ],
   },
   fleet: {
@@ -872,6 +882,9 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
+      { key: "categories", label: "تصنيفات المنتجات", icon: "list-outline", endpoint: "/api/warehouse/categories", titleFields: ["name"], subtitleFields: ["parentName", "code"] },
+      { key: "purchase-orders", label: "أوامر شراء المستودع", icon: "cart-outline", endpoint: "/api/warehouse/purchase-orders", titleFields: ["ref", "poNumber"], subtitleFields: ["supplierName"], statusField: "status", amountFields: ["totalAmount"], dateFields: ["orderDate"] },
+      { key: "cycle-counts", label: "جرد المخزون", icon: "calculator-outline", endpoint: "/api/warehouse/cycle-counts", titleFields: ["ref", "cycle"], subtitleFields: ["location", "status"], statusField: "status", dateFields: ["startDate"] },
     ],
   },
   operations: {
@@ -880,6 +893,9 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
     sections: [
       { key: "projects", label: "المشاريع", icon: "briefcase-outline", endpoint: "/api/projects", titleFields: ["name", "projectName"], subtitleFields: ["code"], statusField: "status", amountFields: ["budget"], dateFields: ["startDate"] },
       { key: "tasks", label: "المهام", icon: "checkbox-outline", endpoint: "/api/tasks", titleFields: ["title", "name"], subtitleFields: ["assigneeName", "priority"], statusField: "status", dateFields: ["dueDate"] },
+      { key: "milestones", label: "المعالم والإنجازات", icon: "flag-outline", endpoint: "/api/projects/milestones", titleFields: ["title", "name"], subtitleFields: ["projectName"], statusField: "status", amountFields: ["budget"], dateFields: ["dueDate"] },
+      { key: "issues", label: "المشاكل والعوائق", icon: "alert-circle-outline", endpoint: "/api/projects/issues", titleFields: ["title", "description"], subtitleFields: ["projectName", "severity"], statusField: "status", dateFields: ["createdAt"] },
+      { key: "operations-center", label: "مركز العمليات", icon: "construct-outline", endpoint: "/api/operations-center/dashboard", titleFields: ["title", "summary"], subtitleFields: ["status", "assigneeName"], statusField: "status", dateFields: ["date"] },
     ],
   },
   umrah: {
@@ -1199,6 +1215,9 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
+      { key: "leads", label: "العملاء المحتملون", icon: "person-add-outline", endpoint: "/api/crm/pipeline", titleFields: ["name", "clientName", "leadName"], subtitleFields: ["phone", "source", "email"], statusField: "status", dateFields: ["createdAt"] },
+      { key: "activities", label: "الأنشطة والمتابعات", icon: "checkmark-circle-outline", endpoint: "/api/crm/activities", titleFields: ["title", "subject", "activityType"], subtitleFields: ["relatedName", "assigneeName"], statusField: "status", dateFields: ["dueDate", "createdAt"] },
+      { key: "contracts", label: "العقود التجارية", icon: "document-text-outline", endpoint: "/api/crm/contracts", titleFields: ["title", "ref"], subtitleFields: ["clientName"], statusField: "status", amountFields: ["value"], dateFields: ["startDate"] },
     ],
   },
   documents: {
@@ -1274,6 +1293,8 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
     key: "support",
     label: "الدعم",
     sections: [
+      { key: "sla", label: "اتفاقيات مستوى الخدمة", icon: "speedometer-outline", endpoint: "/api/support/sla", titleFields: ["name", "title"], subtitleFields: ["category", "priority"], statusField: "status" },
+      { key: "categories", label: "تصنيفات الدعم", icon: "list-outline", endpoint: "/api/support/categories", titleFields: ["name"], subtitleFields: ["parentName"] },
       {
         key: "tickets", label: "التذاكر", icon: "help-buoy-outline", endpoint: "/api/support/tickets",
         titleFields: ["subject", "title"], subtitleFields: ["ticketNumber", "clientName", "priority"], statusField: "status", dateFields: ["createdAt"],
@@ -1348,6 +1369,8 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
+      { key: "leads", label: "قائمة الجمهور المستهدف", icon: "people-outline", endpoint: "/api/marketing/leads", titleFields: ["name", "email"], subtitleFields: ["source", "campaign"], statusField: "status", dateFields: ["createdAt"] },
+      { key: "email-campaigns", label: "حملات البريد", icon: "mail-outline", endpoint: "/api/marketing/email-campaigns", titleFields: ["name", "subject"], subtitleFields: ["listName"], statusField: "status", dateFields: ["scheduledAt"] },
     ],
   },
   property: {
@@ -1471,6 +1494,10 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
+      { key: "tenants", label: "المستأجرون", icon: "person-outline", endpoint: "/api/properties/tenants", titleFields: ["name", "tenantName"], subtitleFields: ["phone", "email", "nationalId"], statusField: "status" },
+      { key: "payments", label: "دفعات الإيجار", icon: "cash-outline", endpoint: "/api/properties/payments", titleFields: ["ref", "reference"], subtitleFields: ["tenantName", "unitName"], statusField: "status", amountFields: ["amount"], dateFields: ["dueDate", "paidDate"] },
+      { key: "owners", label: "الملاك", icon: "people-circle-outline", endpoint: "/api/properties/owners", titleFields: ["name", "ownerName"], subtitleFields: ["phone", "email"], statusField: "status" },
+      { key: "inspections", label: "عمليات الفحص", icon: "eye-outline", endpoint: "/api/properties/inspections", titleFields: ["ref", "type"], subtitleFields: ["unitName", "inspectorName"], statusField: "status", dateFields: ["inspectionDate"] },
     ],
   },
   legal: {
@@ -1539,7 +1566,8 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
-      { key: "sessions", label: "الجلسات القادمة", icon: "calendar-outline", endpoint: "/api/legal/sessions/upcoming", titleFields: ["caseTitle", "caseNumber"], subtitleFields: ["location", "court"], statusField: "status", dateFields: ["sessionDate"] },
+      { key: "sessions", label: "جلسات التقاضي", icon: "calendar-outline", endpoint: "/api/legal/sessions/upcoming", titleFields: ["caseTitle", "caseNumber"], subtitleFields: ["location", "court"], statusField: "status", dateFields: ["sessionDate"] },
+      { key: "judgments", label: "الأحكام", icon: "ribbon-outline", endpoint: "/api/legal/judgments", titleFields: ["caseTitle", "ref"], subtitleFields: ["court", "judgmentType"], statusField: "status", dateFields: ["judgmentDate"] },
     ],
   },
   requests: {
@@ -1700,6 +1728,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
+      { key: "kpis", label: "مؤشرات الأداء", icon: "speedometer-outline", endpoint: "/api/governance/kpis", titleFields: ["title", "name"], subtitleFields: ["category", "unit"], statusField: "status", amountFields: ["current", "target"] },
     ],
   },
   bi: {
@@ -1779,6 +1808,13 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
         },
       },
       { key: "roles", label: "الأدوار والصلاحيات", icon: "key-outline", endpoint: "/api/admin/roles", titleFields: ["name"], subtitleFields: ["slug", "level"] },
+      { key: "audit-logs", label: "سجلات التدقيق", icon: "eye-outline", endpoint: "/api/audit-logs", titleFields: ["action", "event"], subtitleFields: ["userName", "entityType"], dateFields: ["createdAt"] },
+      { key: "activity-log", label: "سجل الأنشطة", icon: "list-outline", endpoint: "/api/activity-log", titleFields: ["event", "description"], subtitleFields: ["userName", "module"], dateFields: ["createdAt"] },
+      { key: "job-titles", label: "المسميات الوظيفية", icon: "id-card-outline", endpoint: "/api/admin/job-titles", titleFields: ["title", "name"], subtitleFields: ["level", "department"] },
+      { key: "integrations", label: "التكاملات", icon: "git-merge-outline", endpoint: "/api/admin/integrations", titleFields: ["name", "provider"], subtitleFields: ["type", "status"], statusField: "status" },
+      { key: "companies", label: "الشركات", icon: "business-outline", endpoint: "/api/settings/companies", titleFields: ["name"], subtitleFields: ["taxNumber", "crNumber"], statusField: "status" },
+      { key: "event-monitor", label: "مراقب الأحداث", icon: "pulse-outline", endpoint: "/api/admin/event-outbox", titleFields: ["eventType", "event"], subtitleFields: ["entityType", "status"], statusField: "status", dateFields: ["createdAt"] },
+      { key: "posting-failures", label: "أخطاء الترحيل", icon: "warning-outline", endpoint: "/api/admin/posting-failures", titleFields: ["error", "message"], subtitleFields: ["source", "entityType"], statusField: "status", dateFields: ["failedAt"] },
     ],
   },
   settings: {
@@ -1829,6 +1865,39 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
+      { key: "numbering", label: "تسلسل الترقيم", icon: "code-slash-outline", endpoint: "/api/numbering", titleFields: ["label", "prefix"], subtitleFields: ["module", "lastNumber"] },
+      { key: "custom-fields", label: "الحقول المخصصة", icon: "code-outline", endpoint: "/api/custom-fields", titleFields: ["label", "name"], subtitleFields: ["entityType", "type"], statusField: "status" },
+    ],
+  },
+  comms: {
+    key: "comms",
+    label: "التواصل والمراسلات",
+    sections: [
+      {
+        key: "correspondence", label: "المراسلات الرسمية", icon: "mail-outline", endpoint: "/api/correspondence",
+        titleFields: ["subject", "ref"], subtitleFields: ["direction", "recipientName"], statusField: "status", dateFields: ["createdAt"],
+        write: {
+          moduleKey: "comms",
+          createFields: [
+            { name: "subject", label: "الموضوع", type: "text", required: true },
+            {
+              name: "direction", label: "الاتجاه", type: "select", required: true,
+              options: [
+                { value: "outgoing", label: "صادر" },
+                { value: "incoming", label: "وارد" },
+              ],
+            },
+            { name: "recipientName", label: "المرسَل إليه", type: "text" },
+            { name: "content", label: "المحتوى", type: "textarea" },
+          ],
+          actions: [
+            { key: "send", label: "إرسال", icon: "send-outline", method: "POST", path: (id) => `/api/correspondence/${id}/send`, confirm: "هل تريد إرسال المراسلة؟", successText: "تم الإرسال", showWhenStatus: ["draft"] },
+          ],
+        },
+      },
+      { key: "inbox", label: "صندوق الوارد", icon: "mail-unread-outline", endpoint: "/api/inbox", titleFields: ["subject", "from"], subtitleFields: ["mailboxName", "from"], statusField: "status", dateFields: ["receivedAt", "createdAt"] },
+      { key: "conversations", label: "المحادثات", icon: "chatbubbles-outline", endpoint: "/api/inbox/conversations", titleFields: ["subject", "clientName"], subtitleFields: ["channel", "status"], statusField: "status", dateFields: ["lastMessageAt", "updatedAt"] },
+      { key: "mailboxes", label: "صناديق البريد", icon: "server-outline", endpoint: "/api/mailboxes", titleFields: ["name", "email"], subtitleFields: ["type", "email"], statusField: "status" },
     ],
   },
 };
