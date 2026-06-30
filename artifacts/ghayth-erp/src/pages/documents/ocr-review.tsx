@@ -57,13 +57,16 @@ const FIELD_LABELS: Record<string, string> = {
 // خيارات رفع مستند للقراءة الضوئية. الفاتورة تحمل **اتجاه المال صراحةً** (قبض/صرف):
 // مبيعات = قبض (مال داخل)، مشتريات = صرف (مال خارج) — فيميّز النظام عند التأكيد
 // ويفتح النموذج الصحيح. الأنواع الأخرى تُطبَّق على كيان قائم (موظف/مركبة/شركة).
+// ملاحظة: `category` يجب أن تكون من تعداد `DOCUMENT_CATEGORIES` الخلفي
+// (hr · finance · legal · contracts · compliance · operations · fleet · properties ·
+// umrah · marketing · general) — وإلا يرفض /documents/upload الطلب (Invalid enum).
 const UPLOAD_DOC_TYPES: { value: string; label: string; category: string; flow?: "receipt" | "payment" }[] = [
-  { value: "purchase_invoice", label: "فاتورة مشتريات — صرف (مال خارج)", category: "financial", flow: "payment" },
-  { value: "sales_invoice", label: "فاتورة مبيعات — قبض (مال داخل)", category: "financial", flow: "receipt" },
+  { value: "purchase_invoice", label: "فاتورة مشتريات — صرف (مال خارج)", category: "finance", flow: "payment" },
+  { value: "sales_invoice", label: "فاتورة مبيعات — قبض (مال داخل)", category: "finance", flow: "receipt" },
   { value: "iqama", label: "إقامة / هوية", category: "hr" },
   { value: "driving_license", label: "رخصة قيادة", category: "hr" },
-  { value: "vehicle_registration", label: "استمارة مركبة", category: "other" },
-  { value: "commercial_registration", label: "سجل تجاري", category: "official" },
+  { value: "vehicle_registration", label: "استمارة مركبة", category: "fleet" },
+  { value: "commercial_registration", label: "سجل تجاري", category: "compliance" },
 ];
 
 // Which target entity each docType is allowed to apply to. The backend
