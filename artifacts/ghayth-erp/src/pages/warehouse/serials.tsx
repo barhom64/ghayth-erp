@@ -4,7 +4,7 @@ import { useApiQuery, asList, apiFetch } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
 import { WarehouseTabsNav } from "@/components/shared/warehouse-tabs-nav";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { PageStatusBadge, STATUS_MAP } from "@workspace/ui-core";
 import { Button } from "@/components/ui/button";
 import { DataTable, type DataTableColumn, AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";
 import { Hash, Plus } from "lucide-react";
@@ -15,10 +15,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 
-const STATUS_LABELS: Record<string, string> = {
-  in_stock: "في المخزن", reserved: "محجوز", sold: "مُباع",
-  returned: "مرتجع", defective: "تالف", scrapped: "متلف",
-};
+// خيارات الحالة (التغيير + الفلترة) مشتقّة من المصدر القانوني للحالات.
+const SERIAL_STATUS_OPTIONS = Object.entries(STATUS_MAP.serial).map(([value, s]) => ({ value, label: s.label }));
 
 const createSchema = z.object({
   productId: z.coerce.number().int().positive("المنتج مطلوب"),
@@ -62,15 +60,15 @@ export default function WarehouseSerialsPage() {
     { key: "serialNumber", header: "الرقم التسلسلي", cell: (r: any) => <span className="font-mono">{r.serialNumber}</span> },
     { key: "productName", header: "المنتج", cell: (r: any) => r.productName ?? `#${r.productId}` },
     { key: "lotId", header: "الدفعة", cell: (r: any) => r.lotId ? `#${r.lotId}` : "—" },
-    { key: "status", header: "الحالة", cell: (r: any) => <Badge>{STATUS_LABELS[r.status] ?? r.status}</Badge> },
+    { key: "status", header: "الحالة", cell: (r: any) => <PageStatusBadge status={r.status} domain="serial" /> },
     { key: "warrantyExpiry", header: "انتهاء الضمان", cell: (r: any) => r.warrantyExpiry ? formatDateAr(r.warrantyExpiry) : "—" },
     { key: "currentLocation", header: "الموقع", cell: (r: any) => r.currentLocation ?? "—" },
     { key: "actions", header: "إجراءات", cell: (r: any) => (
       <Select value={r.status} onValueChange={(v) => changeStatus(r.id, v)}>
         <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
         <SelectContent>
-          {Object.entries(STATUS_LABELS).map(([v, l]) => (
-            <SelectItem key={v} value={v}>{l}</SelectItem>
+          {SERIAL_STATUS_OPTIONS.map(({ value, label }) => (
+            <SelectItem key={value} value={value}>{label}</SelectItem>
           ))}
         </SelectContent>
       </Select>
@@ -85,7 +83,7 @@ export default function WarehouseSerialsPage() {
       <AdvancedFilters
         config={{
           searchPlaceholder: "بحث برقم تسلسلي أو منتج أو موقع...",
-          statuses: Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label })),
+          statuses: SERIAL_STATUS_OPTIONS,
           showDateRange: false,
         }}
         values={filters}
