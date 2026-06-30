@@ -9,6 +9,7 @@ import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { hashPassword } from "../lib/auth.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { logger } from "../lib/logger.js";
+import { registerEntityParty } from "../lib/partyService.js";
 import type { ClientRow, InvoiceRow } from "../lib/dbTypes.js";
 
 // Local row shapes for the projection-style SELECTs in this file. Keeping
@@ -257,6 +258,16 @@ router.post("/", authorize({ feature: "crm.clients", action: "create" }), async 
     createSubsidiaryAccountsForEntity(scope.companyId, "client", insertedId, name, { branchId: scope.branchId, actorUserId: scope.userId }).catch((e) => logger.error(e, "clients background task failed"));
 
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.created", entity: "clients", entityId: insertedId, details: JSON.stringify({ name, phone, email, classification, source }) }).catch((e) => logger.error(e, "clients background task failed"));
+
+    // Master-data identity (migration 249): link the client to ONE party so a
+    // customer who is also a supplier/employee resolves to a single 360° record
+    // immediately — no waiting for the operator-triggered backfill. Non-fatal.
+    registerEntityParty(scope.companyId, "clients", insertedId, "customer", {
+      displayName: String(name).trim(),
+      phone: phone ?? null,
+      email: email ?? null,
+      kind: type === "government" ? "organization" : "person",
+    }).catch((e) => logger.error(e, "[partyService] clients registration failed"));
 
     res.status(201).json(client);
   } catch (err) {
@@ -548,6 +559,12 @@ router.post("/auto-create", authorize({ feature: "crm.clients", action: "create"
     }).catch((e) => logger.error(e, "clients background task failed"));
 
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.created", entity: "clients", entityId: insertId, details: JSON.stringify({ name: clientName, phone, source }) }).catch((e) => logger.error(e, "clients background task failed"));
+
+    // Master-data identity (migration 249) — auto-created clients link to a
+    // party too, so the on-the-fly customer is deduped/360-resolvable. Non-fatal.
+    registerEntityParty(scope.companyId, "clients", insertId, "customer", {
+      displayName: clientName, phone: phone ?? null, kind: "person",
+    }).catch((e) => logger.error(e, "[partyService] clients auto-create registration failed"));
 
     res.status(201).json({ ...newClient, isNew: true });
   } catch (err) {

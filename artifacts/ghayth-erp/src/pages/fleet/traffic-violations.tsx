@@ -12,6 +12,8 @@ import { AlertTriangle, Plus, CheckCircle, DollarSign } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
+import { useFormContext } from "react-hook-form";
+import { useVehicleDriverDefault } from "@/hooks/use-vehicle-driver-default";
 import {
   PageShell,
   PageStatusBadge,
@@ -59,6 +61,21 @@ const STATUS_OPTIONS = [
   { value: "pending", label: "غير مدفوعة" },
   { value: "paid", label: "مدفوعة" },
 ];
+
+// الكيان يقود التجربة (داخل FormShell): اختيار المركبة يُعبّئ سائقها الحالي
+// تلقائيًا. يقرأ سياق react-hook-form؛ يعامل "none" (لا سائق) كحقل فارغ ليملأ،
+// ولا يطمس اختيارًا يدويًا. لا يرسم شيئًا.
+function ViolationDriverAutofill() {
+  const { watch, setValue } = useFormContext();
+  const vehicleId = watch("vehicleId");
+  const driverId = watch("driverId");
+  useVehicleDriverDefault(
+    vehicleId,
+    driverId === "none" ? "" : driverId,
+    (v) => setValue("driverId", v, { shouldDirty: true }),
+  );
+  return null;
+}
 
 export default function TrafficViolationsPage() {
   const [, navigate] = useLocation();
@@ -254,6 +271,7 @@ export default function TrafficViolationsPage() {
               }}
             >
               <FormGrid cols={3}>
+                <ViolationDriverAutofill />
                 <FormSelectField
                   name="vehicleId"
                   label="المركبة"

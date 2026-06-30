@@ -18,6 +18,7 @@ import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zon
 import { VehicleContextCard, type VehicleContextSection } from "@/components/shared/vehicle-context-card";
 import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { VehicleSelect, SupplierSelect, DriverSelect } from "@/components/shared/entity-selects";
+import { useVehicleDriverDefault, useVehicleMileageDefault } from "@/hooks/use-vehicle-driver-default";
 
 type EventKind = "fuel" | "maintenance" | "insurance";
 
@@ -57,6 +58,9 @@ export default function VehicleEventCreate() {
   const ev = form.event;
   const pending = fuelMut.isPending || maintMut.isPending || insMut.isPending;
   const set = (patch: Partial<typeof INITIAL>) => setForm((f) => ({ ...f, ...patch }));
+  // الكيان يقود التجربة: اختيار المركبة يُعبّئ سائقها المعيَّن تلقائيًا (قابل للتغيير).
+  useVehicleDriverDefault(form.vehicleId, form.driverId, (v) => set({ driverId: v }));
+  useVehicleMileageDefault(form.vehicleId, form.mileageAtFuel, (v) => set({ mileageAtFuel: v }));
 
   const done = (msg: string, to = "/fleet") => {
     clearDraft();

@@ -7,6 +7,7 @@ import {
   Info, CreditCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ContextCardSkeleton, ContextStat, ContextWarning } from "./context-card-kit";
 
 export type ClientContextSection = "invoice" | "opportunity" | "ticket" | "project" | "contract";
 
@@ -79,20 +80,7 @@ export function ClientContextCard({
 
   if (!hasId) return null;
 
-  if (isLoading) {
-    return (
-      <Card className={cn("border-border bg-surface-subtle/50 animate-pulse", className)}>
-        <CardContent className="p-4">
-          <div className="h-4 w-32 bg-gray-200 rounded mb-3" />
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-12 bg-gray-100 rounded" />
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
+  if (isLoading) return <ContextCardSkeleton className={className} />;
 
   if (!data) return null;
 
@@ -195,8 +183,10 @@ export function ClientContextCard({
   );
 }
 
+// Financial KPI tile — now a thin map over the shared ContextStat so the tile
+// markup lives once (context-card-kit). The tone enum picks value + border.
 function FinTile({
-  icon: Icon,
+  icon,
   label,
   value,
   tone,
@@ -206,22 +196,12 @@ function FinTile({
   value: string;
   tone: "neutral" | "green" | "red" | "amber";
 }) {
-  const toneClass =
-    tone === "red" ? "text-status-error-foreground border-status-error-surface" :
-    tone === "green" ? "text-status-success-foreground border-status-success-surface" :
-    tone === "amber" ? "text-status-warning-foreground border-status-warning-surface" :
-    "text-gray-800 border-border";
-  return (
-    <div className={cn("bg-white rounded p-2 border", toneClass.split(" ")[1])}>
-      <div className="flex items-center gap-1 text-xs text-muted-foreground mb-0.5">
-        <Icon className="h-3 w-3" />
-        <span>{label}</span>
-      </div>
-      <div className={cn("text-sm font-semibold", toneClass.split(" ")[0])}>
-        {value}
-      </div>
-    </div>
-  );
+  const [textTone, borderTone] =
+    tone === "red" ? ["text-status-error-foreground", "border-status-error-surface"] :
+    tone === "green" ? ["text-status-success-foreground", "border-status-success-surface"] :
+    tone === "amber" ? ["text-status-warning-foreground", "border-status-warning-surface"] :
+    ["text-gray-800", "border-border"];
+  return <ContextStat icon={icon} label={label} value={value} tone={textTone} borderTone={borderTone} />;
 }
 
 function InvoiceSection({
@@ -254,12 +234,9 @@ function InvoiceSection({
         </div>
       ))}
       {overdueCount > 0 && (
-        <div className="flex items-center gap-1.5 text-xs text-status-error-foreground bg-status-error-surface border border-status-error-surface rounded p-1.5">
-          <AlertTriangle className="h-3 w-3" />
-          <span>
-            يوجد {overdueCount} فاتورة متأخرة — قد يكون التحصيل أولى من فاتورة جديدة
-          </span>
-        </div>
+        <ContextWarning icon={AlertTriangle}>
+          يوجد {overdueCount} فاتورة متأخرة — قد يكون التحصيل أولى من فاتورة جديدة
+        </ContextWarning>
       )}
     </div>
   );

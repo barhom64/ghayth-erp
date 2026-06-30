@@ -12,6 +12,7 @@ import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawd
 import { requestIdempotencyToken, markIdempotencyReplay } from "../lib/requestIdempotency.js";
 import { cascadeDispatchToBooking } from "../lib/transportDispatchCascade.js";
 import { logger } from "../lib/logger.js";
+import { registerEntityParty } from "../lib/partyService.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { hashPassword } from "../lib/auth.js";
 import { issueNumber, voidNumber } from "../lib/numberingService.js";
@@ -525,11 +526,20 @@ router.get("/vehicles", authorize({ feature: "fleet.vehicles", action: "list" })
          GROUP BY "vehicleId"
        )
        SELECT v.*,
+              COALESCE(av."driverId", v."assignedDriverId") AS "currentDriverId",
               d.name AS "driverName",
               COALESCE(gc."govLinkCount", 0)::int AS "govLinkCount",
               ie."insuranceExpiry"
        FROM fleet_vehicles v
-       LEFT JOIN fleet_drivers d ON d.id = v."assignedDriverId" AND d."deletedAt" IS NULL
+       LEFT JOIN LATERAL (
+         SELECT vda."driverId"
+           FROM vehicle_driver_assignments vda
+          WHERE vda."vehicleId" = v.id AND vda."companyId" = v."companyId"
+            AND vda.status = 'active' AND vda."assignmentType" = 'primary'
+          ORDER BY vda."startDate" DESC
+          LIMIT 1
+       ) av ON TRUE
+       LEFT JOIN fleet_drivers d ON d.id = COALESCE(av."driverId", v."assignedDriverId") AND d."deletedAt" IS NULL
        LEFT JOIN gov_counts gc ON gc."entityId" = v.id
        LEFT JOIN insurance_expiry ie ON ie."vehicleId" = v.id
        WHERE ${where} AND v."deletedAt" IS NULL
@@ -789,11 +799,26 @@ router.post("/me/fuel-logs", authorize({ feature: "fleet.driver.me", action: "up
     const mileageAtFuel = Number(b.mileageAtFuel || b.mileage) || null;
     const stationName = b.stationName || b.station || null;
 
-    const { insertId } = await rawExecute(
-      `INSERT INTO fleet_fuel_logs ("companyId","vehicleId","driverId","fuelDate",liters,"costPerLiter","totalCost","mileageAtFuel","stationName","tripId")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [driver.companyId, resolvedVehicleId, driver.id, fuelDate, liters, costPerLiter, totalCost, mileageAtFuel, stationName, validatedTripId]);
-    assertInsert(insertId, "fleet_fuel_logs");
+    // Fuel-log INSERT + odometer advance are wrapped in one transaction so the
+    // two writes are atomic (no partial state if the second fails). The inner
+    // rawExecute calls auto-join the ambient transaction via ALS.
+    const insertId = await withTransaction(async () => {
+      const ins = await rawExecute(
+        `INSERT INTO fleet_fuel_logs ("companyId","vehicleId","driverId","fuelDate",liters,"costPerLiter","totalCost","mileageAtFuel","stationName","tripId")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [driver.companyId, resolvedVehicleId, driver.id, fuelDate, liters, costPerLiter, totalCost, mileageAtFuel, stationName, validatedTripId]);
+      assertInsert(ins.insertId, "fleet_fuel_logs");
+      // Advance the vehicle odometer to the fuel reading (monotonic — GREATEST,
+      // never decreases), so currentMileage stays fresh and the next form
+      // auto-fills the true reading. Mirrors the trip-completion update pattern.
+      if (mileageAtFuel != null) {
+        await rawExecute(
+          `UPDATE fleet_vehicles SET "currentMileage" = GREATEST(COALESCE("currentMileage", 0), $1), "updatedAt" = NOW()
+            WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
+          [mileageAtFuel, resolvedVehicleId, driver.companyId]);
+      }
+      return ins.insertId;
+    });
 
     // مرشّح مصروف للمالية (لا ترحيل مباشر للدفتر) — يُجسّده المحاسب لاحقًا.
     if (totalCost > 0) {
@@ -1739,6 +1764,13 @@ router.post("/drivers", authorize({ feature: "fleet.vehicles", action: "create" 
 
     createSubsidiaryAccountsForEntity(scope.companyId, "driver", insertId, name, { branchId: scope.branchId, actorUserId: scope.userId }).catch((e) => logger.error(e, "fleet background task failed"));
 
+    // Master-data identity (migration 249): link the driver to ONE party so a
+    // driver who is also an employee/client resolves to a single 360° record
+    // immediately. Non-fatal: a registry-link failure must not block creation.
+    registerEntityParty(scope.companyId, "fleet_drivers", insertId, "driver", {
+      displayName: name, nationalId: b.nationalId || null, phone: phone || null, kind: "person",
+    }).catch((e) => logger.error(e, "[partyService] fleet_drivers registration failed"));
+
     createAuditLog({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -1764,7 +1796,30 @@ router.get("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "view
   try {
     const scope = req.scope!;
     const vehicleId = parseId(req.params.id, "id");
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT v.*, d.name AS "driverName", d.phone AS "driverPhone" FROM fleet_vehicles v LEFT JOIN fleet_drivers d ON d.id = v."assignedDriverId" AND d."deletedAt" IS NULL WHERE v.id=$1 AND v."companyId"=$2 AND v."deletedAt" IS NULL`, [vehicleId, scope.companyId]);
+    // Current driver = the ACTIVE PRIMARY row in vehicle_driver_assignments
+    // (the temporal source of truth; one active-primary per vehicle is enforced
+    // by uq_vehicle_active_primary, migration 267). Falls back to the legacy
+    // fleet_vehicles.assignedDriverId for vehicles created before the assignment
+    // model — so no data migration is required and old rows keep resolving.
+    // `currentDriverId` is the unified value; `assignedDriverId` stays in v.* for
+    // backward compatibility. driverName/driverPhone now reflect the CURRENT driver.
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `SELECT v.*,
+              COALESCE(av."driverId", v."assignedDriverId") AS "currentDriverId",
+              d.name AS "driverName", d.phone AS "driverPhone"
+         FROM fleet_vehicles v
+         LEFT JOIN LATERAL (
+           SELECT vda."driverId"
+             FROM vehicle_driver_assignments vda
+            WHERE vda."vehicleId" = v.id AND vda."companyId" = v."companyId"
+              AND vda.status = 'active' AND vda."assignmentType" = 'primary'
+            ORDER BY vda."startDate" DESC
+            LIMIT 1
+         ) av ON TRUE
+         LEFT JOIN fleet_drivers d ON d.id = COALESCE(av."driverId", v."assignedDriverId") AND d."deletedAt" IS NULL
+        WHERE v.id=$1 AND v."companyId"=$2 AND v."deletedAt" IS NULL`,
+      [vehicleId, scope.companyId],
+    );
     if (!row) throw new NotFoundError("المركبة غير موجودة");
     const [trips, maintenance, fuelLogs, insurance] = await Promise.all([
       rawQuery<Record<string, unknown>>(
@@ -3240,8 +3295,12 @@ router.post("/maintenance", authorize({ feature: "fleet.maintenance", action: "c
     );
     const assignedMechanic = b.performedBy || (mechanics[0]?.name ?? null);
 
-    const defaultNextDate = new Date();
-    defaultNextDate.setMonth(defaultNextDate.getMonth() + 3);
+    // Next-service reminder = 3 months from the Riyadh wall-clock date (not the
+    // UTC `new Date()` "now", which drifts the date across the day boundary in
+    // +03). Derived from currentDateInTz so the reminder is anchored to local
+    // time; setUTCMonth on the parsed midnight is calendar-correct.
+    const defaultNextDate = new Date(`${currentDateInTz("Asia/Riyadh")}T00:00:00Z`);
+    defaultNextDate.setUTCMonth(defaultNextDate.getUTCMonth() + 3);
     const effectiveNextServiceDate = b.nextServiceDate || toDateISO(defaultNextDate);
 
     const insertId = await withTransaction(async (client) => {
@@ -3253,6 +3312,15 @@ router.post("/maintenance", authorize({ feature: "fleet.maintenance", action: "c
 
       if (b.vehicleId) {
         await client.query(`UPDATE fleet_vehicles SET status='maintenance', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='available' AND "deletedAt" IS NULL`, [b.vehicleId, scope.companyId]);
+        // Advance the odometer to the service reading (monotonic — GREATEST,
+        // never decreases), keeping currentMileage fresh for the next form.
+        const svcMileage = Number(b.mileageAtService) || null;
+        if (svcMileage != null) {
+          await client.query(
+            `UPDATE fleet_vehicles SET "currentMileage" = GREATEST(COALESCE("currentMileage", 0), $1), "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
+            [svcMileage, b.vehicleId, scope.companyId],
+          );
+        }
       }
 
       return maintId;

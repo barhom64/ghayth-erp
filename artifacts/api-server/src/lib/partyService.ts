@@ -123,7 +123,7 @@ export async function registerEntityParty(
   return partyId;
 }
 
-export interface PartyLinkRow { entityTable: string; entityId: number; role: string }
+export interface PartyLinkRow { entityTable: string; entityId: number; role: string; displayName?: string | null }
 export interface Party360 {
   party: { id: number; companyId: number; kind: string; displayName: string; nationalId: string | null; phone: string | null; email: string | null };
   links: PartyLinkRow[];
@@ -141,7 +141,28 @@ export async function getParty360(companyId: number, partyId: number): Promise<P
     `SELECT "entityTable", "entityId", role FROM party_links WHERE "partyId"=$1 AND "companyId"=$2 ORDER BY "entityTable"`,
     [partyId, companyId],
   );
-  return { party, links };
+  // Enrich each link with the entity's own display name so the 360° screen
+  // shows "محمد سالم (موظف)" not "موظف #12". Table + name column come from the
+  // fixed PARTY_SOURCES allowlist (never user input), and every lookup carries
+  // the companyId predicate. Best-effort: a missing name never fails the view.
+  const enriched: PartyLinkRow[] = [];
+  for (const link of links) {
+    const src = PARTY_SOURCES.find((s) => s.table === link.entityTable);
+    let displayName: string | null = null;
+    if (src) {
+      try {
+        const [row] = await rawQuery<{ name: string | null }>(
+          `SELECT ${src.nameCol} AS name FROM ${src.table} WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
+          [link.entityId, companyId],
+        );
+        displayName = row?.name ?? null;
+      } catch (e) {
+        logger.warn(e, `[partyService] name lookup failed for ${link.entityTable}#${link.entityId}`);
+      }
+    }
+    enriched.push({ ...link, displayName });
+  }
+  return { party, links: enriched };
 }
 
 export interface BackfillResult { table: string; scanned: number; linked: number; }

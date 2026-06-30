@@ -20,6 +20,7 @@ import { MapLocationPicker } from "@/components/shared/map-location-picker";
 import { MultiLegBookingEditor, type BookingLeg, legsToApiPayload } from "@/components/shared/multi-leg-booking-editor";
 import { UmrahContextQuestionnaire } from "@/components/shared/umrah-context-questionnaire";
 import { VehicleSelect, DriverSelect } from "@/components/shared/entity-selects";
+import { useVehicleDriverDefault } from "@/hooks/use-vehicle-driver-default";
 
 // #1733 Comment 9 — booking create form. The operator-side intake
 // surface for the pre-trip pipeline. Field visibility is driven by the
@@ -177,6 +178,8 @@ export default function TransportBookingCreate() {
   const [allowUpgrade, setAllowUpgrade] = useState(false);
   const [requiredExactVehicleId, setRequiredExactVehicleId] = useState("");
   const [requiredExactDriverId, setRequiredExactDriverId] = useState("");
+  // الكيان يقود التجربة: تثبيت مركبة محدّدة يُعبّئ سائقها الحالي تلقائيًا (قابل للتغيير).
+  useVehicleDriverDefault(requiredExactVehicleId, requiredExactDriverId, setRequiredExactDriverId);
 
   // #1812 time-window fields.
   const [pickupWindowStart, setPickupWindowStart] = useState("");
