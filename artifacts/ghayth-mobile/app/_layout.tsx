@@ -523,6 +523,9 @@ function AuthGate() {
       <Stack.Screen name="fleet/traffic-violations" options={{ title: 'مخالفات المرور' }} />
       <Stack.Screen name="warehouse/categories" options={{ title: 'فئات المستودعات' }} />
       <Stack.Screen name="properties/buildings" options={{ title: 'المباني' }} />
+      <Stack.Screen name="hr/transfers" options={{ title: 'نقل الموظفين' }} />
+      <Stack.Screen name="hr/salary-components" options={{ title: 'مكونات الراتب' }} />
+      <Stack.Screen name="hr/positions" options={{ title: 'المناصب الوظيفية' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
