@@ -431,12 +431,16 @@ export const STATUS_MAP = {
   },
 
   // ── Warehouse: serial lifecycle (الأرقام التسلسلية) ────────────────
+  // Mirrors the backend SERIAL_STATUSES set verbatim
+  // (warehouse-advanced.ts:257 + DB check). The previous local page map
+  // offered `defective` (which the PATCH endpoint rejects) and lacked
+  // `warranty_repair` (so those rows showed raw english) — corrected here.
   serial: {
     in_stock:             { label: "في المخزن",       tone: "success"  },
     reserved:             { label: "محجوز",           tone: "info"     },
     sold:                 { label: "مُباع",           tone: "neutral"  },
     returned:             { label: "مرتجع",           tone: "warning"  },
-    defective:            { label: "تالف",            tone: "danger"   },
+    warranty_repair:      { label: "إصلاح بالضمان",   tone: "warning"  },
     scrapped:             { label: "متلف",            tone: "muted"    },
   },
 } as const satisfies Record<string, Record<string, StatusDef>>;
