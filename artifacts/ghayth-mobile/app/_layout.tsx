@@ -798,6 +798,9 @@ function AuthGate() {
       <Stack.Screen name="settings/channels" options={{ title: 'قنوات الاتصال' }} />
       <Stack.Screen name="requests/stats" options={{ title: 'إحصاءات الطلبات' }} />
       <Stack.Screen name="projects/workload" options={{ title: 'عبء العمل' }} />
+      <Stack.Screen name="hr/supervision-lines" options={{ title: 'خطوط الإشراف' }} />
+      <Stack.Screen name="hr/approval-authorities" options={{ title: 'صلاحيات الاعتماد' }} />
+      <Stack.Screen name="hr/scoring-ranking" options={{ title: 'تصنيف الأداء' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
