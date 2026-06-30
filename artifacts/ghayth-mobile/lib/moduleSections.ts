@@ -472,6 +472,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "purchase-orders", label: "أوامر الشراء", icon: "cart-outline", endpoint: "/api/finance/purchase-orders",
         titleFields: ["ref", "orderNumber", "poNumber"], subtitleFields: ["supplierName", "vendorName"], statusField: "status", amountFields: ["totalAmount", "total", "amount"], dateFields: ["createdAt", "date"],
+        detailRoute: "/finance/purchase-order-detail",
         write: {
           moduleKey: "finance",
           detailPath: (id) => `/api/finance/purchase-orders/${id}`,
