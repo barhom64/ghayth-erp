@@ -61,7 +61,12 @@ describe("FIN-P4-SLICE-B §A — postSalesInvoice calls numberingService.issueNu
     expect(METHOD).toMatch(/branchId:\s*request\.branchId/);
     expect(METHOD).toMatch(/entityTable:\s*request\.sourceRefs\.sourceType/);
     expect(METHOD).toMatch(/actorId:\s*request\.createdBy/);
-    expect(METHOD).toMatch(/expectedTiming:\s*["']on_posting["']/);
+    // Unified to 'on_draft' — the route-level creation paths for the same
+    // entities (finance/sales_invoice, umrah/umrah_agent_invoice) issue at
+    // 'on_draft', so a single scheme can only satisfy both the route and the
+    // engine when both declare the same timing. expectedTiming is a pure
+    // consistency assertion and does not change when the number is allocated.
+    expect(METHOD).toMatch(/expectedTiming:\s*["']on_draft["']/);
   });
 });
 
