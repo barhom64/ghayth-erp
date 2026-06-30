@@ -594,7 +594,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
-      { key: "trips", label: "الرحلات", icon: "navigate-outline", endpoint: "/api/fleet/trips", titleFields: ["destination", "ref", "origin"], subtitleFields: ["driverName", "vehiclePlate"], statusField: "status", dateFields: ["tripDate", "startTime", "date"] },
+      { key: "trips", label: "الرحلات", icon: "navigate-outline", endpoint: "/api/fleet/trips", titleFields: ["destination", "ref", "origin"], subtitleFields: ["driverName", "vehiclePlate"], statusField: "status", dateFields: ["tripDate", "startTime", "date"], detailRoute: "/fleet/trip-detail" },
       {
         key: "rental-contracts", label: "عقود التأجير", icon: "document-text-outline", endpoint: "/api/fleet/rental-contracts",
         titleFields: ["contractNumber", "ref"], subtitleFields: ["customerName", "clientName"], statusField: "status", amountFields: ["totalAmount", "total"], dateFields: ["startDate"],
@@ -731,6 +731,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "maintenance", label: "الصيانة", icon: "build-outline", endpoint: "/api/fleet/maintenance",
         titleFields: ["type", "description"], subtitleFields: ["vehiclePlate"], statusField: "status", amountFields: ["cost"], dateFields: ["serviceDate"],
+        detailRoute: "/fleet/maintenance-detail",
         write: {
           moduleKey: "fleet",
           createFields: [
@@ -915,7 +916,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
     label: "العمليات والمشاريع",
     sections: [
       { key: "projects", label: "المشاريع", icon: "briefcase-outline", endpoint: "/api/projects", titleFields: ["name", "projectName"], subtitleFields: ["code"], statusField: "status", amountFields: ["budget"], dateFields: ["startDate"], detailRoute: "/projects/project-detail" },
-      { key: "tasks", label: "المهام", icon: "checkbox-outline", endpoint: "/api/tasks", titleFields: ["title", "name"], subtitleFields: ["assigneeName", "priority"], statusField: "status", dateFields: ["dueDate"] },
+      { key: "tasks", label: "المهام", icon: "checkbox-outline", endpoint: "/api/tasks", titleFields: ["title", "name"], subtitleFields: ["assigneeName", "priority"], statusField: "status", dateFields: ["dueDate"], detailRoute: "/projects/task-detail" },
       { key: "milestones", label: "المعالم والإنجازات", icon: "flag-outline", endpoint: "/api/projects/milestones", titleFields: ["title", "name"], subtitleFields: ["projectName"], statusField: "status", amountFields: ["budget"], dateFields: ["dueDate"] },
       { key: "issues", label: "المشاكل والعوائق", icon: "alert-circle-outline", endpoint: "/api/projects/issues", titleFields: ["title", "description"], subtitleFields: ["projectName", "severity"], statusField: "status", dateFields: ["createdAt"] },
       { key: "operations-center", label: "مركز العمليات", icon: "construct-outline", endpoint: "/api/operations-center/dashboard", titleFields: ["title", "summary"], subtitleFields: ["status", "assigneeName"], statusField: "status", dateFields: ["date"] },

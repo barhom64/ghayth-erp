@@ -146,6 +146,9 @@ function AuthGate() {
       <Stack.Screen name="fleet/driver-detail" options={{ title: 'ملف السائق' }} />
       <Stack.Screen name="hr/payroll-detail" options={{ title: 'مسيّر الرواتب' }} />
       <Stack.Screen name="finance/journal-detail" options={{ title: 'القيد المحاسبي' }} />
+      <Stack.Screen name="fleet/trip-detail" options={{ title: 'تفاصيل الرحلة' }} />
+      <Stack.Screen name="fleet/maintenance-detail" options={{ title: 'أمر الصيانة' }} />
+      <Stack.Screen name="projects/task-detail" options={{ title: 'المهمة' }} />
       <Stack.Screen name="manager-workspace" options={{ title: 'مساحة عمل المدير' }} />
       <Stack.Screen name="finance/reports" options={{ title: 'التقارير المالية' }} />
       <Stack.Screen name="hr/employee-detail" options={{ title: 'ملف الموظف' }} />
