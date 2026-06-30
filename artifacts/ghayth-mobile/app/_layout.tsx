@@ -603,6 +603,10 @@ function AuthGate() {
       <Stack.Screen name="transport/route-patterns" options={{ title: 'أنماط المسارات' }} />
       <Stack.Screen name="transport/locations" options={{ title: 'مواقع النقل' }} />
       <Stack.Screen name="fleet/telematics-devices" options={{ title: 'أجهزة التتبع' }} />
+      <Stack.Screen name="transport/control-tower" options={{ title: 'برج المراقبة' }} />
+      <Stack.Screen name="admin/print-templates" options={{ title: 'قوالب الطباعة' }} />
+      <Stack.Screen name="marketing/funnel" options={{ title: 'مسار التسويق' }} />
+      <Stack.Screen name="requests/request-types" options={{ title: 'أنواع الطلبات' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
