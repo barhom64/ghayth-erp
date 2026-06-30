@@ -1005,6 +1005,11 @@ function AuthGate() {
       <Stack.Screen name="exec-dashboard/overdue-invoices" options={{ title: 'الفواتير المتأخرة' }} />
       <Stack.Screen name="exec-dashboard/unified-pnl" options={{ title: 'الأرباح والخسائر الموحّدة' }} />
       <Stack.Screen name="exec-dashboard/critical-obligations" options={{ title: 'الالتزامات الحرجة' }} />
+      <Stack.Screen name="portal/dashboard" options={{ title: 'بوابة العميل' }} />
+      <Stack.Screen name="portal/invoices" options={{ title: 'فواتيري' }} />
+      <Stack.Screen name="portal/tickets" options={{ title: 'تذاكر الدعم' }} />
+      <Stack.Screen name="portal/projects" options={{ title: 'مشاريعي' }} />
+      <Stack.Screen name="portal/kb" options={{ title: 'قاعدة المعرفة' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
