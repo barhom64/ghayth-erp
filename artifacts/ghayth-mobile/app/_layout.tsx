@@ -1002,6 +1002,9 @@ function AuthGate() {
       <Stack.Screen name="inbox/unread-count" options={{ title: 'الرسائل غير المقروءة' }} />
       <Stack.Screen name="admin/rbac-v2-users" options={{ title: 'مستخدمو الأدوار' }} />
       <Stack.Screen name="admin/rbac-jit-my" options={{ title: 'طلباتي JIT' }} />
+      <Stack.Screen name="exec-dashboard/overdue-invoices" options={{ title: 'الفواتير المتأخرة' }} />
+      <Stack.Screen name="exec-dashboard/unified-pnl" options={{ title: 'الأرباح والخسائر الموحّدة' }} />
+      <Stack.Screen name="exec-dashboard/critical-obligations" options={{ title: 'الالتزامات الحرجة' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
