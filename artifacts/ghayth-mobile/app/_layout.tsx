@@ -590,6 +590,14 @@ function AuthGate() {
       <Stack.Screen name="admin/workflow-sla" options={{ title: 'تعريفات SLA' }} />
       <Stack.Screen name="admin/proactive-rules" options={{ title: 'القواعد الاستباقية' }} />
       <Stack.Screen name="finance/zatca" options={{ title: 'إرسالات زاتكا' }} />
+      <Stack.Screen name="umrah/commission-plans" options={{ title: 'خطط العمولة' }} />
+      <Stack.Screen name="umrah/calendar" options={{ title: 'تقويم العمرة' }} />
+      <Stack.Screen name="umrah/hotels" options={{ title: 'الفنادق' }} />
+      <Stack.Screen name="umrah/room-blocks" options={{ title: 'كتل الغرف' }} />
+      <Stack.Screen name="admin/ivr-menus" options={{ title: 'قوائم IVR' }} />
+      <Stack.Screen name="admin/outbound-queue" options={{ title: 'طابور الإرسال' }} />
+      <Stack.Screen name="admin/notification-chains" options={{ title: 'سلاسل الإشعارات' }} />
+      <Stack.Screen name="careers/jobs" options={{ title: 'الوظائف المتاحة' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
