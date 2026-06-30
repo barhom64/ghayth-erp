@@ -60,6 +60,28 @@ describe("المنطق — lib/fleet/movementBonuses", () => {
   });
 });
 
+describe("منتقي الحركات — قائمة الحركات المؤهَّلة (قراءة فقط)", () => {
+  it("المكتبة تُصدّر listEligibleMovements بفلتر حالة العمل الفعلي + سياق + hasBonus", () => {
+    expect(LIB).toContain("export async function listEligibleMovements");
+    expect(LIB).toContain("d.status IN ('executing','completed','closed')");
+    expect(LIB).toContain('AS "driverName"');
+    expect(LIB).toContain('AS "vehiclePlate"');
+    expect(LIB).toContain('AS "hasBonus"');
+    // علامة وجود مكافأة غير ملغاة قائمة (لا تمنع، إعلامية)
+    expect(LIB).toMatch(/EXISTS \([\s\S]*?transport_movement_bonuses mb[\s\S]*?mb\.status <> 'void'/);
+  });
+  it("المسار يعرض الحركات المؤهَّلة عبر صلاحية القائمة، مسار مميّز", () => {
+    expect(ROUTE).toMatch(/"\/fleet\/movement-bonuses\/eligible-movements"[\s\S]{0,160}fleet\.movement_bonus[\s\S]{0,30}"list"/);
+    expect(ROUTE).toContain("listEligibleMovements");
+  });
+  it("الواجهة تستبدل الإدخال اليدوي بمنتقي قابل للبحث (SearchableSelect)", () => {
+    expect(PAGE).toContain("SearchableSelect");
+    expect(PAGE).toContain("/fleet/movement-bonuses/eligible-movements");
+    // لم يعد رقم أمر التوزيع يُدخَل يدويًا كحقل رقمي
+    expect(PAGE).not.toMatch(/placeholder="من لوحة التوزيع"/);
+  });
+});
+
 describe("قفل الحدود — لا دفتر، الختم في مكتبة الأسطول", () => {
   it("لا قيد ولا جداول مالية في كود المكافآت", () => {
     for (const src of [LIB, ROUTE]) {
