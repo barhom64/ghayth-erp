@@ -804,6 +804,7 @@ function AuthGate() {
       <Stack.Screen name="admin/rbac-features" options={{ title: 'ميزات الصلاحيات' }} />
       <Stack.Screen name="admin/rbac-sod" options={{ title: 'فصل المهام' }} />
       <Stack.Screen name="admin/jit-pending" options={{ title: 'طلبات الوصول المؤقت' }} />
+      <Stack.Screen name="admin/notification-stats" options={{ title: 'إحصاءات الإشعارات' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
