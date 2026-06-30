@@ -1159,6 +1159,12 @@ function AuthGate() {
       <Stack.Screen name="fleet/rental-payments" options={{ title: 'دفعات عقد الإيجار' }} />
       <Stack.Screen name="fleet/me-cargo-checkpoints" options={{ title: 'نقاط تفتيش شحنتي' }} />
       <Stack.Screen name="transport/billing-candidate-detail" options={{ title: 'تفاصيل مرشح الفوترة' }} />
+      <Stack.Screen name="hr/today-summary" options={{ title: 'ملخص الحضور اليوم' }} />
+      <Stack.Screen name="hr/wps-preflight" options={{ title: 'فحص WPS' }} />
+      <Stack.Screen name="hr/wps-run-detail" options={{ title: 'تفاصيل إرسال WPS' }} />
+      <Stack.Screen name="hr/employee-evaluation-history" options={{ title: 'تاريخ التقييمات' }} />
+      <Stack.Screen name="hr/transfer-detail" options={{ title: 'تفاصيل طلب النقل' }} />
+      <Stack.Screen name="fleet/optimizer-run-detail" options={{ title: 'تفاصيل تشغيل المحسّن' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
