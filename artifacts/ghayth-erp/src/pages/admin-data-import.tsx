@@ -109,7 +109,7 @@ export default function AdminDataImportPage() {
       setPreview(null);
       toast({
         title: `تم تحميل ${rows.length.toLocaleString("ar-SA")} صفاً من ${file.name}`,
-        description: "راجع الصفوف ثم اضغط «فحص (Preview)»",
+        description: "راجع الصفوف ثم اضغط «معاينة»",
       });
     } catch (err: any) {
       toast({ variant: "destructive", title: "تعذّر قراءة الملف", description: err?.message || "" });

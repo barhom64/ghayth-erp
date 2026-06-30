@@ -379,7 +379,7 @@ export default function AdminAiGovernance() {
         { href: "/dashboard", label: "لوحة التحكم" },
         { label: "حوكمة الذكاء الاصطناعي" },
       ]}
-      subtitle="سجلّ المزوّدات، كتالوج الـ prompts، ومركز المراجعة"
+      subtitle="سجلّ المزوّدات، كتالوج الموجّهات، ومركز المراجعة"
       actions={
         <RefreshAction onRefresh={refreshAll} />
       }

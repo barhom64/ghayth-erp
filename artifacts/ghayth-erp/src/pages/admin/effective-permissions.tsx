@@ -130,7 +130,7 @@ export default function EffectivePermissionsPage() {
   return (
     <PageShell
       title="الصلاحيات الفعلية للمستخدم"
-      subtitle="عرض كامل لما يُسمح للمستخدم بفعله بعد دمج قوالب الأدوار + الـ overrides + قواعد الـ deny"
+      subtitle="عرض كامل لما يُسمح للمستخدم بفعله بعد دمج قوالب الأدوار + التخصيصات + قواعد المنع"
       breadcrumbs={[
         { href: "/dashboard", label: "لوحة التحكم" },
         { href: "/admin", label: "الإدارة" },
@@ -211,7 +211,7 @@ export default function EffectivePermissionsPage() {
               <div className="flex items-center gap-2">
                 <Filter className="h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="فلتر بالـ feature / role / action..."
+                  placeholder="فلتر بالميزة / الدور / الإجراء..."
                   value={filter}
                   onChange={(e) => setFilter(e.target.value)}
                   className="h-8 text-sm"
