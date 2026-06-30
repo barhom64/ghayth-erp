@@ -1237,6 +1237,10 @@ function AuthGate() {
             <Stack.Screen name="intelligence/activity-stats" options={{ title: 'إحصائيات النشاط' }} />
             <Stack.Screen name="intelligence/clients-analytics" options={{ title: 'تحليلات العملاء' }} />
             <Stack.Screen name="intelligence/company-kpis" options={{ title: 'مؤشرات أداء الشركة' }} />
+            <Stack.Screen name="hr/self-submissions" options={{ title: 'طلبات التعديل الذاتي' }} />
+            <Stack.Screen name="hr/scoring-history" options={{ title: 'سجل تقييم الأداء' }} />
+            <Stack.Screen name="hr/lifecycle-status" options={{ title: 'حالة دورة حياة الموظف' }} />
+            <Stack.Screen name="hr/lifecycle-history" options={{ title: 'سجل دورة حياة الموظف' }} />
             <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>

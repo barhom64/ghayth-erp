@@ -5,32 +5,32 @@ import { GLoadingState, GEmptyState } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 
-interface SelfSubmission { id?: number; employeeName?: string; field?: string; status?: string; submittedAt?: string; }
+interface ScoringHistory { id?: number; period?: string; score?: number; rank?: number; category?: string; evaluatedAt?: string; }
 
-export default function SelfSubmissions() {
+export default function ScoringHistory() {
   const c = useColors();
-  const { data, isLoading, isError, refetch } = useList<SelfSubmission[]>('/api/employees/self-submissions');
+  const { data, isLoading, isError, refetch } = useList<ScoringHistory[]>('/api/employees/0/scoring/history');
   const list = Array.isArray(data) ? data : [];
   if (isLoading) return <GLoadingState text="جارٍ تحميل…" />;
   if (isError) return <GEmptyState icon="alert-circle-outline" title="تعذّر التحميل" description="تحقق من الاتصال" actionLabel="إعادة المحاولة" onAction={refetch} />;
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Stack.Screen options={{ title: 'طلبات التعديل الذاتي' }} />
+      <Stack.Screen options={{ title: 'سجل تقييم الأداء' }} />
       <FlatList
         data={list}
         keyExtractor={(item, i) => String(item.id ?? i)}
         contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
         onRefresh={refetch}
         refreshing={isLoading}
-        ListEmptyComponent={<GEmptyState icon="create-outline" title="لا توجد طلبات تعديل" description="" />}
+        ListEmptyComponent={<GEmptyState icon="star-outline" title="لا يوجد سجل تقييم" description="" />}
         renderItem={({ item }) => (
           <View style={{ backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, padding: 14 }}>
-            <Text style={{ color: c.text, fontSize: 15, fontWeight: '600' }}>{item.employeeName ?? ''}</Text>
-            {!!item.field && <Text style={{ color: c.textMuted, fontSize: 13, marginTop: 2 }}>الحقل: {item.field}</Text>}
+            <Text style={{ color: c.text, fontSize: 15, fontWeight: '600' }}>{item.period ?? ''}</Text>
             <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', marginTop: 4 }}>
-              {!!item.status && <Text style={{ color: c.brand, fontSize: 12 }}>{item.status}</Text>}
-              {!!item.submittedAt && <Text style={{ color: c.textFaint, fontSize: 12 }}>{new Date(item.submittedAt).toLocaleDateString('ar-SA', { month: 'short', day: 'numeric', year: 'numeric' })}</Text>}
+              {item.score !== undefined && <Text style={{ color: c.brand, fontSize: 16, fontWeight: '700' }}>{item.score}</Text>}
+              {item.rank !== undefined && <Text style={{ color: c.textMuted, fontSize: 13 }}>الترتيب: #{item.rank}</Text>}
             </View>
+            {!!item.category && <Text style={{ color: c.textFaint, fontSize: 12, marginTop: 4 }}>{item.category}</Text>}
           </View>
         )}
       />
