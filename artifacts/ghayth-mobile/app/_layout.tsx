@@ -643,6 +643,8 @@ function AuthGate() {
       <Stack.Screen name="admin/governance-overview" options={{ title: 'نظرة عامة على الحوكمة' }} />
       <Stack.Screen name="admin/system-registry" options={{ title: 'سجل النظام' }} />
       <Stack.Screen name="admin/subscription" options={{ title: 'الاشتراك' }} />
+      <Stack.Screen name="umrah/season-portfolio" options={{ title: 'محفظة الموسم' }} />
+      <Stack.Screen name="umrah/agent-balances" options={{ title: 'أرصدة وكلاء العمرة' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
