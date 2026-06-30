@@ -49,6 +49,15 @@ export default function DashboardScreen() {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'صباح الخير' : hour < 17 ? 'مساء الخير' : 'مساء النور';
 
+  if (isLoading) return <GLoadingState text="جارٍ تحميل لوحة القيادة…" />;
+  if (isError) return (
+    <GEmptyState
+      icon="alert-circle-outline"
+      title="تعذّر تحميل البيانات"
+      description="تحقق من اتصالك بالإنترنت وأعد المحاولة"
+    />
+  );
+
   return (
     <GScreen scrollable>
       {/* تحية المستخدم */}
