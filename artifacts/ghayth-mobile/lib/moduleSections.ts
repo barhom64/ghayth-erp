@@ -699,7 +699,34 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
-      { key: "vendor-contracts", label: "عقود الموردين", icon: "document-attach-outline", endpoint: "/api/finance/vendor-contracts", detailRoute: "/finance/vendor-contract-detail", titleFields: ["title", "ref"], subtitleFields: ["vendorName"], statusField: "status", amountFields: ["contractValue"], dateFields: ["startDate"] },
+      {
+        key: "vendor-contracts", label: "عقود الموردين", icon: "document-attach-outline", endpoint: "/api/finance/vendor-contracts",
+        detailRoute: "/finance/vendor-contract-detail", titleFields: ["title", "ref"], subtitleFields: ["vendorName"], statusField: "status", amountFields: ["contractValue"], dateFields: ["startDate"],
+        write: {
+          moduleKey: "finance",
+          createFields: [
+            { name: "title", label: "عنوان العقد", type: "text", required: true },
+            {
+              name: "vendorId", label: "المورد", type: "reference", required: true,
+              refEndpoint: "/api/finance/vendors", refLabelFields: ["name"], refValueField: "id",
+            },
+            { name: "startDate", label: "تاريخ البداية", type: "date", required: true },
+            { name: "endDate", label: "تاريخ النهاية", type: "date" },
+            { name: "contractValue", label: "قيمة العقد", type: "currency" },
+            {
+              name: "contractType", label: "نوع العقد", type: "select",
+              options: [
+                { value: "service", label: "خدمات" },
+                { value: "supply", label: "توريد" },
+                { value: "maintenance", label: "صيانة" },
+                { value: "consulting", label: "استشارات" },
+                { value: "other", label: "أخرى" },
+              ],
+            },
+            { name: "notes", label: "ملاحظات", type: "textarea" },
+          ],
+        },
+      },
       { key: "accounts", label: "شجرة الحسابات", icon: "git-branch-outline", endpoint: "/api/finance/accounts", titleFields: ["name", "accountName"], subtitleFields: ["code", "type"], statusField: "status", amountFields: ["balance"] },
       { key: "budget", label: "الموازنات", icon: "pie-chart-outline", endpoint: "/api/finance/budget", titleFields: ["accountName"], subtitleFields: ["accountCode", "period"], statusField: "status", amountFields: ["amount"] },
       { key: "cost-centers", label: "مراكز التكلفة", icon: "layers-outline", endpoint: "/api/finance/cost-centers", titleFields: ["name"], subtitleFields: ["code"], statusField: "status" },
@@ -762,7 +789,29 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       },
       { key: "tax-returns", label: "الإقرارات الضريبية", icon: "document-text-outline", endpoint: "/api/finance/tax-returns", titleFields: ["period", "ref"], subtitleFields: ["type"], statusField: "status", amountFields: ["vatAmount", "totalAmount"], dateFields: ["dueDate"] },
       { key: "fiscal-periods", label: "الفترات المالية", icon: "calendar-outline", endpoint: "/api/finance/fiscal-periods-v2", titleFields: ["name", "period"], subtitleFields: ["year"], statusField: "status", dateFields: ["startDate", "endDate"] },
-      { key: "commitments", label: "الالتزامات التعاقدية", icon: "link-outline", endpoint: "/api/finance/commitments", detailRoute: "/finance/commitment-detail", titleFields: ["ref", "description"], subtitleFields: ["counterparty", "type"], statusField: "status", amountFields: ["amount"], dateFields: ["startDate"] },
+      {
+        key: "commitments", label: "الالتزامات التعاقدية", icon: "link-outline", endpoint: "/api/finance/commitments",
+        detailRoute: "/finance/commitment-detail", titleFields: ["ref", "description"], subtitleFields: ["counterparty", "type"], statusField: "status", amountFields: ["amount"], dateFields: ["startDate"],
+        write: {
+          moduleKey: "finance",
+          createFields: [
+            { name: "description", label: "وصف الالتزام", type: "text", required: true },
+            { name: "counterparty", label: "الطرف المقابل", type: "text", required: true },
+            { name: "amount", label: "القيمة", type: "currency", required: true },
+            { name: "startDate", label: "تاريخ البداية", type: "date", required: true },
+            { name: "endDate", label: "تاريخ النهاية", type: "date" },
+            {
+              name: "type", label: "النوع", type: "select",
+              options: [
+                { value: "lease", label: "إيجار" },
+                { value: "service", label: "خدمات" },
+                { value: "loan", label: "قرض" },
+                { value: "other", label: "أخرى" },
+              ],
+            },
+          ],
+        },
+      },
     ],
   },
   fleet: {
@@ -1843,7 +1892,19 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
-      { key: "templates", label: "القوالب", icon: "copy-outline", endpoint: "/api/documents/templates", titleFields: ["title"], subtitleFields: ["category"], dateFields: ["createdAt"], detailRoute: "/documents/template-detail" },
+      {
+        key: "templates", label: "القوالب", icon: "copy-outline", endpoint: "/api/documents/templates",
+        titleFields: ["title"], subtitleFields: ["category"], dateFields: ["createdAt"],
+        detailRoute: "/documents/template-detail",
+        write: {
+          moduleKey: "documents",
+          createFields: [
+            { name: "title", label: "عنوان القالب", type: "text", required: true },
+            { name: "category", label: "التصنيف", type: "text" },
+            { name: "description", label: "الوصف", type: "textarea" },
+          ],
+        },
+      },
     ],
   },
   support: {
@@ -2218,7 +2279,28 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
-      { key: "catalog", label: "كتالوج الخدمات", icon: "list-outline", endpoint: "/api/requests/catalog", titleFields: ["title"], subtitleFields: ["category", "type"] },
+      {
+        key: "catalog", label: "كتالوج الخدمات", icon: "list-outline", endpoint: "/api/requests/catalog",
+        titleFields: ["title"], subtitleFields: ["category", "type"],
+        write: {
+          moduleKey: "requests",
+          createFields: [
+            { name: "title", label: "اسم الخدمة", type: "text", required: true },
+            { name: "category", label: "التصنيف", type: "text", required: true },
+            { name: "description", label: "الوصف", type: "textarea" },
+            {
+              name: "type", label: "النوع", type: "select",
+              options: [
+                { value: "it", label: "تقنية المعلومات" },
+                { value: "hr", label: "الموارد البشرية" },
+                { value: "facility", label: "خدمات المنشأة" },
+                { value: "finance", label: "المالية" },
+                { value: "other", label: "أخرى" },
+              ],
+            },
+          ],
+        },
+      },
     ],
   },
   governance: {
@@ -2454,7 +2536,19 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       { key: "roles", label: "الأدوار والصلاحيات", icon: "key-outline", endpoint: "/api/admin/roles", titleFields: ["name"], subtitleFields: ["slug", "level"] },
       { key: "audit-logs", label: "سجلات التدقيق", icon: "eye-outline", endpoint: "/api/audit-logs", titleFields: ["action", "event"], subtitleFields: ["userName", "entityType"], dateFields: ["createdAt"] },
       { key: "activity-log", label: "سجل الأنشطة", icon: "list-outline", endpoint: "/api/activity-log", titleFields: ["event", "description"], subtitleFields: ["userName", "module"], dateFields: ["createdAt"] },
-      { key: "job-titles", label: "المسميات الوظيفية", icon: "id-card-outline", endpoint: "/api/admin/job-titles", titleFields: ["title", "name"], subtitleFields: ["level", "department"] },
+      {
+        key: "job-titles", label: "المسميات الوظيفية", icon: "id-card-outline", endpoint: "/api/admin/job-titles",
+        titleFields: ["title", "name"], subtitleFields: ["level", "department"],
+        write: {
+          moduleKey: "admin",
+          createFields: [
+            { name: "title", label: "المسمى الوظيفي", type: "text", required: true },
+            { name: "level", label: "المستوى الوظيفي", type: "text" },
+            { name: "department", label: "القسم", type: "text" },
+            { name: "description", label: "الوصف", type: "textarea" },
+          ],
+        },
+      },
       { key: "integrations", label: "التكاملات", icon: "git-merge-outline", endpoint: "/api/admin/integrations", titleFields: ["name", "provider"], subtitleFields: ["type", "status"], statusField: "status" },
       { key: "companies", label: "الشركات", icon: "business-outline", endpoint: "/api/settings/companies", titleFields: ["name"], subtitleFields: ["taxNumber", "crNumber"], statusField: "status" },
       { key: "event-monitor", label: "مراقب الأحداث", icon: "pulse-outline", endpoint: "/api/admin/event-outbox", titleFields: ["eventType", "event"], subtitleFields: ["entityType", "status"], statusField: "status", dateFields: ["createdAt"] },
