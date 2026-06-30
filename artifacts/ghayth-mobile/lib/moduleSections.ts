@@ -474,7 +474,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       },
       { key: "vouchers", label: "سندات الصرف", icon: "cash-outline", endpoint: "/api/finance/vouchers", titleFields: ["ref"], subtitleFields: ["payee", "description"], statusField: "status", amountFields: ["amount"], dateFields: ["createdAt"], detailRoute: "/finance/voucher-detail" },
       { key: "customer-advances", label: "دفعات العملاء المقدمة", icon: "arrow-down-circle-outline", endpoint: "/api/finance/customer-advances", detailRoute: "/finance/customer-advance-detail", titleFields: ["ref"], subtitleFields: ["clientName", "method"], statusField: "status", amountFields: ["amount"], dateFields: ["receivedDate"] },
-      { key: "collection", label: "التحصيل", icon: "alert-circle-outline", endpoint: "/api/finance/collection", titleFields: ["ref"], subtitleFields: ["clientName", "currentStageName"], statusField: "status", amountFields: ["total"], dateFields: ["dueDate"] },
+      { key: "collection", label: "التحصيل", icon: "alert-circle-outline", endpoint: "/api/finance/collection", titleFields: ["ref"], subtitleFields: ["clientName", "currentStageName"], statusField: "status", amountFields: ["total"], dateFields: ["dueDate"], detailRoute: "/finance/collection-detail" },
       {
         key: "purchase-orders", label: "أوامر الشراء", icon: "cart-outline", endpoint: "/api/finance/purchase-orders",
         titleFields: ["ref", "orderNumber", "poNumber"], subtitleFields: ["supplierName", "vendorName"], statusField: "status", amountFields: ["totalAmount", "total", "amount"], dateFields: ["createdAt", "date"],
@@ -1326,7 +1326,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
-      { key: "templates", label: "القوالب", icon: "copy-outline", endpoint: "/api/documents/templates", titleFields: ["title"], subtitleFields: ["category"], dateFields: ["createdAt"] },
+      { key: "templates", label: "القوالب", icon: "copy-outline", endpoint: "/api/documents/templates", titleFields: ["title"], subtitleFields: ["category"], dateFields: ["createdAt"], detailRoute: "/documents/template-detail" },
     ],
   },
   support: {
