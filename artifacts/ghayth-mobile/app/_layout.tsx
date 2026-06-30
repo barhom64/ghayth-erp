@@ -1197,6 +1197,8 @@ function AuthGate() {
       <Stack.Screen name="bi/rejection-rate" options={{ title: 'معدل الرفض' }} />
       <Stack.Screen name="bi/bottleneck" options={{ title: 'نقاط الاختناق' }} />
       <Stack.Screen name="bi/employee-productivity" options={{ title: 'إنتاجية الموظفين' }} />
+      <Stack.Screen name="tasks/task-detail" options={{ title: 'تفاصيل المهمة' }} />
+      <Stack.Screen name="tasks/entity-search" options={{ title: 'بحث المهام بالكيانات' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
