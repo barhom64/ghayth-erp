@@ -148,6 +148,12 @@ function AuthGate() {
       <Stack.Screen name="finance/journal-detail" options={{ title: 'القيد المحاسبي' }} />
       <Stack.Screen name="fleet/trip-detail" options={{ title: 'تفاصيل الرحلة' }} />
       <Stack.Screen name="fleet/fuel-log-detail" options={{ title: 'سجل الوقود' }} />
+      <Stack.Screen name="fleet/insurance-detail" options={{ title: 'وثيقة التأمين' }} />
+      <Stack.Screen name="fleet/violation-detail" options={{ title: 'المخالفة المرورية' }} />
+      <Stack.Screen name="warehouse/movement-detail" options={{ title: 'حركة المخزون' }} />
+      <Stack.Screen name="warehouse/supplier-detail" options={{ title: 'ملف المورد' }} />
+      <Stack.Screen name="umrah/sub-agent-detail" options={{ title: 'الوكيل الفرعي' }} />
+      <Stack.Screen name="umrah/transport-detail" options={{ title: 'رحلة النقل' }} />
       <Stack.Screen name="umrah/package-detail" options={{ title: 'الباقة' }} />
       <Stack.Screen name="umrah/agent-detail" options={{ title: 'الوكيل' }} />
       <Stack.Screen name="fleet/maintenance-detail" options={{ title: 'أمر الصيانة' }} />

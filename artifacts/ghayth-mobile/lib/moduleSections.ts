@@ -765,6 +765,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       },
       {
         key: "insurance", label: "وثائق التأمين", icon: "shield-checkmark-outline", endpoint: "/api/fleet/insurance",
+        detailRoute: "/fleet/insurance-detail",
         titleFields: ["policyNumber", "provider"], subtitleFields: ["vehiclePlate", "provider"], amountFields: ["premium"], dateFields: ["endDate"],
         write: {
           moduleKey: "fleet",
@@ -794,6 +795,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       { key: "alerts", label: "التنبيهات", icon: "notifications-outline", endpoint: "/api/fleet/alerts", titleFields: ["alertType", "description"], subtitleFields: ["vehiclePlate", "severity"], statusField: "status", dateFields: ["resolvedAt"] },
       {
         key: "traffic-violations", label: "المخالفات المرورية", icon: "warning-outline", endpoint: "/api/fleet/traffic-violations",
+        detailRoute: "/fleet/violation-detail",
         titleFields: ["violationNumber", "violationType"], subtitleFields: ["vehiclePlate", "driverName"], statusField: "status", amountFields: ["fineAmount"], dateFields: ["violationDate"],
         write: {
           moduleKey: "fleet",
@@ -860,6 +862,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       },
       {
         key: "movements", label: "حركات المخزون", icon: "swap-horizontal-outline", endpoint: "/api/warehouse/movements",
+        detailRoute: "/warehouse/movement-detail",
         titleFields: ["ref", "movementNumber"], subtitleFields: ["type", "fromWarehouse", "toWarehouse"], statusField: "status", dateFields: ["date", "createdAt"],
         write: {
           moduleKey: "warehouse",
@@ -889,6 +892,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       },
       {
         key: "suppliers", label: "الموردون", icon: "business-outline", endpoint: "/api/warehouse/suppliers",
+        detailRoute: "/warehouse/supplier-detail",
         titleFields: ["name"], subtitleFields: ["contactPerson", "phone"],
         write: {
           moduleKey: "warehouse",
@@ -1069,6 +1073,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       },
       {
         key: "sub-agents", label: "الوكلاء الفرعيون", icon: "people-circle-outline", endpoint: "/api/umrah/sub-agents",
+        detailRoute: "/umrah/sub-agent-detail",
         titleFields: ["name"], subtitleFields: ["country", "agentName"],
         write: {
           moduleKey: "umrah",
@@ -1099,6 +1104,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       },
       {
         key: "transport", label: "النقل", icon: "bus-outline", endpoint: "/api/umrah/transport",
+        detailRoute: "/umrah/transport-detail",
         titleFields: ["fromLocation", "toLocation"], subtitleFields: ["vehiclePlate", "driverName"], statusField: "status", amountFields: ["cost"], dateFields: ["tripDate"],
         write: {
           moduleKey: "umrah",
