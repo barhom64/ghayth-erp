@@ -19,6 +19,7 @@ import { NumberField, FormFieldWrapper, TextField } from "@/components/shared/fo
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { FinanceCreateTabs } from "@/components/shared/finance-create-tabs";
 
 /**
  * تسجيل واقعة مالية — م١-ب. الواجهة تشغيلية: يدخل المستخدم (الكيان/الطرف + ما حدث +
@@ -160,6 +161,9 @@ export default function FinancialEventCreate() {
       )}
       <div dir="rtl">
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* شريط الأنواع الموحّد — يعرض صفحات الإنشاء المالية كسطح تبويبي واحد (مترابط). */}
+          <FinanceCreateTabs active="event" />
+
           {/* اختصار «ابدأ من مستند» — يُبرز محرّك قراءة المستندات (OCR) وبوابة الاستيراد
               في مكان تسجيل الواقعة: امسح ورقة/فاتورة ضوئيًّا (محرّك OCR، تأكيد بشري) أو
               استورد Excel/CSV، بدل الإدخال اليدوي. كلاهما يمرّ على نفس محرّك القيد. */}
@@ -230,23 +234,6 @@ export default function FinancialEventCreate() {
               </button>
             </p>
           )}
-
-          {/* م٤ — أنواع أخرى من الوقائع المالية (تمرّ على محرّكاتها القائمة). */}
-          <p className="text-xs text-muted-foreground">
-            أنواع أخرى:{" "}
-            <button type="button" className="text-primary hover:underline" onClick={() => navigate("/finance/documents/invoice")}>
-              فاتورة مبيعات ←
-            </button>
-            {" · "}
-            <button type="button" className="text-primary hover:underline" onClick={() => navigate("/finance/documents/vendor-invoice")}>
-              فاتورة مشتريات ←
-            </button>
-            {" · "}
-            {/* م٦ — «القيد» (الروح المحاسبية §١١.٢): قيد يومية يدوي للمحاسب. */}
-            <button type="button" className="text-primary hover:underline" onClick={() => navigate("/finance/journal/create")}>
-              قيد محاسبي ←
-            </button>
-          </p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <FormFieldWrapper label="التاريخ" required>
