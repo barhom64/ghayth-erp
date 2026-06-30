@@ -151,6 +151,61 @@ export async function approveMovementBonus(
   }).catch((e) => logger.error(e, "movement bonus approve audit failed"));
 }
 
+export interface MovementFilters {
+  driverId?: number;
+  search?: string;
+  limit?: number;
+}
+
+/**
+ * قائمة الحركات (أوامر التوزيع) المؤهَّلة للمكافأة — قراءة فقط لمنتقي الشاشة.
+ * المؤهَّل: عمل فعلي (executing/completed/closed) فقط، أحدثًا أولًا، بسياق
+ * السائق والمركبة والحجز والمسار، وعلامة `hasBonus` (مكافأة غير ملغاة قائمة).
+ * يستبدل إدخال رقم أمر التوزيع يدويًا. لا قيد ولا كتابة.
+ */
+export async function listEligibleMovements(scope: FleetScope, f: MovementFilters) {
+  const where: string[] = [
+    `d."companyId" = $1`,
+    `d.status IN ('executing','completed','closed')`,
+  ];
+  const params: unknown[] = [scope.companyId];
+  if (f.driverId != null) {
+    params.push(f.driverId);
+    where.push(`d."driverId" = $${params.length}`);
+  }
+  const s = f.search?.trim();
+  if (s) {
+    params.push(`%${s}%`);
+    const i = params.length;
+    where.push(
+      `(dr.name ILIKE $${i} OR b."bookingNumber" ILIKE $${i}` +
+        ` OR b."fromLocationText" ILIKE $${i} OR b."toLocationText" ILIKE $${i})`,
+    );
+  }
+  const limit = Math.min(Math.max(f.limit ?? 100, 1), 200);
+  return rawQuery<Record<string, unknown>>(
+    `SELECT d.id, d.status, d."scheduledStartAt", d."completedAt",
+            d."driverId", dr.name AS "driverName",
+            d."vehicleId", v."plateNumber" AS "vehiclePlate",
+            b.id AS "bookingId", b."bookingNumber", b."transportServiceType",
+            b."fromLocationText", b."toLocationText",
+            EXISTS (
+              SELECT 1 FROM transport_movement_bonuses mb
+               WHERE mb."dispatchOrderId" = d.id AND mb."companyId" = d."companyId"
+                 AND mb.status <> 'void' AND mb."deletedAt" IS NULL
+            ) AS "hasBonus"
+       FROM transport_dispatch_orders d
+            JOIN transport_booking_lines l ON l.id = d."bookingLineId" AND l."deletedAt" IS NULL
+            JOIN transport_bookings b      ON b.id = l."bookingId" AND b."deletedAt" IS NULL
+            LEFT JOIN fleet_vehicles v ON v.id = d."vehicleId" AND v."deletedAt" IS NULL
+            LEFT JOIN fleet_drivers dr ON dr.id = d."driverId" AND dr."deletedAt" IS NULL
+      WHERE ${where.join(" AND ")}
+      ORDER BY d."scheduledStartAt" DESC NULLS LAST
+      LIMIT ${limit}`,
+    params,
+  );
+}
+
 export interface BonusFilters {
   status?: string;
   driverId?: number;
