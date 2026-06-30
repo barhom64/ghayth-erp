@@ -1205,6 +1205,8 @@ function AuthGate() {
       <Stack.Screen name="portal/kb-detail" options={{ title: 'مقالة المعرفة' }} />
       <Stack.Screen name="fleet/rental-contract-detail" options={{ title: 'عقد الإيجار' }} />
       <Stack.Screen name="fleet/vehicle-tco" options={{ title: 'تكلفة ملكية المركبة' }} />
+      <Stack.Screen name="transport/booking-detail" options={{ title: 'تفاصيل الحجز' }} />
+      <Stack.Screen name="transport/route-pattern-detail" options={{ title: 'نمط المسار' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
