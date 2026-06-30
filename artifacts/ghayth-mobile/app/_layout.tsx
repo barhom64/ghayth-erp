@@ -532,6 +532,9 @@ function AuthGate() {
       <Stack.Screen name="admin/companies" options={{ title: 'الشركات' }} />
       <Stack.Screen name="admin/branches" options={{ title: 'الفروع' }} />
       <Stack.Screen name="finance/pricing-rules" options={{ title: 'قواعد التسعير' }} />
+      <Stack.Screen name="finance/clients" options={{ title: 'العملاء' }} />
+      <Stack.Screen name="finance/cost-center-assignments" options={{ title: 'ربط مراكز التكلفة' }} />
+      <Stack.Screen name="marketing/templates" options={{ title: 'قوالب التسويق' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
