@@ -873,6 +873,12 @@ function AuthGate() {
       <Stack.Screen name="bi/exec-overdue-invoices" options={{ title: 'الفواتير المتأخرة' }} />
       <Stack.Screen name="bi/exec-pnl" options={{ title: 'الأرباح والخسائر الموحّد' }} />
       <Stack.Screen name="bi/exec-critical-obligations" options={{ title: 'الالتزامات الحرجة' }} />
+      <Stack.Screen name="admin/comm-dlp-rules" options={{ title: 'قواعد حماية البيانات DLP' }} />
+      <Stack.Screen name="admin/comm-providers" options={{ title: 'مزودو الاتصالات' }} />
+      <Stack.Screen name="admin/ai-overview" options={{ title: 'نظرة حوكمة الذكاء الاصطناعي' }} />
+      <Stack.Screen name="finance/classification-center" options={{ title: 'مركز تصنيف الحسابات' }} />
+      <Stack.Screen name="finance/subsidiary-account-failures" options={{ title: 'أخطاء الحسابات الفرعية' }} />
+      <Stack.Screen name="comms/inbox-conversations" options={{ title: 'محادثات البريد الوارد' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
