@@ -50,6 +50,7 @@ import {
 } from "../lib/employeeLifecycleEngine.js";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
+import { registerEntityParty } from "../lib/partyService.js";
 import type { EmployeeRow, EmployeeAssignmentRow } from "../lib/dbTypes.js";
 
 // Extended employee row — schema has many more columns than the early
@@ -663,6 +664,14 @@ router.post("/quick-activate", authorize({ feature: "hr.employees", action: "cre
         status: "inactive", assignmentId, onboardingTasksCreated: onboardingTaskCount,
       },
     });
+
+    // ── Master-data identity (migration 249) ──
+    // Link the person to ONE party so an employee who is also a driver/
+    // supplier/client resolves to a single 360° record immediately. Non-fatal.
+    registerEntityParty(scope.companyId, "employees", empId, "employee", {
+      displayName: name, nationalId: nationalId || null,
+      phone: phone || null, email: email || null, kind: "person",
+    }).catch((e) => logger.error(e, "[partyService] employees registration failed"));
 
     // ── رابط الاستكمال الذاتي ──
     // حين يتوفّر بريد الموظف، نُصدِر رمزًا مؤقتًا ونرسل له رابطًا يفتح صفحة
@@ -1785,6 +1794,14 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
 
     const { empId, assignmentId, finalEmpNumber, userId, createdNewUser, loginEmail, onboardingTaskCount } = result;
     let accountInviteWarning: string | null = null;
+
+    // ── Master-data identity (migration 249) ──
+    // Link the person to ONE party (dedupe across driver/supplier/client/…).
+    // Non-fatal: a registry-link failure must not block onboarding.
+    registerEntityParty(scope.companyId, "employees", empId, "employee", {
+      displayName: name, nationalId: nationalId || null,
+      phone: phone || null, email: email || null, kind: "person",
+    }).catch((e) => logger.error(e, "[partyService] employees onboard registration failed"));
 
     // ── Step 8: Notify manager and HR ──
     const managerAssignmentId = await getManagerAssignmentId(scope.companyId, targetBranchId);
