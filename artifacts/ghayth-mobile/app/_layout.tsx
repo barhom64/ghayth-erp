@@ -615,6 +615,8 @@ function AuthGate() {
       <Stack.Screen name="finance/vendor-credits" options={{ title: 'مذكرات ائتمان الموردين' }} />
       <Stack.Screen name="finance/payment-runs" options={{ title: 'دفعات الدفع' }} />
       <Stack.Screen name="finance/dunning-history" options={{ title: 'سجل التحصيل' }} />
+      <Stack.Screen name="finance/bank-guarantees" options={{ title: 'خطابات الضمان' }} />
+      <Stack.Screen name="finance/intercompany" options={{ title: 'معاملات بين الشركات' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
