@@ -1191,7 +1191,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
         },
       },
       {
-        key: "opportunities", label: "الفرص البيعية", icon: "trending-up-outline", endpoint: "/api/crm/opportunities",
+        key: "opportunities", label: "الفرص البيعية", icon: "trending-up-outline", endpoint: "/api/crm/opportunities", detailRoute: "/crm/opportunity-detail",
         titleFields: ["title", "name"], subtitleFields: ["clientName"], statusField: "status", amountFields: ["estimatedValue", "value"], dateFields: ["closingDate"],
         write: {
           moduleKey: "crm",
