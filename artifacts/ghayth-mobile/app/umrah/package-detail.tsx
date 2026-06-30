@@ -5,8 +5,8 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge, GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -49,6 +49,7 @@ function fmtMoney(val?: number, currency?: string): string {
 export default function UmrahPackageDetailScreen() {
   const c = useColors();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
 
   const { data: pkg, isLoading } = useList<UmrahPackage>(`/api/umrah/packages/${id}`);
 
@@ -131,6 +132,8 @@ export default function UmrahPackageDetailScreen() {
             ))}
           </GCard>
         )}
+
+        <GButton title="إنشاء مجموعة عمرة" icon="add-circle-outline" variant="secondary" onPress={() => router.push({ pathname: '/umrah/group-detail' as never, params: { packageId: id } })} style={{ marginBottom: 8 }} />
 
         {excludes.length > 0 && (
           <GCard>
