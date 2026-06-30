@@ -118,6 +118,15 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
     sensitiveFields: ["iban", "iqamaOrId", "amount", "bankRefNumber"],
     displayOrder: 143 },
 
+  // أجر السائق بالساعة (الدفعة 2). إعداد معدّل القيادة/التوقف ونوع الدفع
+  // (شهري/بالساعة): افتراضي الشركة وتجاوز لكل سائق. سياسة أجر تملكها HR —
+  // الأسطول يوفّر الساعات فقط. الحقول حسّاسة (بيانات أجر).
+  { key: "hr.driver_pay", parentKey: "hr.payroll", moduleKey: "hr", labelAr: "معدّلات أجر السائق",
+    descriptionAr: "معدّل ساعة القيادة/التوقف ونوع الدفع (شهري/بالساعة) للسائقين — افتراضي الشركة وتجاوز لكل سائق",
+    availableActions: ALL_ACTIONS, availableScopes: ["company"],
+    sensitiveFields: ["drivingHourlyRate", "stopHourlyRate"],
+    displayOrder: 144 },
+
   { key: "hr.saudization", parentKey: "hr", moduleKey: "hr", labelAr: "السعودة (نطاقات)",
     descriptionAr: "متابعة نسبة السعودة وتصنيف الشركة في نطاقات + تاريخ اللقطات الشهرية",
     availableActions: ["view", "list", "update", "export"],
