@@ -944,6 +944,12 @@ function AuthGate() {
       <Stack.Screen name="transport/ops-weekly" options={{ title: 'الملخص الأسبوعي للعمليات' }} />
       <Stack.Screen name="transport/maps-thresholds" options={{ title: 'حدود استخدام الخرائط' }} />
       <Stack.Screen name="admin/pbx-control-extensions" options={{ title: 'امتدادات PBX' }} />
+      <Stack.Screen name="tasks/index" options={{ title: 'المهام' }} />
+      <Stack.Screen name="admin/system-dependency-graph" options={{ title: 'مخطط تبعيات النظام' }} />
+      <Stack.Screen name="finance/dunning-preview" options={{ title: 'معاينة التحصيل' }} />
+      <Stack.Screen name="admin/workflows-pending" options={{ title: 'سير العمل المعلّقة' }} />
+      <Stack.Screen name="admin/workflows-stats" options={{ title: 'إحصائيات سير العمل' }} />
+      <Stack.Screen name="comms/correspondence-stats" options={{ title: 'إحصائيات المراسلات' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
