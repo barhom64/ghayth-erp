@@ -1303,7 +1303,15 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           { name: "code", label: "الرمز", type: "text" },
           { name: "description", label: "الوصف", type: "textarea" },
         ] } },
-      { key: "purchase-orders", label: "أوامر شراء المستودع", icon: "cart-outline", endpoint: "/api/warehouse/purchase-orders", detailRoute: "/finance/purchase-order-detail", titleFields: ["ref", "poNumber"], subtitleFields: ["supplierName"], statusField: "status", amountFields: ["totalAmount"], dateFields: ["orderDate"] },
+      { key: "purchase-orders", label: "أوامر شراء المستودع", icon: "cart-outline", endpoint: "/api/warehouse/purchase-orders", detailRoute: "/finance/purchase-order-detail", titleFields: ["ref", "poNumber"], subtitleFields: ["supplierName"], statusField: "status", amountFields: ["totalAmount"], dateFields: ["orderDate"],
+        write: { moduleKey: "warehouse", createFields: [
+          { name: "supplierId", label: "المورد", type: "reference", required: true, refEndpoint: "/api/warehouse/suppliers", refLabelFields: ["name"], refValueField: "id" },
+          { name: "orderDate", label: "تاريخ الطلب", type: "date", required: true },
+          { name: "expectedDeliveryDate", label: "تاريخ التسليم المتوقع", type: "date" },
+          { name: "notes", label: "ملاحظات", type: "textarea" },
+        ], actions: [
+          { key: "approve", label: "اعتماد أمر الشراء", icon: "checkmark-circle-outline" as never, method: "PATCH" as const, path: (id: string | number) => `/api/warehouse/purchase-orders/${id}/approve`, confirm: "هل تريد اعتماد أمر الشراء؟", successText: "تم الاعتماد", showWhenStatus: ["pending", "draft"] },
+        ] } },
       { key: "cycle-counts", label: "جرد المخزون", icon: "calculator-outline", endpoint: "/api/warehouse/cycle-counts", titleFields: ["ref", "cycle"], subtitleFields: ["location", "status"], statusField: "status", dateFields: ["startDate"], detailRoute: "/warehouse/cycle-count-detail",
         write: { moduleKey: "warehouse", createFields: [
           { name: "location", label: "الموقع / المستودع", type: "text", required: true },
@@ -1449,7 +1457,6 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
-      { key: "agent-invoices", label: "فواتير الوكلاء", icon: "receipt-outline", endpoint: "/api/umrah/agent-invoices", detailRoute: "/umrah/agent-invoice-detail", titleFields: ["ref", "invoiceNumber"], subtitleFields: ["agentName"], statusField: "status", amountFields: ["total", "amount"], dateFields: ["date", "createdAt"] },
       {
         key: "seasons", label: "المواسم", icon: "moon-outline", endpoint: "/api/umrah/seasons",
         titleFields: ["title"], subtitleFields: ["notes"], statusField: "status", dateFields: ["startDate"],
@@ -2732,7 +2739,12 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           { name: "channel", label: "القناة", type: "select", required: true, options: [{ value: "email", label: "بريد إلكتروني" }, { value: "whatsapp", label: "واتساب" }, { value: "sms", label: "رسالة نصية" }, { value: "phone", label: "مكالمة هاتفية" }] },
           { name: "body", label: "نص الرسالة", type: "textarea", required: true },
         ] } },
-      { key: "mailboxes", label: "صناديق البريد", icon: "server-outline", endpoint: "/api/mailboxes", titleFields: ["name", "email"], subtitleFields: ["type", "email"], statusField: "status" },
+      { key: "mailboxes", label: "صناديق البريد", icon: "server-outline", endpoint: "/api/mailboxes", titleFields: ["name", "email"], subtitleFields: ["type", "email"], statusField: "status",
+        write: { moduleKey: "comms", createFields: [
+          { name: "name", label: "اسم الصندوق", type: "text", required: true },
+          { name: "email", label: "عنوان البريد", type: "text", required: true },
+          { name: "type", label: "النوع", type: "select", required: true, options: [{ value: "imap", label: "IMAP" }, { value: "smtp", label: "SMTP" }, { value: "exchange", label: "Exchange" }] },
+        ] } },
     ],
   },
 };
