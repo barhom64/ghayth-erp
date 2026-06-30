@@ -1,0 +1,83 @@
+# Quarantined integration tests (guard `test:integration` step skips these)
+#
+# WHY THIS FILE EXISTS
+# --------------------
+# Until Task #869 the pre-merge guard only ran `vitest run tests/unit`; the
+# ~119 dynamic Postgres integration tests never gated CI. When first wired into
+# the gate they were run against the EXACT CI harness (guard.yml's `:54329`
+# service container: db/schema.sql + post-cutoff migrations, NO seed data, env
+# = DATABASE_URL + JWT_SECRET only — no Redis/SMTP/SECRETS_ENCRYPTION_KEY).
+# Against that harness the files below fail for pre-existing, systemic reasons
+# that long predate this task (fresh-tenant chart-of-accounts/mapping bootstrap
+# gaps, schema/dump drift, fixture FK seeding, missing backfill helpers, and
+# tests that depend on Redis/SMTP/secrets not provided to the guard job).
+#
+# To avoid blocking ALL merges, these files are explicitly QUARANTINED: the
+# guard runs every other integration file (locking the currently-green subset
+# green and forcing any NEW integration test to pass) while these remain a
+# tracked, shrinkable backlog. A failing NON-quarantined dynamic test blocks
+# merge via the `guard` status.
+#
+# HOW TO DE-QUARANTINE
+# --------------------
+# Fix the underlying bug, confirm the file passes against the CI harness
+# (a clean `:54329` DB — schema.sql + post-cutoff migrations, no seeds), then
+# delete its line below. Do NOT add new entries to grow the backlog; new tests
+# must pass. One path (filename only, relative to tests/integration/) per line.
+attendanceTimezone.test.ts
+bankAdjustmentPosting.dynamic.test.ts
+clientPickerVisibility.dynamic.test.ts
+companyDocCategories.dynamic.test.ts
+custodyAdvancesReportPosting.dynamic.test.ts
+customerAdvanceApplyFreshTenant.dynamic.test.ts
+customerAdvancesListErrorSurfacing.dynamic.test.ts
+customerReceiptPosting.dynamic.test.ts
+entitySubsidiaryAccounts.dynamic.test.ts
+eventLogsCoverage.test.ts
+expensesListThreeAxisRead.dynamic.test.ts
+financeIntentMappingSeed.dynamic.test.ts
+finDatafixSubsidiaryAudit.dynamic.test.ts
+fixedAssetAnchors.dynamic.test.ts
+fxRealizedOnPayment.dynamic.test.ts
+grnTreatmentEnforcement.dynamic.test.ts
+idempotencyDoubleClick.dynamic.test.ts
+inboxConversations.dynamic.test.ts
+journalListThreeAxisRead.dynamic.test.ts
+mobileAuth.dynamic.test.ts
+moduleShakedown.dynamic.test.ts
+mudadContractRegisterListener.dynamic.test.ts
+notificationOptOutCrossTenant.dynamic.test.ts
+notificationOptOutScreen.dynamic.test.ts
+ocrEntitySync.dynamic.test.ts
+openingBalancesThreeAxisRead.dynamic.test.ts
+optOutSkipCounterReset.dynamic.test.ts
+parentAccountPostingGuard.dynamic.test.ts
+postingEnginePins.dynamic.test.ts
+postingFailsClearly.dynamic.test.ts
+postingFailureRecovery.dynamic.test.ts
+productRevenueMapPosting.dynamic.test.ts
+salaryAdvanceDetailThreeAxisRead.dynamic.test.ts
+salaryAdvancesListThreeAxisRead.dynamic.test.ts
+specContractDrift.dynamic.test.ts
+statusAxesTrigger.dynamic.test.ts
+subsidiaryProvisioningFailureTracking.dynamic.test.ts
+systemSmtp.dynamic.test.ts
+umrahAnalyticAccountAutoCreate.dynamic.test.ts
+umrahCommissionViaHrJE.dynamic.test.ts
+umrahFullCycleE2E.dynamic.test.ts
+umrahImportFalseSuccessContract.dynamic.test.ts
+umrahImportUnlinkedRecovery.dynamic.test.ts
+umrahInvoicePostingTwoLine.dynamic.test.ts
+umrahMainAgentLinkClosure.dynamic.test.ts
+umrahNuskPurchaseJE.dynamic.test.ts
+umrahPostingFailsClearly.dynamic.test.ts
+umrahUnlinkedBulkLink.dynamic.test.ts
+umrahUnlinkedPerRowLink.dynamic.test.ts
+vendorApAnchors.dynamic.test.ts
+vendorSecretsSeed.dynamic.test.ts
+voucherDetailThreeAxisRead.dynamic.test.ts
+voucherDirectionAware.dynamic.test.ts
+vouchersListThreeAxisRead.dynamic.test.ts
+wave2FinanceProtection.dynamic.test.ts
+wpsDirectDelivery.dynamic.test.ts
+zatcaB2cSpikePause.dynamic.test.ts
