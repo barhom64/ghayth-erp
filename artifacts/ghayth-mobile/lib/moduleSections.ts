@@ -2860,8 +2860,11 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
-      { key: "roles", label: "الأدوار والصلاحيات", icon: "key-outline", endpoint: "/api/admin/roles", titleFields: ["name"], subtitleFields: ["slug", "level"] },
-      { key: "audit-logs", label: "سجلات التدقيق", icon: "eye-outline", endpoint: "/api/audit-logs", titleFields: ["action", "event"], subtitleFields: ["userName", "entityType"], dateFields: ["createdAt"] },
+      { key: "roles", label: "الأدوار والصلاحيات", icon: "key-outline", endpoint: "/api/admin/roles", titleFields: ["name"], subtitleFields: ["key", "level"], detailRoute: "/admin/roles" as never },
+      { key: "audit-logs", label: "سجلات التدقيق", icon: "eye-outline", endpoint: "/api/audit-logs", titleFields: ["action", "event"], subtitleFields: ["userName", "entityType"], dateFields: ["createdAt"], detailRoute: "/admin/audit-logs" as never },
+      { key: "integrations", label: "التكاملات", icon: "link-outline", endpoint: "/api/admin/integrations", titleFields: ["name"], subtitleFields: ["type"], statusField: "status", dateFields: ["lastTestedAt"], detailRoute: "/admin/integrations" as never },
+      { key: "system-health", label: "صحة النظام", icon: "pulse-outline", endpoint: "/api/admin/system-health", titleFields: ["status"], write: { moduleKey: "admin", noDetail: true, createFields: [] }, detailRoute: "/admin/system-health" as never },
+      { key: "workspace", label: "بيئة العمل", icon: "people-outline", endpoint: "/api/workspace/feed", titleFields: ["action", "description"], subtitleFields: ["actorName"], dateFields: ["createdAt"], detailRoute: "/admin/workspace" as never, write: { moduleKey: "admin", noDetail: true, createFields: [] } },
       { key: "activity-log", label: "سجل الأنشطة", icon: "list-outline", endpoint: "/api/activity-log", titleFields: ["event", "description"], subtitleFields: ["userName", "module"], dateFields: ["createdAt"] },
       {
         key: "job-titles", label: "المسميات الوظيفية", icon: "id-card-outline", endpoint: "/api/admin/job-titles",

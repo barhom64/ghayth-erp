@@ -367,6 +367,11 @@ function AuthGate() {
       <Stack.Screen name="bi/scheduled-reports" options={{ title: 'التقارير المجدولة' }} />
       <Stack.Screen name="hr/proactive-insights" options={{ title: 'التنبيهات الاستباقية' }} />
       <Stack.Screen name="governance/integrations" options={{ title: 'تكاملات الحوكمة' }} />
+      <Stack.Screen name="admin/integrations" options={{ title: 'التكاملات الخارجية' }} />
+      <Stack.Screen name="admin/system-health" options={{ title: 'صحة النظام' }} />
+      <Stack.Screen name="admin/roles" options={{ title: 'الأدوار والصلاحيات' }} />
+      <Stack.Screen name="admin/audit-logs" options={{ title: 'سجلات التدقيق' }} />
+      <Stack.Screen name="admin/workspace" options={{ title: 'بيئة العمل' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
