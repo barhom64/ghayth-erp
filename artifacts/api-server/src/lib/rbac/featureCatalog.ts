@@ -356,6 +356,12 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
     icon: "Clock",
     availableActions: ALL_ACTIONS, availableScopes: ["self", "branch", "company"],
     approvableActions: ["approve"], displayOrder: 334 },
+  // مكافآت حركات النقل (الدفعة أ). يمنحها المشرف على حركة (أمر توزيع) بمبلغ
+  // مقطوع، باعتماد منفصل عن المنح (approve ≠ update). تُرحَّل في الرواتب لاحقًا.
+  { key: "fleet.movement_bonus", parentKey: "fleet", moduleKey: "fleet", labelAr: "مكافآت حركات النقل",
+    icon: "Award",
+    availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],
+    approvableActions: ["approve"], displayOrder: 335 },
   // Self-service driver surface (#1354). Granted to the "driver" role
   // and only the "driver" role — replaces the standalone driver portal
   // that lived under a separate JWT type. The driver logs in with the

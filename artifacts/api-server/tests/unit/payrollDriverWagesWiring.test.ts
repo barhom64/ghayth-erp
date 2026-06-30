@@ -49,7 +49,7 @@ describe("مسيّر الرواتب — routes/hr.ts", () => {
     expect(HR_ROUTE).toMatch(/gosiContributionWage\s*=\s*\n?\s*\(GOSI_INCLUDE_HOUSING \? basic \+ housingAllowance : basic\) \+ driverHoursAmount/);
   });
   it("الصافي يضمّ أجر الساعات، والإدراج يحفظ الأعمدة + يُعيد assignmentId", () => {
-    expect(HR_ROUTE).toMatch(/gross \+ overtime \+ commission \+ driverHoursAmount - totalDeductions/);
+    expect(HR_ROUTE).toMatch(/gross \+ overtime \+ commission \+ driverHoursAmount \+ bonusAmount - totalDeductions/);
     expect(HR_ROUTE).toContain('"drivingHours","drivingHoursAmount","stopHours","stopHoursAmount"');
     expect(HR_ROUTE).toContain('RETURNING id, "employeeId", "assignmentId"');
     expect(HR_ROUTE).toContain("totalDriverWages");

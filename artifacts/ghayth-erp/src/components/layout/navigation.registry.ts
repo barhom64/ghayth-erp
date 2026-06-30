@@ -599,6 +599,7 @@ export const allNavSections: NavSection[] = [
           { label: "تسجيل واقعة مركبة", path: "/fleet/record-event", icon: ClipboardCheck, perm: "fleet.vehicles:update" },
           { label: "السائقين", path: "/fleet/drivers", icon: User, perm: "fleet.vehicles:list" },
           { label: "ساعات عمل السائق", path: "/fleet/driver-work-hours", icon: Clock, perm: "fleet.driver_hours:list" },
+          { label: "مكافآت حركات النقل", path: "/fleet/movement-bonuses", icon: Award, perm: "fleet.movement_bonus:list" },
           { label: "فحوص المركبات", path: "/fleet/inspections", icon: ClipboardCheck, perm: "fleet.vehicles:list" },
           { label: "الرحلات", path: "/fleet/trips", icon: Navigation, perm: "fleet.trips:list" },
           { label: "استهلاك الوقود", path: "/fleet/fuel", icon: Fuel, perm: "fleet.trips:list" },

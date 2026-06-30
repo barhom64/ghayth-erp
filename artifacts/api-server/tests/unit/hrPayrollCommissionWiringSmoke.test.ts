@@ -44,21 +44,20 @@ describe("payroll route — commission consumption (exactly-once)", () => {
   });
 
   it("net pay includes the commission earning", () => {
-    // الدفعة 3: انضمّ أجر السائق بالساعة للصافي (driverHoursAmount=0 لغير السائق
-    // الساعي ⇒ العمولة لا تزال ضمن الصافي بلا تغيير سلوكي).
-    expect(HR_ROUTE).toMatch(/roundTo2\(gross \+ overtime \+ commission \+ driverHoursAmount - totalDeductions\)/);
+    // الدفعة ب: انضمّت مكافأة الحركة للصافي كذلك (bonusAmount=0 لغير المُكافَئين
+    // ⇒ العمولة وأجر الساعات لا يزالان ضمن الصافي بلا تغيير سلوكي).
+    expect(HR_ROUTE).toMatch(/roundTo2\(gross \+ overtime \+ commission \+ driverHoursAmount \+ bonusAmount - totalDeductions\)/);
   });
 
   it("WHT base includes commission (non-resident remuneration)", () => {
-    // الدفعة 3: انضمّ أجر السائق بالساعة لوعاء WHT أيضًا (أجرٌ كالعمولة) —
-    // العمولة لا تزال ضمن الوعاء.
-    expect(HR_ROUTE).toMatch(/\(gross \+ overtime \+ commission \+ driverHoursAmount\) \* whtRate/);
+    // الدفعة ب: انضمّت المكافأة لوعاء WHT أيضًا (أجرٌ كالعمولة) — العمولة باقية.
+    expect(HR_ROUTE).toMatch(/\(gross \+ overtime \+ commission \+ driverHoursAmount \+ bonusAmount\) \* whtRate/);
   });
 
-  it("payroll_lines INSERT carries the commission column (22 cols) + RETURNING for stamping", () => {
-    // الدفعة 3 وسّعت الإدراج بأربعة أعمدة لأجر السائق (18→22)؛ عمود العمولة باقٍ.
-    expect(HR_ROUTE).toMatch(/const COLS_PER_ROW = 22;/);
-    expect(HR_ROUTE).toMatch(/"whtAmount",commission,"drivingHours","drivingHoursAmount","stopHours","stopHoursAmount"\)/);
+  it("payroll_lines INSERT carries the commission column (23 cols) + RETURNING for stamping", () => {
+    // الدفعة ب وسّعت الإدراج بعمود bonusAmount (22→23)؛ عمود العمولة باقٍ.
+    expect(HR_ROUTE).toMatch(/const COLS_PER_ROW = 23;/);
+    expect(HR_ROUTE).toMatch(/"stopHours","stopHoursAmount","bonusAmount"\)/);
     expect(HR_ROUTE).toMatch(/RETURNING id, "employeeId"/);
   });
 
