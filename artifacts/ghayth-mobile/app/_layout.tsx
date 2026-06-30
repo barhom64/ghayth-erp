@@ -1010,6 +1010,7 @@ function AuthGate() {
       <Stack.Screen name="portal/tickets" options={{ title: 'تذاكر الدعم' }} />
       <Stack.Screen name="portal/projects" options={{ title: 'مشاريعي' }} />
       <Stack.Screen name="portal/kb" options={{ title: 'قاعدة المعرفة' }} />
+      <Stack.Screen name="settings/two-factor-auth" options={{ title: 'المصادقة الثنائية' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
