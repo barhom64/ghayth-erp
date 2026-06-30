@@ -6,6 +6,7 @@
  *   2. Unified Inbox — UNION across communications_log + pbx_calls
  *   3. Providers     — failover registry CRUD
  *   4. DLP Rules     — outbound scan rule CRUD + dry-run tester
+ *   5. Outbound Queue — operational view of outbound_queue + bulk-retry
  *
  * Same nesting + dialog pattern as admin-ai-governance.tsx so an
  * operator who knows one knows the other.
@@ -39,6 +40,7 @@ import { formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import {
   Radio, Inbox, Shield, AlertOctagon, Plus, FlaskConical, Phone, MessageSquare, Mail,
+  Send, RotateCw,
 } from "lucide-react";
 import { RefreshAction } from "@/components/page-actions";
 
@@ -83,6 +85,29 @@ interface InboxRow {
   createdAt: string;
 }
 
+interface OutboundQueueRow {
+  id: number;
+  channel: string;
+  recipient: string | null;
+  recipientName: string | null;
+  subject: string | null;
+  status: string;
+  attempts: number;
+  maxAttempts: number;
+  errorMessage: string | null;
+  scheduledAt: string | null;
+  sentAt: string | null;
+  messageLogId: number | null;
+  createdAt: string;
+}
+
+interface OutboundQueueResp {
+  data: OutboundQueueRow[];
+  total: number;
+  windowHours: number;
+  totalsByStatus: Record<string, number>;
+}
+
 interface Overview {
   providers: Array<{ channel: string; status: string; count: number }>;
   dlpRules: Array<{ severity: string; action: string; count: number }>;
@@ -123,12 +148,26 @@ const DIRECTION_LABEL_AR: Record<string, string> = {
   outbound: "صادر",
 };
 
+// Outbound-queue status copy + color (plain tailwind palette to stay
+// Arabic-first and self-contained — these queue statuses aren't all
+// covered by the shared status resolver).
+const QUEUE_STATUS_AR: Record<string, { label: string; cls: string }> = {
+  pending:   { label: "قيد الانتظار", cls: "bg-amber-100 text-amber-800" },
+  sending:   { label: "قيد الإرسال",  cls: "bg-blue-100 text-blue-800" },
+  sent:      { label: "مُرسَل",        cls: "bg-emerald-100 text-emerald-800" },
+  failed:    { label: "فشل",          cls: "bg-red-100 text-red-800" },
+  cancelled: { label: "ملغى",         cls: "bg-gray-100 text-gray-700" },
+};
+const queueStatusLabel = (s: string) => QUEUE_STATUS_AR[s]?.label ?? s;
+
 export default function AdminCommunicationControl() {
   const [tab, setTab] = useState("overview");
   const [providerOpen, setProviderOpen] = useState(false);
   const [dlpOpen, setDlpOpen] = useState(false);
   const [dlpTestOpen, setDlpTestOpen] = useState(false);
   const [inboxChannel, setInboxChannel] = useState<string>("all");
+  const [queueStatus, setQueueStatus] = useState<string>("all");
+  const [queueChannel, setQueueChannel] = useState<string>("all");
 
   const { data: overview, isLoading: ovLoading, error: ovError, refetch: refetchOverview } =
     useApiQuery<Overview>(["comm-control-overview"], "/admin/communication-control/overview");
@@ -147,9 +186,22 @@ export default function AdminCommunicationControl() {
   const { data: rulesResp, refetch: refetchRules } =
     useApiQuery<{ data: DlpRuleRow[] }>(["comm-control-dlp"], "/admin/communication-control/dlp-rules");
 
+  const queueQs = [
+    queueStatus !== "all" ? `status=${queueStatus}` : "",
+    queueChannel !== "all" ? `channel=${queueChannel}` : "",
+  ].filter(Boolean).join("&");
+  const { data: queueResp, isLoading: qLoading, refetch: refetchQueue } =
+    useApiQuery<OutboundQueueResp>(
+      ["comm-control-queue", queueStatus, queueChannel],
+      `/admin/communication-control/outbound-queue${queueQs ? `?${queueQs}` : ""}`,
+    );
+
   const providers = providersResp?.data ?? [];
   const rules = rulesResp?.data ?? [];
   const inbox = inboxResp?.data ?? [];
+  const queue = queueResp?.data ?? [];
+  const totalsByStatus = queueResp?.totalsByStatus ?? {};
+  const failedCount = totalsByStatus.failed ?? 0;
 
   // Print wiring — the Unified Inbox is the primary operational row-level
   // table (messages + calls); providers/DLP are smaller config registries.
@@ -160,7 +212,25 @@ export default function AdminCommunicationControl() {
     void refetchInbox();
     void refetchProviders();
     void refetchRules();
+    void refetchQueue();
   };
+
+  const bulkRetry = useMutation({
+    mutationFn: () => apiFetch<{ ok: boolean; queueReset: number }>(
+      "/admin/communication-control/outbound-queue/bulk-retry",
+      {
+        method: "POST",
+        body: JSON.stringify(
+          queueChannel !== "all" ? { channel: queueChannel, hours: 24 } : { hours: 24 },
+        ),
+      },
+    ),
+    onSuccess: (r) => {
+      toast({ title: "تمت إعادة الجدولة", description: `أُعيدت جدولة ${r.queueReset} رسالة فاشلة للإرسال` });
+      refreshAll();
+    },
+    onError: (e: Error) => toast({ title: "فشلت إعادة المحاولة", description: e.message, variant: "destructive" }),
+  });
 
   const createProvider = useMutation({
     mutationFn: (b: Partial<ProviderRow>) => apiFetch("/admin/communication-control/providers", {
@@ -256,6 +326,37 @@ export default function AdminCommunicationControl() {
     )},
   ];
 
+  const queueColumns: DataTableColumn<OutboundQueueRow>[] = [
+    { key: "channel", header: "القناة", render: (r) => {
+      const Icon = CHANNEL_ICON[r.channel] ?? Radio;
+      return <span className="flex items-center gap-1 text-xs"><Icon className="w-3 h-3" />{INBOX_CHANNEL_LABEL_AR[r.channel] ?? r.channel}</span>;
+    }},
+    { key: "recipient", header: "المُرسَل إليه", render: (r) => (
+      <div className="max-w-[220px]">
+        {r.recipientName && <p className="text-xs font-medium truncate">{r.recipientName}</p>}
+        <p className="font-mono text-[11px] text-muted-foreground truncate">{r.recipient ?? "—"}</p>
+      </div>
+    )},
+    { key: "subject", header: "الموضوع", render: (r) => (
+      <span className="text-xs max-w-[260px] truncate block" title={r.subject ?? ""}>{r.subject ?? "—"}</span>
+    )},
+    { key: "status", header: "الحالة", render: (r) => {
+      const s = QUEUE_STATUS_AR[r.status];
+      return <Badge className={cn("text-[10px] border-0", s?.cls ?? "bg-gray-100 text-gray-700")}>{s?.label ?? r.status}</Badge>;
+    }},
+    { key: "attempts", header: "المحاولات", render: (r) => (
+      <span className="font-mono text-xs">{r.attempts}/{r.maxAttempts}</span>
+    )},
+    { key: "errorMessage", header: "سبب الفشل", render: (r) => (
+      r.errorMessage
+        ? <span className="text-[11px] text-status-error-foreground max-w-[280px] truncate block" title={r.errorMessage}>{r.errorMessage}</span>
+        : <span className="text-xs text-muted-foreground">—</span>
+    )},
+    { key: "createdAt", header: "التاريخ", render: (r) => (
+      <span className="text-xs">{formatDateAr(r.createdAt)}</span>
+    )},
+  ];
+
   // Aggregate by channel for the overview tab.
   const inboundByChannel = (overview?.inboundLast24h ?? []).reduce<Record<string, { in: number; out: number }>>((acc, r) => {
     acc[r.channel] = acc[r.channel] ?? { in: 0, out: 0 };
@@ -283,6 +384,9 @@ export default function AdminCommunicationControl() {
             <TabsTrigger value="inbox"><Inbox className="w-4 h-4 me-1" />الصندوق الموحّد</TabsTrigger>
             <TabsTrigger value="providers"><Radio className="w-4 h-4 me-1" />المزوّدات ({providers.length})</TabsTrigger>
             <TabsTrigger value="dlp"><Shield className="w-4 h-4 me-1" />قواعد DLP ({rules.length})</TabsTrigger>
+            <TabsTrigger value="queue">
+              <Send className="w-4 h-4 me-1" />صف الإرسال{failedCount > 0 ? ` (${failedCount} فشل)` : ""}
+            </TabsTrigger>
           </TabsList>
 
           {/* ── Overview ──────────────────────────────────────────── */}
@@ -432,6 +536,70 @@ export default function AdminCommunicationControl() {
                 {rules.length > 0
                   ? <DataTable columns={ruleColumns} data={rules} noToolbar pageSize={0} />
                   : <p className="text-sm text-muted-foreground p-6 text-center">لا توجد قواعد DLP بعد.</p>}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ── Outbound Queue ────────────────────────────────────── */}
+          <TabsContent value="queue" className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Label className="text-sm">الحالة:</Label>
+              <Select value={queueStatus} onValueChange={setQueueStatus}>
+                <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">جميع الحالات</SelectItem>
+                  <SelectItem value="pending">قيد الانتظار</SelectItem>
+                  <SelectItem value="sending">قيد الإرسال</SelectItem>
+                  <SelectItem value="sent">مُرسَل</SelectItem>
+                  <SelectItem value="failed">فشل</SelectItem>
+                  <SelectItem value="cancelled">ملغى</SelectItem>
+                </SelectContent>
+              </Select>
+              <Label className="text-sm">القناة:</Label>
+              <Select value={queueChannel} onValueChange={setQueueChannel}>
+                <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">جميع القنوات</SelectItem>
+                  <SelectItem value="email">بريد إلكتروني</SelectItem>
+                  <SelectItem value="whatsapp">واتساب</SelectItem>
+                  <SelectItem value="sms">رسائل SMS</SelectItem>
+                  <SelectItem value="pbx">سنترال (PBX)</SelectItem>
+                  <SelectItem value="push">إشعار فوري</SelectItem>
+                  <SelectItem value="internal">داخلي</SelectItem>
+                </SelectContent>
+              </Select>
+              <span className="text-xs text-muted-foreground">آخر 24 ساعة، حد أقصى 100 سجل</span>
+              <div className="ms-auto">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  rateLimitAware
+                  disabled={failedCount === 0 || bulkRetry.isPending}
+                  onClick={() => bulkRetry.mutate()}
+                >
+                  <RotateCw className={cn("w-4 h-4 me-1", bulkRetry.isPending && "animate-spin")} />
+                  إعادة محاولة الفاشل{failedCount > 0 ? ` (${failedCount})` : ""}
+                </Button>
+              </div>
+            </div>
+
+            {Object.keys(totalsByStatus).length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(totalsByStatus).map(([s, n]) => (
+                  <Badge key={s} className={cn("text-[11px] border-0", QUEUE_STATUS_AR[s]?.cls ?? "bg-gray-100 text-gray-700")}>
+                    {queueStatusLabel(s)}: {n}
+                  </Badge>
+                ))}
+              </div>
+            )}
+
+            <Card>
+              <CardContent className="p-0">
+                <PageStateWrapper isLoading={qLoading && queue.length === 0} compact onRetry={refetchQueue}>
+                  {queue.length > 0
+                    ? <DataTable columns={queueColumns} data={queue} noToolbar pageSize={0} />
+                    : <p className="text-sm text-muted-foreground p-6 text-center">لا توجد رسائل في صف الإرسال ضمن النطاق المختار.</p>}
+                </PageStateWrapper>
               </CardContent>
             </Card>
           </TabsContent>
