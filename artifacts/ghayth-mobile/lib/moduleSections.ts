@@ -533,7 +533,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
     label: "الأسطول",
     sections: [
       {
-        key: "vehicles", label: "المركبات", icon: "car-outline", endpoint: "/api/fleet/vehicles",
+        key: "vehicles", label: "المركبات", icon: "car-outline", endpoint: "/api/fleet/vehicles", detailRoute: "/fleet/vehicle-detail",
         titleFields: ["plateNumber", "plate"], subtitleFields: ["make", "model"], statusField: "status", dateFields: ["expiryDate"],
         write: {
           moduleKey: "fleet",

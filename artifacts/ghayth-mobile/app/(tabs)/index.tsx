@@ -57,6 +57,7 @@ const QUICK_LINKS: QuickLink[] = [
   { label: 'لوحة المدير',    icon: 'stats-chart-outline',           route: '/exec-dashboard',   managerOnly: true },
   { label: 'مساحة المدير',   icon: 'briefcase-outline',             route: '/manager-workspace', managerOnly: true },
   { label: 'التقارير المالية', icon: 'bar-chart-outline',            route: '/finance/reports',   managerOnly: true },
+  { label: 'ذكاء الأعمال',   icon: 'analytics-outline',            route: '/bi/dashboard',       managerOnly: true },
   { label: 'البحث',          icon: 'search-outline',                route: '/search' },
   { label: 'التقويم',        icon: 'calendar-number-outline',       route: '/calendar' },
   { label: 'المساعد الذكي',  icon: 'sparkles-outline',             route: '/assistant' },
