@@ -425,6 +425,13 @@ function AuthGate() {
       <Stack.Screen name="warehouse/transfers" options={{ title: 'تحويلات المستودع' }} />
       <Stack.Screen name="properties/maintenance-requests" options={{ title: 'طلبات الصيانة' }} />
       <Stack.Screen name="crm/pipeline" options={{ title: 'خط المبيعات' }} />
+      <Stack.Screen name="finance/bank-reconciliation" options={{ title: 'التسوية البنكية' }} />
+      <Stack.Screen name="finance/fx-rates" options={{ title: 'أسعار الصرف' }} />
+      <Stack.Screen name="hr/performance-reviews" options={{ title: 'تقييمات الأداء' }} />
+      <Stack.Screen name="projects/milestones" options={{ title: 'معالم المشاريع' }} />
+      <Stack.Screen name="warehouse/purchase-orders" options={{ title: 'أوامر الشراء' }} />
+      <Stack.Screen name="admin/system-logs" options={{ title: 'سجلات النظام' }} />
+      <Stack.Screen name="properties/leases" options={{ title: 'عقود الإيجار' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
