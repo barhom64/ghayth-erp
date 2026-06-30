@@ -1231,6 +1231,12 @@ function AuthGate() {
             <Stack.Screen name="intelligence/proactive-insights" options={{ title: 'الرؤى الاستباقية' }} />
             <Stack.Screen name="admin/cron-jobs" options={{ title: 'وظائف الجدولة' }} />
             <Stack.Screen name="governance/expiring-iqama" options={{ title: 'إقامات منتهية الصلاحية' }} />
+            <Stack.Screen name="intelligence/alerts-infra" options={{ title: 'تنبيهات البنية التحتية' }} />
+            <Stack.Screen name="intelligence/alerts-infra-settings" options={{ title: 'إعدادات تنبيهات البنية التحتية' }} />
+            <Stack.Screen name="intelligence/daily-schedule" options={{ title: 'الجدول اليومي' }} />
+            <Stack.Screen name="intelligence/activity-stats" options={{ title: 'إحصائيات النشاط' }} />
+            <Stack.Screen name="intelligence/clients-analytics" options={{ title: 'تحليلات العملاء' }} />
+            <Stack.Screen name="intelligence/company-kpis" options={{ title: 'مؤشرات أداء الشركة' }} />
             <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
