@@ -38,7 +38,7 @@ export async function createOpportunityFromInboundComm(params: {
   const { insertId } = await rawExecute(
     `INSERT INTO crm_opportunities
        ("companyId", title, "contactName", "contactPhone", "contactEmail", source, stage, status, notes, "createdAt")
-     VALUES ($1, $2, $3, $4, $5, $6, 'lead', 'active', $7, NOW())`,
+     VALUES ($1, $2, $3, $4, $5, $6, 'lead', 'open', $7, NOW())`,
     [
       companyId,
       title,
