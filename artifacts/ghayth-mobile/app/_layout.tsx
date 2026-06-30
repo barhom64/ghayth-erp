@@ -408,6 +408,16 @@ function AuthGate() {
       <Stack.Screen name="support/sla-report" options={{ title: 'تقرير مستوى الخدمة' }} />
       <Stack.Screen name="fleet/violations" options={{ title: 'مخالفات الأسطول' }} />
       <Stack.Screen name="projects/risks" options={{ title: 'مخاطر المشاريع' }} />
+      <Stack.Screen name="support/tickets" options={{ title: 'تذاكر الدعم' }} />
+      <Stack.Screen name="governance/policies" options={{ title: 'السياسات' }} />
+      <Stack.Screen name="governance/audits" options={{ title: 'التدقيق والمراجعة' }} />
+      <Stack.Screen name="governance/capas" options={{ title: 'الإجراءات التصحيحية' }} />
+      <Stack.Screen name="governance/risks" options={{ title: 'مخاطر الحوكمة' }} />
+      <Stack.Screen name="legal/cases" options={{ title: 'القضايا القانونية' }} />
+      <Stack.Screen name="documents/list" options={{ title: 'مكتبة الوثائق' }} />
+      <Stack.Screen name="finance/gl-accounts" options={{ title: 'دليل الحسابات' }} />
+      <Stack.Screen name="finance/budgets" options={{ title: 'الميزانيات' }} />
+      <Stack.Screen name="finance/cost-centers" options={{ title: 'مراكز التكلفة' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
