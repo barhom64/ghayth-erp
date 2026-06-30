@@ -631,6 +631,13 @@ function AuthGate() {
       <Stack.Screen name="bi/ops-analytics" options={{ title: 'تحليلات العمليات' }} />
       <Stack.Screen name="admin/daily-schedule" options={{ title: 'الجدول اليومي' }} />
       <Stack.Screen name="admin/company-kpis" options={{ title: 'مؤشرات أداء الشركة' }} />
+      <Stack.Screen name="finance/gl-integrity" options={{ title: 'فجوات سلامة الدفتر' }} />
+      <Stack.Screen name="fleet/optimizer-runs" options={{ title: 'تشغيلات المُحسِّن' }} />
+      <Stack.Screen name="fleet/expense-rules" options={{ title: 'قواعد مصروفات الأسطول' }} />
+      <Stack.Screen name="transport/calendar" options={{ title: 'تقويم النقل' }} />
+      <Stack.Screen name="governance/expiring-registrations" options={{ title: 'التراخيص المنتهية' }} />
+      <Stack.Screen name="admin/import-batches" options={{ title: 'دفعات الاستيراد' }} />
+      <Stack.Screen name="admin/comm-overview" options={{ title: 'نظرة عامة على الاتصالات' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
