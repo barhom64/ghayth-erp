@@ -1718,9 +1718,9 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       // ── Step 8c: Driver-vehicle binding ──
       // When the new employee is a driver and the operator chose a
       // vehicle in the form, validate the vehicle belongs to the same
-      // company and create the assignment row. We use UPDATE
-      // fleet_vehicles SET "currentDriverId" = empId so the existing
-      // driver-detail screens pick it up without a new entity.
+      // company, then ensure a fleet_drivers row linked to this employee
+      // (INSERT … ON CONFLICT DO NOTHING) so the existing driver-detail
+      // and assignment screens pick the person up without a new entity.
       const wantsVehicle = ((body as any).vehicleId as number | null | undefined) ?? null;
       const effectiveRole = role || "employee";
       if (wantsVehicle && (effectiveRole === "driver" || effectiveRole === "fleet_driver")) {
