@@ -87,6 +87,8 @@ const MeDriver = lazy(() => import("@/pages/fleet/me-driver"));
 const MeInspection = lazy(() => import("@/pages/fleet/me-inspection"));
 const MeDriverReports = lazy(() => import("@/pages/fleet/me-driver-reports"));
 const InspectionsReview = lazy(() => import("@/pages/fleet/inspections-review"));
+// أجر السائق بالساعة — شاشة ساعات العمل (الدفعة 1).
+const DriverWorkHours = lazy(() => import("@/pages/fleet/driver-work-hours"));
 
 export const fleetRoutes = [
   { path: "/fleet", component: Fleet },
@@ -175,6 +177,8 @@ export const fleetRoutes = [
   { path: "/fleet/transport/itineraries/:id", component: TransportItineraryDetail },
   { path: "/fleet/transport/route-patterns", component: TransportRoutePatterns },
   { path: "/me/driver/navigation", component: MeDriverNavigation },
+  // أجر السائق بالساعة — ساعات العمل (قبل /fleet/:id كي لا يُطابَق كمعرّف).
+  { path: "/fleet/driver-work-hours", component: DriverWorkHours },
   { path: "/fleet/:id/status", component: VehicleStatusChange },
   { path: "/fleet/:id", component: VehicleDetail },
 ];
