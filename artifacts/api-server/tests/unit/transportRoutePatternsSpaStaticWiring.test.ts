@@ -175,3 +175,48 @@ describe("#2079 TA-T18-04 — boundary intact", () => {
     expect(PAGE).not.toMatch(/CREATE TABLE|ALTER TABLE|DROP TABLE/i);
   });
 });
+
+/* ── 7. Heavy-transport ready preset (2026-06-30) ──────────────── */
+
+describe("قالب «نقل ثقيل» الجاهز — قيم مُسبقة فوق تدفّق الإنشاء القائم", () => {
+  it("أصناف المركبة قائمة قانونية عربية (شاحنة=truck للنقل الثقيل)", () => {
+    expect(PAGE).toMatch(/VEHICLE_CLASS_OPTIONS\s*=\s*\[/);
+    expect(PAGE).toMatch(/value:\s*"truck",\s*label:\s*"شاحنة"/);
+    expect(PAGE).toMatch(/value:\s*"trailer"/);
+  });
+
+  it("أصناف الرخصة قائمة قانونية عربية (نقل ثقيل=heavy)", () => {
+    expect(PAGE).toMatch(/LICENSE_CLASS_OPTIONS\s*=\s*\[/);
+    expect(PAGE).toMatch(/value:\s*"heavy",\s*label:\s*"نقل ثقيل"/);
+  });
+
+  it("التهيئة المسبقة: شاحنة + رخصة نقل ثقيل + وحدة طن (كلها قابلة للتعديل)", () => {
+    expect(PAGE).toMatch(/HEAVY_TRANSPORT_PRESET[\s\S]{0,200}defaultVehicleClass:\s*"truck"/);
+    expect(PAGE).toMatch(/HEAVY_TRANSPORT_PRESET[\s\S]{0,200}defaultLicenseClass:\s*"heavy"/);
+    expect(PAGE).toMatch(/defaultCargoUnit:\s*"طن"/);
+  });
+
+  it("زر «قالب نقل ثقيل» يفتح حوار الإنشاء مُهيّأً، بصلاحية الإنشاء نفسها", () => {
+    expect(PAGE).toContain("قالب نقل ثقيل");
+    expect(PAGE).toMatch(/openHeavyPreset/);
+    expect(PAGE).toMatch(/\{\s*\.\.\.EMPTY_FORM,\s*\.\.\.HEAVY_TRANSPORT_PRESET\s*\}/);
+    // الزر مُحاط بصلاحية fleet.bookings:create (يُعاد استخدام تدفّق POST القائم).
+    expect(PAGE).toMatch(/perm="fleet\.bookings:create"[\s\S]{0,80}onClick=\{openHeavyPreset\}/);
+  });
+
+  it("حقلا الصنف صارا قائمتين (تخزين كود/عرض عربي) لا إدخالًا حرًّا بأكواد إنجليزية", () => {
+    expect(PAGE).toMatch(/function ClassSelectField/);
+    expect(PAGE).toMatch(/options=\{VEHICLE_CLASS_OPTIONS\}/);
+    expect(PAGE).toMatch(/options=\{LICENSE_CLASS_OPTIONS\}/);
+    // حفظ قيمة قديمة غير قانونية + خيار «غير محدّد» (لا يضيع تعديل قالب سابق).
+    expect(PAGE).toMatch(/\{\s*value,\s*label:\s*value\s*\}/);
+    expect(PAGE).toContain("— غير محدّد");
+  });
+
+  it("لا endpoint/RBAC/هجرة جديدة — مجرد تهيئة مسبقة فوق POST القائم", () => {
+    // القالب الجاهز لا يضيف مسارًا: يفتح نفس الحوار ويُرسل عبر POST نفسه.
+    const verbs = SERVER_LIB.match(/transportRoutePatternsRouter\.(get|post|patch|delete)\(/g) ?? [];
+    expect(verbs.length).toBe(7);
+    expect(PAGE).not.toMatch(/fleet\.routePatterns|fleet\.heavy/);
+  });
+});
