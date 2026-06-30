@@ -1144,6 +1144,14 @@ function AuthGate() {
       <Stack.Screen name="finance/vendor-statement" options={{ title: 'كشف حساب المورد' }} />
       <Stack.Screen name="finance/finance-projects" options={{ title: 'مشاريع المالية' }} />
       <Stack.Screen name="finance/finance-project-costs" options={{ title: 'تكاليف المشروع المالي' }} />
+      <Stack.Screen name="projects/stats-summary" options={{ title: 'ملخص إحصائيات المشاريع' }} />
+      <Stack.Screen name="properties/sale-detail" options={{ title: 'تفاصيل عملية البيع' }} />
+      <Stack.Screen name="properties/unit-impact-preview" options={{ title: 'معاينة تأثير الوحدة' }} />
+      <Stack.Screen name="hr/attendance-auto-detection-log" options={{ title: 'سجل الاكتشاف التلقائي' }} />
+      <Stack.Screen name="hr/attendance-auto-detection-settings" options={{ title: 'إعدادات الاكتشاف التلقائي' }} />
+      <Stack.Screen name="hr/attendance-auto-detection-summary" options={{ title: 'ملخص الاكتشاف التلقائي' }} />
+      <Stack.Screen name="hr/discipline-memo-detail" options={{ title: 'تفاصيل المذكرة التأديبية' }} />
+      <Stack.Screen name="hr/discipline-regulation-detail" options={{ title: 'تفاصيل اللائحة التأديبية' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
