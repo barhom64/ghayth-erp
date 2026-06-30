@@ -1241,6 +1241,8 @@ function AuthGate() {
             <Stack.Screen name="hr/scoring-history" options={{ title: 'سجل تقييم الأداء' }} />
             <Stack.Screen name="hr/lifecycle-status" options={{ title: 'حالة دورة حياة الموظف' }} />
             <Stack.Screen name="hr/lifecycle-history" options={{ title: 'سجل دورة حياة الموظف' }} />
+            <Stack.Screen name="admin/my-sessions" options={{ title: 'جلسات الدخول' }} />
+            <Stack.Screen name="admin/two-fa-status" options={{ title: 'حالة المصادقة الثنائية' }} />
             <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
