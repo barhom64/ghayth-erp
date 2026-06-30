@@ -7,8 +7,12 @@ import FinancialVendorInvoiceCreate from "./financial-vendor-invoice-create";
 
 type InPageType = Exclude<FinanceCreateTab, "journal">;
 
-// نوع البدء من الرابط (?type=sales|purchase) — لإعادة التوجيه من المسارات القديمة.
+// نوع البدء من المسار: المساران القديمان للفاتورتين (/invoice · /vendor-invoice)
+// يعرضان الصفحة الموحّدة بالنوع المناسب مُسبَقًا (بلا إعادة توجيه). يدعم أيضًا ?type=.
 function initialType(): InPageType {
+  const p = window.location.pathname;
+  if (p.endsWith("/vendor-invoice")) return "purchase";
+  if (p.endsWith("/invoice")) return "sales";
   const t = new URLSearchParams(window.location.search).get("type");
   return t === "sales" || t === "purchase" ? t : "event";
 }

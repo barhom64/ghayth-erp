@@ -11,8 +11,8 @@ export type FinanceCreateTab = "event" | "sales" | "purchase" | "journal";
 
 const TABS: { key: FinanceCreateTab; label: string; path: string }[] = [
   { key: "event", label: "قبض / صرف", path: "/finance/documents/create" },
-  { key: "sales", label: "فاتورة مبيعات", path: "/finance/documents/create?type=sales" },
-  { key: "purchase", label: "فاتورة مشتريات", path: "/finance/documents/create?type=purchase" },
+  { key: "sales", label: "فاتورة مبيعات", path: "/finance/documents/invoice" },
+  { key: "purchase", label: "فاتورة مشتريات", path: "/finance/documents/vendor-invoice" },
   { key: "journal", label: "قيد محاسبي", path: "/finance/journal/create" },
 ];
 

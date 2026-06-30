@@ -291,13 +291,14 @@ export const financeRoutes = [
   // م٨ — التبديل: سند القبض/الصرف القديم يُحوَّل إلى «تسجيل واقعة» الموحّد (يشمله
   // كحالة قبض/صرف بجدول بنود + توزيع + مرفقات). doc 25 §٨ (تحويل لا حذف).
   { path: "/finance/vouchers/create", component: redirectTo("/finance/documents/create") },
-  // الصفحة الموحّدة (تبويبات قبض/صرف · مبيعات · مشتريات في المكان). المساران القديمان
-  // للفاتورتين يُحوَّلان إليها بنوع مُسبَق (?type=) — صفحة واحدة بدل ثلاث (ادمجها كلها).
+  // الصفحة الموحّدة (تبويبات قبض/صرف · مبيعات · مشتريات تبدّل النموذج في المكان —
+  // صفحة واحدة بدل ثلاث، «ادمجها كلها»). المساران القديمان للفاتورتين يعرضان **نفس
+  // الصفحة** بالنوع المناسب مُسبَقًا (يُشتَقّ من المسار) — لا إعادة توجيه، لا وميض.
   { path: "/finance/documents/create", component: FinanceCreatePage },
   { path: "/finance/documents/import", component: FinancialImportGateway },
   { path: "/finance/collect", component: CustomerCollection },
-  { path: "/finance/documents/invoice", component: redirectTo("/finance/documents/create?type=sales") },
-  { path: "/finance/documents/vendor-invoice", component: redirectTo("/finance/documents/create?type=purchase") },
+  { path: "/finance/documents/invoice", component: FinanceCreatePage },
+  { path: "/finance/documents/vendor-invoice", component: FinanceCreatePage },
   { path: "/finance/vouchers/:id", component: VoucherDetail },
   { path: "/finance/journal", component: Journal },
   { path: "/finance/journal/activity", component: PostingActivity },
