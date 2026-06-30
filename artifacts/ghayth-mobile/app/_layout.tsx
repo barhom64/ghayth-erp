@@ -1183,6 +1183,11 @@ function AuthGate() {
       <Stack.Screen name="finance/deferred-revenue-schedules" options={{ title: 'جداول الإيراد المؤجل' }} />
       <Stack.Screen name="finance/journal-template-detail" options={{ title: 'قالب القيد' }} />
       <Stack.Screen name="finance/supplier-finance-defaults" options={{ title: 'الإعدادات المالية للمورد' }} />
+      <Stack.Screen name="hr/evaluation-cycle-detail" options={{ title: 'دورة التقييم' }} />
+      <Stack.Screen name="hr/employee-status" options={{ title: 'حالة الموظف' }} />
+      <Stack.Screen name="hr/discipline-auto-detection-settings" options={{ title: 'إعدادات الكشف التلقائي' }} />
+      <Stack.Screen name="umrah/settings" options={{ title: 'إعدادات العمرة' }} />
+      <Stack.Screen name="admin/effective-permissions" options={{ title: 'الصلاحيات الفعلية' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
