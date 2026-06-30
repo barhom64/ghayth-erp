@@ -607,6 +607,9 @@ function AuthGate() {
       <Stack.Screen name="admin/print-templates" options={{ title: 'قوالب الطباعة' }} />
       <Stack.Screen name="marketing/funnel" options={{ title: 'مسار التسويق' }} />
       <Stack.Screen name="requests/request-types" options={{ title: 'أنواع الطلبات' }} />
+      <Stack.Screen name="finance/amortization" options={{ title: 'جداول الإطفاء' }} />
+      <Stack.Screen name="finance/accounting-mappings" options={{ title: 'تعيينات المحاسبة' }} />
+      <Stack.Screen name="bi/operations" options={{ title: 'تأخيرات SLA' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
