@@ -2799,6 +2799,214 @@ async function dailySpeedViolationCheck(): Promise<string> {
   return `Speed violation alerts: ${alerted}`;
 }
 
+/**
+ * Spec ملف 04 §تنبيهات الأسطول السبعة — تنبيه خروج السياج الجغرافي:
+ *   «خروج المركبة من السياج الجغرافي → تنبيه»
+ *
+ * يفحص cron يوميًا (07:15، بعد speed check بـ 15د) قراءات اليوم السابق
+ * في fleet_device_positions ويقارنها بسياجات المركبة في geofence_zones
+ * (شريحة ٨، migration 438). موضع GPS يُعدّ «خارج السياج» إن لم يقع
+ * داخل أي سياج فعّال للمركبة (حساب Haversine في SQL).
+ *
+ * مركبة بلا سياجات معرّفة تُتجاهل تمامًا (السياج اختياري لكل مركبة،
+ * ليس إلزاميًا).
+ *
+ * التجميع يومي: مرّة واحدة لكل مركبة لكل يوم تقويمي عبر
+ * fleet_geofence_exit_alerts (vehicleId, exitDate).
+ *
+ * channel = email فقط — بلا in_app fan-out (درس Codex P2 من شريحة ١).
+ * توجيه: getManagerAssignmentId (خروج السياج سلوك تشغيلي يومي،
+ * branch_manager هو المسؤول الأنسب).
+ *
+ * يستبدل smartAlerts.checkGeofenceViolation المعطّلة (التي كانت تبحث
+ * في أعمدة geofenceLat/Lng/Radius غير الموجودة على fleet_trips).
+ */
+async function dailyGeofenceExitCheck(): Promise<string> {
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
+  const tz = await getSystemTimezone();
+  let alerted = 0;
+  for (const company of companies) {
+    // كل قراءة GPS لمركبة لها سياجات فعّالة + هل وقعت داخل أي سياج؟
+    // (تجميع per-position أولًا، ثم per-vehicle).
+    // Haversine بالكيلومتر (R=6371):
+    //   d = 2R · asin(sqrt(sin²((φ2-φ1)/2) + cos(φ1)·cos(φ2)·sin²((λ2-λ1)/2)))
+    const candidates = await rawQuery<Record<string, unknown>>(
+      `WITH day_bounds AS (
+         SELECT
+           ((NOW() AT TIME ZONE $2)::date - INTERVAL '1 day')::date AS "exitDate",
+           ((((NOW() AT TIME ZONE $2)::date - INTERVAL '1 day')::date)::timestamp AT TIME ZONE $2) AS "startTs",
+           ((((NOW() AT TIME ZONE $2)::date)::timestamp                            AT TIME ZONE $2)) AS "endTs"
+       ),
+       position_distances AS (
+         SELECT p.id AS "posId",
+                p."vehicleId",
+                p."occurredAt",
+                MIN(
+                  2 * 6371.0 * asin(
+                    sqrt(
+                      power(sin(radians((z."centerLat" - p.lat)::float8) / 2.0), 2) +
+                      cos(radians(p.lat::float8)) * cos(radians(z."centerLat"::float8)) *
+                      power(sin(radians((z."centerLng" - p.lng)::float8) / 2.0), 2)
+                    )
+                  ) - z."radiusKm"::float8
+                ) AS "marginKm"
+           FROM fleet_device_positions p
+           CROSS JOIN day_bounds db
+           JOIN geofence_zones z
+             ON z."companyId" = p."companyId"
+            AND z."vehicleId" = p."vehicleId"
+            AND z."deletedAt" IS NULL
+          WHERE p."companyId" = $1
+            AND p."occurredAt" >= db."startTs"
+            AND p."occurredAt" <  db."endTs"
+          GROUP BY p.id, p."vehicleId", p."occurredAt"
+       )
+       SELECT pd."vehicleId",
+              fv."plateNumber",
+              CONCAT_WS(' ', fv.make, fv.model) AS "vehicleName",
+              fv."branchId",
+              COUNT(*) FILTER (WHERE pd."marginKm" > 0)::int      AS "exitCount",
+              MIN(pd."occurredAt") FILTER (WHERE pd."marginKm" > 0) AS "firstExitTime",
+              MAX(pd."marginKm") FILTER (WHERE pd."marginKm" > 0) AS "maxMarginKm",
+              (SELECT "exitDate" FROM day_bounds)                  AS "exitDate"
+         FROM position_distances pd
+         JOIN fleet_vehicles fv ON fv.id = pd."vehicleId"
+        WHERE fv."deletedAt" IS NULL
+        GROUP BY pd."vehicleId", fv."plateNumber", fv.make, fv.model, fv."branchId"
+       HAVING COUNT(*) FILTER (WHERE pd."marginKm" > 0) >= 1`,
+      [company.id, tz]
+    );
+    for (const c of candidates) {
+      const vehicleId = Number(c.vehicleId);
+      const exitDate = String(c.exitDate).slice(0, 10);
+      const branchId = c.branchId != null ? Number(c.branchId) : null;
+      const exitCount = Number(c.exitCount);
+      const maxDistanceKm = Number(c.maxMarginKm);
+      const firstExitTime = c.firstExitTime ? String(c.firstExitTime) : '—';
+
+      const existing = await rawQuery<Record<string, unknown>>(
+        `SELECT 1 FROM fleet_geofence_exit_alerts
+          WHERE "vehicleId" = $1 AND "exitDate" = $2::date LIMIT 1`,
+        [vehicleId, exitDate]
+      );
+      if (existing.length > 0) continue;
+
+      // اسم السائق من رحلة فعّالة خلال يوم الخروج نفسه (نفس نمط شريحة ٧).
+      let driverName = '—';
+      try {
+        const [trip] = await rawQuery<{ name: string | null }>(
+          `SELECT fd.name FROM fleet_trips ft
+             LEFT JOIN fleet_drivers fd ON fd.id = ft."driverId"
+            WHERE ft."companyId" = $1 AND ft."vehicleId" = $2
+              AND ft."deletedAt" IS NULL
+              AND ft."startTime" >= ($3::date)::timestamp AT TIME ZONE $4
+              AND ft."startTime" <  ($3::date + 1)::timestamp AT TIME ZONE $4
+            ORDER BY ft."startTime" DESC
+            LIMIT 1`,
+          [company.id, vehicleId, exitDate, tz]
+        );
+        if (trip?.name) driverName = trip.name;
+      } catch (e) {
+        logger.warn(e, `[cronScheduler] geofence_exit: driver lookup failed (vehicleId=${vehicleId})`);
+      }
+
+      // المدير: branch_manager (السياج سلوك تشغيلي يومي).
+      let managerAssignment: number | null = null;
+      let managerName = 'المدير';
+      try {
+        if (branchId) {
+          managerAssignment = await getManagerAssignmentId(company.id, branchId);
+        }
+        if (!managerAssignment) {
+          const [fallback] = await rawQuery<{ id: number; name: string }>(
+            `SELECT ea.id, e.name
+               FROM employee_assignments ea
+               LEFT JOIN employees e ON e.id = ea."employeeId"
+              WHERE ea."companyId" = $1 AND ea.status = 'active'
+                AND ea.role IN ('branch_manager','hr_manager','general_manager','owner')
+              ORDER BY CASE ea.role
+                         WHEN 'branch_manager' THEN 1
+                         WHEN 'hr_manager' THEN 2
+                         WHEN 'general_manager' THEN 3
+                         ELSE 4
+                       END
+              LIMIT 1`,
+            [company.id]
+          );
+          if (fallback) { managerAssignment = fallback.id; managerName = fallback.name || managerName; }
+        }
+      } catch (e) {
+        logger.warn(e, `[cronScheduler] geofence_exit: manager lookup failed (vehicleId=${vehicleId})`);
+      }
+
+      if (!managerAssignment) {
+        logger.info(`[cronScheduler] geofence_exit: no manager (company=${company.id}, vehicleId=${vehicleId}) — skipped`);
+        continue;
+      }
+
+      // استخرج اسم + بريد المدير (شريحة ٧ Codex P1 — dispatchNotification
+      // يحتاج recipientEmail ليُرسل البريد فعلًا).
+      let managerEmail: string | null = null;
+      try {
+        const [mgrInfo] = await rawQuery<{ name: string; email: string | null }>(
+          `SELECT e.name, e.email FROM employee_assignments ea
+             JOIN employees e ON e.id = ea."employeeId"
+            WHERE ea.id = $1`,
+          [managerAssignment]
+        );
+        if (mgrInfo) {
+          if (mgrInfo.name) managerName = mgrInfo.name;
+          managerEmail = mgrInfo.email ?? null;
+        }
+      } catch (e) {
+        logger.warn(e, `[cronScheduler] geofence_exit: manager email lookup failed (vehicleId=${vehicleId})`);
+      }
+
+      try {
+        await dispatchNotification({
+          companyId: company.id,
+          eventCategory: "fleet.geofence.exit",
+          title: "",
+          body: "",
+          channels: ["email" as const],
+          templateKey: "fleet.geofence.exit",
+          templateVars: {
+            managerName: managerName,
+            driverName: driverName,
+            plateNumber: String(c.plateNumber ?? '—'),
+            vehicleName: String(c.vehicleName ?? '—'),
+            exitCount: String(exitCount),
+            firstExitTime: firstExitTime,
+            maxDistanceKm: maxDistanceKm.toFixed(2),
+            exitDate: exitDate,
+          },
+          assignmentId: managerAssignment,
+          recipientEmail: managerEmail ?? undefined,
+          recipientName: managerName,
+          refType: "fleet_vehicle",
+          refId: vehicleId,
+          priority: "high",
+        });
+      } catch (e) {
+        logger.warn(e, `[cronScheduler] geofence_exit dispatch failed (vehicleId=${vehicleId})`);
+        continue;
+      }
+
+      await rawExecute(
+        `INSERT INTO fleet_geofence_exit_alerts
+           ("vehicleId","exitDate","companyId","branchId",
+            "exitCount","maxDistanceKm","alertedAssignmentId")
+         VALUES ($1,$2::date,$3,$4,$5,$6,$7)
+         ON CONFLICT ("vehicleId","exitDate") DO NOTHING`,
+        [vehicleId, exitDate, company.id, branchId, exitCount, maxDistanceKm, managerAssignment]
+      ).catch((e) => logger.error(e, "[cronScheduler] fleet_geofence_exit_alerts insert failed"));
+
+      alerted++;
+    }
+  }
+  return `Geofence exit alerts: ${alerted}`;
+}
+
 async function weeklyCrmReport(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let sent = 0;
@@ -6135,6 +6343,10 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   // يومي 07:00 يفحص قراءات اليوم السابق. idempotent يومي عبر
   // fleet_speed_violation_alerts: مرّة واحدة لكل مركبة لكل يوم تقويمي.
   { name: "daily_speed_violation_check", description: "تنبيه تجاوز السرعة (يومي، حسب vehicle_speed_limits)", schedule: "0 7 * * *", handler: dailySpeedViolationCheck },
+  // ملف 04 §تنبيهات الأسطول — خروج السياج الجغرافي (مقابل geofence_zones).
+  // يومي 07:15 يفحص قراءات اليوم السابق بـ Haversine. idempotent عبر
+  // fleet_geofence_exit_alerts: مرّة واحدة لكل مركبة لكل يوم تقويمي.
+  { name: "daily_geofence_exit_check", description: "تنبيه خروج السياج الجغرافي (يومي)", schedule: "15 7 * * *", handler: dailyGeofenceExitCheck },
   { name: "weekly_crm_report", description: "تقرير CRM الأسبوعي", schedule: "0 8 * * 0", handler: weeklyCrmReport },
   { name: "weekly_cash_flow", description: "فحص التدفق النقدي الأسبوعي", schedule: "0 9 * * 1", handler: weeklyCashFlowCheck },
   { name: "weekly_property_revenue", description: "إيرادات عقارية أسبوعية", schedule: "0 9 * * 1", handler: weeklyPropertyRevenue },
