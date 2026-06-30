@@ -94,12 +94,22 @@ POST /umrah/import/presets
 POST /umrah/import/vouchers
 
 # ======================================================================
-# GENUINE GAP — LEDGER-SENSITIVE: needs audit + assertion test + COUNCIL/ESCALATION [HIGH]
+# EXEMPT — ledger ops VERIFIED audited beyond the guard's 200-line window or via
+# a delegated helper/engine the static scan can't follow (2026-06-30 deep audit)
 # ======================================================================
-# Ledger-mutating actions with no explicit createAuditLog/emitEvent in-handler.
-# Per the constitution any ledger-touching change needs an assertion test on the
-# journal lines + council review — do NOT wire hastily. journal reverse VERIFIED
-# unaudited (finance-journal.ts ~L3791); the others MUST be re-verified before action.
+# Re-verified line-by-line against the actual code: NONE of these is a real gap.
+# The audit happens, just outside the per-handler window the scanner reads. No
+# code change — wiring extra audit here would DOUBLE-log. (Same false-positive
+# class as the applyTransition<…> generic-call fix.)
+#   journal/:id/reverse        → createAuditLog + emitEvent at finance-journal.ts:4003
+#                                (≈212 lines into the handler; action "journal.reversed").
+#   fiscal-periods-v2/:id/close→ delegates to closeFiscalPeriodCanonical, which writes
+#                                the audit_log + event_logs row in-tx (finance-hardening.ts:234).
+#   fiscal-periods/:period/close→ DEPRECATED redirect stub (finance-budget.ts:752, `_req`):
+#                                returns a "use v2" message, writes nothing → nothing to audit.
+#   payment-run/execute        → emitEvent at finance-purchase.ts:2208 (end of a 355-line handler).
+#   umrah/reclassify-revenue   → thin route delegating to reclassifyRevenueForInvoices engine,
+#                                which emitEvent + createAuditLog (umrahReclassifyEngine.ts:229/249).
 POST /finance/fiscal-periods-v2/:id/close
 POST /finance/fiscal-periods/:period/close
 POST /finance/journal/:id/reverse
