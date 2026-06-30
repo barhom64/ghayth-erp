@@ -590,6 +590,16 @@ class FinancialEngineImpl implements DomainEngine {
     const currency = request.currency ?? "SAR";
 
     // ── Step 1: number (centralised via numberingService)
+    // expectedTiming is a CONSISTENCY ASSERTION, not a behavioural switch —
+    // the number is issued the moment issueNumber() runs regardless of its
+    // value. The route-level creation paths for the same entities
+    // (finance/sales_invoice in routes/finance-invoices.ts + transport-pricing.ts,
+    // umrah/umrah_agent_invoice in routes/umrah.ts) all declare 'on_draft'.
+    // Keeping this engine at 'on_posting' made one scheme unable to satisfy
+    // both paths → a guaranteed 422 timing-mismatch on whichever side didn't
+    // match the seeded scheme. Unified to 'on_draft' so every issuance path
+    // for these entities passes the guard (migration 441 sets the matching
+    // scheme timing). No change to WHEN the number is allocated.
     const numbering = await issueNumber({
       moduleKey: request.moduleKey,
       entityKey: request.entityKey,
@@ -597,7 +607,7 @@ class FinancialEngineImpl implements DomainEngine {
       branchId: request.branchId,
       entityTable: request.sourceRefs.sourceType,
       actorId: request.createdBy,
-      expectedTiming: "on_posting",
+      expectedTiming: "on_draft",
     });
 
     // ── Step 2: per-line tax + revenue account
