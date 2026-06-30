@@ -801,6 +801,9 @@ function AuthGate() {
       <Stack.Screen name="hr/supervision-lines" options={{ title: 'خطوط الإشراف' }} />
       <Stack.Screen name="hr/approval-authorities" options={{ title: 'صلاحيات الاعتماد' }} />
       <Stack.Screen name="hr/scoring-ranking" options={{ title: 'تصنيف الأداء' }} />
+      <Stack.Screen name="admin/rbac-features" options={{ title: 'ميزات الصلاحيات' }} />
+      <Stack.Screen name="admin/rbac-sod" options={{ title: 'فصل المهام' }} />
+      <Stack.Screen name="admin/jit-pending" options={{ title: 'طلبات الوصول المؤقت' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
