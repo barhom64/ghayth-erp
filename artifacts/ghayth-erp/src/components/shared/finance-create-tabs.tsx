@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
  * بدل صفحات متفرّقة. كل تبويب ينتقل لصفحته — والمحرّك الخلفي لكل نوع يبقى كما هو
  * (لا نقل منطق، لا هجرة، لا مساس بالدفتر). يحلّ محلّ روابط «أنواع أخرى» النصّية.
  */
-type FinanceCreateTab = "event" | "sales" | "purchase" | "journal";
+export type FinanceCreateTab = "event" | "sales" | "purchase" | "journal";
 
 const TABS: { key: FinanceCreateTab; label: string; path: string }[] = [
   { key: "event", label: "قبض / صرف", path: "/finance/documents/create" },
@@ -16,7 +16,16 @@ const TABS: { key: FinanceCreateTab; label: string; path: string }[] = [
   { key: "journal", label: "قيد محاسبي", path: "/finance/journal/create" },
 ];
 
-export function FinanceCreateTabs({ active }: { active: FinanceCreateTab }) {
+export function FinanceCreateTabs({
+  active,
+  onSelect,
+}: {
+  active: FinanceCreateTab;
+  // عند توفيره: التبديل **في المكان** (داخل الصفحة الموحّدة) بدل الانتقال — للأنواع
+  // التي تعرضها الصفحة الموحّدة (قبض/صرف · مبيعات · مشتريات). «القيد» يبقى انتقالًا
+  // (تدفّق محاسبي مستقل بصفحته). بدونه: انتقال كامل (للاستخدام المستقل/الرجوع).
+  onSelect?: (key: FinanceCreateTab) => void;
+}) {
   const [, navigate] = useLocation();
   return (
     <div
@@ -32,7 +41,11 @@ export function FinanceCreateTabs({ active }: { active: FinanceCreateTab }) {
             type="button"
             role="tab"
             aria-selected={isActive}
-            onClick={() => { if (!isActive) navigate(t.path); }}
+            onClick={() => {
+              if (isActive) return;
+              if (onSelect && t.key !== "journal") onSelect(t.key);
+              else navigate(t.path);
+            }}
             className={cn(
               "rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
               isActive

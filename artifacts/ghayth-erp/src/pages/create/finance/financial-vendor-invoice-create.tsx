@@ -15,7 +15,6 @@ import { SupplierSelect, BranchSelect, AccountSelect, ProjectSelect, VehicleSele
 import { NumberField, FormFieldWrapper, TextField } from "@/components/shared/form-field-wrapper";
 import { ACCOUNT_PURPOSE_OPTIONS } from "@/lib/finance/account-purposes";
 import { ArrowUpRight } from "lucide-react";
-import { FinanceCreateTabs } from "@/components/shared/finance-create-tabs";
 
 /**
  * فاتورة مشتريات (مورد) — الروح التشغيلية (م٤، docs/25 §٧.٤ + §١١.٢). نفس جدول
@@ -39,7 +38,7 @@ const emptyLine = (): VLine => ({ itemName: "", quantity: 1, unit: "", unitPrice
 const lineAmount = (l: VLine) => roundMoney((Number(l.quantity) || 0) * (Number(l.unitPrice) || 0));
 const LINK_DIM: Record<Exclude<LinkType, "">, string> = { project: "projectId", vehicle: "vehicleId", unit: "unitId" };
 
-export default function FinancialVendorInvoiceCreate() {
+export default function FinancialVendorInvoiceCreate({ embedded = false }: { embedded?: boolean } = {}) {
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
@@ -174,25 +173,21 @@ export default function FinancialVendorInvoiceCreate() {
     );
   }
 
-  return (
-    <CreatePageLayout title="فاتورة مشتريات (تسجيل واقعة)" subtitle="نفس جدول البنود الموحّد، مع ربط كل بند بكيانه وغرض حسابه — تمرّ على محرّك فاتورة المورد القائم" backPath="/finance/expenses">
-      <div dir="rtl">
-        {ocrPrefilled && (
-          <div className="mb-4 rounded-lg border border-status-info-foreground bg-status-info-surface px-4 py-2 text-sm text-status-info-foreground">
-            عُبّئ النموذج من فاتورة ممسوحة (OCR){" "}
-            {ocrSupplierMatched === true
-              ? "— وطُوبق المورّد بالرقم الضريبي."
-              : ocrSupplierMatched === false
-                ? "— لم يُطابَق المورّد بالرقم الضريبي، اختره يدويًّا."
-                : "."}{" "}
-            راجع المبلغ والضريبة والمورّد قبل الحفظ.
-          </div>
-        )}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* شريط الأنواع الموحّد — صفحات الإنشاء المالية كسطح تبويبي واحد (مترابط). */}
-          <FinanceCreateTabs active="purchase" />
-
-          {/* اختصار «ابدأ من مستند» — مطابقة لصفحة الواقعة (نفس محرّك القراءة/الاستيراد). */}
+  const inner = (
+    <div dir="rtl">
+      {ocrPrefilled && (
+        <div className="mb-4 rounded-lg border border-status-info-foreground bg-status-info-surface px-4 py-2 text-sm text-status-info-foreground">
+          عُبّئ النموذج من فاتورة ممسوحة (OCR){" "}
+          {ocrSupplierMatched === true
+            ? "— وطُوبق المورّد بالرقم الضريبي."
+            : ocrSupplierMatched === false
+              ? "— لم يُطابَق المورّد بالرقم الضريبي، اختره يدويًّا."
+              : "."}{" "}
+          راجع المبلغ والضريبة والمورّد قبل الحفظ.
+        </div>
+      )}
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* اختصار «ابدأ من مستند» — مطابقة لصفحة الواقعة (نفس محرّك القراءة/الاستيراد). */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-dashed bg-surface-subtle px-3 py-2 text-sm">
             <span className="text-muted-foreground">عندك المستند جاهز؟ ابدأ منه:</span>
             <button type="button" className="text-primary hover:underline font-medium" onClick={() => navigate("/documents/ocr/review")}>
@@ -280,7 +275,12 @@ export default function FinancialVendorInvoiceCreate() {
             </Button>
           </div>
         </form>
-      </div>
+    </div>
+  );
+  // مضمّن داخل الصفحة الموحّدة (FinanceCreatePage يوفّر القشرة + التبويبات)، أو مستقلًّا.
+  return embedded ? inner : (
+    <CreatePageLayout title="فاتورة مشتريات (تسجيل واقعة)" subtitle="نفس جدول البنود الموحّد، مع ربط كل بند بكيانه وغرض حسابه — تمرّ على محرّك فاتورة المورد القائم" backPath="/finance/expenses">
+      {inner}
     </CreatePageLayout>
   );
 }
