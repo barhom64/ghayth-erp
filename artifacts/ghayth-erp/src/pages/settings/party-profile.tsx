@@ -20,7 +20,7 @@ interface Party360 {
     phone: string | null;
     email: string | null;
   };
-  links: Array<{ entityTable: string; entityId: number; role: string }>;
+  links: Array<{ entityTable: string; entityId: number; role: string; displayName?: string | null }>;
 }
 
 // role → (Arabic label, deep-link to that entity's detail page). Roles map 1:1
@@ -103,8 +103,8 @@ export default function PartyProfile() {
                     const chip = (
                       <span className="inline-flex items-center gap-1.5 rounded border border-border bg-white px-2.5 py-1.5 text-sm">
                         <Briefcase className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="font-medium">{meta.label}</span>
-                        <span className="text-muted-foreground">#{l.entityId}</span>
+                        <span className="font-medium">{l.displayName || `#${l.entityId}`}</span>
+                        <span className="text-xs text-muted-foreground">({meta.label})</span>
                         {meta.href && <ArrowLeft className="h-3 w-3 text-indigo-500" />}
                       </span>
                     );
