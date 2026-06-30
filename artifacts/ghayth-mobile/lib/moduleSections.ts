@@ -164,6 +164,8 @@ export interface ModuleSection {
   dateFields?: string[];
   /** Config-driven write capabilities (detail/create/edit/delete/status). */
   write?: SectionWriteConfig;
+  /** If set, tapping a row navigates to this route with `{ id }` param instead of generic /record. */
+  detailRoute?: string;
 }
 
 export interface ModuleDef {
@@ -180,6 +182,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "employees", label: "الموظفون", icon: "people-outline", endpoint: "/api/employees",
         titleFields: ["name", "fullName"], subtitleFields: ["jobTitle", "empNumber", "branchName"], statusField: "status",
+        detailRoute: "/hr/employee-detail",
         write: {
           moduleKey: "hr",
           canDelete: true,
@@ -1136,6 +1139,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "clients", label: "العملاء", icon: "person-outline", endpoint: "/api/clients",
         titleFields: ["name", "clientName"], subtitleFields: ["phone", "email"], statusField: "status",
+        detailRoute: "/crm/client-detail",
         write: {
           moduleKey: "crm",
           canDelete: true,
@@ -1909,7 +1913,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
         },
       },
       { key: "inbox", label: "صندوق الوارد", icon: "mail-unread-outline", endpoint: "/api/inbox", titleFields: ["subject", "from"], subtitleFields: ["mailboxName", "from"], statusField: "status", dateFields: ["receivedAt", "createdAt"] },
-      { key: "conversations", label: "المحادثات", icon: "chatbubbles-outline", endpoint: "/api/inbox/conversations", titleFields: ["subject", "clientName"], subtitleFields: ["channel", "status"], statusField: "status", dateFields: ["lastMessageAt", "updatedAt"] },
+      { key: "conversations", label: "المحادثات", icon: "chatbubbles-outline", endpoint: "/api/inbox/conversations", titleFields: ["subject", "clientName"], subtitleFields: ["channel", "status"], statusField: "status", dateFields: ["lastMessageAt", "updatedAt"], detailRoute: "/comms/conversation" },
       { key: "mailboxes", label: "صناديق البريد", icon: "server-outline", endpoint: "/api/mailboxes", titleFields: ["name", "email"], subtitleFields: ["type", "email"], statusField: "status" },
     ],
   },

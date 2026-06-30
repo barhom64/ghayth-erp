@@ -125,6 +125,7 @@ function AuthGate() {
       <Stack.Screen name="assistant" options={{ title: 'المساعد الذكي' }} />
       <Stack.Screen name="exec-dashboard" options={{ title: 'لوحة المدير التنفيذي' }} />
       <Stack.Screen name="comms/conversation" options={{ title: 'المحادثة' }} />
+      <Stack.Screen name="crm/client-detail" options={{ title: 'ملف العميل' }} />
       <Stack.Screen name="manager-workspace" options={{ title: 'مساحة عمل المدير' }} />
       <Stack.Screen name="finance/reports" options={{ title: 'التقارير المالية' }} />
       <Stack.Screen name="hr/employee-detail" options={{ title: 'ملف الموظف' }} />

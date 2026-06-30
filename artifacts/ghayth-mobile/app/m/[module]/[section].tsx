@@ -240,8 +240,13 @@ export default function SectionListScreen() {
                 leading={def.icon as never}
                 trailing={st ? <GStatusBadge status={st.label} size="sm" /> : undefined}
                 onPress={noDetail ? undefined : () => {
-                  setRecord({ title: rowTitle, row: item, module, section });
-                  router.push('/record');
+                  if (def.detailRoute) {
+                    const itemId = String(item.id ?? item.employeeId ?? '');
+                    router.push({ pathname: def.detailRoute as never, params: { id: itemId } });
+                  } else {
+                    setRecord({ title: rowTitle, row: item, module, section });
+                    router.push('/record');
+                  }
                 }}
               />
             );
