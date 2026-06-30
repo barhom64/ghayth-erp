@@ -935,6 +935,15 @@ function AuthGate() {
       <Stack.Screen name="bi/approval-timeliness" options={{ title: 'توقيت الاعتمادات' }} />
       <Stack.Screen name="bi/avg-completion-time" options={{ title: 'متوسط وقت الإنجاز' }} />
       <Stack.Screen name="bi/ops-trend" options={{ title: 'اتجاه العمليات' }} />
+      <Stack.Screen name="finance/budget-vs-actual" options={{ title: 'الميزانية مقابل الفعلي' }} />
+      <Stack.Screen name="finance/budget-variance-report" options={{ title: 'تقرير انحراف الميزانية' }} />
+      <Stack.Screen name="finance/cost-centers-tree" options={{ title: 'شجرة مراكز التكلفة' }} />
+      <Stack.Screen name="finance/custodies-report" options={{ title: 'تقرير العهد' }} />
+      <Stack.Screen name="finance/cash-bank-statement" options={{ title: 'كشف النقد والبنك' }} />
+      <Stack.Screen name="finance/custody-advances-report" options={{ title: 'تقرير سلف العهد' }} />
+      <Stack.Screen name="transport/ops-weekly" options={{ title: 'الملخص الأسبوعي للعمليات' }} />
+      <Stack.Screen name="transport/maps-thresholds" options={{ title: 'حدود استخدام الخرائط' }} />
+      <Stack.Screen name="admin/pbx-control-extensions" options={{ title: 'امتدادات PBX' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
