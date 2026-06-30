@@ -562,6 +562,16 @@ function AuthGate() {
       <Stack.Screen name="hr/evaluation-cycles" options={{ title: 'دورات التقييم' }} />
       <Stack.Screen name="finance/tax-codes" options={{ title: 'رموز الضريبة' }} />
       <Stack.Screen name="support/csat" options={{ title: 'رضا العملاء' }} />
+      <Stack.Screen name="hr/teams" options={{ title: 'الفرق' }} />
+      <Stack.Screen name="hr/committees" options={{ title: 'اللجان' }} />
+      <Stack.Screen name="calendar/appointments" options={{ title: 'المواعيد' }} />
+      <Stack.Screen name="requests/catalog" options={{ title: 'كتالوج الطلبات' }} />
+      <Stack.Screen name="admin/notification-rules" options={{ title: 'قواعد الإشعارات' }} />
+      <Stack.Screen name="admin/ai-prompts" options={{ title: 'مطالبات الذكاء الاصطناعي' }} />
+      <Stack.Screen name="warehouse/lots" options={{ title: 'دفعات المستودع' }} />
+      <Stack.Screen name="warehouse/serials" options={{ title: 'الأرقام التسلسلية' }} />
+      <Stack.Screen name="finance/budget-variance" options={{ title: 'انحراف الميزانية' }} />
+      <Stack.Screen name="finance/expenses-analysis" options={{ title: 'تحليل المصروفات' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
