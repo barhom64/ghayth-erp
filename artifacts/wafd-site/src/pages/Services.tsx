@@ -7,14 +7,29 @@ import { useEffect } from "react";
 import { Link } from "wouter";
 import { WAFD_PHONE } from "@/lib/wafd-constants";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useSiteData } from "@/contexts/SiteDataContext";
 
 const WHATSAPP_NUMBER = WAFD_PHONE;
 
+type SvcItem = {
+  icon: string;
+  title: string;
+  subtitle: string;
+  desc: string;
+  features: string[];
+  color: string;
+  available: boolean;
+  link: string | null;
+  whatsappMsg: string;
+};
+
 export default function Services() {
   const { t, dir } = useLanguage();
+  const { services: dbServices } = useSiteData();
   const s = t.services;
 
-  const services = [
+  // القيم الاحتياطية (تظهر فقط عند تعذّر الجلب من غيث).
+  const fallbackServices: SvcItem[] = [
     {
       icon: "🛂",
       title: s.visaTitle,
@@ -23,7 +38,7 @@ export default function Services() {
       features: [s.visaFeature1, s.visaFeature2, s.visaFeature3, s.visaFeature4],
       color: "oklch(0.52 0.12 185)",
       available: true,
-      link: null as string | null,
+      link: null,
       whatsappMsg: `${s.requestNow}: ${s.visaTitle}`,
     },
     {
@@ -34,7 +49,7 @@ export default function Services() {
       features: [s.transportFeature1, s.transportFeature2, s.transportFeature3, s.transportFeature4],
       color: "oklch(0.52 0.12 185)",
       available: true,
-      link: null as string | null,
+      link: null,
       whatsappMsg: `${s.requestNow}: ${s.transportTitle}`,
     },
     {
@@ -60,6 +75,21 @@ export default function Services() {
       whatsappMsg: `${s.requestNow}: ${s.programsTitle}`,
     },
   ];
+
+  // المحتوى الحيّ من غيث (يُحرَّر من لوحة التحكم).
+  const services: SvcItem[] = dbServices.length
+    ? dbServices.map((svc) => ({
+        icon: svc.icon ?? "🕋",
+        title: svc.title,
+        subtitle: svc.subtitle ?? s.available,
+        desc: svc.description ?? "",
+        features: svc.features ?? [],
+        color: "oklch(0.52 0.12 185)",
+        available: svc.isActive,
+        link: svc.link,
+        whatsappMsg: `${s.requestNow}: ${svc.title}`,
+      }))
+    : fallbackServices;
 
   useEffect(() => {
     window.scrollTo(0, 0);
