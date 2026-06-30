@@ -25,6 +25,9 @@ const MIGRATION_434_PATH = join(apiSrc, "migrations/434_transport_deduction_cand
 const MIGRATION_434 = read(MIGRATION_434_PATH);
 const HELPER = read(join(apiSrc, "lib/transport/tripEvents.ts"));
 const DEDUCTIONS = read(join(apiSrc, "lib/transport/deductions.ts"));
+const EVENT_CATALOG = read(join(apiSrc, "lib/eventCatalog.ts"));
+const EVENT_LISTENERS = read(join(apiSrc, "lib/eventListeners.ts"));
+const FINANCE_INVOICES = read(join(apiSrc, "routes/finance-invoices.ts"));
 const BOOKINGS = read(join(apiSrc, "routes/transport-bookings.ts"));
 const PLANNING = read(join(apiSrc, "routes/transport-planning.ts"));
 const RECORDER = read(join(spaSrc, "components/shared/trip-event-recorder.tsx"));
@@ -246,5 +249,23 @@ describe("شريحة 4 — خصم النقص/التأخير (مرشّح → ما
     expect(TRIP_WEIGHT).toContain("export function computeWeightShortage");
     expect(DETAIL).toContain("computeWeightShortage(b.tripEvents)");
     expect(DETAIL).toContain("اقتراح من الأوزان");
+  });
+});
+
+describe("شريحة 4 — ربط المرشّح بالإشعار (عبر حدث، قفل الحدود)", () => {
+  it("الحدث مُسجّل في الكتالوج", () => {
+    expect(EVENT_CATALOG).toContain('name: "transport.deduction.materialized"');
+    expect(EVENT_CATALOG).toMatch(/deductionCandidateId: "number"[\s\S]*?creditMemoId: "number"/);
+  });
+
+  it("المالية تقبل deductionCandidateId وتُطلق الحدث (لا تكتب جدول النقل)", () => {
+    expect(FINANCE_INVOICES).toContain("deductionCandidateId: z.coerce.number()");
+    expect(FINANCE_INVOICES).toContain('action: "transport.deduction.materialized"');
+    expect(FINANCE_INVOICES).not.toContain("UPDATE transport_deduction_candidates");
+  });
+
+  it("مستمع النقل يربط مرشّحه (status=issued + creditMemoId) — يكتب جدوله فقط", () => {
+    expect(EVENT_LISTENERS).toContain('registerCrossDomainHandler("transport.deduction.materialized"');
+    expect(EVENT_LISTENERS).toMatch(/UPDATE transport_deduction_candidates[\s\S]*?status = 'issued'[\s\S]*?"creditMemoId"/);
   });
 });
