@@ -5,8 +5,8 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge , GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -15,6 +15,7 @@ interface ExcuseRequest {
   id: number;
   ref?: string;
   employeeName?: string;
+  employeeId?: number;
   reason?: string;
   status?: string;
   date?: string;
@@ -34,6 +35,7 @@ function fmtDate(val?: string): string {
 
 export default function ExcuseRequestDetailScreen() {
   const c = useColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const { data: req, isLoading } = useList<ExcuseRequest>(`/api/hr/excuse-requests/${id}`);
@@ -88,6 +90,8 @@ export default function ExcuseRequestDetailScreen() {
             <Text style={{ fontSize: 13, color: c.text, textAlign: 'right' }}>{req.notes}</Text>
           </GCard>
         ) : null}
+
+        <GButton title="طلب عذر جديد" icon="document-text-outline" variant="secondary" onPress={() => router.push({ pathname: '/hr/excuse-request-new' as never, params: { employeeId: String(req?.employeeId ?? '') } })} />
       </View>
     </ScrollView>
   );

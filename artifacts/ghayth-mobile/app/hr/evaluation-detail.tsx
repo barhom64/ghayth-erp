@@ -5,8 +5,8 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge , GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -16,6 +16,7 @@ interface Evaluation {
   ref?: string;
   employeeName?: string;
   employeeNumber?: string;
+  employeeId?: number;
   evaluatorName?: string;
   period?: string;
   evaluationType?: string;
@@ -57,6 +58,7 @@ function scoreColor(score: number, max: number): string {
 
 export default function EvaluationDetailScreen() {
   const c = useColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const { data: evaluation, isLoading } = useList<Evaluation>(`/api/hr/evaluations/${id}`);
@@ -160,6 +162,8 @@ export default function EvaluationDetailScreen() {
             <Text style={{ fontSize: 13, color: c.text, textAlign: 'right', lineHeight: 20 }}>{evaluation.developmentPlan}</Text>
           </GCard>
         ) : null}
+
+        <GButton title="تقييم جديد" icon="star-outline" variant="secondary" onPress={() => router.push({ pathname: '/hr/evaluation-new' as never, params: { employeeId: String(evaluation?.employeeId ?? '') } })} />
       </View>
     </ScrollView>
   );

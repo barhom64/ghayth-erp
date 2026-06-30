@@ -4,8 +4,8 @@
  */
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge , GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -41,6 +41,7 @@ function fmtMoney(val?: number, currency?: string): string {
 
 export default function GratuityDetailScreen() {
   const c = useColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const { data: rec, isLoading } = useList<GratuityRecord>(`/api/hr/gratuity/${id}`);
@@ -103,6 +104,8 @@ export default function GratuityDetailScreen() {
             <Text style={{ fontSize: 13, color: c.text, textAlign: 'right' }}>{rec.notes}</Text>
           </GCard>
         ) : null}
+
+        <GButton title="احتساب مكافأة نهاية خدمة" icon="calculator-outline" variant="secondary" onPress={() => router.push({ pathname: '/hr/gratuity-detail' as never, params: { id } })} />
       </View>
     </ScrollView>
   );

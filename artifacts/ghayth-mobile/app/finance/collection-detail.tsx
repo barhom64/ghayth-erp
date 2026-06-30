@@ -5,8 +5,8 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge , GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -47,6 +47,7 @@ const STAGE_COLORS: Record<string, string> = {
 
 export default function CollectionDetailScreen() {
   const c = useColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const { data: col, isLoading } = useList<CollectionCase>(`/api/finance/collection/${id}`);
@@ -125,6 +126,8 @@ export default function CollectionDetailScreen() {
             <Text style={{ fontSize: 13, color: c.text, textAlign: 'right' }}>{col.notes}</Text>
           </GCard>
         ) : null}
+
+        <GButton title="متابعة التحصيل" icon="refresh-outline" variant="secondary" onPress={() => router.push('/finance/collection-new' as never)} />
       </View>
     </ScrollView>
   );

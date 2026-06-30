@@ -4,8 +4,8 @@
  */
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge , GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -39,6 +39,7 @@ function fmtMoney(val?: number, currency?: string): string {
 
 export default function VendorAdvanceDetailScreen() {
   const c = useColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const { data: adv, isLoading } = useList<VendorAdvance>(`/api/finance/vendor-advances/${id}`);
@@ -110,6 +111,8 @@ export default function VendorAdvanceDetailScreen() {
             <Text style={{ fontSize: 13, color: c.text, textAlign: 'right' }}>{adv.notes}</Text>
           </GCard>
         ) : null}
+
+        <GButton title="دفعة مقدمة للمورد" icon="cash-outline" variant="secondary" onPress={() => router.push('/finance/vendor-advance-new' as never)} />
       </View>
     </ScrollView>
   );

@@ -5,8 +5,8 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge , GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -42,6 +42,7 @@ function fmtMoney(val?: number, currency?: string): string {
 
 export default function TransportBookingDetailScreen() {
   const c = useColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const { data: booking, isLoading } = useList<TransportBooking>(`/api/transport/bookings/${id}`);
@@ -99,6 +100,8 @@ export default function TransportBookingDetailScreen() {
             <Text style={{ fontSize: 13, color: c.text, textAlign: 'right' }}>{booking.notes}</Text>
           </GCard>
         ) : null}
+
+        <GButton title="حجز نقل جديد" icon="add-circle-outline" variant="secondary" onPress={() => router.push('/fleet/trip-new' as never)} />
       </View>
     </ScrollView>
   );

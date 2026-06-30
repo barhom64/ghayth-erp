@@ -5,8 +5,8 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState , GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 
@@ -52,6 +52,7 @@ function fmtMoney(val?: number, currency?: string): string {
 
 export default function StockMovementDetailScreen() {
   const c = useColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const { data: mov, isLoading } = useList<StockMovement>(`/api/warehouse/movements/${id}`);
@@ -118,6 +119,8 @@ export default function StockMovementDetailScreen() {
             <Text style={{ fontSize: 13, color: c.text, textAlign: 'right' }}>{mov.notes}</Text>
           </GCard>
         ) : null}
+
+        <GButton title="حركة مخزون جديدة" icon="swap-horizontal-outline" variant="secondary" onPress={() => router.push('/warehouse/movement-new' as never)} />
       </View>
     </ScrollView>
   );

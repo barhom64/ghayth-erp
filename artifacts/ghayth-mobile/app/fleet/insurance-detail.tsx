@@ -5,8 +5,8 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState , GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 
@@ -40,6 +40,7 @@ function fmtMoney(val?: number, currency?: string): string {
 
 export default function FleetInsuranceDetailScreen() {
   const c = useColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const { data: ins, isLoading } = useList<FleetInsurance>(`/api/fleet/insurance/${id}`);
@@ -108,6 +109,8 @@ export default function FleetInsuranceDetailScreen() {
             <Text style={{ fontSize: 13, color: c.text, textAlign: 'right' }}>{ins.notes}</Text>
           </GCard>
         ) : null}
+
+        <GButton title="تأمين مركبة جديد" icon="shield-outline" variant="secondary" onPress={() => router.push('/fleet/insurance-new' as never)} />
       </View>
     </ScrollView>
   );

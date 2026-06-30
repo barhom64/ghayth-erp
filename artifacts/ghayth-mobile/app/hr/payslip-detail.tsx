@@ -4,8 +4,8 @@
  */
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge , GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -41,6 +41,7 @@ function fmtDate(val?: string): string {
 
 export default function PayslipDetailScreen() {
   const c = useColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const { data: slip, isLoading } = useList<Payslip>(`/api/hr/payroll/slips/${id}`);
@@ -120,6 +121,8 @@ export default function PayslipDetailScreen() {
             <Text style={{ fontSize: 14, color: c.text, textAlign: 'right' }}>{fmtDate(slip.paidAt)}</Text>
           </GCard>
         ) : null}
+
+        <GButton title="تصدير كشف الراتب" icon="download-outline" variant="secondary" onPress={() => router.push({ pathname: '/hr/payslip-detail' as never, params: { id } })} />
       </View>
     </ScrollView>
   );

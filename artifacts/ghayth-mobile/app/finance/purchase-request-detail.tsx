@@ -4,8 +4,8 @@
  */
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge , GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList, apiFetch } from '@/hooks/useApi';
 import { useAuth } from '@/context/AuthContext';
@@ -57,6 +57,7 @@ const PRIORITY_COLORS: Record<string, string> = {
 
 export default function PurchaseRequestDetailScreen() {
   const c = useColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -171,6 +172,8 @@ export default function PurchaseRequestDetailScreen() {
             </View>
           </View>
         )}
+
+        <GButton title="أمر شراء جديد" icon="cart-outline" variant="secondary" onPress={() => router.push({ pathname: '/finance/purchase-order-new' as never, params: { requestId: id } })} />
       </View>
     </ScrollView>
   );

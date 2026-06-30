@@ -5,8 +5,8 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge , GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -55,6 +55,7 @@ function getFileIcon(fileType?: string): string {
 
 export default function DocumentDetailScreen() {
   const c = useColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const { data: doc, isLoading } = useList<Document>(`/api/documents/${id}`);
@@ -126,6 +127,8 @@ export default function DocumentDetailScreen() {
             <Text style={{ fontSize: 13, color: c.text, textAlign: 'right' }}>{doc.description}</Text>
           </GCard>
         ) : null}
+
+        <GButton title="إضافة وثيقة جديدة" icon="document-outline" variant="secondary" onPress={() => router.push('/documents/document-new' as never)} />
       </View>
     </ScrollView>
   );

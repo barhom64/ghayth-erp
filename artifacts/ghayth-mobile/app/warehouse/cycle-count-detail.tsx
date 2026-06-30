@@ -5,8 +5,8 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge , GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -48,6 +48,7 @@ function fmtDate(val?: string): string {
 
 export default function CycleCountDetailScreen() {
   const c = useColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const { data: count, isLoading } = useList<CycleCount>(`/api/warehouse/cycle-counts/${id}`);
@@ -142,6 +143,8 @@ export default function CycleCountDetailScreen() {
             <Text style={{ fontSize: 13, color: c.text, textAlign: 'right' }}>{count.notes}</Text>
           </GCard>
         ) : null}
+
+        <GButton title="جرد دوري جديد" icon="list-outline" variant="secondary" onPress={() => router.push('/warehouse/cycle-count-new' as never)} />
       </View>
     </ScrollView>
   );

@@ -5,8 +5,8 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge , GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -43,6 +43,7 @@ function fmtDate(val?: string): string {
 
 export default function TripDetailScreen() {
   const c = useColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const { data: trip, isLoading } = useList<Trip>(`/api/fleet/trips/${id}`);
@@ -121,6 +122,8 @@ export default function TripDetailScreen() {
             <Text style={{ fontSize: 13, color: c.text, textAlign: 'right' }}>{trip.notes}</Text>
           </GCard>
         ) : null}
+
+        <GButton title="رحلة جديدة" icon="navigate-outline" variant="secondary" onPress={() => router.push('/fleet/trip-new' as never)} />
       </View>
     </ScrollView>
   );

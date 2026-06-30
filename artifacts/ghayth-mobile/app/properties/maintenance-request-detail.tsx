@@ -5,8 +5,8 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge , GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList, apiFetch } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -52,6 +52,7 @@ const PRIORITY_COLORS: Record<string, string> = {
 
 export default function MaintenanceRequestDetailScreen() {
   const c = useColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const qc = useQueryClient();
 
@@ -148,6 +149,8 @@ export default function MaintenanceRequestDetailScreen() {
             <Text style={{ fontSize: 15, fontWeight: '700', color: '#FFF' }}>تحديد كمكتمل</Text>
           </View>
         )}
+
+        <GButton title="طلب صيانة جديد" icon="construct-outline" variant="secondary" onPress={() => router.push('/properties/maintenance-new' as never)} />
       </View>
     </ScrollView>
   );

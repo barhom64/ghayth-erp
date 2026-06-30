@@ -4,8 +4,8 @@
  */
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState, GAvatar, GStatusBadge } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState, GAvatar, GStatusBadge , GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -32,6 +32,7 @@ function fmtMoney(val?: number, currency?: string): string {
 
 export default function OwnerDetailScreen() {
   const c = useColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const { data: owner, isLoading } = useList<PropertyOwner>(`/api/properties/owners/${id}`);
@@ -93,6 +94,8 @@ export default function OwnerDetailScreen() {
             <Text style={{ fontSize: 13, color: c.text, textAlign: 'right' }}>{owner.notes}</Text>
           </GCard>
         ) : null}
+
+        <GButton title="عقار جديد لهذا المالك" icon="home-outline" variant="secondary" onPress={() => router.push({ pathname: '/properties/property-new' as never, params: { ownerId: id } })} />
       </View>
     </ScrollView>
   );

@@ -4,8 +4,8 @@
  */
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState , GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 
@@ -34,6 +34,7 @@ function fmtMoney(val?: number, currency?: string): string {
 
 export default function UmrahSubAgentDetailScreen() {
   const c = useColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const { data: subAgent, isLoading } = useList<UmrahSubAgent>(`/api/umrah/sub-agents/${id}`);
@@ -99,6 +100,8 @@ export default function UmrahSubAgentDetailScreen() {
             <Text style={{ fontSize: 13, color: c.text, textAlign: 'right' }}>{subAgent.notes}</Text>
           </GCard>
         ) : null}
+
+        <GButton title="فاتورة وكيل فرعي" icon="document-text-outline" variant="secondary" onPress={() => router.push({ pathname: '/umrah/sub-agent-invoice-new' as never, params: { subAgentId: id } })} />
       </View>
     </ScrollView>
   );

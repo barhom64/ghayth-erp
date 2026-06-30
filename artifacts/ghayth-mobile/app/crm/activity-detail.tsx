@@ -5,8 +5,8 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge , GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -44,6 +44,7 @@ function fmtDate(val?: string): string {
 
 export default function ActivityDetailScreen() {
   const c = useColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const { data: act, isLoading } = useList<Activity>(`/api/crm/activities/${id}`);
@@ -114,6 +115,8 @@ export default function ActivityDetailScreen() {
             <Text style={{ fontSize: 13, color: c.text, textAlign: 'right' }}>{act.notes}</Text>
           </GCard>
         ) : null}
+
+        <GButton title="تسجيل نشاط جديد" icon="add-circle-outline" variant="secondary" onPress={() => router.push('/crm/activity-new' as never)} />
       </View>
     </ScrollView>
   );

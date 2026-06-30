@@ -5,8 +5,8 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge , GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -48,6 +48,7 @@ function fmtMoney(val?: number, currency?: string): string {
 
 export default function TrainingDetailScreen() {
   const c = useColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const { data: program, isLoading } = useList<TrainingProgram>(`/api/hr/training/programs/${id}`);
@@ -134,6 +135,8 @@ export default function TrainingDetailScreen() {
             })}
           </GCard>
         )}
+
+        <GButton title="تسجيل مشاركة موظف" icon="person-add-outline" variant="secondary" onPress={() => router.push({ pathname: '/hr/training-enrollment-new' as never, params: { trainingId: id } })} />
       </View>
     </ScrollView>
   );

@@ -4,8 +4,8 @@
  */
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge , GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -40,6 +40,7 @@ function fmtMoney(val?: number, currency?: string): string {
 
 export default function ExitRequestDetailScreen() {
   const c = useColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const { data: req, isLoading } = useList<ExitRequest>(`/api/hr/transfers/${id}`);
@@ -97,6 +98,8 @@ export default function ExitRequestDetailScreen() {
             <Text style={{ fontSize: 13, color: c.text, textAlign: 'right' }}>{req.notes}</Text>
           </GCard>
         ) : null}
+
+        <GButton title="طلب إنهاء خدمة جديد" icon="exit-outline" variant="secondary" onPress={() => router.push('/hr/exit-request-new' as never)} />
       </View>
     </ScrollView>
   );

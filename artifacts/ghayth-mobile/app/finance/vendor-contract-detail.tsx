@@ -5,8 +5,8 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge , GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -42,6 +42,7 @@ function fmtMoney(val?: number, currency?: string): string {
 
 export default function VendorContractDetailScreen() {
   const c = useColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const { data: contract, isLoading } = useList<VendorContract>(`/api/finance/vendor-contracts/${id}`);
@@ -107,6 +108,8 @@ export default function VendorContractDetailScreen() {
             <Text style={{ fontSize: 13, color: c.text, textAlign: 'right' }}>{contract.notes}</Text>
           </GCard>
         ) : null}
+
+        <GButton title="فاتورة مورد جديدة" icon="document-text-outline" variant="secondary" onPress={() => router.push({ pathname: '/finance/vendor-invoice-new' as never, params: { contractId: id } })} />
       </View>
     </ScrollView>
   );

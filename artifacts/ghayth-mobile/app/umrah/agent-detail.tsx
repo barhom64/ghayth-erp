@@ -5,8 +5,8 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge , GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -45,6 +45,7 @@ function fmtMoney(val?: number, currency?: string): string {
 
 export default function UmrahAgentDetailScreen() {
   const c = useColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const { data: agent, isLoading } = useList<UmrahAgent>(`/api/umrah/agents/${id}`);
@@ -118,6 +119,8 @@ export default function UmrahAgentDetailScreen() {
             <Text style={{ fontSize: 13, color: c.text, textAlign: 'right' }}>{agent.notes}</Text>
           </GCard>
         ) : null}
+
+        <GButton title="فاتورة وكيل جديدة" icon="document-text-outline" variant="secondary" onPress={() => router.push({ pathname: '/umrah/agent-invoice-new' as never, params: { agentId: id } })} />
       </View>
     </ScrollView>
   );

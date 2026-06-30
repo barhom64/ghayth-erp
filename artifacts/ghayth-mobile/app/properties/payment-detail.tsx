@@ -5,8 +5,8 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge , GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -40,6 +40,7 @@ function fmtMoney(val?: number, currency?: string): string {
 
 export default function RentPaymentDetailScreen() {
   const c = useColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const { data: pmt, isLoading } = useList<RentPayment>(`/api/properties/payments/${id}`);
@@ -100,6 +101,8 @@ export default function RentPaymentDetailScreen() {
             <Text style={{ fontSize: 13, color: c.text, textAlign: 'right' }}>{pmt.notes}</Text>
           </GCard>
         ) : null}
+
+        <GButton title="دفعة إيجار جديدة" icon="cash-outline" variant="secondary" onPress={() => router.push('/properties/payment-new' as never)} />
       </View>
     </ScrollView>
   );

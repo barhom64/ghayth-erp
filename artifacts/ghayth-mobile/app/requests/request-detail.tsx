@@ -4,8 +4,8 @@
  */
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge , GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -47,6 +47,7 @@ function fmtDate(val?: string): string {
 
 export default function RequestDetailScreen() {
   const c = useColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const { data: req, isLoading } = useList<Request>(`/api/requests/${id}`);
@@ -107,6 +108,8 @@ export default function RequestDetailScreen() {
             <Text style={{ fontSize: 13, color: c.text, textAlign: 'right' }}>{req.notes}</Text>
           </GCard>
         ) : null}
+
+        <GButton title="طلب جديد" icon="add-circle-outline" variant="secondary" onPress={() => router.push('/requests/request-new' as never)} />
       </View>
     </ScrollView>
   );

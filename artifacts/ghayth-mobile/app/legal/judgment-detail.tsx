@@ -5,8 +5,8 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge , GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -49,6 +49,7 @@ const OUTCOME_COLORS: Record<string, string> = {
 
 export default function JudgmentDetailScreen() {
   const c = useColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const { data: judgment, isLoading } = useList<Judgment>(`/api/legal/judgments/${id}`);
@@ -133,6 +134,8 @@ export default function JudgmentDetailScreen() {
             <Text style={{ fontSize: 13, color: c.text, textAlign: 'right' }}>{judgment.notes}</Text>
           </GCard>
         ) : null}
+
+        <GButton title="جلسة جديدة" icon="calendar-outline" variant="secondary" onPress={() => router.push({ pathname: '/legal/session-new' as never, params: { judgmentId: id } })} />
       </View>
     </ScrollView>
   );

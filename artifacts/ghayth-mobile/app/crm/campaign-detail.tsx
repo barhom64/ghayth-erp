@@ -4,8 +4,8 @@
  */
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge , GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -41,6 +41,7 @@ function fmtMoney(val?: number, currency?: string): string {
 
 export default function CampaignDetailScreen() {
   const c = useColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const { data: campaign, isLoading } = useList<Campaign>(`/api/marketing/campaigns/${id}`);
@@ -118,6 +119,8 @@ export default function CampaignDetailScreen() {
             <Text style={{ fontSize: 13, color: c.text, textAlign: 'right', lineHeight: 20 }}>{campaign.description}</Text>
           </GCard>
         ) : null}
+
+        <GButton title="حملة تسويقية جديدة" icon="megaphone-outline" variant="secondary" onPress={() => router.push('/crm/campaign-new' as never)} />
       </View>
     </ScrollView>
   );

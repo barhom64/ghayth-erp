@@ -4,8 +4,8 @@
  */
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GText, GLoadingState, GEmptyState , GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 
@@ -38,6 +38,7 @@ function fmtMoney(val?: number, currency?: string): string {
 
 export default function BankAccountDetailScreen() {
   const c = useColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const { data: acct, isLoading } = useList<BankAccount>(`/api/finance/bank-accounts/${id}`);
@@ -94,6 +95,8 @@ export default function BankAccountDetailScreen() {
             <Text style={{ fontSize: 13, color: c.text, textAlign: 'right' }}>{acct.notes}</Text>
           </GCard>
         ) : null}
+
+        <GButton title="قيد يدوي جديد" icon="add-circle-outline" variant="secondary" onPress={() => router.push('/finance/journal-new' as never)} />
       </View>
     </ScrollView>
   );
