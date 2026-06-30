@@ -2338,7 +2338,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           { name: "court", label: "المحكمة", type: "text" },
           { name: "notes", label: "ملاحظات", type: "textarea" },
         ] } },
-      { key: "judgments", label: "الأحكام", icon: "ribbon-outline", endpoint: "/api/legal/judgments", titleFields: ["caseTitle", "ref"], subtitleFields: ["court", "judgmentType"], statusField: "status", dateFields: ["judgmentDate"], detailRoute: "/legal/judgment-detail",
+      { key: "judgments", label: "الأحكام", icon: "ribbon-outline", endpoint: "/api/legal/judgments", titleFields: ["caseTitle", "ref"], subtitleFields: ["court", "judgmentType"], statusField: "status", dateFields: ["judgmentDate"], detailRoute: "/legal/judgment-detail", createRoute: "/legal/judgment-new",
         write: { moduleKey: "legal", createFields: [
           { name: "caseId", label: "القضية", type: "text", required: true },
           { name: "judgmentDate", label: "تاريخ الحكم", type: "date", required: true },
@@ -2617,7 +2617,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
     sections: [
       {
         key: "users", label: "المستخدمون", icon: "person-circle-outline", endpoint: "/api/admin/users",
-        detailRoute: "/admin/user-detail",
+        detailRoute: "/admin/user-detail", createRoute: "/admin/user-new",
         titleFields: ["name", "fullName", "email"], subtitleFields: ["email", "role"], statusField: "status",
         write: {
           moduleKey: "admin",

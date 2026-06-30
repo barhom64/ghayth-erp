@@ -263,7 +263,6 @@ function AuthGate() {
       <Stack.Screen name="support/ticket-new" options={{ title: 'تذكرة دعم جديدة' }} />
       <Stack.Screen name="crm/opportunity-new" options={{ title: 'فرصة بيعية جديدة' }} />
       <Stack.Screen name="crm/activity-new" options={{ title: 'نشاط متابعة جديد' }} />
-      <Stack.Screen name="hr/expense-new" options={{ title: 'مصروف جديد' }} />
       <Stack.Screen name="finance/vendor-payment-new" options={{ title: 'دفعة للمورد' }} />
       <Stack.Screen name="finance/customer-receipt-new" options={{ title: 'إيصال دفعة العميل' }} />
       <Stack.Screen name="warehouse/cycle-count-new" options={{ title: 'جرد مخزون جديد' }} />
@@ -323,7 +322,10 @@ function AuthGate() {
       <Stack.Screen name="umrah/transport-new" options={{ title: 'نقل عمرة جديد' }} />
       <Stack.Screen name="umrah/violation-new" options={{ title: 'مخالفة عمرة جديدة' }} />
       <Stack.Screen name="finance/purchase-order-new" options={{ title: 'أمر شراء جديد' }} />
-            <Stack.Screen name="fleet/vehicle-new" options={{ title: 'مركبة جديدة' }} />
+            <Stack.Screen name="legal/judgment-new" options={{ title: 'حكم قضائي جديد' }} />
+      <Stack.Screen name="admin/user-new" options={{ title: 'مستخدم جديد' }} />
+      <Stack.Screen name="finance/expense-new" options={{ title: 'مصروف جديد' }} />
+      <Stack.Screen name="fleet/vehicle-new" options={{ title: 'مركبة جديدة' }} />
       <Stack.Screen name="fleet/driver-new" options={{ title: 'سائق جديد' }} />
       <Stack.Screen name="projects/project-new" options={{ title: 'مشروع جديد' }} />
       <Stack.Screen name="umrah/agent-new" options={{ title: 'وكيل عمرة جديد' }} />
