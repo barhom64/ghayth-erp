@@ -1171,6 +1171,12 @@ function AuthGate() {
       <Stack.Screen name="finance/entity-pnl" options={{ title: 'ربح وخسارة الكيان' }} />
       <Stack.Screen name="finance/subsidiary-substitution-state" options={{ title: 'حالة استبدال الفروع' }} />
       <Stack.Screen name="finance/cash-in-transit" options={{ title: 'النقد في الطريق' }} />
+      <Stack.Screen name="finance/zatca-settings" options={{ title: 'إعدادات ZATCA' }} />
+      <Stack.Screen name="finance/zatca-submissions" options={{ title: 'إرسالات ZATCA' }} />
+      <Stack.Screen name="finance/vendor-receivable-detail" options={{ title: 'تفاصيل الذمة' }} />
+      <Stack.Screen name="finance/financial-request-detail" options={{ title: 'تفاصيل الطلب المالي' }} />
+      <Stack.Screen name="finance/recurring-journal-detail" options={{ title: 'قيد دوري' }} />
+      <Stack.Screen name="finance/pricing-rule-detail" options={{ title: 'تفاصيل قاعدة التسعير' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
