@@ -35,6 +35,8 @@ const QUICK_ACTIONS: QuickAction[] = [
   { label: 'طلب استئذان',   icon: 'hand-left-outline',         route: '/hr/excuse-new' },
   { label: 'كشف الراتب',    icon: 'document-text-outline',     route: '/hr/payslip' },
   { label: 'طلباتي',         icon: 'list-outline',              route: '/hr/my-requests' },
+  { label: 'وثائقي',         icon: 'document-outline',          route: '/hr/my-documents' },
+  { label: 'تقييماتي',       icon: 'star-outline',              route: '/hr/my-performance' },
 ];
 
 function AssignmentSwitcherModal({ assignments, currentCompanyId, onSwitch, onClose }: {
