@@ -214,6 +214,14 @@ d("شريحة 1 — دورة حياة وقائع الرحلة (قاعدة حيّ
       [a.companyId, a.branchId],
     );
     driverPrivateId = dp.id;
+
+    // شريحة 4 — معدّل خصم نقص الوزن (0.5 ريال/كغم) على مستوى الشركة، لاختبار
+    // اشتقاق المبلغ من المعدّل. (معدّل التأخّر غير مُعدّ عمدًا → بلا مبلغ = 400.)
+    await rawExecute(
+      `INSERT INTO settings (scope, "scopeId", key, value)
+       VALUES ('company', $1, 'fleet.deduction.shortageRatePerKg', '0.5'::jsonb)`,
+      [a.companyId],
+    );
   }, 90_000);
 
   it("واقعة «تحميل» تُسجّل (مع وزن فارغ) وتنقل الحجز إلى in_progress", async () => {
@@ -418,6 +426,36 @@ d("شريحة 1 — دورة حياة وقائع الرحلة (قاعدة حيّ
     const res = await withAuth(
       request(app).post(`/api/transport/bookings/${bookingId}/deductions`), tokenB,
     ).send({ basis: "delay", delayHours: 3, amount: 90, reason: "تأخّر" });
+    expect(res.status).toBe(404);
+  });
+
+  it("شريحة 4 — المبلغ يُحسب من المعدّل عند غيابه (500 كغم × 0.5 = 250)", async () => {
+    const res = await withAuth(
+      request(app).post(`/api/transport/bookings/${bookingId}/deductions`), tokenA,
+    ).send({ basis: "weight_shortage", shortageKg: 500, reason: "بلا مبلغ — يُحسب" });
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    expect(res.body?.data?.amount).toBe(250);
+  });
+
+  it("شريحة 4 — أساس بلا مبلغ ولا معدّل مُعدّ (تأخّر) → 400", async () => {
+    const res = await withAuth(
+      request(app).post(`/api/transport/bookings/${bookingId}/deductions`), tokenA,
+    ).send({ basis: "delay", delayHours: 4, reason: "بلا معدّل" });
+    expect(res.status).toBe(400);
+  });
+
+  it("شريحة 4 — السائق يُبلّغ عن خصم (المبلغ من المعدّل) → 201", async () => {
+    const res = await withAuth(
+      request(app).post(`/api/transport/dispatch-orders/${driverDispatchId}/deduction`), tokenA,
+    ).send({ basis: "weight_shortage", shortageKg: 200, reason: "نقص ميداني" });
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    expect(res.body?.data?.amount).toBe(100); // 200 × 0.5
+  });
+
+  it("شريحة 4 — السائق: عزل شركة أخرى → 404", async () => {
+    const res = await withAuth(
+      request(app).post(`/api/transport/dispatch-orders/${driverDispatchId}/deduction`), tokenB,
+    ).send({ basis: "weight_shortage", shortageKg: 100, reason: "x" });
     expect(res.status).toBe(404);
   });
 });
