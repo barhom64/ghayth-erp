@@ -1063,9 +1063,75 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
-      { key: "cargo-manifests", label: "بيانات الشحن", icon: "cube-outline", endpoint: "/api/cargo/manifests", detailRoute: "/fleet/cargo-manifest-detail", titleFields: ["manifestNumber", "ref"], subtitleFields: ["linkedCustomerName", "vehiclePlate", "driverName"], statusField: "status", amountFields: ["freightRevenue"], dateFields: ["pickupDate"] },
-      { key: "transport-bookings", label: "حجوزات النقل", icon: "bus-outline", endpoint: "/api/transport/bookings", titleFields: ["bookingNumber", "fromLocationText"], subtitleFields: ["linkedCustomerName", "toLocationText"], statusField: "status", dateFields: ["requestedPickupDate"], detailRoute: "/fleet/transport-booking-detail" },
-      { key: "transport-dispatch", label: "أوامر التشغيل", icon: "git-network-outline", endpoint: "/api/transport/dispatch-orders", titleFields: ["bookingNumber", "fromLocationText"], subtitleFields: ["vehiclePlate", "driverName"], statusField: "status", dateFields: ["scheduledStartAt"], detailRoute: "/fleet/transport-dispatch-detail" },
+      {
+        key: "cargo-manifests", label: "بيانات الشحن", icon: "cube-outline", endpoint: "/api/cargo/manifests",
+        detailRoute: "/fleet/cargo-manifest-detail", titleFields: ["manifestNumber", "ref"], subtitleFields: ["linkedCustomerName", "vehiclePlate", "driverName"], statusField: "status", amountFields: ["freightRevenue"], dateFields: ["pickupDate"],
+        write: {
+          moduleKey: "fleet",
+          createFields: [
+            {
+              name: "vehicleId", label: "المركبة", type: "reference", required: true,
+              refEndpoint: "/api/fleet/vehicles", refLabelFields: ["plateNumber", "model"], refValueField: "id",
+            },
+            {
+              name: "driverId", label: "السائق", type: "reference", required: true,
+              refEndpoint: "/api/fleet/drivers", refLabelFields: ["name"], refValueField: "id",
+            },
+            { name: "pickupDate", label: "تاريخ الاستلام", type: "date", required: true },
+            { name: "pickupLocation", label: "موقع الاستلام", type: "text", required: true },
+            { name: "deliveryLocation", label: "موقع التسليم", type: "text", required: true },
+            { name: "cargoDescription", label: "وصف البضاعة", type: "textarea" },
+            { name: "freightRevenue", label: "قيمة الشحن", type: "currency" },
+            {
+              name: "linkedCustomerId", label: "العميل", type: "reference",
+              refEndpoint: "/api/clients", refLabelFields: ["name"], refValueField: "id",
+            },
+          ],
+        },
+      },
+      {
+        key: "transport-bookings", label: "حجوزات النقل", icon: "bus-outline", endpoint: "/api/transport/bookings",
+        titleFields: ["bookingNumber", "fromLocationText"], subtitleFields: ["linkedCustomerName", "toLocationText"], statusField: "status", dateFields: ["requestedPickupDate"],
+        detailRoute: "/fleet/transport-booking-detail",
+        write: {
+          moduleKey: "fleet",
+          createFields: [
+            {
+              name: "linkedCustomerId", label: "العميل", type: "reference", required: true,
+              refEndpoint: "/api/clients", refLabelFields: ["name"], refValueField: "id",
+            },
+            { name: "fromLocationText", label: "من (موقع الانطلاق)", type: "text", required: true },
+            { name: "toLocationText", label: "إلى (الوجهة)", type: "text", required: true },
+            { name: "requestedPickupDate", label: "تاريخ الاستلام المطلوب", type: "date", required: true },
+            { name: "passengerCount", label: "عدد الركاب", type: "number" },
+            { name: "notes", label: "ملاحظات", type: "textarea" },
+          ],
+        },
+      },
+      {
+        key: "transport-dispatch", label: "أوامر التشغيل", icon: "git-network-outline", endpoint: "/api/transport/dispatch-orders",
+        titleFields: ["bookingNumber", "fromLocationText"], subtitleFields: ["vehiclePlate", "driverName"], statusField: "status", dateFields: ["scheduledStartAt"],
+        detailRoute: "/fleet/transport-dispatch-detail",
+        write: {
+          moduleKey: "fleet",
+          createFields: [
+            {
+              name: "bookingId", label: "الحجز", type: "reference", required: true,
+              refEndpoint: "/api/transport/bookings", refLabelFields: ["bookingNumber", "fromLocationText"], refValueField: "id",
+            },
+            {
+              name: "vehicleId", label: "المركبة", type: "reference", required: true,
+              refEndpoint: "/api/fleet/vehicles", refLabelFields: ["plateNumber", "model"], refValueField: "id",
+            },
+            {
+              name: "driverId", label: "السائق", type: "reference", required: true,
+              refEndpoint: "/api/fleet/drivers", refLabelFields: ["name"], refValueField: "id",
+            },
+            { name: "scheduledStartAt", label: "وقت الانطلاق المجدول", type: "date", required: true },
+            { name: "notes", label: "ملاحظات", type: "textarea" },
+          ],
+        },
+      },
     ],
   },
   warehouse: {
