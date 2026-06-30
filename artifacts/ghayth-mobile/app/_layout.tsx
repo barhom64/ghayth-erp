@@ -890,6 +890,10 @@ function AuthGate() {
       <Stack.Screen name="umrah/policies" options={{ title: 'سياسات العمرة' }} />
       <Stack.Screen name="umrah/packages-drift" options={{ title: 'انحراف أسعار الباقات' }} />
       <Stack.Screen name="umrah/recovery-hub" options={{ title: 'مركز استرداد العمرة' }} />
+      <Stack.Screen name="hr/employee-documents" options={{ title: 'وثائق الموظفين' }} />
+      <Stack.Screen name="hr/employee-document-types" options={{ title: 'أنواع وثائق الموظف' }} />
+      <Stack.Screen name="hr/company-document-categories" options={{ title: 'تصنيفات وثائق الشركة' }} />
+      <Stack.Screen name="hr/onboarding-steps" options={{ title: 'خطوات التأهيل' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
