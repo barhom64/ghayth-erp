@@ -25,6 +25,12 @@ interface MySpaceData {
   pendingApprovals?: ApprovalItem[];
 }
 
+function formatDateAr(val: string): string {
+  if (!val) return '';
+  try { return new Date(val).toLocaleDateString('ar-SA', { year: 'numeric', month: 'short', day: 'numeric' }); }
+  catch { return val; }
+}
+
 const FILTERS: FilterType[] = ['الكل', 'إجازات', 'سلف', 'وقت إضافي', 'نهاية خدمة'];
 const typeToFilter: Record<string, FilterType> = {
   leave: 'إجازات',
@@ -122,7 +128,7 @@ export default function ApprovalsScreen() {
                 </View>
               </View>
               <View style={styles.itemMeta}>
-                <GText variant="caption" color={c.textFaint}>{item.createdAt}</GText>
+                <GText variant="caption" color={c.textFaint}>{formatDateAr(item.createdAt)}</GText>
                 <GText variant="caption" color={c.textMuted}>{typeToFilter[item.type] ?? item.type}</GText>
               </View>
               <View style={styles.actions}>
