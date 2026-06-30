@@ -44,10 +44,10 @@ export function DateInput({ label, value, onChange, error, minDate, maxDate, pla
   const [selMonth, setSelMonth] = useState(parsed?.m ?? now.getMonth() + 1);
   const [selDay, setSelDay]     = useState(parsed?.d ?? now.getDate());
 
-  // سنوات: من 3 سنوات مضت إلى سنة قادمة
+  // سنوات: من 5 سنوات مضت إلى سنتين قادمتين
   const years = useMemo(() => {
     const base = now.getFullYear();
-    return Array.from({ length: 5 }, (_, i) => base - 2 + i);
+    return Array.from({ length: 8 }, (_, i) => base - 5 + i);
   }, []);
 
   const days = useMemo(() => {

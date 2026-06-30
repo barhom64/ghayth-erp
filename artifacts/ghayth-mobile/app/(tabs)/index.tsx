@@ -28,6 +28,24 @@ interface DashboardData {
   vehicles?: { total: number; active: number };
 }
 
+interface InsightItem {
+  id: number | string;
+  label: string;
+  meta?: Record<string, unknown>;
+}
+
+interface Insight {
+  category: string;
+  label: string;
+  count: number;
+  items: InsightItem[];
+}
+
+interface InsightsResp {
+  insights?: Insight[];
+  totalCount?: number;
+}
+
 interface QuickLink { label: string; icon: IoniconName; route: string; managerOnly?: boolean }
 
 const QUICK_LINKS: QuickLink[] = [
@@ -39,15 +57,31 @@ const QUICK_LINKS: QuickLink[] = [
   { label: 'الإشعارات',     icon: 'notifications-outline',         route: '/(tabs)/notifications' },
 ];
 
+// خريطة الفئة → مسار تنقل + أيقونة + لون
+const INSIGHT_META: Record<string, { route: string; icon: IoniconName; color: string; bg: string }> = {
+  my_documents_expiring:    { route: '/hr/my-documents',        icon: 'document-text-outline',        color: '#F59E0B', bg: '#FFFBEB' },
+  my_official_docs_expiring:{ route: '/hr/my-documents',        icon: 'id-card-outline',              color: '#EF4444', bg: '#FEF2F2' },
+  my_pending_requests:      { route: '/hr/my-requests',         icon: 'time-outline',                 color: '#3B82F6', bg: '#EFF6FF' },
+  team_pending_leaves:      { route: '/(tabs)/approvals',       icon: 'checkmark-done-circle-outline',color: '#8B5CF6', bg: '#F5F3FF' },
+  company_iqama_expiring:   { route: '/m/hr/employees',         icon: 'people-outline',               color: '#EF4444', bg: '#FEF2F2' },
+  company_unposted_journals:{ route: '/m/finance/journal',      icon: 'book-outline',                 color: '#F59E0B', bg: '#FFFBEB' },
+  company_overdue_invoices: { route: '/m/finance/collection',   icon: 'receipt-outline',              color: '#EF4444', bg: '#FEF2F2' },
+  company_due_obligations:  { route: '/m/finance/obligations',  icon: 'alert-circle-outline',         color: '#EF4444', bg: '#FEF2F2' },
+  critical_notifications:   { route: '/(tabs)/notifications',   icon: 'notifications-outline',        color: '#EF4444', bg: '#FEF2F2' },
+};
+
 export default function DashboardScreen() {
   const c = useColors();
   const { user } = useAuth();
   const router = useRouter();
   const { data, isLoading, isError } = useList<DashboardData>('/api/dashboard/summary');
+  const { data: insightsResp } = useList<InsightsResp>('/api/me/proactive-insights');
   const isManager = canApprove(user?.userRoles);
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'صباح الخير' : hour < 17 ? 'مساء الخير' : 'مساء النور';
+
+  const activeInsights = (insightsResp?.insights ?? []).filter(i => i.count > 0);
 
   if (isLoading) return <GLoadingState text="جارٍ تحميل لوحة القيادة…" />;
   if (isError) return (
@@ -90,6 +124,44 @@ export default function DashboardScreen() {
           c={c}
         />
       </View>
+
+      {/* التنبيهات الذكية */}
+      {activeInsights.length > 0 && (
+        <>
+          <GText variant="subheading" style={{ paddingHorizontal: 16, marginTop: 8, marginBottom: 8 }}>
+            تنبيهات تحتاج انتباهك
+          </GText>
+          {activeInsights.map(insight => {
+            const meta = INSIGHT_META[insight.category];
+            if (!meta) return null;
+            return (
+              <Pressable
+                key={insight.category}
+                onPress={() => router.push(meta.route as never)}
+                style={({ pressed }) => [
+                  styles.insightCard,
+                  { backgroundColor: pressed ? c.surfaceAlt : c.surface, borderColor: meta.color + '40' },
+                ]}
+              >
+                <View style={[styles.insightIcon, { backgroundColor: meta.bg }]}>
+                  <Ionicons name={meta.icon} size={20} color={meta.color} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: c.text, textAlign: 'right' }}>{insight.label}</Text>
+                  {insight.items.length > 0 && (
+                    <Text style={{ fontSize: 12, color: c.textMuted, textAlign: 'right', marginTop: 2 }} numberOfLines={1}>
+                      {insight.items.slice(0, 3).map(i => i.label).join(' · ')}
+                    </Text>
+                  )}
+                </View>
+                <View style={[styles.insightBadge, { backgroundColor: meta.color }]}>
+                  <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '700' }}>{insight.count}</Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </>
+      )}
 
       {/* الوصول السريع */}
       <GText variant="subheading" style={{ paddingHorizontal: 16, marginTop: 8, marginBottom: 8 }}>
@@ -145,5 +217,12 @@ const styles = StyleSheet.create({
   statsRow: { flexDirection: 'row', gap: 8, padding: 16 },
   quickGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 12, gap: 8 },
   quickItem: { width: '22%', borderRadius: 10, borderWidth: 1, paddingVertical: 14, alignItems: 'center', marginBottom: 4 },
+  insightCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    marginHorizontal: 16, marginBottom: 8,
+    borderRadius: 10, borderWidth: 1, padding: 12,
+  },
+  insightIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  insightBadge: { minWidth: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
   actRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, justifyContent: 'flex-end' },
 });
