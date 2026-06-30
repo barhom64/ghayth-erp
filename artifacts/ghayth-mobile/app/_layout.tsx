@@ -436,6 +436,11 @@ function AuthGate() {
       <Stack.Screen name="fleet/routes" options={{ title: 'مسارات الأسطول' }} />
       <Stack.Screen name="hr/attendance-shifts" options={{ title: 'الورديات والجداول' }} />
       <Stack.Screen name="crm/leads" options={{ title: 'العملاء المحتملون' }} />
+      <Stack.Screen name="finance/trial-balance" options={{ title: 'ميزان المراجعة' }} />
+      <Stack.Screen name="hr/loans" options={{ title: 'قروض الموظفين' }} />
+      <Stack.Screen name="fleet/schedule" options={{ title: 'جدول الأسطول' }} />
+      <Stack.Screen name="hr/overtime" options={{ title: 'العمل الإضافي' }} />
+      <Stack.Screen name="projects/issues" options={{ title: 'مشاكل المشاريع' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
