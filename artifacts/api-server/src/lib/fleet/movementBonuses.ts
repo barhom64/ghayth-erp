@@ -203,6 +203,34 @@ export async function getApprovedMovementBonuses(
   return { total: Math.round(total * 100) / 100, rowIds };
 }
 
+export interface CompanyBonus {
+  assignmentId: number;
+  total: number;
+  rowIds: number[];
+}
+
+/**
+ * عقد قراءة (batch، الدفعة ب): كل المكافآت المعتمدة غير المُستهلكة لكل تعيين
+ * في الشركة (استعلام واحد، يتجنّب N+1 في المسيّر). الأسطول يملك الحساب.
+ */
+export async function getApprovedMovementBonusesForCompany(
+  companyId: number,
+): Promise<CompanyBonus[]> {
+  const rows = await rawQuery<{ assignmentId: number; total: string | null; rowIds: number[] }>(
+    `SELECT "assignmentId", SUM(amount) AS total, array_agg(id) AS "rowIds"
+       FROM transport_movement_bonuses
+      WHERE "companyId" = $1 AND status = 'approved' AND "payrollLineId" IS NULL
+        AND "deletedAt" IS NULL AND "assignmentId" IS NOT NULL
+      GROUP BY "assignmentId"`,
+    [companyId],
+  );
+  return rows.map((r) => ({
+    assignmentId: Number(r.assignmentId),
+    total: Math.round(Number(r.total ?? 0) * 100) / 100,
+    rowIds: (r.rowIds ?? []).map(Number),
+  }));
+}
+
 /**
  * يختم المكافآت المُستهلكة بـ payrollLineId بعد ترحيلها في المسيّر (منع الازدواج).
  * كتابة جدول الأسطول تعيش هنا (المكتبة)، يستدعيها مسيّر HR داخل معاملته —
