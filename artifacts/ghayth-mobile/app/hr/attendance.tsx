@@ -1,6 +1,6 @@
 /**
  * تسجيل الحضور الميداني — GPS + كاميرا
- * يُرحّل إلى POST /api/hr/attendance/check-in أو check-out
+ * يُرحّل إلى POST /api/hr/check-in أو /api/hr/check-out
  */
 import React, { useState } from 'react';
 import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';

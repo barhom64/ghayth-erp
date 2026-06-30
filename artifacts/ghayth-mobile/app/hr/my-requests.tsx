@@ -1,13 +1,14 @@
 /**
- * طلباتي — عرض طلبات الموظف الشخصية (إجازات، سلف، وقت إضافي)
- * من /api/my-space/requests
+ * طلباتي — عرض طلبات الموظف الشخصية (إجازات، سلف، وقت إضافي، استئذان)
+ * من /api/my-space/requests + /api/hr/excuse-requests (مُفلتَر بالتعيين)
  */
 import React, { useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Stack } from 'expo-router';
-import { GScreen, GCard, GText, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { GScreen, GCard, GText, GEmptyState, GStatusBadge } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
+import { useAuth } from '@/context/AuthContext';
 import { statusBadge } from '@/lib/moduleSections';
 
 type FilterType = 'الكل' | 'إجازات' | 'سلف' | 'وقت إضافي' | 'استئذان';
@@ -28,9 +29,10 @@ interface RequestItem {
 
 interface MyRequestsResp {
   leaveRequests?: RequestItem[];
-  excuseRequests?: RequestItem[];
   data?: RequestItem[];
 }
+
+interface ExcuseResp { data?: RequestItem[] }
 
 const FILTERS: FilterType[] = ['الكل', 'إجازات', 'سلف', 'وقت إضافي', 'استئذان'];
 
@@ -50,12 +52,18 @@ function formatDateAr(val?: string): string {
 
 export default function MyRequestsScreen() {
   const c = useColors();
+  const { user, assignments } = useAuth();
   const [filter, setFilter] = useState<FilterType>('الكل');
 
+  const activeAssignment = assignments.find(a => a.companyId === user?.companyId);
   const { data: resp, isLoading, isError, refetch } = useList<MyRequestsResp>('/api/my-space/requests');
+  const { data: excuseResp } = useList<ExcuseResp>('/api/hr/excuse-requests', { limit: 50 });
 
   const leaveItems: RequestItem[] = (resp?.leaveRequests ?? []).map(r => ({ ...r, requestType: 'leave' }));
-  const excuseItems: RequestItem[] = (resp?.excuseRequests ?? []).map(r => ({ ...r, requestType: 'excuse' }));
+  // فلترة استئذانات الموظف الحالي فقط من القائمة الشاملة
+  const excuseItems: RequestItem[] = (excuseResp?.data ?? [])
+    .filter((r: RequestItem & { assignmentId?: number }) => !activeAssignment || r.assignmentId === activeAssignment.id)
+    .map(r => ({ ...r, requestType: 'excuse' }));
   const workflowItems: RequestItem[] = (resp?.data ?? []);
   const allItems = [...leaveItems, ...excuseItems, ...workflowItems].sort((a, b) =>
     new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -71,9 +79,6 @@ export default function MyRequestsScreen() {
   });
 
   const doRefetch = () => { refetch(); };
-
-  if (isLoading) return <GLoadingState text="جارٍ تحميل طلباتك…" />;
-  if (isError) return <GEmptyState icon="alert-circle-outline" title="تعذّر تحميل الطلبات" description="تحقق من اتصالك وحاول مجدداً" />;
 
   return (
     <GScreen>
@@ -102,11 +107,15 @@ export default function MyRequestsScreen() {
         onRefresh={doRefetch}
         refreshing={isLoading}
         ListEmptyComponent={
-          <GEmptyState
-            icon="file-tray-outline"
-            title="لا توجد طلبات"
-            description={filter === 'الكل' ? 'لم ترسل أي طلبات بعد' : `لا توجد طلبات ${filter}`}
-          />
+          isError ? (
+            <GEmptyState icon="alert-circle-outline" title="تعذّر تحميل الطلبات" description="تحقق من اتصالك وحاول مجدداً" />
+          ) : (
+            <GEmptyState
+              icon="file-tray-outline"
+              title="لا توجد طلبات"
+              description={filter === 'الكل' ? 'لم ترسل أي طلبات بعد' : `لا توجد طلبات ${filter}`}
+            />
+          )
         }
         renderItem={({ item }) => {
           const st = statusBadge(item.status);
