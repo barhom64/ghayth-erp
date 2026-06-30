@@ -885,6 +885,11 @@ function AuthGate() {
       <Stack.Screen name="hr/wps-credentials" options={{ title: 'بيانات اعتماد WPS' }} />
       <Stack.Screen name="finance/zatca-pause-history" options={{ title: 'تاريخ إيقاف ZATCA' }} />
       <Stack.Screen name="finance/zatca-missing-tax" options={{ title: 'أرقام ضريبية ناقصة ZATCA' }} />
+      <Stack.Screen name="transport/integration-sources" options={{ title: 'مصادر تكامل النقل' }} />
+      <Stack.Screen name="umrah/attachments" options={{ title: 'مرفقات العمرة' }} />
+      <Stack.Screen name="umrah/policies" options={{ title: 'سياسات العمرة' }} />
+      <Stack.Screen name="umrah/packages-drift" options={{ title: 'انحراف أسعار الباقات' }} />
+      <Stack.Screen name="umrah/recovery-hub" options={{ title: 'مركز استرداد العمرة' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
