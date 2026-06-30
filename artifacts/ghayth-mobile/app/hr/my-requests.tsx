@@ -4,12 +4,13 @@
  */
 import React, { useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { GScreen, GCard, GText, GEmptyState, GStatusBadge } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { useAuth } from '@/context/AuthContext';
 import { statusBadge } from '@/lib/moduleSections';
+import { setRecord } from '@/lib/recordStore';
 
 type FilterType = 'الكل' | 'إجازات' | 'سلف' | 'وقت إضافي' | 'استئذان';
 
@@ -52,8 +53,17 @@ function formatDateAr(val?: string): string {
 
 export default function MyRequestsScreen() {
   const c = useColors();
+  const router = useRouter();
   const { user, assignments } = useAuth();
   const [filter, setFilter] = useState<FilterType>('الكل');
+
+  const DETAIL_ROUTES: Record<string, string> = {
+    leave: '/hr/leave-request-detail',
+    loan: '/hr/loan-detail',
+    overtime: '/hr/overtime-detail',
+    salary_advance: '/hr/payslip-detail',
+    excuse: '/hr/excuse-request-detail',
+  };
 
   const activeAssignment = assignments.find(a => a.companyId === user?.companyId);
   const { data: resp, isLoading, isError, refetch } = useList<MyRequestsResp>('/api/my-space/requests');
@@ -121,8 +131,16 @@ export default function MyRequestsScreen() {
           const st = statusBadge(item.status);
           const type = typeLabel[item.requestType ?? ''] ?? item.requestType ?? '';
           const name = item.leaveTypeName ?? item.title ?? type;
+          const detailRoute = DETAIL_ROUTES[item.requestType ?? ''];
+          const handlePress = () => {
+            if (detailRoute) {
+              setRecord({ title: name, row: item as unknown as Record<string, unknown>, module: 'hr', section: item.requestType ?? 'requests' });
+              router.push({ pathname: detailRoute as never, params: { id: item.id } });
+            }
+          };
           return (
-            <GCard>
+            <Pressable onPress={detailRoute ? handlePress : undefined}>
+            <GCard style={detailRoute ? { borderLeftWidth: 3, borderLeftColor: c.brand } : undefined}>
               <View style={styles.itemHeader}>
                 <GStatusBadge status={st?.label ?? item.status} size="sm" />
                 <View style={{ flex: 1, marginRight: 8 }}>
@@ -142,6 +160,7 @@ export default function MyRequestsScreen() {
                 ) : null}
               </View>
             </GCard>
+            </Pressable>
           );
         }}
       />
