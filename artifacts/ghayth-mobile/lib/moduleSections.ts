@@ -1863,6 +1863,7 @@ const STATUS_MAP: Record<string, { label: string; tone: Tone }> = {
   inactive: { label: "غير نشط", tone: "default" },
   suspended: { label: "موقوف", tone: "danger" },
   pending: { label: "معلّق", tone: "warning" },
+  pending_approval: { label: "قيد الاعتماد", tone: "warning" },
   approved: { label: "معتمد", tone: "success" },
   rejected: { label: "مرفوض", tone: "danger" },
   cancelled: { label: "ملغي", tone: "default" },
@@ -1873,7 +1874,7 @@ const STATUS_MAP: Record<string, { label: string; tone: Tone }> = {
   paid: { label: "مدفوع", tone: "success" },
   unpaid: { label: "غير مدفوع", tone: "warning" },
   partial: { label: "مدفوع جزئيًا", tone: "warning" },
-  overdue: { label: "متأخر", tone: "danger" },
+  overdue: { label: "متأخر السداد", tone: "danger" },
   open: { label: "مفتوح", tone: "info" },
   closed: { label: "مغلق", tone: "default" },
   in_progress: { label: "قيد التنفيذ", tone: "info" },
@@ -1888,6 +1889,20 @@ const STATUS_MAP: Record<string, { label: string; tone: Tone }> = {
   occupied: { label: "مشغول", tone: "warning" },
   maintenance: { label: "صيانة", tone: "warning" },
   scheduled: { label: "مجدول", tone: "info" },
+  // حالات الحضور
+  present: { label: "حاضر", tone: "success" },
+  absent: { label: "غائب", tone: "danger" },
+  late: { label: "متأخر", tone: "warning" },
+  on_leave: { label: "إجازة", tone: "info" },
+  excused: { label: "مستأذن", tone: "info" },
+  holiday: { label: "إجازة رسمية", tone: "default" },
+  // حالات إضافية
+  submitted: { label: "مُرسَل", tone: "warning" },
+  under_review: { label: "قيد المراجعة", tone: "warning" },
+  on_trip: { label: "في رحلة", tone: "info" },
+  off_duty: { label: "خارج الدوام", tone: "default" },
+  in_use: { label: "قيد الاستخدام", tone: "info" },
+  out_of_service: { label: "خارج الخدمة", tone: "danger" },
 };
 
 export function statusBadge(raw: string | null): { label: string; tone: Tone } | null {
