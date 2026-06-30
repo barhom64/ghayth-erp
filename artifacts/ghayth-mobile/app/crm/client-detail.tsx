@@ -11,7 +11,7 @@ import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge, GAvatar } from '@workspace/ui-native';
+import { GCard, GButton, GText, GLoadingState, GEmptyState, GStatusBadge, GAvatar } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -203,7 +203,15 @@ export default function ClientDetailScreen() {
 
         {/* ─── الفواتير ─── */}
         {tab === 'invoices' && (
-          invLoading ? <ActivityIndicator color={c.brand} style={{ marginTop: 40 }} /> :
+          <>
+          <GButton
+            title="فاتورة جديدة"
+            icon="add-circle-outline"
+            variant="secondary"
+            onPress={() => router.push({ pathname: '/finance/invoice-new' as never, params: { clientId: id } })}
+            style={{ marginBottom: 8 }}
+          />
+          {invLoading ? <ActivityIndicator color={c.brand} style={{ marginTop: 40 }} /> :
           invoices.length === 0 ? <GEmptyState icon="receipt-outline" title="لا فواتير" description="لا توجد فواتير لهذا العميل" /> :
           <GCard style={{ gap: 0, padding: 0 }}>
             {invoices.map((inv, i) => {
@@ -222,12 +230,21 @@ export default function ClientDetailScreen() {
                 </View>
               );
             })}
-          </GCard>
+          </GCard>}
+          </>
         )}
 
         {/* ─── التذاكر ─── */}
         {tab === 'tickets' && (
-          tickLoading ? <ActivityIndicator color={c.brand} style={{ marginTop: 40 }} /> :
+          <>
+          <GButton
+            title="تذكرة دعم جديدة"
+            icon="add-circle-outline"
+            variant="secondary"
+            onPress={() => router.push({ pathname: '/support/ticket-new' as never, params: { clientId: id } })}
+            style={{ marginBottom: 8 }}
+          />
+          {tickLoading ? <ActivityIndicator color={c.brand} style={{ marginTop: 40 }} /> :
           tickets.length === 0 ? <GEmptyState icon="headset-outline" title="لا تذاكر" description="لا توجد تذاكر دعم لهذا العميل" /> :
           <GCard style={{ gap: 0, padding: 0 }}>
             {tickets.map((tick, i) => {
@@ -242,7 +259,8 @@ export default function ClientDetailScreen() {
                 </View>
               );
             })}
-          </GCard>
+          </GCard>}
+          </>
         )}
 
         {/* ─── المشاريع ─── */}
@@ -267,7 +285,15 @@ export default function ClientDetailScreen() {
 
         {/* ─── الفرص ─── */}
         {tab === 'opportunities' && (
-          oppLoading ? <ActivityIndicator color={c.brand} style={{ marginTop: 40 }} /> :
+          <>
+          <GButton
+            title="فرصة بيعية جديدة"
+            icon="add-circle-outline"
+            variant="secondary"
+            onPress={() => router.push({ pathname: '/crm/opportunity-new' as never, params: { clientId: id } })}
+            style={{ marginBottom: 8 }}
+          />
+          {oppLoading ? <ActivityIndicator color={c.brand} style={{ marginTop: 40 }} /> :
           opportunities.length === 0 ? <GEmptyState icon="trending-up-outline" title="لا فرص" description="لا توجد فرص مبيعات لهذا العميل" /> :
           <GCard style={{ gap: 0, padding: 0 }}>
             {opportunities.map((opp, i) => {
@@ -284,7 +310,8 @@ export default function ClientDetailScreen() {
                 </View>
               );
             })}
-          </GCard>
+          </GCard>}
+          </>
         )}
       </View>
     </ScrollView>
