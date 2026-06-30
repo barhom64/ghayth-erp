@@ -151,6 +151,8 @@ function AuthGate() {
       <Stack.Screen name="projects/task-detail" options={{ title: 'المهمة' }} />
       <Stack.Screen name="hr/overtime-detail" options={{ title: 'الوقت الإضافي' }} />
       <Stack.Screen name="finance/expense-detail" options={{ title: 'المصروف' }} />
+      <Stack.Screen name="warehouse/product-detail" options={{ title: 'الصنف' }} />
+      <Stack.Screen name="hr/contract-detail" options={{ title: 'عقد الموظف' }} />
       <Stack.Screen name="manager-workspace" options={{ title: 'مساحة عمل المدير' }} />
       <Stack.Screen name="finance/reports" options={{ title: 'التقارير المالية' }} />
       <Stack.Screen name="hr/employee-detail" options={{ title: 'ملف الموظف' }} />

@@ -344,6 +344,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "contracts", label: "عقود الموظفين", icon: "document-text-outline", endpoint: "/api/hr/contracts",
         titleFields: ["ref"], subtitleFields: ["employeeName", "contractType"], statusField: "approvalStatus", amountFields: ["salary"], dateFields: ["startDate"],
+        detailRoute: "/hr/contract-detail",
         write: {
           moduleKey: "hr",
           detailPath: (id) => `/api/hr/contracts/${id}`,
@@ -829,6 +830,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "products", label: "المنتجات", icon: "cube-outline", endpoint: "/api/warehouse/products",
         titleFields: ["name", "productName"], subtitleFields: ["sku", "categoryName"], statusField: "status",
+        detailRoute: "/warehouse/product-detail",
         write: {
           moduleKey: "warehouse",
           canDelete: true,
