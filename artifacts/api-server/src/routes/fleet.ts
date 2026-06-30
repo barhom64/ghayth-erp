@@ -12,6 +12,7 @@ import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawd
 import { requestIdempotencyToken, markIdempotencyReplay } from "../lib/requestIdempotency.js";
 import { cascadeDispatchToBooking } from "../lib/transportDispatchCascade.js";
 import { logger } from "../lib/logger.js";
+import { registerEntityParty } from "../lib/partyService.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { hashPassword } from "../lib/auth.js";
 import { issueNumber, voidNumber } from "../lib/numberingService.js";
@@ -1738,6 +1739,13 @@ router.post("/drivers", authorize({ feature: "fleet.vehicles", action: "create" 
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     createSubsidiaryAccountsForEntity(scope.companyId, "driver", insertId, name, { branchId: scope.branchId, actorUserId: scope.userId }).catch((e) => logger.error(e, "fleet background task failed"));
+
+    // Master-data identity (migration 249): link the driver to ONE party so a
+    // driver who is also an employee/client resolves to a single 360° record
+    // immediately. Non-fatal: a registry-link failure must not block creation.
+    registerEntityParty(scope.companyId, "fleet_drivers", insertId, "driver", {
+      displayName: name, nationalId: b.nationalId || null, phone: phone || null, kind: "person",
+    }).catch((e) => logger.error(e, "[partyService] fleet_drivers registration failed"));
 
     createAuditLog({
       companyId: scope.companyId,
