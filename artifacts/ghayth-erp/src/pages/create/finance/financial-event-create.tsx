@@ -163,7 +163,7 @@ export default function FinancialEventCreate() {
               استورد Excel/CSV، بدل الإدخال اليدوي. كلاهما يمرّ على نفس محرّك القيد. */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-dashed bg-surface-subtle px-3 py-2 text-sm">
             <span className="text-muted-foreground">عندك المستند جاهز؟ ابدأ منه:</span>
-            <button type="button" className="text-primary hover:underline font-medium" onClick={() => navigate("/documents/ocr-inbox")}>
+            <button type="button" className="text-primary hover:underline font-medium" onClick={() => navigate("/documents/ocr/review")}>
               قراءة ضوئية (OCR) ←
             </button>
             <span className="text-muted-foreground" aria-hidden>·</span>
