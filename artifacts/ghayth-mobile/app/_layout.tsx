@@ -256,6 +256,19 @@ function AuthGate() {
       <Stack.Screen name="manager-workspace" options={{ title: 'مساحة عمل المدير' }} />
       <Stack.Screen name="finance/reports" options={{ title: 'التقارير المالية' }} />
       <Stack.Screen name="hr/employee-detail" options={{ title: 'ملف الموظف' }} />
+      <Stack.Screen name="hr/employee-new" options={{ title: 'إضافة موظف جديد' }} />
+      <Stack.Screen name="hr/leave-request-new" options={{ title: 'طلب إجازة جديد' }} />
+      <Stack.Screen name="hr/loan-new" options={{ title: 'طلب سلفة' }} />
+      <Stack.Screen name="hr/overtime-new" options={{ title: 'طلب وقت إضافي' }} />
+      <Stack.Screen name="support/ticket-new" options={{ title: 'تذكرة دعم جديدة' }} />
+      <Stack.Screen name="crm/opportunity-new" options={{ title: 'فرصة بيعية جديدة' }} />
+      <Stack.Screen name="crm/activity-new" options={{ title: 'نشاط متابعة جديد' }} />
+      <Stack.Screen name="hr/expense-new" options={{ title: 'مصروف جديد' }} />
+      <Stack.Screen name="finance/vendor-payment-new" options={{ title: 'دفعة للمورد' }} />
+      <Stack.Screen name="finance/customer-receipt-new" options={{ title: 'إيصال دفعة العميل' }} />
+      <Stack.Screen name="warehouse/cycle-count-new" options={{ title: 'جرد مخزون جديد' }} />
+      <Stack.Screen name="governance/risk-new" options={{ title: 'مخاطرة جديدة' }} />
+      <Stack.Screen name="hr/recruitment-new" options={{ title: 'إعلان وظيفي جديد' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>

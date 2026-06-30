@@ -11,7 +11,7 @@ import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge, GAvatar } from '@workspace/ui-native';
+import { GCard, GButton, GText, GLoadingState, GEmptyState, GStatusBadge, GAvatar } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -197,7 +197,15 @@ export default function EmployeeDetailScreen() {
 
         {/* ─── تبويب الإجازات ─── */}
         {tab === 'leaves' && (
-          leaveLoading ? <ActivityIndicator color={c.brand} style={{ marginTop: 40 }} /> :
+          <>
+          <GButton
+            title="طلب إجازة جديد"
+            icon="add-circle-outline"
+            variant="secondary"
+            onPress={() => router.push('/hr/leave-request-new' as never)}
+            style={{ marginBottom: 8 }}
+          />
+          {leaveLoading ? <ActivityIndicator color={c.brand} style={{ marginTop: 40 }} /> :
           leaveData.length === 0 ? <GEmptyState icon="calendar-outline" title="لا طلبات إجازة" description="لم يُعثر على طلبات إجازة لهذا الموظف" /> :
           <GCard style={{ gap: 0, padding: 0 }}>
             {leaveData.map((l, i) => {
@@ -214,7 +222,8 @@ export default function EmployeeDetailScreen() {
                 </View>
               );
             })}
-          </GCard>
+          </GCard>}
+          </>
         )}
 
         {/* ─── تبويب الرواتب ─── */}

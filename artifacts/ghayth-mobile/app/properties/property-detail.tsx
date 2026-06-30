@@ -8,8 +8,8 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GButton, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -82,6 +82,7 @@ function fmtMoney(val?: number): string {
 
 export default function PropertyDetailScreen() {
   const c = useColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [tab, setTab] = useState<Tab>('info');
 
@@ -212,7 +213,15 @@ export default function PropertyDetailScreen() {
         )}
 
         {tab === 'contracts' && (
-          contrLoading ? <ActivityIndicator color={c.brand} style={{ marginTop: 40 }} /> :
+          <>
+          <GButton
+            title="عقد إيجار جديد"
+            icon="add-circle-outline"
+            variant="secondary"
+            onPress={() => router.push({ pathname: '/properties/contract-new' as never })}
+            style={{ marginBottom: 8 }}
+          />
+          {contrLoading ? <ActivityIndicator color={c.brand} style={{ marginTop: 40 }} /> :
           contracts.length === 0 ? <GEmptyState icon="document-text-outline" title="لا عقود" description="لا توجد عقود إيجار لهذا العقار" /> :
           <GCard style={{ gap: 0, padding: 0 }}>
             {contracts.map((con, i) => {
@@ -230,11 +239,20 @@ export default function PropertyDetailScreen() {
                 </View>
               );
             })}
-          </GCard>
+          </GCard>}
+          </>
         )}
 
         {tab === 'maintenance' && (
-          maintLoading ? <ActivityIndicator color={c.brand} style={{ marginTop: 40 }} /> :
+          <>
+          <GButton
+            title="طلب صيانة جديد"
+            icon="add-circle-outline"
+            variant="secondary"
+            onPress={() => router.push({ pathname: '/properties/maintenance-new' as never, params: { propertyId: id } })}
+            style={{ marginBottom: 8 }}
+          />
+          {maintLoading ? <ActivityIndicator color={c.brand} style={{ marginTop: 40 }} /> :
           maintenance.length === 0 ? <GEmptyState icon="build-outline" title="لا صيانة" description="لا توجد طلبات صيانة لهذا العقار" /> :
           <GCard style={{ gap: 0, padding: 0 }}>
             {maintenance.map((m, i) => {
@@ -251,7 +269,8 @@ export default function PropertyDetailScreen() {
                 </View>
               );
             })}
-          </GCard>
+          </GCard>}
+          </>
         )}
       </View>
     </ScrollView>

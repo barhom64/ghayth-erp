@@ -5,8 +5,8 @@
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge, GAvatar } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GButton, GText, GLoadingState, GEmptyState, GStatusBadge, GAvatar } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 
@@ -68,6 +68,7 @@ function fmtMoney(val?: number, currency?: string): string {
 
 export default function VendorDetailScreen() {
   const c = useColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [tab, setTab] = useState<Tab>('info');
 
@@ -157,7 +158,15 @@ export default function VendorDetailScreen() {
         )}
 
         {tab === 'invoices' && (
-          invoices.length === 0
+          <>
+          <GButton
+            title="فاتورة مورد جديدة"
+            icon="add-circle-outline"
+            variant="secondary"
+            onPress={() => router.push({ pathname: '/finance/vendor-invoice-new' as never, params: { vendorId: id } })}
+            style={{ marginBottom: 8 }}
+          />
+          {invoices.length === 0
             ? <GEmptyState icon="documents-outline" title="لا توجد فواتير" description="لم يتم تسجيل أي فواتير لهذا المورد" />
             : invoices.map((inv, i) => (
               <GCard key={inv.id ?? i} style={{ gap: 4 }}>
@@ -170,11 +179,20 @@ export default function VendorDetailScreen() {
                   {inv.status ? <GStatusBadge status={inv.status} size="sm" /> : null}
                 </View>
               </GCard>
-            ))
+            ))}
+          </>
         )}
 
         {tab === 'payments' && (
-          payments.length === 0
+          <>
+          <GButton
+            title="دفعة للمورد"
+            icon="add-circle-outline"
+            variant="secondary"
+            onPress={() => router.push({ pathname: '/finance/vendor-payment-new' as never, params: { vendorId: id } })}
+            style={{ marginBottom: 8 }}
+          />
+          {payments.length === 0
             ? <GEmptyState icon="cash-outline" title="لا توجد مدفوعات" description="لم يتم تسجيل أي مدفوعات لهذا المورد" />
             : payments.map((pay, i) => (
               <GCard key={pay.id ?? i} style={{ gap: 4 }}>
@@ -187,7 +205,8 @@ export default function VendorDetailScreen() {
                   {pay.method ? <Text style={{ fontSize: 12, color: c.textMuted }}>{pay.method}</Text> : null}
                 </View>
               </GCard>
-            ))
+            ))}
+          </>
         )}
       </View>
     </ScrollView>
