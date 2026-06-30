@@ -638,6 +638,11 @@ function AuthGate() {
       <Stack.Screen name="governance/expiring-registrations" options={{ title: 'التراخيص المنتهية' }} />
       <Stack.Screen name="admin/import-batches" options={{ title: 'دفعات الاستيراد' }} />
       <Stack.Screen name="admin/comm-overview" options={{ title: 'نظرة عامة على الاتصالات' }} />
+      <Stack.Screen name="warehouse/abc-classification" options={{ title: 'تصنيف ABC' }} />
+      <Stack.Screen name="finance/cost-center-ranking" options={{ title: 'تصنيف مراكز التكلفة' }} />
+      <Stack.Screen name="admin/governance-overview" options={{ title: 'نظرة عامة على الحوكمة' }} />
+      <Stack.Screen name="admin/system-registry" options={{ title: 'سجل النظام' }} />
+      <Stack.Screen name="admin/subscription" options={{ title: 'الاشتراك' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
