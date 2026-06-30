@@ -1122,6 +1122,22 @@ function AuthGate() {
       <Stack.Screen name="m/intelligence-recommendations" options={{ title: 'التوصيات الذكية' }} />
       <Stack.Screen name="m/client-rfm" options={{ title: 'تحليل RFM للعميل' }} />
       <Stack.Screen name="m/client-analytics" options={{ title: 'تحليلات العملاء' }} />
+      <Stack.Screen name="admin/role-approval-limits" options={{ title: 'حدود الاعتماد للدور' }} />
+      <Stack.Screen name="admin/role-field-policies" options={{ title: 'سياسات الحقول للدور' }} />
+      <Stack.Screen name="admin/role-grants" options={{ title: 'منح الدور' }} />
+      <Stack.Screen name="admin/role-history" options={{ title: 'تاريخ الدور' }} />
+      <Stack.Screen name="admin/announcements" options={{ title: 'الإعلانات' }} />
+      <Stack.Screen name="admin/employee-of-month" options={{ title: 'موظف الشهر' }} />
+      <Stack.Screen name="digital-signature/history" options={{ title: 'تاريخ التواقيع الرقمية' }} />
+      <Stack.Screen name="digital-signature/my-signatures" options={{ title: 'توقيعاتي الرقمية' }} />
+      <Stack.Screen name="pdpl/employee-data-export" options={{ title: 'تصدير بيانات الموظف' }} />
+      <Stack.Screen name="pdpl/privacy-notice" options={{ title: 'إشعار الخصوصية' }} />
+      <Stack.Screen name="settings/custom-field-definitions" options={{ title: 'تعريفات الحقول المخصصة' }} />
+      <Stack.Screen name="settings/custom-field-catalog" options={{ title: 'كتالوج الحقول المخصصة' }} />
+      <Stack.Screen name="admin/rules-log" options={{ title: 'سجل القواعد' }} />
+      <Stack.Screen name="admin/rules-log-stats" options={{ title: 'إحصائيات سجل القواعد' }} />
+      <Stack.Screen name="admin/rules-journeys" options={{ title: 'رحلات القواعد' }} />
+      <Stack.Screen name="bi/report-catalog" options={{ title: 'كتالوج التقارير' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
