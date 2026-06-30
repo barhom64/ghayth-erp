@@ -163,6 +163,9 @@ function AuthGate() {
       <Stack.Screen name="governance/compliance-detail" options={{ title: 'بند الامتثال' }} />
       <Stack.Screen name="legal/session-detail" options={{ title: 'جلسة التقاضي' }} />
       <Stack.Screen name="requests/request-detail" options={{ title: 'تفاصيل الطلب' }} />
+      <Stack.Screen name="documents/document-detail" options={{ title: 'تفاصيل المستند' }} />
+      <Stack.Screen name="hr/payslip-detail" options={{ title: 'كشف الراتب' }} />
+      <Stack.Screen name="hr/exit-request-detail" options={{ title: 'طلب إنهاء الخدمة' }} />
       <Stack.Screen name="umrah/package-detail" options={{ title: 'الباقة' }} />
       <Stack.Screen name="umrah/agent-detail" options={{ title: 'الوكيل' }} />
       <Stack.Screen name="fleet/maintenance-detail" options={{ title: 'أمر الصيانة' }} />

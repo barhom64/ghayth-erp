@@ -381,8 +381,8 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           { key: "approve", label: "اعتماد المسيرة", icon: "checkmark-circle-outline", method: "POST", path: (id) => `/api/hr/payroll/${id}/approve`, confirm: "هل تريد اعتماد مسيرة الرواتب؟", successText: "تم اعتماد المسيرة", showWhenStatus: ["draft", "pending"] },
           { key: "post", label: "ترحيل المسيرة", icon: "git-commit-outline", method: "POST", path: (id) => `/api/hr/payroll/${id}/post`, confirm: "سيتم ترحيل المسيرة محاسبيًا. متابعة؟", successText: "تم ترحيل المسيرة", showWhenStatus: ["approved"] },
         ] } },
-      { key: "payslips", label: "كشوف الرواتب", icon: "document-text-outline", endpoint: "/api/hr/payroll/slips", titleFields: ["employeeName"], subtitleFields: ["period", "month"], statusField: "status", amountFields: ["netSalary"] },
-      { key: "exit-requests", label: "طلبات إنهاء الخدمة", icon: "log-out-outline", endpoint: "/api/hr/transfers", titleFields: ["employeeName"], subtitleFields: ["exitType", "reason"], statusField: "status", dateFields: ["requestDate"],
+      { key: "payslips", label: "كشوف الرواتب", icon: "document-text-outline", endpoint: "/api/hr/payroll/slips", detailRoute: "/hr/payslip-detail", titleFields: ["employeeName"], subtitleFields: ["period", "month"], statusField: "status", amountFields: ["netSalary"] },
+      { key: "exit-requests", label: "طلبات إنهاء الخدمة", icon: "log-out-outline", endpoint: "/api/hr/transfers", detailRoute: "/hr/exit-request-detail", titleFields: ["employeeName"], subtitleFields: ["exitType", "reason"], statusField: "status", dateFields: ["requestDate"],
         write: { moduleKey: "hr", actions: [
           { key: "approve", label: "اعتماد الطلب", icon: "checkmark-circle-outline", method: "PATCH", path: (id) => `/api/hr/transfers/${id}/approve`, body: { approved: true }, confirm: "هل تريد اعتماد طلب إنهاء الخدمة؟", successText: "تم اعتماد الطلب", showWhenStatus: ["pending"] },
         ] } },
@@ -1265,6 +1265,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
     sections: [
       {
         key: "documents", label: "المستندات", icon: "document-text-outline", endpoint: "/api/documents",
+        detailRoute: "/documents/document-detail",
         titleFields: ["name", "title"], subtitleFields: ["type", "category"], statusField: "status", dateFields: ["createdAt"],
         write: {
           moduleKey: "documents",
