@@ -1030,6 +1030,21 @@ function AuthGate() {
       <Stack.Screen name="projects/project-letters" options={{ title: 'خطابات المشروع' }} />
       <Stack.Screen name="projects/project-gantt" options={{ title: 'مخطط غانت' }} />
       <Stack.Screen name="projects/project-units" options={{ title: 'وحدات المشروع' }} />
+      <Stack.Screen name="legal/case-correspondence" options={{ title: 'مراسلات القضية' }} />
+      <Stack.Screen name="legal/case-judgments" options={{ title: 'أحكام القضية' }} />
+      <Stack.Screen name="legal/case-sessions" options={{ title: 'جلسات القضية' }} />
+      <Stack.Screen name="warehouse/supplier-items" options={{ title: 'منتجات المورد' }} />
+      <Stack.Screen name="warehouse/inventory-count-items" options={{ title: 'بنود الجرد' }} />
+      <Stack.Screen name="hr/discipline-stats" options={{ title: 'إحصاءات الانضباط' }} />
+      <Stack.Screen name="hr/employee-discipline-summary" options={{ title: 'ملخص انضباط الموظف' }} />
+      <Stack.Screen name="umrah/pilgrim-timeline" options={{ title: 'الجدول الزمني للمعتمر' }} />
+      <Stack.Screen name="umrah/transport-manifest" options={{ title: 'بيان الركاب' }} />
+      <Stack.Screen name="umrah/agent-pilgrim-invoices" options={{ title: 'فواتير وكيل العمرة' }} />
+      <Stack.Screen name="fleet/telematics-vehicle-events" options={{ title: 'أحداث المركبة' }} />
+      <Stack.Screen name="fleet/telematics-sensors" options={{ title: 'بيانات الحساسات' }} />
+      <Stack.Screen name="governance/module-policies" options={{ title: 'سياسات الوحدة' }} />
+      <Stack.Screen name="governance/policy-compliance-actions" options={{ title: 'إجراءات امتثال السياسة' }} />
+      <Stack.Screen name="documents/document-versions" options={{ title: 'إصدارات المستند' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
