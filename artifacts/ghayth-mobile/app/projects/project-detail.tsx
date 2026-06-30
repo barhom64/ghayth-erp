@@ -167,7 +167,15 @@ export default function ProjectDetailScreen() {
 
         {/* ─── المراحل ─── */}
         {tab === 'milestones' && (
-          msLoading ? <ActivityIndicator color={c.brand} style={{ marginTop: 40 }} /> :
+          <>
+          <GButton
+            title="إضافة مرحلة"
+            icon="add-circle-outline"
+            variant="secondary"
+            onPress={() => router.push({ pathname: '/projects/milestone-new' as never, params: { projectId: id } })}
+            style={{ marginBottom: 8 }}
+          />
+          {msLoading ? <ActivityIndicator color={c.brand} style={{ marginTop: 40 }} /> :
           milestones.length === 0 ? <GEmptyState icon="flag-outline" title="لا مراحل" description="لا توجد مراحل لهذا المشروع" /> :
           <GCard style={{ gap: 0, padding: 0 }}>
             {milestones.map((ms, i) => {
@@ -182,7 +190,8 @@ export default function ProjectDetailScreen() {
                 </View>
               );
             })}
-          </GCard>
+          </GCard>}
+          </>
         )}
 
         {/* ─── المهام ─── */}

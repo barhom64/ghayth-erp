@@ -271,6 +271,10 @@ function AuthGate() {
       <Stack.Screen name="hr/recruitment-new" options={{ title: 'إعلان وظيفي جديد' }} />
       <Stack.Screen name="legal/session-new" options={{ title: 'جلسة تقاضي جديدة' }} />
       <Stack.Screen name="umrah/payment-new" options={{ title: 'تسجيل دفعة معتمر' }} />
+      <Stack.Screen name="warehouse/product-new" options={{ title: 'إضافة صنف جديد' }} />
+      <Stack.Screen name="projects/milestone-new" options={{ title: 'مرحلة جديدة' }} />
+      <Stack.Screen name="governance/audit-new" options={{ title: 'تدقيق جديد' }} />
+      <Stack.Screen name="governance/capa-new" options={{ title: 'إجراء تصحيحي / وقائي' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>

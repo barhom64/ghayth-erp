@@ -1217,7 +1217,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       {
         key: "products", label: "المنتجات", icon: "cube-outline", endpoint: "/api/warehouse/products",
         titleFields: ["name", "productName"], subtitleFields: ["sku", "categoryName"], statusField: "status",
-        detailRoute: "/warehouse/product-detail",
+        detailRoute: "/warehouse/product-detail", createRoute: "/warehouse/product-new",
         write: {
           moduleKey: "warehouse",
           canDelete: true,
@@ -1358,7 +1358,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
         },
       },
       {
-        key: "milestones", label: "المعالم والإنجازات", icon: "flag-outline", endpoint: "/api/projects/milestones", titleFields: ["title", "name"], subtitleFields: ["projectName"], statusField: "status", amountFields: ["budget"], dateFields: ["dueDate"], detailRoute: "/projects/milestone-detail",
+        key: "milestones", label: "المعالم والإنجازات", icon: "flag-outline", endpoint: "/api/projects/milestones", titleFields: ["title", "name"], subtitleFields: ["projectName"], statusField: "status", amountFields: ["budget"], dateFields: ["dueDate"], detailRoute: "/projects/milestone-detail", createRoute: "/projects/milestone-new",
         write: {
           moduleKey: "operations",
           createFields: [
@@ -2472,7 +2472,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       },
       {
         key: "audits", label: "عمليات التدقيق", icon: "search-outline", endpoint: "/api/governance/audits",
-        titleFields: ["title"], subtitleFields: ["type"], statusField: "status", dateFields: ["startDate"], detailRoute: "/governance/audit-detail",
+        titleFields: ["title"], subtitleFields: ["type"], statusField: "status", dateFields: ["startDate"], detailRoute: "/governance/audit-detail", createRoute: "/governance/audit-new",
         write: {
           moduleKey: "governance",
           createFields: [
