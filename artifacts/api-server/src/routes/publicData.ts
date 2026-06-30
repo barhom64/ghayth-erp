@@ -430,4 +430,73 @@ router.post("/leads", publicLimiter, async (req, res) => {
   }
 });
 
+// ── محتوى الموقع العام (واجهة قراءة CMS متعددة المستأجرين) ──────────────────
+// المستأجر يُحَل على الخادم من site_config (slug أو customDomain)، لا نثق أبداً
+// بـ companyId من العميل. نُظهر فقط المواقع المُفعّلة + الصفوف النشطة.
+// الحلّ مفصول حسب العمود لتفادي الغموض: lookup الـ slug يفحص slug فقط،
+// و by-host يفحص customDomain فقط. هكذا لا يتسبب تطابق slug مستأجر مع
+// customDomain مستأجر آخر في تسريب محتوى عبر المستأجرين (كل عمود فريد منفرداً).
+async function resolveSiteBySlug(slug: string): Promise<Record<string, unknown> | null> {
+  const key = (slug || "").trim().toLowerCase();
+  if (!key) return null;
+  const [cfg] = await rawQuery<Record<string, unknown>>(
+    `SELECT * FROM site_config WHERE enabled = true AND LOWER(slug) = $1 LIMIT 1`,
+    [key],
+  );
+  return cfg ?? null;
+}
+
+async function resolveSiteByHost(host: string): Promise<Record<string, unknown> | null> {
+  const key = (host || "").trim().toLowerCase();
+  if (!key) return null;
+  const [cfg] = await rawQuery<Record<string, unknown>>(
+    `SELECT * FROM site_config WHERE enabled = true AND LOWER("customDomain") = $1 LIMIT 1`,
+    [key],
+  );
+  return cfg ?? null;
+}
+
+async function fetchSiteContent(cfg: Record<string, unknown>) {
+  const companyId = cfg.companyId as number;
+  const [packages, services, hotels] = await Promise.all([
+    rawQuery(`SELECT * FROM site_packages WHERE "companyId"=$1 AND "isActive"=true AND "deletedAt" IS NULL ORDER BY "sortOrder" ASC, id ASC`, [companyId]),
+    rawQuery(`SELECT * FROM site_services WHERE "companyId"=$1 AND "isActive"=true AND "deletedAt" IS NULL ORDER BY "sortOrder" ASC, id ASC`, [companyId]),
+    rawQuery(`SELECT * FROM site_hotels WHERE "companyId"=$1 AND "isActive"=true AND "deletedAt" IS NULL ORDER BY "sortOrder" ASC, id ASC`, [companyId]),
+  ]);
+  return { config: cfg, packages, services, hotels };
+}
+
+// حلّ المستأجر من ترويسة Host (للقالب القياسي المنشور على نطاق مخصّص).
+// يجب أن يُسجَّل قبل "/site/:slug" وإلا التقطه المعامل :slug (تظليل المسار).
+router.get("/site/by-host", publicLimiter, async (req, res) => {
+  try {
+    const host = String(req.headers.host || "").split(":")[0];
+    const cfg = await resolveSiteByHost(host);
+    if (!cfg) { res.status(404).json({ error: "الموقع غير موجود", code: "NOT_FOUND" }); return; }
+    res.json(await fetchSiteContent(cfg));
+  } catch (err) { handleRouteError(err, res, "public site by-host"); }
+});
+
+router.get("/site/:slug", publicLimiter, async (req, res) => {
+  try {
+    const cfg = await resolveSiteBySlug(String(req.params.slug));
+    if (!cfg) { res.status(404).json({ error: "الموقع غير موجود", code: "NOT_FOUND" }); return; }
+    res.json(await fetchSiteContent(cfg));
+  } catch (err) { handleRouteError(err, res, "public site get"); }
+});
+
+router.get("/site/:slug/posts", publicLimiter, async (req, res) => {
+  try {
+    const cfg = await resolveSiteBySlug(String(req.params.slug));
+    if (!cfg) { res.status(404).json({ error: "الموقع غير موجود", code: "NOT_FOUND" }); return; }
+    const companyId = cfg.companyId as number;
+    const posts = await rawQuery(
+      `SELECT * FROM site_posts WHERE "companyId"=$1 AND status='published' AND "deletedAt" IS NULL
+       ORDER BY "publishedAt" DESC NULLS LAST, "sortOrder" ASC, id ASC`,
+      [companyId],
+    );
+    res.json({ posts });
+  } catch (err) { handleRouteError(err, res, "public site posts"); }
+});
+
 export default router;
