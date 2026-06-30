@@ -285,6 +285,43 @@ function AuthGate() {
       <Stack.Screen name="properties/tenant-new" options={{ title: 'مستأجر جديد' }} />
       <Stack.Screen name="properties/owner-new" options={{ title: 'مالك جديد' }} />
       <Stack.Screen name="properties/inspection-new" options={{ title: 'فحص عقاري جديد' }} />
+      <Stack.Screen name="hr/training-enrollment-new" options={{ title: 'تسجيل مشاركة تدريب' }} />
+      <Stack.Screen name="hr/contract-new" options={{ title: 'عقد عمل جديد' }} />
+      <Stack.Screen name="hr/official-letter-new" options={{ title: 'خطاب رسمي جديد' }} />
+      <Stack.Screen name="hr/delegation-new" options={{ title: 'تفويض صلاحيات' }} />
+      <Stack.Screen name="hr/excuse-request-new" options={{ title: 'طلب عذر جديد' }} />
+      <Stack.Screen name="hr/gratuity-new" options={{ title: 'مكافأة نهاية خدمة' }} />
+      <Stack.Screen name="finance/collection-new" options={{ title: 'متابعة تحصيل' }} />
+      <Stack.Screen name="finance/commitment-new" options={{ title: 'التزام مالي جديد' }} />
+      <Stack.Screen name="finance/custody-new" options={{ title: 'عهدة جديدة' }} />
+      <Stack.Screen name="finance/customer-advance-new" options={{ title: 'دفعة مقدمة من عميل' }} />
+      <Stack.Screen name="finance/fixed-asset-disposal-new" options={{ title: 'صرف أصل ثابت' }} />
+      <Stack.Screen name="finance/obligation-new" options={{ title: 'التزام جديد' }} />
+      <Stack.Screen name="finance/salary-advance-new" options={{ title: 'سلفة راتب جديدة' }} />
+      <Stack.Screen name="finance/vendor-advance-new" options={{ title: 'دفعة مقدمة للمورد' }} />
+      <Stack.Screen name="finance/vendor-contract-new" options={{ title: 'عقد مورد جديد' }} />
+      <Stack.Screen name="finance/voucher-new" options={{ title: 'سند قبض/صرف' }} />
+      <Stack.Screen name="fleet/cargo-manifest-new" options={{ title: 'بيان شحن جديد' }} />
+      <Stack.Screen name="fleet/insurance-new" options={{ title: 'تأمين مركبة جديد' }} />
+      <Stack.Screen name="governance/compliance-new" options={{ title: 'مراجعة امتثال جديدة' }} />
+      <Stack.Screen name="governance/policy-new" options={{ title: 'سياسة جديدة' }} />
+      <Stack.Screen name="legal/contract-new" options={{ title: 'عقد قانوني جديد' }} />
+      <Stack.Screen name="properties/payment-new" options={{ title: 'دفعة إيجار' }} />
+      <Stack.Screen name="properties/lease-new" options={{ title: 'عقد إيجار جديد' }} />
+      <Stack.Screen name="properties/property-new" options={{ title: 'عقار جديد' }} />
+      <Stack.Screen name="requests/request-new" options={{ title: 'طلب جديد' }} />
+      <Stack.Screen name="crm/campaign-new" options={{ title: 'حملة تسويقية جديدة' }} />
+      <Stack.Screen name="crm/contract-new" options={{ title: 'عقد CRM جديد' }} />
+      <Stack.Screen name="crm/email-campaign-new" options={{ title: 'حملة بريد إلكتروني' }} />
+      <Stack.Screen name="documents/document-new" options={{ title: 'وثيقة جديدة' }} />
+      <Stack.Screen name="documents/template-new" options={{ title: 'قالب وثيقة جديد' }} />
+      <Stack.Screen name="umrah/agent-invoice-new" options={{ title: 'فاتورة وكيل عمرة' }} />
+      <Stack.Screen name="umrah/invoice-new" options={{ title: 'فاتورة عمرة جديدة' }} />
+      <Stack.Screen name="umrah/nusk-invoice-new" options={{ title: 'فاتورة نسك جديدة' }} />
+      <Stack.Screen name="umrah/penalty-new" options={{ title: 'غرامة عمرة جديدة' }} />
+      <Stack.Screen name="umrah/sub-agent-invoice-new" options={{ title: 'فاتورة وكيل فرعي' }} />
+      <Stack.Screen name="umrah/transport-new" options={{ title: 'نقل عمرة جديد' }} />
+      <Stack.Screen name="umrah/violation-new" options={{ title: 'مخالفة عمرة جديدة' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
