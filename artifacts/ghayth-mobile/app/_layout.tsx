@@ -954,6 +954,9 @@ function AuthGate() {
       <Stack.Screen name="finance/cost-center-report" options={{ title: 'تقرير مراكز التكلفة' }} />
       <Stack.Screen name="finance/allocation-override-log" options={{ title: 'سجل تجاوزات التوزيع' }} />
       <Stack.Screen name="finance/subsidiary-accounts" options={{ title: 'الحسابات الفرعية' }} />
+      <Stack.Screen name="umrah/dashboard" options={{ title: 'لوحة العمرة' }} />
+      <Stack.Screen name="umrah/import-presets" options={{ title: 'قوالب الاستيراد' }} />
+      <Stack.Screen name="properties/maintenance-list" options={{ title: 'قائمة الصيانة' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
