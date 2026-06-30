@@ -128,6 +128,9 @@ const createCreditMemoSchema = z.object({
   reason: z.string().min(1, "السبب مطلوب").max(2000, "النص طويل جدًا"),
   vatIncluded: z.boolean().optional(),
   memoDate: z.string().optional(),
+  // شريحة 4 — ربط اختياري بمرشّح خصم نقل: عند الإصدار تُطلق المالية حدثًا
+  // يربط المرشّح بالإشعار في مسار النقل (لا تكتب المالية جدول النقل).
+  deductionCandidateId: z.coerce.number().int().positive().optional(),
 });
 
 // Preview-time schema — same shape, but `reason` is optional since the
@@ -2928,7 +2931,7 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
     const scope = req.scope!;
 
     const id = parseId(req.params.id, "id");
-    const { amount, reason, vatIncluded = true, memoDate } = zodParse(createCreditMemoSchema.safeParse(req.body));
+    const { amount, reason, vatIncluded = true, memoDate, deductionCandidateId } = zodParse(createCreditMemoSchema.safeParse(req.body));
 
     const creditAmount = roundTo2(Number(amount));
     const memoDateStr = memoDate
@@ -3211,6 +3214,20 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
       entityId: id,
       details: JSON.stringify({ memoId, amount: creditAmount, net, vat, reason }),
     }).catch((e) => logger.error(e, "finance-invoices background task failed"));
+
+    // شريحة 4 — اربط مرشّح خصم النقل بهذا الإشعار عبر حدث عابر للمسار؛ مستمع
+    // النقل يحدّث مرشّحه (status=issued + creditMemoId). المالية لا تكتب جدول النقل.
+    if (deductionCandidateId && memoId) {
+      emitEvent({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "transport.deduction.materialized",
+        entity: "credit_memos",
+        entityId: memoId,
+        deductionCandidateId,
+        creditMemoId: memoId,
+      }).catch((e) => logger.error(e, "transport deduction link emit failed"));
+    }
 
     const [memo] = await rawQuery<Record<string, unknown>>(`SELECT * FROM credit_memos WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [memoId, scope.companyId]);
     // cogsReversalWarnings is non-fatal — flagged when a restored lot's
