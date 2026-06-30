@@ -6,8 +6,8 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { GCard, GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { GCard, GLoadingState, GEmptyState, GStatusBadge, GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
@@ -63,6 +63,7 @@ function fmtMoney(val?: number): string {
 
 export default function OpportunityDetailScreen() {
   const c = useColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [tab, setTab] = useState<Tab>('info');
 
@@ -164,7 +165,15 @@ export default function OpportunityDetailScreen() {
         )}
 
         {tab === 'activities' && (
-          actsLoading ? <ActivityIndicator color={c.brand} style={{ marginTop: 40 }} /> :
+          <>
+          <GButton
+            title="تسجيل نشاط جديد"
+            icon="add-circle-outline"
+            variant="secondary"
+            onPress={() => router.push({ pathname: '/crm/activity-new' as never, params: { opportunityId: id } })}
+            style={{ marginBottom: 8 }}
+          />
+          {actsLoading ? <ActivityIndicator color={c.brand} style={{ marginTop: 40 }} /> :
           activities.length === 0 ? <GEmptyState icon="list-outline" title="لا أنشطة" description="لا توجد أنشطة مسجّلة لهذه الفرصة" /> :
           <GCard style={{ gap: 0, padding: 0 }}>
             {activities.map((act, i) => {
@@ -182,7 +191,8 @@ export default function OpportunityDetailScreen() {
                 </View>
               );
             })}
-          </GCard>
+          </GCard>}
+          </>
         )}
       </View>
     </ScrollView>

@@ -7,7 +7,7 @@
 import React, { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { GCard, GText, GLoadingState, GEmptyState, GStatusBadge, GButton } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
@@ -58,6 +58,7 @@ function fmtMoney(val?: number, currency?: string): string {
 
 export default function InvoiceDetailScreen() {
   const c = useColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [acting, setActing] = useState(false);
 
@@ -91,6 +92,7 @@ export default function InvoiceDetailScreen() {
 
   const isDraft = invoice.status === 'draft';
   const isSent = invoice.status === 'sent';
+  const isPayable = ['sent', 'partial', 'overdue'].includes(invoice.status ?? '');
   const isOverdue = invoice.dueDate && new Date(invoice.dueDate) < new Date() && (invoice.remaining ?? 0) > 0;
 
   return (
@@ -195,6 +197,14 @@ export default function InvoiceDetailScreen() {
             variant="secondary"
             onPress={() => doAction('send', 'إرسال الفاتورة')}
             loading={acting}
+          />
+        )}
+        {isPayable && (
+          <GButton
+            title="تسجيل دفعة"
+            icon="cash-outline"
+            variant="secondary"
+            onPress={() => router.push({ pathname: '/finance/payment-new' as never, params: { invoiceId: id } })}
           />
         )}
       </View>

@@ -129,6 +129,8 @@ function AuthGate() {
       <Stack.Screen name="support/ticket-new" options={{ title: 'تذكرة دعم جديدة' }} />
       <Stack.Screen name="crm/lead-new" options={{ title: 'عميل محتمل جديد' }} />
       <Stack.Screen name="crm/opportunity-new" options={{ title: 'فرصة بيعية جديدة' }} />
+      <Stack.Screen name="crm/activity-new" options={{ title: 'تسجيل نشاط متابعة' }} />
+      <Stack.Screen name="finance/payment-new" options={{ title: 'تسجيل دفعة' }} />
       <Stack.Screen name="hr/leave-balances" options={{ title: 'أرصدة الإجازات' }} />
       <Stack.Screen name="hr/change-password" options={{ title: 'تغيير كلمة المرور' }} />
       <Stack.Screen name="hr/my-attendance" options={{ title: 'سجل حضوري' }} />
