@@ -9,6 +9,9 @@ import { useEffect, useRef } from "react";
 import { useApiQuery } from "@/lib/api";
 
 interface VehicleDriverInfo {
+  /** Unified current driver — resolved from the active primary assignment
+   *  (vehicle_driver_assignments) with a legacy assignedDriverId fallback. */
+  currentDriverId?: number | null;
   assignedDriverId?: number | null;
   driverName?: string | null;
 }
@@ -25,7 +28,8 @@ export function useVehicleDriverDefault(
     hasVehicle ? `/fleet/vehicles/${vehicleId}` : null,
     { enabled: hasVehicle },
   );
-  const assigned = data?.assignedDriverId ?? null;
+  // Prefer the unified current driver (active assignment); fall back to legacy.
+  const assigned = data?.currentDriverId ?? data?.assignedDriverId ?? null;
 
   const setterRef = useRef(setDriverId);
   setterRef.current = setDriverId;

@@ -1772,7 +1772,30 @@ router.get("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "view
   try {
     const scope = req.scope!;
     const vehicleId = parseId(req.params.id, "id");
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT v.*, d.name AS "driverName", d.phone AS "driverPhone" FROM fleet_vehicles v LEFT JOIN fleet_drivers d ON d.id = v."assignedDriverId" AND d."deletedAt" IS NULL WHERE v.id=$1 AND v."companyId"=$2 AND v."deletedAt" IS NULL`, [vehicleId, scope.companyId]);
+    // Current driver = the ACTIVE PRIMARY row in vehicle_driver_assignments
+    // (the temporal source of truth; one active-primary per vehicle is enforced
+    // by uq_vehicle_active_primary, migration 267). Falls back to the legacy
+    // fleet_vehicles.assignedDriverId for vehicles created before the assignment
+    // model — so no data migration is required and old rows keep resolving.
+    // `currentDriverId` is the unified value; `assignedDriverId` stays in v.* for
+    // backward compatibility. driverName/driverPhone now reflect the CURRENT driver.
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `SELECT v.*,
+              COALESCE(av."driverId", v."assignedDriverId") AS "currentDriverId",
+              d.name AS "driverName", d.phone AS "driverPhone"
+         FROM fleet_vehicles v
+         LEFT JOIN LATERAL (
+           SELECT vda."driverId"
+             FROM vehicle_driver_assignments vda
+            WHERE vda."vehicleId" = v.id AND vda."companyId" = v."companyId"
+              AND vda.status = 'active' AND vda."assignmentType" = 'primary'
+            ORDER BY vda."startDate" DESC
+            LIMIT 1
+         ) av ON TRUE
+         LEFT JOIN fleet_drivers d ON d.id = COALESCE(av."driverId", v."assignedDriverId") AND d."deletedAt" IS NULL
+        WHERE v.id=$1 AND v."companyId"=$2 AND v."deletedAt" IS NULL`,
+      [vehicleId, scope.companyId],
+    );
     if (!row) throw new NotFoundError("المركبة غير موجودة");
     const [trips, maintenance, fuelLogs, insurance] = await Promise.all([
       rawQuery<Record<string, unknown>>(
