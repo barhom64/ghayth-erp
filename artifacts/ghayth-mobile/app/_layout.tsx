@@ -714,6 +714,9 @@ function AuthGate() {
       <Stack.Screen name="store/stats" options={{ title: 'إحصاءات المتجر' }} />
       <Stack.Screen name="marketing/stats" options={{ title: 'إحصاءات التسويق' }} />
       <Stack.Screen name="support/stats" options={{ title: 'إحصاءات الدعم' }} />
+      <Stack.Screen name="hr/attendance-stats" options={{ title: 'إحصاءات الحضور' }} />
+      <Stack.Screen name="hr/violations-stats" options={{ title: 'إحصاءات المخالفات' }} />
+      <Stack.Screen name="hr/payroll-summary" options={{ title: 'ملخص الرواتب' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
