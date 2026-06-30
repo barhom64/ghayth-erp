@@ -329,8 +329,8 @@ async function documentExpiryAlerts(): Promise<string> {
 
     // Company documents (commercial registration, municipality license, etc.)
     const companyDocAlerts = await rawQuery<Record<string, unknown>>(
-      `SELECT cd.id, NULL AS "employeeId", cd."type" AS "employeeName",
-              cd."type", cd."expiryDate",
+      `SELECT cd.id, NULL AS "employeeId", cd."documentType" AS "employeeName",
+              cd."documentType", cd."expiryDate",
               (cd."expiryDate"::date - CURRENT_DATE) AS "daysLeft"
        FROM company_documents cd
        WHERE cd."companyId"=$1 AND cd.status='active'
