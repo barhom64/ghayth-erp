@@ -30,6 +30,7 @@ const QUICK_ACTIONS: QuickAction[] = [
   { label: 'طلب إجازة',     icon: 'calendar-outline',          route: '/hr/leave-new' },
   { label: 'وقت إضافي',     icon: 'alarm-outline',             route: '/hr/overtime-new' },
   { label: 'طلب سلفة',      icon: 'card-outline',              route: '/hr/loan-new' },
+  { label: 'طلب استئذان',   icon: 'hand-left-outline',         route: '/hr/excuse-new' },
   { label: 'كشف الراتب',    icon: 'document-text-outline',     route: '/hr/payslip' },
   { label: 'طلباتي',         icon: 'list-outline',              route: '/hr/my-requests' },
 ];

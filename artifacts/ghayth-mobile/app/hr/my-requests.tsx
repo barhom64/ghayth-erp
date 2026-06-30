@@ -10,32 +10,36 @@ import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 import { statusBadge } from '@/lib/moduleSections';
 
-type FilterType = 'الكل' | 'إجازات' | 'سلف' | 'وقت إضافي';
+type FilterType = 'الكل' | 'إجازات' | 'سلف' | 'وقت إضافي' | 'استئذان';
 
 interface RequestItem {
   id: number;
   requestType?: string;
   leaveTypeName?: string;
+  excuseType?: string;
   title?: string;
   status: string;
   startDate?: string;
   endDate?: string;
+  excuseDate?: string;
   days?: number;
   createdAt: string;
 }
 
 interface MyRequestsResp {
   leaveRequests?: RequestItem[];
+  excuseRequests?: RequestItem[];
   data?: RequestItem[];
 }
 
-const FILTERS: FilterType[] = ['الكل', 'إجازات', 'سلف', 'وقت إضافي'];
+const FILTERS: FilterType[] = ['الكل', 'إجازات', 'سلف', 'وقت إضافي', 'استئذان'];
 
 const typeLabel: Record<string, string> = {
   leave: 'إجازة',
   loan: 'سلفة',
   overtime: 'وقت إضافي',
   salary_advance: 'سلفة',
+  excuse: 'استئذان',
 };
 
 function formatDateAr(val?: string): string {
@@ -51,8 +55,9 @@ export default function MyRequestsScreen() {
   const { data: resp, isLoading, isError, refetch } = useList<MyRequestsResp>('/api/my-space/requests');
 
   const leaveItems: RequestItem[] = (resp?.leaveRequests ?? []).map(r => ({ ...r, requestType: 'leave' }));
+  const excuseItems: RequestItem[] = (resp?.excuseRequests ?? []).map(r => ({ ...r, requestType: 'excuse' }));
   const workflowItems: RequestItem[] = (resp?.data ?? []);
-  const allItems = [...leaveItems, ...workflowItems].sort((a, b) =>
+  const allItems = [...leaveItems, ...excuseItems, ...workflowItems].sort((a, b) =>
     new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
 
@@ -61,6 +66,7 @@ export default function MyRequestsScreen() {
     if (filter === 'إجازات') return item.requestType === 'leave';
     if (filter === 'سلف') return item.requestType === 'loan' || item.requestType === 'salary_advance';
     if (filter === 'وقت إضافي') return item.requestType === 'overtime';
+    if (filter === 'استئذان') return item.requestType === 'excuse';
     return true;
   });
 
@@ -117,7 +123,9 @@ export default function MyRequestsScreen() {
               </View>
               <View style={styles.itemMeta}>
                 <GText variant="caption" color={c.textFaint}>{formatDateAr(item.createdAt)}</GText>
-                {item.startDate ? (
+                {item.excuseDate ? (
+                  <GText variant="caption" color={c.textMuted}>{formatDateAr(item.excuseDate)}{item.excuseType ? ` · ${item.excuseType}` : ''}</GText>
+                ) : item.startDate ? (
                   <GText variant="caption" color={c.textMuted}>
                     {formatDateAr(item.startDate)}{item.endDate ? ` ← ${formatDateAr(item.endDate)}` : ''}
                     {item.days ? ` (${item.days} أيام)` : ''}

@@ -114,6 +114,7 @@ function AuthGate() {
       <Stack.Screen name="hr/my-requests" options={{ title: 'طلباتي' }} />
       <Stack.Screen name="hr/overtime-new" options={{ title: 'طلب وقت إضافي' }} />
       <Stack.Screen name="hr/loan-new" options={{ title: 'طلب سلفة' }} />
+      <Stack.Screen name="hr/excuse-new" options={{ title: 'طلب استئذان' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
   );
