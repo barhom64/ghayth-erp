@@ -959,6 +959,12 @@ function AuthGate() {
       <Stack.Screen name="properties/maintenance-list" options={{ title: 'قائمة الصيانة' }} />
       <Stack.Screen name="admin/activity-stats" options={{ title: 'إحصائيات النشاط' }} />
       <Stack.Screen name="settings/custom-field-values" options={{ title: 'قيم الحقول المخصصة' }} />
+      <Stack.Screen name="bi/admin-reports/daily" options={{ title: 'التقرير اليومي' }} />
+      <Stack.Screen name="bi/admin-reports/weekly" options={{ title: 'التقرير الأسبوعي' }} />
+      <Stack.Screen name="bi/admin-reports/monthly" options={{ title: 'التقرير الشهري' }} />
+      <Stack.Screen name="admin/event-log-stats" options={{ title: 'إحصائيات سجل الأحداث' }} />
+      <Stack.Screen name="admin/event-outbox-stats" options={{ title: 'إحصائيات صندوق الصادر' }} />
+      <Stack.Screen name="admin/event-journeys" options={{ title: 'رحلات الأحداث' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
