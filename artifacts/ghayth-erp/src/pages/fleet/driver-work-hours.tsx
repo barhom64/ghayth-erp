@@ -5,16 +5,14 @@
 // بشري (القرار 3ج). المعدّلات والأجر في الموارد البشرية — لا تظهر هنا.
 
 import { useState } from "react";
-import { useApiQuery, asList, apiFetch } from "@/lib/api";
+import { useApiQuery, asList, apiFetch, getErrorMessage } from "@/lib/api";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { toast } from "@/hooks/use-toast";
-import { getErrorMessage } from "@/lib/api";
-import { PageShell } from "@workspace/ui-core";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { CheckCircle, Clock } from "lucide-react";
 import { todayLocal } from "@/lib/formatters";
 
@@ -57,19 +55,16 @@ const STATUS_LABEL: Record<string, string> = {
   void: "ملغى",
 };
 
-function HoursRowItem({ row, onChanged }: { row: HoursRow; onChanged: () => void }) {
-  const derivedD = num(row.derivedDrivingHours) ?? 0;
-  const derivedS = num(row.derivedStopHours) ?? 0;
+// خلية اليدوي — حالة محلية لكل صفّ (تعديل قبل الاعتماد فقط).
+function ManualCell({ row, onChanged }: { row: HoursRow; onChanged: () => void }) {
   const [mDrive, setMDrive] = useState<string>(row.manualDrivingHours != null ? String(row.manualDrivingHours) : "");
   const [mStop, setMStop] = useState<string>(row.manualStopHours != null ? String(row.manualStopHours) : "");
-  // المقترح للاعتماد: اليدوي إن وُجد، وإلا المشتقّ.
-  const [aDrive, setADrive] = useState<string>(String(num(row.manualDrivingHours) ?? derivedD));
-  const [aStop, setAStop] = useState<string>(String(num(row.manualStopHours) ?? derivedS));
   const [busy, setBusy] = useState(false);
 
-  const isApproved = row.status === "approved";
-
-  async function saveManual() {
+  if (row.status === "approved") {
+    return <span className="text-muted-foreground">{fmt(row.manualDrivingHours)} / {fmt(row.manualStopHours)}</span>;
+  }
+  async function save() {
     setBusy(true);
     try {
       await apiFetch(`/fleet/driver-work-hours/${row.id}`, {
@@ -87,16 +82,40 @@ function HoursRowItem({ row, onChanged }: { row: HoursRow; onChanged: () => void
       setBusy(false);
     }
   }
+  return (
+    <div className="flex items-center gap-1 justify-center">
+      <Input type="number" step="0.25" min="0" max="24" value={mDrive}
+        onChange={(e) => setMDrive(e.target.value)} className="h-8 w-16 text-center" placeholder="قيادة" />
+      <span className="text-muted-foreground">/</span>
+      <Input type="number" step="0.25" min="0" max="24" value={mStop}
+        onChange={(e) => setMStop(e.target.value)} className="h-8 w-16 text-center" placeholder="توقف" />
+      <GuardedButton perm="fleet.driver_hours:update" size="sm" variant="outline"
+        disabled={busy} onClick={save}>حفظ</GuardedButton>
+    </div>
+  );
+}
 
+// خلية المعتمد — حالة محلية؛ المقترح = اليدوي إن وُجد وإلا المشتقّ.
+function ApproveCell({ row, onChanged }: { row: HoursRow; onChanged: () => void }) {
+  const derivedD = num(row.derivedDrivingHours) ?? 0;
+  const derivedS = num(row.derivedStopHours) ?? 0;
+  const [aDrive, setADrive] = useState<string>(String(num(row.manualDrivingHours) ?? derivedD));
+  const [aStop, setAStop] = useState<string>(String(num(row.manualStopHours) ?? derivedS));
+  const [busy, setBusy] = useState(false);
+
+  if (row.status === "approved") {
+    return (
+      <span className="font-bold text-status-success-foreground">
+        {fmt(row.approvedDrivingHours)} / {fmt(row.approvedStopHours)}
+      </span>
+    );
+  }
   async function approve() {
     setBusy(true);
     try {
       await apiFetch(`/fleet/driver-work-hours/${row.id}/approve`, {
         method: "POST",
-        body: JSON.stringify({
-          approvedDrivingHours: Number(aDrive || 0),
-          approvedStopHours: Number(aStop || 0),
-        }),
+        body: JSON.stringify({ approvedDrivingHours: Number(aDrive || 0), approvedStopHours: Number(aStop || 0) }),
       });
       toast({ title: "تم اعتماد الساعات" });
       onChanged();
@@ -106,64 +125,16 @@ function HoursRowItem({ row, onChanged }: { row: HoursRow; onChanged: () => void
       setBusy(false);
     }
   }
-
   return (
-    <tr className="border-b text-sm">
-      <td className="p-2 font-medium">{row.driverName}</td>
-      <td className="p-2 whitespace-nowrap">{row.workDate?.split("T")[0]}</td>
-
-      {/* التتبع (مشتقّ، عرض فقط) */}
-      <td className="p-2 text-center text-muted-foreground" title="من التتبع">
-        {fmt(row.derivedDrivingHours)} / {fmt(row.derivedStopHours)}
-      </td>
-
-      {/* اليدوي (قابل للتعديل قبل الاعتماد) */}
-      <td className="p-2">
-        {isApproved ? (
-          <span className="text-muted-foreground">{fmt(row.manualDrivingHours)} / {fmt(row.manualStopHours)}</span>
-        ) : (
-          <div className="flex items-center gap-1 justify-center">
-            <Input type="number" step="0.25" min="0" max="24" value={mDrive}
-              onChange={(e) => setMDrive(e.target.value)} className="h-8 w-16 text-center" placeholder="قيادة" />
-            <span className="text-muted-foreground">/</span>
-            <Input type="number" step="0.25" min="0" max="24" value={mStop}
-              onChange={(e) => setMStop(e.target.value)} className="h-8 w-16 text-center" placeholder="توقف" />
-            <GuardedButton perm="fleet.driver_hours:update" size="sm" variant="outline"
-              disabled={busy} onClick={saveManual}>حفظ</GuardedButton>
-          </div>
-        )}
-      </td>
-
-      {/* المعتمد + إجراء الاعتماد */}
-      <td className="p-2">
-        {isApproved ? (
-          <span className="font-bold text-status-success-foreground">
-            {fmt(row.approvedDrivingHours)} / {fmt(row.approvedStopHours)}
-          </span>
-        ) : (
-          <div className="flex items-center gap-1 justify-center">
-            <Input type="number" step="0.25" min="0" max="24" value={aDrive}
-              onChange={(e) => setADrive(e.target.value)} className="h-8 w-16 text-center" />
-            <span className="text-muted-foreground">/</span>
-            <Input type="number" step="0.25" min="0" max="24" value={aStop}
-              onChange={(e) => setAStop(e.target.value)} className="h-8 w-16 text-center" />
-            <GuardedButton perm="fleet.driver_hours:approve" size="sm"
-              disabled={busy} onClick={approve}>اعتماد</GuardedButton>
-          </div>
-        )}
-      </td>
-
-      <td className="p-2 text-center">
-        {isApproved ? (
-          <Badge variant="outline" className="gap-1">
-            <CheckCircle className="w-3 h-3 text-status-success" /> {STATUS_LABEL[row.status]}
-            {row.payrollLineId != null && <span className="text-[10px] text-muted-foreground">· مُرحّل</span>}
-          </Badge>
-        ) : (
-          <Badge variant="outline">{STATUS_LABEL[row.status] ?? row.status}</Badge>
-        )}
-      </td>
-    </tr>
+    <div className="flex items-center gap-1 justify-center">
+      <Input type="number" step="0.25" min="0" max="24" value={aDrive}
+        onChange={(e) => setADrive(e.target.value)} className="h-8 w-16 text-center" />
+      <span className="text-muted-foreground">/</span>
+      <Input type="number" step="0.25" min="0" max="24" value={aStop}
+        onChange={(e) => setAStop(e.target.value)} className="h-8 w-16 text-center" />
+      <GuardedButton perm="fleet.driver_hours:approve" size="sm"
+        disabled={busy} onClick={approve}>اعتماد</GuardedButton>
+    </div>
   );
 }
 
@@ -210,6 +181,26 @@ export default function DriverWorkHoursPage() {
   const pending = rows.filter((r) => r.status === "pending").length;
   const approved = rows.filter((r) => r.status === "approved").length;
 
+  const columns: DataTableColumn<HoursRow>[] = [
+    { key: "driverName", header: "السائق", sortable: true, searchable: true, render: (r) => <span className="font-medium">{r.driverName}</span> },
+    { key: "workDate", header: "اليوم", sortable: true, render: (r) => r.workDate?.split("T")[0] || "-" },
+    { key: "tracking", header: "التتبع (قيادة/توقف)", align: "center", render: (r) => (
+      <span className="text-muted-foreground">{fmt(r.derivedDrivingHours)} / {fmt(r.derivedStopHours)}</span>
+    ) },
+    { key: "manual", header: "اليدوي (قيادة/توقف)", align: "center", render: (r) => <ManualCell row={r} onChanged={refetch} /> },
+    { key: "approved", header: "المعتمد (قيادة/توقف)", align: "center", render: (r) => <ApproveCell row={r} onChanged={refetch} /> },
+    { key: "status", header: "الحالة", align: "center", sortable: true, render: (r) => (
+      r.status === "approved" ? (
+        <Badge variant="outline" className="gap-1">
+          <CheckCircle className="w-3 h-3 text-status-success" /> {STATUS_LABEL[r.status]}
+          {r.payrollLineId != null && <span className="text-[10px] text-muted-foreground">· مُرحّل</span>}
+        </Badge>
+      ) : (
+        <Badge variant="outline">{STATUS_LABEL[r.status] ?? r.status}</Badge>
+      )
+    ) },
+  ];
+
   return (
     <PageShell
       title="ساعات عمل السائق"
@@ -254,35 +245,15 @@ export default function DriverWorkHoursPage() {
         </CardContent>
       </Card>
 
-      {isLoading ? (
-        <LoadingSpinner />
-      ) : isError ? (
-        <ErrorState onRetry={refetch} />
-      ) : rows.length === 0 ? (
-        <Card><CardContent className="p-8 text-center text-muted-foreground">لا توجد ساعات مسجّلة في هذه الفترة.</CardContent></Card>
-      ) : (
-        <Card>
-          <CardContent className="p-0 overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b text-xs text-muted-foreground">
-                  <th className="p-2 text-start">السائق</th>
-                  <th className="p-2 text-start">اليوم</th>
-                  <th className="p-2 text-center">التتبع (قيادة/توقف)</th>
-                  <th className="p-2 text-center">اليدوي (قيادة/توقف)</th>
-                  <th className="p-2 text-center">المعتمد (قيادة/توقف)</th>
-                  <th className="p-2 text-center">الحالة</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <HoursRowItem key={r.id} row={r} onChanged={refetch} />
-                ))}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
-      )}
+      <DataTable
+        columns={columns}
+        data={rows}
+        isLoading={isLoading}
+        error={isError ? new Error("تعذّر تحميل البيانات") : null}
+        onRetry={refetch}
+        emptyMessage="لا توجد ساعات مسجّلة في هذه الفترة."
+        emptyIcon={<Clock className="w-10 h-10 text-gray-300" />}
+      />
     </PageShell>
   );
 }
