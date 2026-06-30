@@ -263,7 +263,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       },
       {
         key: "leave-requests", label: "طلبات الإجازة", icon: "calendar-outline", endpoint: "/api/hr/leave-requests",
-        titleFields: ["employeeName"], subtitleFields: ["leaveType", "empNumber"], statusField: "status", dateFields: ["startDate", "createdAt"],
+        titleFields: ["employeeName"], subtitleFields: ["leaveType", "empNumber"], statusField: "status", dateFields: ["startDate", "createdAt"], detailRoute: "/hr/leave-request-detail",
         write: {
           moduleKey: "hr",
           detailPath: (id) => `/api/hr/leaves/${id}`,
@@ -388,13 +388,13 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
         ] } },
       { key: "gratuity", label: "مكافأة نهاية الخدمة", icon: "ribbon-outline", endpoint: "/api/hr/gratuity", titleFields: ["employeeName"], subtitleFields: ["yearsOfService"], statusField: "status", amountFields: ["gratuityAmount", "totalAmount"], dateFields: ["lastWorkingDay"] },
       { key: "delegations", label: "التفويضات", icon: "swap-horizontal-outline", endpoint: "/api/hr/delegations", titleFields: ["delegatorName"], subtitleFields: ["delegateeName", "scope"], statusField: "status", dateFields: ["fromDate", "toDate"] },
-      { key: "evaluations", label: "تقييمات الأداء", icon: "star-outline", endpoint: "/api/hr/evaluations", titleFields: ["employeeName"], subtitleFields: ["period", "evaluatorName"], statusField: "status", amountFields: ["score"], dateFields: ["evaluationDate"] },
+      { key: "evaluations", label: "تقييمات الأداء", icon: "star-outline", endpoint: "/api/hr/evaluations", titleFields: ["employeeName"], subtitleFields: ["period", "evaluatorName"], statusField: "status", amountFields: ["score"], dateFields: ["evaluationDate"], detailRoute: "/hr/evaluation-detail" },
       { key: "official-letters", label: "الخطابات الرسمية", icon: "mail-outline", endpoint: "/api/hr/official-letters", titleFields: ["subject", "letterNumber"], subtitleFields: ["employeeName", "type"], statusField: "status", dateFields: ["createdAt"] },
       { key: "excuse-requests", label: "طلبات الاستئذان", icon: "hand-left-outline", endpoint: "/api/hr/excuse-requests", titleFields: ["employeeName"], subtitleFields: ["excuseType"], statusField: "status", dateFields: ["excuseDate"],
         write: { moduleKey: "hr", actions: [
           { key: "approve", label: "اعتماد الاستئذان", icon: "checkmark-circle-outline" as never, method: "PATCH" as const, path: (id: string | number) => `/api/hr/excuse-requests/${id}/approve`, body: { approved: true }, confirm: "هل تريد اعتماد طلب الاستئذان؟", successText: "تم اعتماد الاستئذان", showWhenStatus: ["pending"] },
         ] } },
-      { key: "training", label: "البرامج التدريبية", icon: "school-outline", endpoint: "/api/hr/training/programs", titleFields: ["title"], subtitleFields: ["provider", "category"], statusField: "status", amountFields: ["cost"], dateFields: ["startDate"] },
+      { key: "training", label: "البرامج التدريبية", icon: "school-outline", endpoint: "/api/hr/training/programs", titleFields: ["title"], subtitleFields: ["provider", "category"], statusField: "status", amountFields: ["cost"], dateFields: ["startDate"], detailRoute: "/hr/training-detail" },
       { key: "recruitment", label: "الوظائف الشاغرة", icon: "person-add-outline", endpoint: "/api/hr/recruitment/postings", titleFields: ["title"], subtitleFields: ["department", "location"], statusField: "status", dateFields: ["closingDate"] },
       { key: "discipline", label: "المخالفات التأديبية", icon: "warning-outline", endpoint: "/api/hr/discipline/memos", titleFields: ["memoNumber"], subtitleFields: ["employeeName", "incidentType"], statusField: "status", dateFields: ["incidentDate"] },
       { key: "legal-entities", label: "الكيانات القانونية", icon: "business-outline", endpoint: "/api/org/legal-entities", titleFields: ["nameAr", "nameEn"], subtitleFields: ["crNumber", "vatNumber"] },
@@ -1410,7 +1410,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
     sections: [
       {
         key: "units", label: "الوحدات العقارية", icon: "home-outline", endpoint: "/api/properties/units",
-        titleFields: ["unitNumber", "name"], subtitleFields: ["buildingName", "type"], statusField: "status",
+        titleFields: ["unitNumber", "name"], subtitleFields: ["buildingName", "type"], statusField: "status", detailRoute: "/properties/unit-detail",
         write: {
           moduleKey: "property",
           canDelete: true,
@@ -1497,7 +1497,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       },
       {
         key: "maintenance-requests", label: "طلبات الصيانة", icon: "build-outline", endpoint: "/api/properties/maintenance-requests",
-        titleFields: ["category", "description"], subtitleFields: ["unitNumber", "tenantName"], statusField: "status", amountFields: ["estimatedCost"], dateFields: ["createdAt"],
+        titleFields: ["category", "description"], subtitleFields: ["unitNumber", "tenantName"], statusField: "status", amountFields: ["estimatedCost"], dateFields: ["createdAt"], detailRoute: "/properties/maintenance-request-detail",
         write: {
           moduleKey: "property",
           detailPath: (id) => `/api/properties/maintenance/${id}`,

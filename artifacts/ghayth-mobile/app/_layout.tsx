@@ -159,6 +159,11 @@ function AuthGate() {
       <Stack.Screen name="governance/capa-detail" options={{ title: 'الإجراء التصحيحي' }} />
       <Stack.Screen name="legal/contract-detail" options={{ title: 'العقد القانوني' }} />
       <Stack.Screen name="legal/judgment-detail" options={{ title: 'الحكم القضائي' }} />
+      <Stack.Screen name="properties/unit-detail" options={{ title: 'الوحدة العقارية' }} />
+      <Stack.Screen name="properties/maintenance-request-detail" options={{ title: 'طلب الصيانة' }} />
+      <Stack.Screen name="hr/evaluation-detail" options={{ title: 'تقييم الأداء' }} />
+      <Stack.Screen name="hr/training-detail" options={{ title: 'البرنامج التدريبي' }} />
+      <Stack.Screen name="hr/leave-request-detail" options={{ title: 'طلب الإجازة' }} />
       <Stack.Screen name="manager-workspace" options={{ title: 'مساحة عمل المدير' }} />
       <Stack.Screen name="finance/reports" options={{ title: 'التقارير المالية' }} />
       <Stack.Screen name="hr/employee-detail" options={{ title: 'ملف الموظف' }} />
