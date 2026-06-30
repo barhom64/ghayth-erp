@@ -1387,6 +1387,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
     sections: [
       {
         key: "campaigns", label: "الحملات", icon: "megaphone-outline", endpoint: "/api/marketing/campaigns",
+        detailRoute: "/crm/campaign-detail",
         titleFields: ["name", "title"], statusField: "status", amountFields: ["budget"], dateFields: ["startDate"],
         write: {
           moduleKey: "marketing",
@@ -1609,7 +1610,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
           ],
         },
       },
-      { key: "sessions", label: "جلسات التقاضي", icon: "calendar-outline", endpoint: "/api/legal/sessions/upcoming", titleFields: ["caseTitle", "caseNumber"], subtitleFields: ["location", "court"], statusField: "status", dateFields: ["sessionDate"] },
+      { key: "sessions", label: "جلسات التقاضي", icon: "calendar-outline", endpoint: "/api/legal/sessions/upcoming", detailRoute: "/legal/session-detail", titleFields: ["caseTitle", "caseNumber"], subtitleFields: ["location", "court"], statusField: "status", dateFields: ["sessionDate"] },
       { key: "judgments", label: "الأحكام", icon: "ribbon-outline", endpoint: "/api/legal/judgments", titleFields: ["caseTitle", "ref"], subtitleFields: ["court", "judgmentType"], statusField: "status", dateFields: ["judgmentDate"], detailRoute: "/legal/judgment-detail" },
     ],
   },
@@ -1619,6 +1620,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
     sections: [
       {
         key: "requests", label: "الطلبات", icon: "file-tray-full-outline", endpoint: "/api/requests",
+        detailRoute: "/requests/request-detail",
         titleFields: ["ref", "type", "title"], subtitleFields: ["requesterName", "type"], statusField: "status", dateFields: ["createdAt"],
         write: {
           moduleKey: "requests",
@@ -1733,6 +1735,7 @@ export const MODULE_SECTIONS: Record<string, ModuleDef> = {
       },
       {
         key: "compliance", label: "الامتثال", icon: "shield-checkmark-outline", endpoint: "/api/governance/compliance",
+        detailRoute: "/governance/compliance-detail",
         titleFields: ["title"], subtitleFields: ["framework", "category"], statusField: "status", dateFields: ["nextReviewDate"],
         write: {
           moduleKey: "governance",
