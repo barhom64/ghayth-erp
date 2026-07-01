@@ -6,6 +6,7 @@ import {
   FormShell,
   FormTextField,
   FormNumberField,
+  FormImageField,
   FormTextareaField,
   FormSelectField,
   FormCheckboxField,
@@ -117,7 +118,7 @@ export default function WebsiteHotelForm() {
             ]}
           />
           <FormTextField name="badge" label="الوسم" />
-          <FormTextField name="imageUrl" label="رابط الصورة" />
+          <FormImageField name="imageUrl" label="صورة الفندق" />
           <FormNumberField name="sortOrder" label="ترتيب العرض" />
         </FormGrid>
         <FormTextareaField name="description" label="الوصف" rows={3} />
