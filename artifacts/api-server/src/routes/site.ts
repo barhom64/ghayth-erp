@@ -28,6 +28,20 @@ const slugField = z
   .regex(/^[a-z0-9-]+$/i, "المعرّف يجب أن يحتوي على حروف لاتينية وأرقام وشرطات فقط");
 const nstr = (max = 500) => z.string().trim().max(max).nullable().optional();
 
+// روابط يُحرّرها المسؤول وتُعرض في وسوم <a href> عامة → نمنع مخططات التنفيذ
+// (javascript:/data:/vbscript:) لتفادي XSS المخزَّن. مسموح: http(s)://… أو مسار
+// جذري نسبي (/…) أو مرساة (#…) أو mailto:/tel:.
+const SAFE_URL_RE = /^(https?:\/\/|\/(?!\/)|#|mailto:|tel:)/i;
+export const isSafeCmsUrl = (v: string): boolean => v === "" || SAFE_URL_RE.test(v.trim());
+const safeUrl = (max = 1000, opts?: { required?: boolean }) => {
+  const base = opts?.required
+    ? z.string().trim().min(1).max(max)
+    : z.string().trim().max(max);
+  return base.refine((v) => isSafeCmsUrl(v), {
+    message: "الرابط غير صالح — استخدم https:// أو مساراً يبدأ بـ /",
+  });
+};
+
 // ─────────────────────────────────────────────────────────────────────────
 // Site config (one row per company, keyed by companyId — upsert).
 // ─────────────────────────────────────────────────────────────────────────
@@ -325,6 +339,106 @@ const postsDef: ResourceDef = {
   }),
 };
 
+const faqsDef: ResourceDef = {
+  table: "site_faqs",
+  cols: {
+    question: "scalar", answer: "scalar", category: "scalar",
+    sortOrder: "scalar", isActive: "scalar",
+  },
+  schema: z.object({
+    question: z.string().trim().min(1).max(500),
+    answer: z.string().trim().min(1).max(5000),
+    category: nstr(120),
+    sortOrder: z.number().int().optional(),
+    isActive: z.boolean().optional(),
+  }),
+};
+
+const testimonialsDef: ResourceDef = {
+  table: "site_testimonials",
+  cols: {
+    authorName: "scalar", authorTitle: "scalar", body: "scalar", rating: "scalar",
+    avatarUrl: "scalar", sortOrder: "scalar", isActive: "scalar",
+  },
+  schema: z.object({
+    authorName: z.string().trim().min(1).max(200),
+    authorTitle: nstr(200),
+    body: z.string().trim().min(1).max(2000),
+    rating: z.number().int().min(1).max(5).nullable().optional(),
+    avatarUrl: nstr(1000),
+    sortOrder: z.number().int().optional(),
+    isActive: z.boolean().optional(),
+  }),
+};
+
+const teamDef: ResourceDef = {
+  table: "site_team",
+  cols: {
+    name: "scalar", role: "scalar", bio: "scalar", photoUrl: "scalar", socials: "jsonb",
+    sortOrder: "scalar", isActive: "scalar",
+  },
+  schema: z.object({
+    name: z.string().trim().min(1).max(200),
+    role: nstr(200),
+    bio: nstr(2000),
+    photoUrl: nstr(1000),
+    socials: z.record(z.string()).optional(),
+    sortOrder: z.number().int().optional(),
+    isActive: z.boolean().optional(),
+  }),
+};
+
+const galleryDef: ResourceDef = {
+  table: "site_gallery",
+  cols: {
+    title: "scalar", imageUrl: "scalar", category: "scalar",
+    sortOrder: "scalar", isActive: "scalar",
+  },
+  schema: z.object({
+    title: nstr(300),
+    imageUrl: z.string().trim().min(1).max(1000),
+    category: nstr(120),
+    sortOrder: z.number().int().optional(),
+    isActive: z.boolean().optional(),
+  }),
+};
+
+const bannersDef: ResourceDef = {
+  table: "site_banners",
+  cols: {
+    title: "scalar", message: "scalar", ctaLabel: "scalar", ctaUrl: "scalar",
+    imageUrl: "scalar", bgColor: "scalar", startsAt: "scalar", endsAt: "scalar",
+    sortOrder: "scalar", isActive: "scalar",
+  },
+  schema: z.object({
+    title: z.string().trim().min(1).max(300),
+    message: nstr(600),
+    ctaLabel: nstr(120),
+    ctaUrl: safeUrl(1000).nullable().optional(),
+    imageUrl: nstr(1000),
+    bgColor: nstr(100),
+    startsAt: z.string().nullable().optional(),
+    endsAt: z.string().nullable().optional(),
+    sortOrder: z.number().int().optional(),
+    isActive: z.boolean().optional(),
+  }),
+};
+
+const navItemsDef: ResourceDef = {
+  table: "site_nav_items",
+  cols: {
+    label: "scalar", url: "scalar", openInNewTab: "scalar",
+    sortOrder: "scalar", isActive: "scalar",
+  },
+  schema: z.object({
+    label: z.string().trim().min(1).max(120),
+    url: safeUrl(1000, { required: true }),
+    openInNewTab: z.boolean().optional(),
+    sortOrder: z.number().int().optional(),
+    isActive: z.boolean().optional(),
+  }),
+};
+
 // Packages
 router.get("/packages", authorize({ feature: "website", action: "list" }), listHandler(packagesDef));
 router.get("/packages/:id", authorize({ feature: "website", action: "view" }), getHandler(packagesDef));
@@ -352,5 +466,47 @@ router.get("/posts/:id", authorize({ feature: "website", action: "view" }), getH
 router.post("/posts", authorize({ feature: "website", action: "create" }), createHandler(postsDef));
 router.put("/posts/:id", authorize({ feature: "website", action: "update" }), updateHandler(postsDef));
 router.delete("/posts/:id", authorize({ feature: "website", action: "delete" }), deleteHandler(postsDef));
+
+// FAQ
+router.get("/faqs", authorize({ feature: "website", action: "list" }), listHandler(faqsDef));
+router.get("/faqs/:id", authorize({ feature: "website", action: "view" }), getHandler(faqsDef));
+router.post("/faqs", authorize({ feature: "website", action: "create" }), createHandler(faqsDef));
+router.put("/faqs/:id", authorize({ feature: "website", action: "update" }), updateHandler(faqsDef));
+router.delete("/faqs/:id", authorize({ feature: "website", action: "delete" }), deleteHandler(faqsDef));
+
+// Testimonials
+router.get("/testimonials", authorize({ feature: "website", action: "list" }), listHandler(testimonialsDef));
+router.get("/testimonials/:id", authorize({ feature: "website", action: "view" }), getHandler(testimonialsDef));
+router.post("/testimonials", authorize({ feature: "website", action: "create" }), createHandler(testimonialsDef));
+router.put("/testimonials/:id", authorize({ feature: "website", action: "update" }), updateHandler(testimonialsDef));
+router.delete("/testimonials/:id", authorize({ feature: "website", action: "delete" }), deleteHandler(testimonialsDef));
+
+// Team members
+router.get("/team", authorize({ feature: "website", action: "list" }), listHandler(teamDef));
+router.get("/team/:id", authorize({ feature: "website", action: "view" }), getHandler(teamDef));
+router.post("/team", authorize({ feature: "website", action: "create" }), createHandler(teamDef));
+router.put("/team/:id", authorize({ feature: "website", action: "update" }), updateHandler(teamDef));
+router.delete("/team/:id", authorize({ feature: "website", action: "delete" }), deleteHandler(teamDef));
+
+// Gallery
+router.get("/gallery", authorize({ feature: "website", action: "list" }), listHandler(galleryDef));
+router.get("/gallery/:id", authorize({ feature: "website", action: "view" }), getHandler(galleryDef));
+router.post("/gallery", authorize({ feature: "website", action: "create" }), createHandler(galleryDef));
+router.put("/gallery/:id", authorize({ feature: "website", action: "update" }), updateHandler(galleryDef));
+router.delete("/gallery/:id", authorize({ feature: "website", action: "delete" }), deleteHandler(galleryDef));
+
+// Campaign banners
+router.get("/banners", authorize({ feature: "website", action: "list" }), listHandler(bannersDef));
+router.get("/banners/:id", authorize({ feature: "website", action: "view" }), getHandler(bannersDef));
+router.post("/banners", authorize({ feature: "website", action: "create" }), createHandler(bannersDef));
+router.put("/banners/:id", authorize({ feature: "website", action: "update" }), updateHandler(bannersDef));
+router.delete("/banners/:id", authorize({ feature: "website", action: "delete" }), deleteHandler(bannersDef));
+
+// Navigation menu
+router.get("/nav-items", authorize({ feature: "website", action: "list" }), listHandler(navItemsDef));
+router.get("/nav-items/:id", authorize({ feature: "website", action: "view" }), getHandler(navItemsDef));
+router.post("/nav-items", authorize({ feature: "website", action: "create" }), createHandler(navItemsDef));
+router.put("/nav-items/:id", authorize({ feature: "website", action: "update" }), updateHandler(navItemsDef));
+router.delete("/nav-items/:id", authorize({ feature: "website", action: "delete" }), deleteHandler(navItemsDef));
 
 export default router;
