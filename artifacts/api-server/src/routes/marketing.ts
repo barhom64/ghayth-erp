@@ -9,6 +9,7 @@ import { handleRouteError, ValidationError, NotFoundError,
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 import { safeUrl } from "../lib/urlPolicy.js";
+import { zCoerceBoolean } from "../lib/zodCoerce.js";
 
 // Local row shapes for marketing tables (not in @workspace/db schema).
 
@@ -75,7 +76,7 @@ const slugField = z
   .nullable();
 
 const publicFields = {
-  isPublic: z.coerce.boolean().optional().nullable(),
+  isPublic: zCoerceBoolean().optional().nullable(),
   slug: slugField,
   publicHeadline: z.string({ invalid_type_error: "العنوان يجب أن يكون نصاً" }).trim().max(200).optional().nullable(),
   publicBody: z.string({ invalid_type_error: "النص يجب أن يكون نصاً" }).trim().max(2000).optional().nullable(),
@@ -193,7 +194,7 @@ router.patch("/campaigns/:id", authorize({ feature: "marketing", action: "update
     const parsed = zodParse(updateCampaignSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<{ id: number; startDate: string | null; endDate: string | null; isPublic: boolean | null; slug: string | null }>(`SELECT id, "startDate", "endDate", "isPublic", slug FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [existing] = await rawQuery<{ id: number; startDate: string | null; endDate: string | null }>(`SELECT id, "startDate", "endDate" FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("الحملة غير موجودة");
     const b = parsed;
     // كمرآة لتحقّق POST: لا يجوز أن تصبح النهاية قبل البداية بعد التعديل الجزئي.
@@ -205,8 +206,9 @@ router.patch("/campaigns/:id", authorize({ feature: "marketing", action: "update
       }
     }
     // النشر العام يتطلّب معرّفاً — نتحقّق من القيمة النهائية بعد الدمج الجزئي.
-    const willBePublic = b.isPublic !== undefined ? b.isPublic : existing.isPublic;
-    const willHaveSlug = b.slug !== undefined ? b.slug : existing.slug;
+    const [pub] = await rawQuery<{ isPublic: boolean | null; slug: string | null }>(`SELECT "isPublic", slug FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const willBePublic = b.isPublic !== undefined ? b.isPublic : pub?.isPublic;
+    const willHaveSlug = b.slug !== undefined ? b.slug : pub?.slug;
     if (willBePublic && !willHaveSlug) {
       throw new ValidationError("معرّف الحملة العام مطلوب عند النشر", { field: "slug", fix: "أدخل معرّفاً بحروف لاتينية/أرقام/شرطات" });
     }
