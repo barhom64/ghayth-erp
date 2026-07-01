@@ -289,7 +289,7 @@ export default function OverridesReportPage() {
       {topActors.length > 0 && (
         <Card className="mb-4">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">أكثر المستخدمين تعديلاً (Top 5)</CardTitle>
+            <CardTitle className="text-sm">أكثر المستخدمين تعديلاً (أعلى ٥)</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
