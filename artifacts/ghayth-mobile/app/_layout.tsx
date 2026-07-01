@@ -1292,6 +1292,8 @@ function AuthGate() {
       <Stack.Screen name="admin/approval-entity" options={{ title: 'سجل الموافقات' }} />
       <Stack.Screen name="intelligence/employee-kpis" options={{ title: 'مؤشرات الموظف' }} />
       <Stack.Screen name="intelligence/employee-daily-schedule" options={{ title: 'جدول الموظف اليومي' }} />
+      <Stack.Screen name="m/my-permissions" options={{ title: 'صلاحياتي' }} />
+      <Stack.Screen name="portal/onboarding-token" options={{ title: 'استقبال الموظف' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
