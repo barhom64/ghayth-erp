@@ -186,7 +186,7 @@ function FieldBreadcrumbSection() {
             <Label className="text-xs">معرّف تعيين الموظف</Label>
             <Input
               type="number"
-              placeholder="assignmentId (اتركه فارغًا للعرض المباشر لكل الموظفين)"
+              placeholder="اتركه فارغًا للعرض المباشر لكل الموظفين"
               value={assignmentId}
               onChange={(e) => setAssignmentId(e.target.value)}
               className="mt-1 font-mono"
