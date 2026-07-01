@@ -147,7 +147,7 @@ export default function BadDebtPage() {
           </p>
           <p className="text-xs text-muted-foreground leading-relaxed">
             الـ aging buckets للذمم المفتوحة تُضرب بنسبة احتمال عدم التحصيل لكل شريحة.
-            القيد الناتج: <span className="font-mono">5170 — مصروف ديون مشكوك (مدين) / 1210 — مخصص ديون (دائن)</span>.
+            القيد الناتج: <span className="font-mono">5820 — مصروف ديون مشكوك (مدين) / 1135 — مخصص ديون (دائن)</span>.
             الـ allowance حساب مقابل لـ AR — يقلل قيمة الذمم في الميزانية ولا يحذف الفواتير.
           </p>
         </CardContent>
@@ -267,11 +267,11 @@ export default function BadDebtPage() {
           <CardContent>
             <div className="text-xs space-y-1 font-mono">
               <div className="flex justify-between">
-                <span>5170 — مصروف ديون مشكوك في تحصيلها</span>
+                <span>5820 — مصروف ديون مشكوك في تحصيلها</span>
                 <span className="text-orange-700">مدين {formatCurrency(data.totalProvision)}</span>
               </div>
               <div className="flex justify-between">
-                <span>1210 — مخصص الديون المشكوك في تحصيلها</span>
+                <span>1135 — مخصص الديون المشكوك في تحصيلها</span>
                 <span className="text-emerald-700">دائن {formatCurrency(data.totalProvision)}</span>
               </div>
               <p className="text-muted-foreground text-[10px] mt-2">
