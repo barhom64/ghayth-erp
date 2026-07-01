@@ -1328,6 +1328,13 @@ function AuthGate() {
       <Stack.Screen name="finance/fx-revaluation-preview" options={{ title: 'معاينة إعادة التقييم' }} />
       <Stack.Screen name="settings/branch-detail" options={{ title: 'تفاصيل الفرع' }} />
       <Stack.Screen name="finance/budget-detail" options={{ title: 'تفاصيل الميزانية' }} />
+      <Stack.Screen name="parties/party-360" options={{ title: 'ملف 360° للطرف' }} />
+      <Stack.Screen name="entity-meta/comments" options={{ title: 'التعليقات' }} />
+      <Stack.Screen name="entity-meta/tags" options={{ title: 'العلامات' }} />
+      <Stack.Screen name="entity-meta/tags-filter" options={{ title: 'فلتر العلامات' }} />
+      <Stack.Screen name="comms/provisioning-email-domains" options={{ title: 'نطاقات البريد' }} />
+      <Stack.Screen name="comms/provisioning-extensions" options={{ title: 'امتدادات PBX' }} />
+      <Stack.Screen name="comms/push-vapid-key" options={{ title: 'مفتاح VAPID' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
