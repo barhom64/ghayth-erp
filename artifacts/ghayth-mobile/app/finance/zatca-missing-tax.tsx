@@ -15,7 +15,7 @@ interface MissingTaxEntry {
 
 export default function FinanceZatcaMissingTaxScreen() {
   const c = useColors();
-  const { data, isLoading, isError, refetch } = useList<MissingTaxEntry[]>('/api/hr/zatca/missing-tax-numbers');
+  const { data, isLoading, isError, refetch } = useList<MissingTaxEntry[]>('/api/finance/zatca/missing-tax-numbers');
   const list = Array.isArray(data) ? data : [];
 
   if (isLoading) return <GLoadingState text="جارٍ تحميل أرقام الضريبة الناقصة…" />;

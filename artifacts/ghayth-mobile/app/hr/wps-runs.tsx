@@ -16,7 +16,7 @@ interface WpsRun {
 
 export default function HrWpsRunsScreen() {
   const c = useColors();
-  const { data, isLoading, isError, refetch } = useList<WpsRun[]>('/api/wps/runs');
+  const { data, isLoading, isError, refetch } = useList<WpsRun[]>('/api/hr/wps/runs');
   const list = Array.isArray(data) ? data : [];
 
   if (isLoading) return <GLoadingState text="جارٍ تحميل تشغيلات WPS…" />;

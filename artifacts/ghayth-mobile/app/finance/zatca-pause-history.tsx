@@ -16,7 +16,7 @@ interface ZatcaPauseEntry {
 
 export default function FinanceZatcaPauseHistoryScreen() {
   const c = useColors();
-  const { data, isLoading, isError, refetch } = useList<ZatcaPauseEntry[]>('/api/hr/zatca/pause-history');
+  const { data, isLoading, isError, refetch } = useList<ZatcaPauseEntry[]>('/api/finance/zatca/pause-history');
   const list = Array.isArray(data) ? data : [];
 
   if (isLoading) return <GLoadingState text="جارٍ تحميل تاريخ إيقاف ZATCA…" />;
