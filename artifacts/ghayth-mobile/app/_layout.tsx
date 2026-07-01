@@ -1323,6 +1323,9 @@ function AuthGate() {
       <Stack.Screen name="finance/wht-category-detail" options={{ title: 'تفاصيل فئة الاستقطاع' }} />
       <Stack.Screen name="finance/allocation-rule-detail" options={{ title: 'تفاصيل قاعدة التوزيع' }} />
       <Stack.Screen name="finance/allocation-settings" options={{ title: 'إعدادات التوزيع' }} />
+      <Stack.Screen name="finance/journal-lines-search" options={{ title: 'بحث سطور القيود' }} />
+      <Stack.Screen name="finance/bank-reconciliation-detail" options={{ title: 'تفاصيل التسوية البنكية' }} />
+      <Stack.Screen name="finance/fx-revaluation-preview" options={{ title: 'معاينة إعادة التقييم' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
