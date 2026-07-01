@@ -32,6 +32,12 @@ import { usePrintRows } from "@/hooks/use-print-rows";
 // #1733 Comment 9 — booking detail page. Single-screen view of the
 // booking + its lines + the dispatch orders that came out of it.
 
+// نقاط التشغيل (checkpoints) المنقولة من قالب المسار — عرض عربي.
+const WAYPOINT_KIND_LABEL_AR: Record<string, string> = {
+  loading: "تحميل", scale: "ميزان", inspection: "فحص",
+  rest: "استراحة", fuel: "وقود", unloading: "تفريغ",
+};
+
 interface BookingDetail {
   id: number;
   bookingNumber: string;
@@ -50,6 +56,7 @@ interface BookingDetail {
   requestedDeliveryTime: string | null;
   cargoDescription: string | null;
   cargoWeight: number | null;
+  cargoOperationalMetadata: { waypoints?: { kind: string; notes?: string }[] } | null;
   passengerCount: number | null;
   umrahGroupId: number | null;
   flightNumber: string | null;
@@ -639,6 +646,30 @@ export default function TransportBookingDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {Array.isArray(b.cargoOperationalMetadata?.waypoints) && b.cargoOperationalMetadata!.waypoints!.length > 0 && (
+        <Card className="mt-4">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <MapPin className="h-4 w-4 text-purple-600" /> نقاط التشغيل
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm">
+            <ol className="flex flex-wrap items-center gap-2">
+              {b.cargoOperationalMetadata!.waypoints!.map((w, i) => (
+                <li key={i} className="flex items-center gap-1">
+                  <span className="inline-flex items-center rounded border bg-surface-subtle px-2 py-0.5">
+                    <span className="text-[10px] text-muted-foreground me-1">{i + 1}.</span>
+                    {WAYPOINT_KIND_LABEL_AR[w.kind] ?? w.kind}
+                    {w.notes ? <span className="text-xs text-muted-foreground ms-1">— {w.notes}</span> : null}
+                  </span>
+                  {i < b.cargoOperationalMetadata!.waypoints!.length - 1 && <span className="text-muted-foreground">←</span>}
+                </li>
+              ))}
+            </ol>
+          </CardContent>
+        </Card>
+      )}
 
       {b.notes && (
         <Card className="mt-4">
