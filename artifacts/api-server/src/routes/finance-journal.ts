@@ -2581,21 +2581,41 @@ journalRouter.get("/vouchers/:id", authorize({ feature: "finance.journal", actio
       // postingStatus='posted' here — where status alone would mislabel it.
       // (This detail read never exposed isPaid; paymentStatus now conveys the
       // payment state truthfully, gated by the canBePaid rule — not added.)
+      // نقص بيانات مُصلَح: كان الرأس يعرض بلا اسم مُنشئ ولا تاريخ تحديث ولا
+      // سطور القيد — أي بلا سياق تدقيق. أُضيف createdByName (مثل القائمة)
+      // وupdatedAt، وتُجلَب سطور القيد أدناه.
       `SELECT je.id, je.ref, je.description,
               CASE WHEN je.ref LIKE 'RV%' THEN 'receipt' ELSE 'payment' END AS "voucherType",
               je."paymentMethod", je.reference, je."attachmentUrl", je."attachmentType",
               je."relatedEntityType", je."relatedEntityId", je."operationType",
-              COALESCE(SUM(jl.debit), 0) AS amount, je."createdAt", je.status,
-              je."documentStatus", je."paymentStatus", je."postingStatus"
+              COALESCE(SUM(jl.debit), 0) AS amount, je."createdAt", je."updatedAt", je.status,
+              je."documentStatus", je."paymentStatus", je."postingStatus",
+              e_cre.name AS "createdByName"
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
+       LEFT JOIN employee_assignments ea_cre ON ea_cre.id = je."createdBy"
+       LEFT JOIN employees e_cre ON e_cre.id = ea_cre."employeeId" AND e_cre."deletedAt" IS NULL
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
          AND (je.ref LIKE 'RV%' OR je.ref LIKE 'PV%')
-       GROUP BY je.id`,
+       GROUP BY je.id, e_cre.name`,
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("السند غير موجود");
-    res.json(maskFields(req, row));
+
+    // سطور القيد المحاسبي للسند — كان المشغّل لا يرى تفاصيل الحسابات
+    // المدينة/الدائنة إطلاقًا رغم أن السند هو قيد journal_entries.
+    const lines = await rawQuery<Record<string, unknown>>(
+      `SELECT jl.id, jl."accountCode", ca.name AS "accountName",
+              jl.debit, jl.credit, jl.description,
+              jl."vehicleId", jl."costCenter", jl."projectId"
+       FROM journal_lines jl
+       LEFT JOIN chart_of_accounts ca
+         ON ca.code = jl."accountCode" AND ca."companyId" = $2 AND ca."deletedAt" IS NULL
+       WHERE jl."journalId" = $1 AND jl."deletedAt" IS NULL
+       ORDER BY jl.id ASC`,
+      [id, scope.companyId]
+    );
+    res.json(maskFields(req, { ...row, lines }));
   } catch (err) { handleRouteError(err, res, "Get voucher detail error:"); }
 });
 
