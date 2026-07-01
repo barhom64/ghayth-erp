@@ -23,7 +23,7 @@ const forgotPasswordSchema = z.object({
 // بـ companyId قادم من العميل (يفتح كتابة عبر-المستأجرين + تعداد الشركات).
 // إضافة موقع عام جديد = سطر هنا فقط.
 const PUBLIC_SITE_COMPANY: Record<string, number> = {
-  wafd: 4,
+  wafd: 6,
 };
 
 const publicLeadSchema = z.object({
