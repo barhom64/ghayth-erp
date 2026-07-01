@@ -15,6 +15,7 @@ import { AlertTriangle, Calculator, BookOpen } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { BadDebtWriteOffCandidates } from "@/components/finance/bad-debt-writeoff-candidates";
 import { PrintButton } from "@/components/shared/print-button";
 interface PreviewResponse {
   asOf: string;
@@ -308,6 +309,8 @@ export default function BadDebtPage() {
           </p>
         </CardContent>
       </Card>
+
+      <BadDebtWriteOffCandidates />
     </PageShell>
   );
 }
