@@ -1277,6 +1277,8 @@ function AuthGate() {
             <Stack.Screen name="finance/assert-postable" options={{ title: 'قابلية الترحيل' }} />
             <Stack.Screen name="properties/building-detail" options={{ title: 'تفاصيل المبنى' }} />
             <Stack.Screen name="properties/maintenance-detail" options={{ title: 'تفاصيل الصيانة' }} />
+            <Stack.Screen name="cargo/manifest-timeline" options={{ title: 'مسار الشحنة' }} />
+            <Stack.Screen name="admin/user-roles-detail" options={{ title: 'أدوار المستخدم' }} />
             <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
