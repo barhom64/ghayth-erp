@@ -1748,7 +1748,7 @@ financeHardeningRouter.get("/cash-flow-forecast", authorize({ feature: "finance.
         `SELECT COALESCE(SUM(jl.debit) - SUM(jl.credit), 0) AS balance
          FROM journal_lines jl
          JOIN journal_entries je ON je.id=jl."journalId" AND jl."deletedAt" IS NULL
-         WHERE je."companyId"=$1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND jl."accountCode" LIKE '11%'`,
+         WHERE je."companyId"=$1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND (jl."accountCode" LIKE '111%' OR jl."accountCode" LIKE '112%')`,
         [scope.companyId]
       ),
     ]);

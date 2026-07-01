@@ -90,6 +90,14 @@ describe("finance-reports — financial statements", () => {
     expect(REPORTS_SRC).toContain('"/reports/cash-flow"');
   });
 
+  it("cash-flow scopes 'cash' to 111x/112x only — not the whole 11% current-assets tree", () => {
+    // Regression pin: `LIKE '11%'` swept AR (113x) + inventory + prepaid + VAT
+    // into 'cash', overstating the cash balance. Corrected to cash (111x) +
+    // banks (112x). See finance-reports.ts cash-flow handler.
+    expect(REPORTS_SRC).toContain("code LIKE '111%' OR code LIKE '112%'");
+    expect(REPORTS_SRC).not.toContain("code LIKE '11%' OR code IN ('1100','1110','1120','1130')");
+  });
+
   it("all report endpoints require finance:read", () => {
     const perms = [...REPORTS_SRC.matchAll(/authorize\(/g)];
     expect(perms.length).toBeGreaterThanOrEqual(12);
