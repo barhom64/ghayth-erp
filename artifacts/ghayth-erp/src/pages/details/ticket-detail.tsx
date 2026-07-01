@@ -242,11 +242,23 @@ export default function TicketDetail() {
             <div className="flex justify-between py-2 border-b"><span className="text-muted-foreground">العميل</span><span>{ticket.clientName || "-"}</span></div>
             <div className="flex justify-between py-2 border-b"><span className="text-muted-foreground">تاريخ الإنشاء</span><span className="text-xs">{ticket.createdAt ? `${formatDateAr(ticket.createdAt)} ${formatTimeAr(ticket.createdAt)}` : "-"}</span></div>
             <div className="flex justify-between py-2"><span className="text-muted-foreground">آخر تحديث</span><span className="text-xs">{ticket.updatedAt ? `${formatDateAr(ticket.updatedAt)} ${formatTimeAr(ticket.updatedAt)}` : "-"}</span></div>
-            {ticket.isSlaBreached && (
+            {/* نقص بيانات مُصلَح: مهلة SLA + أول رد + العدّاد المتبقّي كانت
+                مُحسوبة ومُرجَعة، لكن يُعرض «مُخترَق» فقط لا الرقم القابل للتصرّف. */}
+            {ticket.slaDeadline && (
+              <div className="flex justify-between py-2 border-b"><span className="text-muted-foreground">مهلة الخدمة (SLA)</span><span className="text-xs">{`${formatDateAr(ticket.slaDeadline)} ${formatTimeAr(ticket.slaDeadline)}`}</span></div>
+            )}
+            {ticket.firstResponseAt && (
+              <div className="flex justify-between py-2 border-b"><span className="text-muted-foreground">أول رد</span><span className="text-xs">{`${formatDateAr(ticket.firstResponseAt)} ${formatTimeAr(ticket.firstResponseAt)}`}</span></div>
+            )}
+            {ticket.isSlaBreached ? (
               <div className="mt-2 p-2 bg-status-error-surface border border-status-error-surface rounded-lg text-status-error-foreground text-xs text-center">
                 تم تجاوز اتفاقية مستوى الخدمة
               </div>
-            )}
+            ) : (ticket.slaDeadline && Number(ticket.slaRemainingHours) > 0 && !["resolved", "closed"].includes(ticket.status)) ? (
+              <div className="mt-2 p-2 bg-status-warning-surface border border-status-warning-surface rounded-lg text-status-warning-foreground text-xs text-center">
+                متبقٍّ على مهلة الخدمة: {ticket.slaRemainingHours} ساعة
+              </div>
+            ) : null}
           </CardContent>
         </Card>
 
