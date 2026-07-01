@@ -224,11 +224,11 @@ export default function CustomerAdvancesApply() {
             <p className="text-xs font-semibold mb-2">معاينة القيد المُولّد</p>
             <div className="text-xs space-y-1 font-mono">
               <div className="flex justify-between">
-                <span>2400 — التزام دفعة مقدمة (العميل)</span>
+                <span>2160 — التزام دفعة مقدمة (العميل)</span>
                 <span className="text-orange-700">مدين {formatCurrency(amountNum)}</span>
               </div>
               <div className="flex justify-between">
-                <span>1200 — حسابات مدينة (AR)</span>
+                <span>1131 — حسابات مدينة (AR)</span>
                 <span className="text-emerald-700">دائن {formatCurrency(amountNum)}</span>
               </div>
               <p className="text-muted-foreground text-[10px] mt-2">

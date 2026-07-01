@@ -337,14 +337,14 @@ export default function BadDebtProvisionPage() {
                 </thead>
                 <tbody>
                   <tr className="border-b">
-                    <td className="py-2 px-2">5170 — مصروف ديون مشكوك فيها</td>
+                    <td className="py-2 px-2">5820 — مصروف ديون مشكوك فيها</td>
                     <td className="py-2 px-2 text-end tabular-nums font-semibold">
                       {formatCurrency(data.totalProvision)}
                     </td>
                     <td className="py-2 px-2 text-end tabular-nums">—</td>
                   </tr>
                   <tr>
-                    <td className="py-2 px-2">1210 — مخصص ديون مشكوك فيها (مقابل)</td>
+                    <td className="py-2 px-2">1135 — مخصص ديون مشكوك فيها (مقابل)</td>
                     <td className="py-2 px-2 text-end tabular-nums">—</td>
                     <td className="py-2 px-2 text-end tabular-nums font-semibold">
                       {formatCurrency(data.totalProvision)}
