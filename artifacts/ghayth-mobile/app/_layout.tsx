@@ -1326,6 +1326,8 @@ function AuthGate() {
       <Stack.Screen name="finance/journal-lines-search" options={{ title: 'بحث سطور القيود' }} />
       <Stack.Screen name="finance/bank-reconciliation-detail" options={{ title: 'تفاصيل التسوية البنكية' }} />
       <Stack.Screen name="finance/fx-revaluation-preview" options={{ title: 'معاينة إعادة التقييم' }} />
+      <Stack.Screen name="settings/branch-detail" options={{ title: 'تفاصيل الفرع' }} />
+      <Stack.Screen name="finance/budget-detail" options={{ title: 'تفاصيل الميزانية' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
