@@ -1279,7 +1279,16 @@ function AuthGate() {
             <Stack.Screen name="properties/maintenance-detail" options={{ title: 'تفاصيل الصيانة' }} />
             <Stack.Screen name="cargo/manifest-timeline" options={{ title: 'مسار الشحنة' }} />
             <Stack.Screen name="admin/user-roles-detail" options={{ title: 'أدوار المستخدم' }} />
-            <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
+            <Stack.Screen name="fleet/driver-reputation" options={{ title: 'سمعة السائق' }} />
+      <Stack.Screen name="fleet/vehicle-impact-preview" options={{ title: 'معاينة التأثير' }} />
+      <Stack.Screen name="obligations/index" options={{ title: 'الالتزامات' }} />
+      <Stack.Screen name="obligations/summary" options={{ title: 'ملخص الالتزامات' }} />
+      <Stack.Screen name="numbering/index" options={{ title: 'مركز الترقيم' }} />
+      <Stack.Screen name="operations-center/index" options={{ title: 'مركز العمليات' }} />
+      <Stack.Screen name="operations-center/daily-checklist" options={{ title: 'قائمة الإقفال اليومي' }} />
+      <Stack.Screen name="scheduled-reports/index" options={{ title: 'التقارير المجدولة' }} />
+      <Stack.Screen name="scheduled-reports/history" options={{ title: 'سجل التقارير' }} />
+      <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
   );
