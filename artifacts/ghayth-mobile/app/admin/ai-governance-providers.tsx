@@ -5,11 +5,11 @@ import { GLoadingState, GEmptyState } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 
-interface Recording { id?: number; filename?: string; duration?: number; createdAt?: string; }
+interface Provider { id?: number; name?: string; type?: string; status?: string; }
 
-export default function PbxRecordingsScreen() {
+export default function AiGovernanceProvidersScreen() {
   const c = useColors();
-  const { data, isLoading, isError, refetch } = useList<Recording[]>('/api/admin/pbx-control/recordings');
+  const { data, isLoading, isError, refetch } = useList<Provider[]>('/api/admin/ai-governance/providers');
   const list = Array.isArray(data) ? data : [];
   if (isLoading) return <GLoadingState text="جارٍ تحميل…" />;
   if (isError) return (
@@ -18,16 +18,16 @@ export default function PbxRecordingsScreen() {
   );
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Stack.Screen options={{ title: 'تسجيلات المكالمات' }} />
+      <Stack.Screen options={{ title: 'موفّرو الذكاء الاصطناعي' }} />
       <FlatList data={list} keyExtractor={(item, i) => String(item.id ?? i)}
         contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
         onRefresh={refetch} refreshing={isLoading}
-        ListEmptyComponent={<GEmptyState icon="mic-outline" title="لا توجد تسجيلات" description="" />}
+        ListEmptyComponent={<GEmptyState icon="cloud-outline" title="لا يوجد موفّرون" description="" />}
         renderItem={({ item }) => (
           <View style={{ backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, padding: 14 }}>
-            <Text style={{ color: c.text, fontSize: 14 }}>{item.filename ?? String(item.id ?? '')}</Text>
-            {item.duration != null && <Text style={{ color: c.textMuted, fontSize: 12, marginTop: 2 }}>{item.duration} ث</Text>}
-            {!!item.createdAt && <Text style={{ color: c.textFaint, fontSize: 12, marginTop: 2 }}>{new Date(item.createdAt).toLocaleDateString('ar-SA', { month: 'short', day: 'numeric', year: 'numeric' })}</Text>}
+            <Text style={{ color: c.text, fontSize: 14 }}>{item.name ?? String(item.id ?? '')}</Text>
+            {!!item.type && <Text style={{ color: c.textMuted, fontSize: 12, marginTop: 2 }}>{item.type}</Text>}
+            {!!item.status && <Text style={{ color: c.textFaint, fontSize: 12, marginTop: 2 }}>{item.status}</Text>}
           </View>
         )}
       />
