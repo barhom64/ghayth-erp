@@ -55,6 +55,14 @@ export interface StatusDef {
  * appear in multiple domains. The top-level key is just a hint for
  * readers of this file; the component resolves statuses by value first,
  * then by domain if provided.
+ *
+ * Scope note (قرار معماري 2026-07-01): this is the GENERIC cross-module
+ * registry with semantic tones. The transport/fleet logistics subsystem
+ * has its OWN deliberate unified dictionary — `lib/transport-status-labels.ts`
+ * — with a richer logistics palette (purple/orange/rose) and context labels,
+ * guarded by 8 tests + a server-enum drift test. The trip/vehicle/driver
+ * overlap is intentional (label follows context); the two registries are
+ * NOT to be force-merged. See that file's header for the rationale.
  */
 export const STATUS_MAP = {
   // ── Shared approval-flow statuses used across HR, finance, requests ──
