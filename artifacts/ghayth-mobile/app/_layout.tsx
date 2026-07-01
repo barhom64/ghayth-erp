@@ -1342,6 +1342,10 @@ function AuthGate() {
       <Stack.Screen name="dashboards/recent-events" options={{ title: 'الأحداث الأخيرة' }} />
       <Stack.Screen name="admin/import-batch-detail" options={{ title: 'تفاصيل دفعة الاستيراد' }} />
       <Stack.Screen name="admin/comm-outbound-queue" options={{ title: 'طابور الإرسال الصادر' }} />
+      <Stack.Screen name="finance/accounting-mapping-detail" options={{ title: 'تفاصيل التعيين المحاسبي' }} />
+      <Stack.Screen name="finance/subsidiary-account-entity" options={{ title: 'الحساب الفرعي للكيان' }} />
+      <Stack.Screen name="inbox/thread-detail" options={{ title: 'تفاصيل المحادثة' }} />
+      <Stack.Screen name="inbox/recipients-search" options={{ title: 'بحث عن مستلم' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
