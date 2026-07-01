@@ -4,13 +4,15 @@ import { X, Send, CheckCircle, User, Phone, ChevronDown, Mail } from "lucide-rea
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { useLanguage } from "@/contexts/LanguageContext";
+import type { LeadCampaign } from "@/contexts/LeadFormContext";
 
 interface LeadFormProps {
   open: boolean;
   onClose: () => void;
+  campaign?: LeadCampaign | null;
 }
 
-export default function LeadForm({ open, onClose }: LeadFormProps) {
+export default function LeadForm({ open, onClose, campaign }: LeadFormProps) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -57,6 +59,9 @@ export default function LeadForm({ open, onClose }: LeadFormProps) {
           subject: serviceLabel,
           message: notes.trim() || undefined,
           source: "website",
+          // عزو الحملة: عند فتح النموذج من بطاقة حملة نرسل slug ليحلّه الخادم
+          // إلى campaignId ويضبط المصدر باسم الحملة (لا نثق بأي معرّف من العميل).
+          campaignSlug: campaign?.slug || undefined,
           website: "",
         }),
       });
