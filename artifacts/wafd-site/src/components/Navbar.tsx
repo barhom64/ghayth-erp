@@ -2,8 +2,9 @@ import { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, LayoutDashboard, Phone, UserCircle, LogIn, Globe, ChevronDown } from "lucide-react";
-import { WAFD_PHONE, WAFD_PHONE_DISPLAY } from "@/lib/wafd-constants";
+import { WAFD_PHONE, WAFD_PHONE_DISPLAY, toSafeHref } from "@/lib/wafd-constants";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useSiteData } from "@/contexts/SiteDataContext";
 import { LANGUAGES } from "@/i18n";
 
 const LOGO_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310419663030823861/YHZMogv6aVcNXaRZ3427z7/wafd-logo-white_3c591659.png";
@@ -94,12 +95,13 @@ export default function Navbar({ onOpenLeadForm }: NavbarProps = {}) {
   const isCustomerAuth = false;
   const navRef = useRef<HTMLDivElement>(null);
   const { t, dir } = useLanguage();
+  const { navItems } = useSiteData();
 
   const WHATSAPP_MSG = encodeURIComponent(t.nav.home === "الرئيسية"
     ? "السلام عليكم، أود الاستفسار عن خدمات وفد للعمرة"
     : "Hello, I would like to inquire about WAFD Umrah services");
 
-  const navLinks = [
+  const navLinks: { href: string; label: string; external?: boolean }[] = [
     // وحدات المتجر/الولاء/تتبع الطلب/المدونة تُبنى كوحدات غيث أصلية لاحقاً
     // (T003/T004) — لا نعرض روابطها قبل وجود مساراتها لتفادي صفحات 404.
     { href: "/", label: t.nav.home },
@@ -109,6 +111,12 @@ export default function Navbar({ onOpenLeadForm }: NavbarProps = {}) {
     { href: "/hajj-tips", label: t.nav.hajjTips },
     { href: "/about", label: t.nav.about },
     { href: "/contact", label: t.nav.contact },
+    // روابط إضافية يُحرّرها المسؤول من لوحة تحكم غيث (الموقع الإلكتروني ← القائمة).
+    ...navItems.map((n) => ({
+      href: n.url,
+      label: n.label,
+      external: n.openInNewTab || /^https?:\/\//i.test(n.url),
+    })),
   ];
 
   useEffect(() => {
@@ -167,8 +175,8 @@ export default function Navbar({ onOpenLeadForm }: NavbarProps = {}) {
 
             {/* Desktop Nav */}
             <div className="hidden md:flex items-center gap-1">
-              {navLinks.map((link) => (
-                <Link key={link.href} href={link.href}>
+              {navLinks.map((link) => {
+                const inner = (
                   <motion.span
                     className={`relative px-3 py-2 text-sm font-medium rounded-lg transition-colors cursor-pointer ${
                       location === link.href
@@ -187,8 +195,17 @@ export default function Navbar({ onOpenLeadForm }: NavbarProps = {}) {
                       />
                     )}
                   </motion.span>
-                </Link>
-              ))}
+                );
+                return link.external ? (
+                  <a key={link.href} href={toSafeHref(link.href)} target="_blank" rel="noopener noreferrer">
+                    {inner}
+                  </a>
+                ) : (
+                  <Link key={link.href} href={link.href}>
+                    {inner}
+                  </Link>
+                );
+              })}
             </div>
 
             {/* CTA Buttons - Desktop only */}
@@ -364,26 +381,36 @@ export default function Navbar({ onOpenLeadForm }: NavbarProps = {}) {
               </div>
 
               <nav className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-1">
-                {navLinks.map((link, i) => (
-                  <motion.div
-                    key={link.href}
-                    initial={{ opacity: 0, x: dir === "rtl" ? 20 : -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.04 }}
-                  >
-                    <Link href={link.href} onClick={handleNavLinkClick}>
-                      <span
-                        className={`flex items-center px-4 py-3 rounded-xl text-base font-semibold transition-all cursor-pointer ${
-                          location === link.href
-                            ? "bg-[oklch(0.94_0.008_185)] text-[oklch(0.52_0.12_185)]"
-                            : "text-[oklch(0.20_0.005_0)] hover:bg-[oklch(0.96_0.004_80)]"
-                        }`}
-                      >
-                        {link.label}
-                      </span>
-                    </Link>
-                  </motion.div>
-                ))}
+                {navLinks.map((link, i) => {
+                  const spanCls = `flex items-center px-4 py-3 rounded-xl text-base font-semibold transition-all cursor-pointer ${
+                    location === link.href
+                      ? "bg-[oklch(0.94_0.008_185)] text-[oklch(0.52_0.12_185)]"
+                      : "text-[oklch(0.20_0.005_0)] hover:bg-[oklch(0.96_0.004_80)]"
+                  }`;
+                  return (
+                    <motion.div
+                      key={link.href}
+                      initial={{ opacity: 0, x: dir === "rtl" ? 20 : -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.04 }}
+                    >
+                      {link.external ? (
+                        <a
+                          href={toSafeHref(link.href)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={handleNavLinkClick}
+                        >
+                          <span className={spanCls}>{link.label}</span>
+                        </a>
+                      ) : (
+                        <Link href={link.href} onClick={handleNavLinkClick}>
+                          <span className={spanCls}>{link.label}</span>
+                        </Link>
+                      )}
+                    </motion.div>
+                  );
+                })}
 
                 {user?.role === "admin" && (
                   <motion.div
