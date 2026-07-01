@@ -202,7 +202,7 @@ export default function AttendanceCategoriesPage() {
   return (
     <PageShell
       title="فئات الموظفين وسياسات الحضور"
-      subtitle="إدارة الـ 6 system categories + إنشاء overrides لكل شركة (#1799 priority #6 closure)"
+      subtitle="إدارة فئات النظام الست + إنشاء تخصيصات لكل شركة"
       breadcrumbs={onHrRoute ? [
         { href: "/dashboard", label: "لوحة التحكم" },
         { href: "/hr", label: "الموارد البشرية" },

@@ -105,7 +105,7 @@ export default function GlHealthScorePage() {
     dims.push({
       key: "integrity",
       label: "سلامة تسلسل القيود (GL Integrity)",
-      description: "فجوات في تسلسل JE refs — مؤشر على قيود محذوفة قسرياً",
+      description: "فجوات في تسلسل مراجع القيود — مؤشر على قيود محذوفة قسرياً",
       weight: 20,
       rawScore: integrityScore,
       weightedScore: Math.round((integrityScore * 20) / 100),
@@ -166,7 +166,7 @@ export default function GlHealthScorePage() {
       : 20;
     dims.push({
       key: "override",
-      label: "معدّل overrides اليدوية",
+      label: "معدّل التجاوزات اليدوية",
       description: "كم نسبة البنود التي تطلب تعديلاً يدوياً — مؤشر على قواعد ناقصة",
       weight: 10,
       rawScore: overrideScore,

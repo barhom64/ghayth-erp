@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
-import { useRoute, Link } from "wouter";
+import { useRoute, Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -748,6 +748,7 @@ const STATUS_TONE: Record<TabStatus, string> = {
 
 export default function EmployeeDetail({ id: propId }: { id?: string }) {
   const [, params] = useRoute("/employees/:id");
+  const [, navigate] = useLocation();
   const id = propId || params?.id || "";
   const { hideTabs: registryHideTabs } = useRegistryTabs("employee", id ?? "");
   const { data: employee, isLoading, isError, error, refetch } = useApiQuery<any>(["employee", id], `/employees/${id}`, !!id);
@@ -1183,6 +1184,29 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
               <InfoRow label={<span className="flex items-center gap-2"><Calendar className="h-4 w-4" /> تاريخ التعيين</span>} value={employee.hireDate ? formatDateAr(employee.hireDate) : "-"} />
               <InfoRow label="مدة الخدمة" value={`${serviceDays} يوم`} />
               <InfoRow label={<span className="flex items-center gap-2"><CreditCard className="h-4 w-4" /> الراتب الأساسي</span>} value={formatCurrency(Number(employee.salary) || 0)} bold last />
+            </CardContent>
+          </Card>
+
+          {/* نقص بيانات مُصلَح: الآيبان/الحساب البنكي وجهة الطوارئ كانت تُحفظ
+              عند الإنشاء لكن لا تظهر في التفاصيل — الرواتب تحتاج الآيبان،
+              والموارد البشرية تحتاج جهة الطوارئ عند الأزمة. */}
+          <Card className="md:col-span-2">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <CreditCard className="h-5 w-5 text-muted-foreground" />
+                المعلومات المالية وجهة الطوارئ
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-4">
+                <InfoRow label="البنك" value={employee.bankName || "—"} />
+                <InfoRow label="رقم الحساب" value={employee.bankAccount || "—"} mono dir="ltr" />
+                <InfoRow label="الآيبان (IBAN)" value={employee.iban || "—"} mono dir="ltr" last />
+              </div>
+              <div className="space-y-4">
+                <InfoRow label={<span className="flex items-center gap-2"><Phone className="h-4 w-4" /> جهة اتصال الطوارئ</span>} value={employee.emergencyContact || "—"} />
+                <InfoRow label={<span className="flex items-center gap-2"><Phone className="h-4 w-4" /> هاتف الطوارئ</span>} value={employee.emergencyPhone || "—"} dir="ltr" last />
+              </div>
             </CardContent>
           </Card>
 
@@ -2195,6 +2219,9 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
         actions={
           <div className="flex items-center gap-2 flex-wrap">
             <OperationalStatusBar employeeId={id} />
+            <GuardedButton perm="hr:update" size="sm" onClick={() => navigate(`/employees/${id}/edit`)}>
+              <Pencil className="h-4 w-4 me-1" />تعديل بيانات الموظف
+            </GuardedButton>
             <PrintButton entityType="employee" entityId={id ?? ""} label="بطاقة الموظف" />
             {id && <EntityPnlButton entityType="employee" entityId={Number(id)} />}
             <div className="relative">

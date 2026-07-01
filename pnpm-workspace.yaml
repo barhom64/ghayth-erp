@@ -8,6 +8,9 @@ packages:
 allowBuilds:
   esbuild: true
   protobufjs: true
+  # tesseract.js: postinstall=opencollective-postinstall (رسالة تمويل فقط) — قرار صريح
+  # «لا تبنِ» (أأمن: لا تنفيذ كود postinstall). يصمت ERR_PNPM_IGNORED_BUILDS بلا تشغيله. (م٢-ج)
+  tesseract.js: false
 
 autoInstallPeers: false
 

@@ -7,6 +7,7 @@ import {
   DollarSign, Calendar,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ContextCardSkeleton, ContextStat, ContextWarning } from "./context-card-kit";
 
 export type PropertyUnitSection = "contract" | "maintenance" | "payment";
 
@@ -83,18 +84,7 @@ export function PropertyUnitContextCard({
 
   if (!hasId) return null;
 
-  if (isLoading) {
-    return (
-      <Card className={cn("border-border bg-surface-subtle/50 animate-pulse", className)}>
-        <CardContent className="p-4">
-          <div className="h-4 w-32 bg-gray-200 rounded mb-3" />
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {[1, 2, 3, 4].map((i) => <div key={i} className="h-12 bg-gray-100 rounded" />)}
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
+  if (isLoading) return <ContextCardSkeleton className={className} />;
 
   if (!data) return null;
 
@@ -140,14 +130,11 @@ export function PropertyUnitContextCard({
 
         {/* Availability warning */}
         {notAvailable && (
-          <div className="flex items-center gap-1.5 text-xs text-status-error-foreground bg-status-error-surface border border-status-error-surface rounded p-1.5">
-            <AlertTriangle className="h-3 w-3" />
-            <span>
-              {data.status === "rented" && "هذه الوحدة مؤجَّرة حاليًا — لا يمكن إنشاء عقد إيجار جديد"}
-              {data.status === "reserved" && "هذه الوحدة محجوزة — راجع الحجز قبل المتابعة"}
-              {data.status === "maintenance" && "هذه الوحدة تحت الصيانة — لا تقبل عقود جديدة"}
-            </span>
-          </div>
+          <ContextWarning icon={AlertTriangle}>
+            {data.status === "rented" && "هذه الوحدة مؤجَّرة حاليًا — لا يمكن إنشاء عقد إيجار جديد"}
+            {data.status === "reserved" && "هذه الوحدة محجوزة — راجع الحجز قبل المتابعة"}
+            {data.status === "maintenance" && "هذه الوحدة تحت الصيانة — لا تقبل عقود جديدة"}
+          </ContextWarning>
         )}
 
         {/* Active contract */}
@@ -215,10 +202,9 @@ export function PropertyUnitContextCard({
               </div>
             </div>
             {openMaintenance.length > 0 && (
-              <div className="flex items-center gap-1.5 text-xs text-status-warning-foreground bg-status-warning-surface border border-status-warning-surface rounded p-1.5">
-                <AlertTriangle className="h-3 w-3" />
-                <span>يوجد {openMaintenance.length} طلب صيانة مفتوح — راجع قبل إضافة طلب جديد</span>
-              </div>
+              <ContextWarning icon={AlertTriangle} tone="warning">
+                يوجد {openMaintenance.length} طلب صيانة مفتوح — راجع قبل إضافة طلب جديد
+              </ContextWarning>
             )}
           </div>
         )}
@@ -227,11 +213,8 @@ export function PropertyUnitContextCard({
   );
 }
 
+// Thin alias kept so call sites read unchanged; markup now lives once in the
+// shared ContextStat (context-card-kit).
 function InfoTile({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="bg-white rounded p-2 border border-border">
-      <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
-      <p className="text-sm font-semibold text-gray-800">{value}</p>
-    </div>
-  );
+  return <ContextStat label={label} value={value} />;
 }

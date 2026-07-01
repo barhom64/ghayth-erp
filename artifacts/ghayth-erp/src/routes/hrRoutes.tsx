@@ -6,6 +6,7 @@ const HrServices = lazy(() => import("@/pages/hr/services"));
 const Employees = lazy(() => import("@/pages/employees"));
 const EmployeeDetail = lazy(() => import("@/pages/employee-detail"));
 const EmployeesCreate = lazy(() => import("@/pages/create/employees-create"));
+const EmployeeEdit = lazy(() => import("@/pages/create/hr/employee-edit"));
 const EmployeeQuickCreate = lazy(() => import("@/pages/create/hr/employee-quick-create"));
 const Attendance = lazy(() => import("@/pages/hr/attendance"));
 const AttendanceCreate = lazy(() => import("@/pages/create/hr/attendance-create"));
@@ -56,6 +57,7 @@ const TrackingPolicies = lazy(() => import("@/pages/hr/tracking-policies"));
 const QRScanner = lazy(() => import("@/pages/hr/qr-scanner"));
 const PenaltyEscalation = lazy(() => import("@/pages/hr/penalty-escalation"));
 const SalaryComponents = lazy(() => import("@/pages/hr/salary-components"));
+const DriverPayRates = lazy(() => import("@/pages/hr/driver-pay-rates")); // معدّلات أجر السائق — الدفعة 2
 const EmployeeActivation = lazy(() => import("@/pages/hr/employee-activation"));
 const OnboardingReview = lazy(() => import("@/pages/hr/onboarding-review"));
 const ActivationBoard = lazy(() => import("@/pages/hr/activation-board"));
@@ -138,6 +140,7 @@ export const hrRoutes = [
   { path: "/employees", component: Employees, subKey: "employees" },
   { path: "/employees/create", component: EmployeesCreate, subKey: "employees" },
   { path: "/employees/quick-create", component: EmployeeQuickCreate, subKey: "employees" },
+  { path: "/employees/:id/edit", component: EmployeeEdit, subKey: "employees" },
   { path: "/employees/:id", component: EmployeeDetail, subKey: "employees" },
   { path: "/hr/attendance", component: Attendance, subKey: "attendance" },
   { path: "/hr/attendance/create", component: AttendanceCreate, subKey: "attendance" },
@@ -162,6 +165,7 @@ export const hrRoutes = [
   { path: "/hr/payroll", component: Payroll, subKey: "payroll" },
   { path: "/hr/payroll/create", component: PayrollCreate, subKey: "payroll" },
   { path: "/hr/payroll/salary-components", component: SalaryComponents, subKey: "payroll" },
+  { path: "/hr/driver-pay-rates", component: DriverPayRates, subKey: "payroll" },
   { path: "/hr/payroll/:id", component: PayrollDetail, subKey: "payroll" },
   { path: "/hr/performance", component: Performance, subKey: "performance" },
   { path: "/hr/performance/create", component: PerformanceCreate, subKey: "performance" },

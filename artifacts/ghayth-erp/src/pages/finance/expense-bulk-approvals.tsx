@@ -266,7 +266,7 @@ export default function ExpenseBulkApprovalsPage() {
                 <Input
                   value={rejectReason}
                   onChange={(e) => setRejectReason(e.target.value)}
-                  placeholder="سبب الرفض (سيُسجَّل في الـ audit trail)..."
+                  placeholder="سبب الرفض (سيُسجَّل في سجل التدقيق)..."
                   className="mb-3"
                 />
                 <div className="flex gap-2">

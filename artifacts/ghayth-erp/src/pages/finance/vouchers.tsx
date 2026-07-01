@@ -163,7 +163,7 @@ export default function VouchersPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "السندات" }]}
       loading={isLoading}
       actions={
-        <Link href="/finance/vouchers/create">
+        <Link href="/finance/documents/create">
           <GuardedButton perm="finance:create" size="sm">
             <Plus className="h-4 w-4 me-1" />سند جديد
           </GuardedButton>

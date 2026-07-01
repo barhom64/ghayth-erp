@@ -14,6 +14,8 @@ const Trips = lazy(() => import("@/pages/fleet/trips"));
 // page file itself are all gone — manual trip creation now flows
 // exclusively through booking → dispatch.
 const TripDetail = lazy(() => import("@/pages/fleet/trip-detail"));
+// البند ٤ — «تسجيل واقعة مركبة» الموحّدة (الكيان يقود: وقود/صيانة/تأمين في مكان واحد).
+const VehicleEventCreate = lazy(() => import("@/pages/create/fleet/vehicle-event-create"));
 const FleetMaintenance = lazy(() => import("@/pages/fleet/maintenance"));
 const MaintenanceTicketImpact = lazy(() => import("@/pages/fleet/maintenance-ticket-impact"));
 const MaintenanceCreate = lazy(() => import("@/pages/create/fleet/maintenance-create"));
@@ -85,9 +87,13 @@ const MeDriver = lazy(() => import("@/pages/fleet/me-driver"));
 const MeInspection = lazy(() => import("@/pages/fleet/me-inspection"));
 const MeDriverReports = lazy(() => import("@/pages/fleet/me-driver-reports"));
 const InspectionsReview = lazy(() => import("@/pages/fleet/inspections-review"));
+// أجر السائق بالساعة — شاشة ساعات العمل (الدفعة 1).
+const DriverWorkHours = lazy(() => import("@/pages/fleet/driver-work-hours"));
+const MovementBonuses = lazy(() => import("@/pages/fleet/movement-bonuses")); // مكافآت حركات النقل — الدفعة أ
 
 export const fleetRoutes = [
   { path: "/fleet", component: Fleet },
+  { path: "/fleet/record-event", component: VehicleEventCreate },
   { path: "/fleet/vehicles/create", component: VehiclesCreate },
   { path: "/fleet/inspections", component: InspectionsReview },
   { path: "/fleet/drivers", component: Drivers },
@@ -172,6 +178,9 @@ export const fleetRoutes = [
   { path: "/fleet/transport/itineraries/:id", component: TransportItineraryDetail },
   { path: "/fleet/transport/route-patterns", component: TransportRoutePatterns },
   { path: "/me/driver/navigation", component: MeDriverNavigation },
+  // أجر السائق بالساعة — ساعات العمل (قبل /fleet/:id كي لا يُطابَق كمعرّف).
+  { path: "/fleet/driver-work-hours", component: DriverWorkHours },
+  { path: "/fleet/movement-bonuses", component: MovementBonuses },
   { path: "/fleet/:id/status", component: VehicleStatusChange },
   { path: "/fleet/:id", component: VehicleDetail },
 ];

@@ -13,6 +13,7 @@ import {
 import { PageShell } from "@workspace/ui-core";
 import { ArrowLeft, Save, Car, User as UserIcon, Calendar, Banknote } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useVehicleDriverDefault } from "@/hooks/use-vehicle-driver-default";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 
@@ -55,6 +56,8 @@ export default function RentalCreate() {
   // R5 — driver.
   const [withDriver, setWithDriver] = useState(false);
   const [driverId, setDriverId] = useState("");
+  // الكيان يقود التجربة: اختيار المركبة يُعبّئ سائقها الحالي تلقائيًا (يظهر عند تفعيل «مع سائق»، قابل للتغيير).
+  useVehicleDriverDefault(vehicleId, driverId, setDriverId);
   // R6 — pricing.
   const [paymentTerms, setPaymentTerms] = useState<RateKind>("daily");
   const [dailyRate, setDailyRate] = useState("");

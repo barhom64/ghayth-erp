@@ -216,7 +216,7 @@ export default function TaxCodesPage() {
         onExportCSV={() => exportToCSV(filtered, [
           { key: "code", label: "الرمز" },
           { key: "name", label: "الاسم" },
-          { key: "nameEn", label: "Name (EN)" },
+          { key: "nameEn", label: "الاسم (إنجليزي)" },
           { key: "rate", label: "النسبة %" },
           { key: "taxType", label: "النوع" },
           { key: "zatcaCategoryCode", label: "فئة زاتكا" },

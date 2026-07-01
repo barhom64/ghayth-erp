@@ -198,6 +198,11 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   "rules.ts",
   "scheduled-reports.ts",
   "search.ts",
+  // site.ts: multi-tenant website/CMS control plane. Generic dynamic-table
+  // handlers keyed on the caller's single active scope.companyId; the site_*
+  // tables are company-only (no branchId) so buildScopedWhere's branch cascade
+  // doesn't apply. Manual companyId scoping is correct here.
+  "site.ts",
   "storage.ts",
   "store.ts",
   "training.ts",
@@ -567,9 +572,21 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // final carve); manualOnly net-unchanged — the new file is manual-scope
       // (+1) while umrah-entities.ts became a pure aggregator and dropped out
       // (−1). total counts the route file either way.
-      total: 154,
+      // +1 total: routes/fleet-driver-hours.ts (أجر السائق بالساعة، الدفعة 1).
+      // وحدة تحكّم رفيعة — كل وصول للبيانات والعزل الإيجاري في lib/fleet/driverHours.ts،
+      // فالراوت بلا scope مباشر (manualOnly دون تغيير).
+      // +1 total: routes/hr-driver-pay.ts (معدّلات أجر السائق، الدفعة 2). وحدة
+      // تحكّم رفيعة كذلك — العزل في lib/hr/driverPayRates.ts (manualOnly دون تغيير).
+      // +1 total: routes/fleet-movement-bonuses.ts (مكافآت حركات النقل، الدفعة أ).
+      // وحدة تحكّم رفيعة — العزل في lib/fleet/movementBonuses.ts (manualOnly دون تغيير).
+      // +1 total/manualOnly: routes/site.ts — multi-tenant website/CMS control
+      // plane (config + packages/services/hotels/posts CRUD). Generic dynamic-
+      // table handlers keyed on the caller's single active scope.companyId; the
+      // site_* tables are company-only (NO branchId), so buildScopedWhere's
+      // branch cascade doesn't apply. Allowlisted with justification.
+      total: 158,
       helperUsers: 39,
-      manualOnly: 110,
+      manualOnly: 111,
     });
   });
 });

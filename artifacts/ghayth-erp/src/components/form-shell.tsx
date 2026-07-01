@@ -3,6 +3,8 @@ import {
   type ComponentProps,
   type FormEvent,
   useCallback,
+  useRef,
+  useState,
 } from "react";
 import {
   useForm,
@@ -25,9 +27,9 @@ import { Switch } from "@/components/ui/switch";
 import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ApiError } from "@/lib/api";
+import { ApiError, apiFetch } from "@/lib/api";
 
 /**
  * FormShell — P1.2 of the unification plan (docs/UNIFICATION_PLAN.md).
@@ -319,6 +321,173 @@ export function FormNumberField(
   props: Omit<FormTextFieldProps, "type" | "inputMode">,
 ) {
   return <FormTextField {...props} type="number" inputMode="numeric" />;
+}
+
+export interface FormImageFieldProps extends BaseFieldProps {
+  disabled?: boolean;
+  /** أقصى حجم للرفع بالميغابايت (افتراضي 5). */
+  maxSizeMB?: number;
+  /** مسار نقطة الرفع نسبةً إلى /api (افتراضيًا رفع صور الموقع). */
+  uploadEndpoint?: string;
+}
+
+/**
+ * حقل رفع صورة حقيقي — يستبدل «لصق رابط الصورة» بزر رفع ملف من الجهاز.
+ * يرفع الملف المختار كـ base64 إلى نقطة رفع خادمية تُعيد رابطًا عامًا،
+ * ويخزّن الرابط في قيمة الحقل داخل FormShell. يعرض معاينة + استبدال + إزالة،
+ * ويقبل القيم القديمة (روابط منسوخة سابقًا) ويعرضها كما هي.
+ */
+export function FormImageField({
+  name,
+  label,
+  description,
+  required,
+  className,
+  disabled,
+  maxSizeMB = 5,
+  uploadEndpoint = "/site/upload-image",
+}: FormImageFieldProps) {
+  const { control } = useFormContext();
+  return (
+    <FieldWrapper
+      name={name}
+      label={label}
+      description={description}
+      required={required}
+      className={className}
+    >
+      <Controller
+        name={name}
+        control={control}
+        render={({ field }) => (
+          <ImageUploadControl
+            value={(field.value as string) ?? ""}
+            onChange={(v) => field.onChange(v)}
+            disabled={disabled}
+            maxSizeMB={maxSizeMB}
+            uploadEndpoint={uploadEndpoint}
+          />
+        )}
+      />
+    </FieldWrapper>
+  );
+}
+
+function ImageUploadControl({
+  value,
+  onChange,
+  disabled,
+  maxSizeMB,
+  uploadEndpoint,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  disabled?: boolean;
+  maxSizeMB: number;
+  uploadEndpoint: string;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const pick = () => inputRef.current?.click();
+
+  const handleFile = async (file: File | undefined) => {
+    if (!file) return;
+    setError(null);
+    if (!file.type.startsWith("image/")) {
+      setError("الرجاء اختيار ملف صورة");
+      return;
+    }
+    if (file.size > maxSizeMB * 1024 * 1024) {
+      setError(`حجم الصورة يتجاوز ${maxSizeMB} ميغابايت`);
+      return;
+    }
+    setUploading(true);
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error("تعذّرت قراءة الملف"));
+        reader.readAsDataURL(file);
+      });
+      const res = await apiFetch<{ url: string }>(uploadEndpoint, {
+        method: "POST",
+        body: JSON.stringify({ dataUrl, fileName: file.name }),
+      });
+      onChange(res.url);
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.fix ?? err.message
+          : err instanceof Error
+            ? err.message
+            : "تعذّر رفع الصورة",
+      );
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        className="hidden"
+        disabled={disabled || uploading}
+        onChange={(e) => handleFile(e.target.files?.[0])}
+      />
+      {value ? (
+        <div className="flex items-start gap-3">
+          <img
+            src={value}
+            alt="معاينة الصورة"
+            className="h-20 w-20 rounded-md border object-cover bg-muted"
+          />
+          <div className="flex flex-col gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={pick}
+              disabled={disabled || uploading}
+            >
+              {uploading ? "جاري الرفع..." : "استبدال الصورة"}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                onChange("");
+                setError(null);
+              }}
+              disabled={disabled || uploading}
+            >
+              إزالة
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={pick}
+          disabled={disabled || uploading}
+          className="flex w-full flex-col items-center justify-center gap-1 rounded-md border border-dashed py-6 text-sm text-muted-foreground transition hover:bg-accent/40 disabled:opacity-60"
+        >
+          <ImageIcon className="h-6 w-6" />
+          <span>{uploading ? "جاري الرفع..." : "اضغط لرفع صورة"}</span>
+          <span className="text-xs">
+            PNG · JPG · WEBP · حتى {maxSizeMB} ميغابايت
+          </span>
+        </button>
+      )}
+      {error && <p className="text-xs text-status-error-foreground">{error}</p>}
+    </div>
+  );
 }
 
 export function FormDateField({

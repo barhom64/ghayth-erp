@@ -44,17 +44,20 @@ describe("shared/* components on FormShell", () => {
     expect(src).not.toMatch(/useState<string>\(""\)\s*;\s*\/\/?\s*body/);
   });
 
-  it("entity-selects QuickCreateDialog builds a runtime zod schema", () => {
-    const src = readSrc("shared/entity-selects.tsx");
+  it("allow-create-drawer GenericCreateForm builds a runtime zod schema (absorbed QuickCreateDialog)", () => {
+    // The field-driven create form was unified into AllowCreateDrawer's
+    // GenericCreateForm (QuickCreateDialog retired); the FormShell + zod-from-
+    // fields plumbing now lives here, hosted in the same drawer.
+    const src = readSrc("shared/allow-create-drawer.tsx");
     expect(src).toContain("FormShell");
     expect(src).toContain("FormTextField");
     // Per-field schema construction — `required: true` becomes
     // z.string().min(1, "مطلوب"), otherwise plain z.string().
     expect(src).toContain("schemaShape");
     expect(src).toMatch(/z\.object\(schemaShape\)/);
-    // Remount key keeps the inputs cleared between consecutive
-    // create flows without an explicit reset.
-    expect(src).toMatch(/key=\{open\s*\?/);
+    // Mounted only while the drawer is open ({open && …}), so inputs clear
+    // between consecutive create flows without an explicit reset.
+    expect(src).toMatch(/\{open && \(/);
   });
 
   it("detail-edit-delete-actions InlineEditCard owns its own FormShell", () => {

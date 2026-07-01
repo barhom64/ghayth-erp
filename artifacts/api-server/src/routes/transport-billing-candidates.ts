@@ -53,6 +53,10 @@ const materializeSchema = z.object({
   // freightRevenue / freightCost are just defaults.
   freightRevenue: z.number().nonnegative().optional(),
   freightCost: z.number().nonnegative().optional(),
+  // البند ٤ شريحة ٢ — مَن يتحمّل صيانة المركبة (مبدأ إبراهيم ١). المحاسب يقرّره عند
+  // المادْيَلة (المالية هي السلطة على المال — حدّ TA-T18). الغياب ⇒ company (شركة).
+  // النوع canonical يطابق مخطّط تقييم الحادث في fleet.ts.
+  costBearer: z.enum(["company", "driver", "insurance", "warranty", "customer", "tenant", "third_party"]).optional(),
 });
 
 // ─── GET /transport-billing-candidates ─────────────────────────────────
@@ -78,7 +82,7 @@ transportBillingCandidatesRouter.get(
                 c."driverId", d.name AS "driverName",
                 c.quantity, c."unitOfMeasure",
                 c."operationalStatus",
-                c."suggestedRevenue", c."suggestedCost",
+                c."suggestedRevenue", c."suggestedCost", c."costBearer",
                 c.status, c."materializedJournalEntryId", c."materializedAt",
                 c."rejectionReason", c."rejectedAt",
                 c."createdAt"
@@ -152,12 +156,13 @@ transportBillingCandidatesRouter.post(
           driverId: number | null;
           suggestedRevenue: string | null;
           suggestedCost: string | null;
+          costBearer: string | null;
           status: CandidateStatus;
         }>(
           `SELECT id, "companyId", "branchId",
                   "sourceType", "sourceId", "sourceRef",
                   "customerId", "vehicleId", "driverId",
-                  "suggestedRevenue", "suggestedCost", status
+                  "suggestedRevenue", "suggestedCost", "costBearer", status
              FROM transport_billing_candidates
             WHERE id = $1 AND "companyId" = $2
             FOR UPDATE`,
@@ -196,6 +201,7 @@ transportBillingCandidatesRouter.post(
           journal = await fleetEngine.postMaintenanceGL(glCtx, {
             id: candidate.sourceId, vehicleId: candidate.vehicleId ?? 0,
             totalCost: cost, description: candidate.sourceRef ?? undefined,
+            costBearer: overrides.costBearer ?? candidate.costBearer ?? undefined, // ج-٥: تجاوز المحاسب ثم اختيار المُكمِل ثم الافتراض
           });
         } else if (candidate.sourceType === "fuel") {
           journal = await fleetEngine.postFuelExpenseGL(glCtx, {

@@ -4,7 +4,7 @@ import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { PageStatusBadge, resolveStatus } from "@workspace/ui-core";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -19,12 +19,6 @@ import { ClipboardCheck, Image as ImageIcon } from "lucide-react";
 
 const TYPE_AR: Record<string, string> = {
   handover: "استلام", return: "تسليم", daily: "يومي", adhoc: "طارئ",
-};
-const STATUS_AR: Record<string, string> = {
-  pending: "قيد الانتظار", submitted: "قيد المراجعة", approved: "معتمد", rejected: "مرفوض",
-};
-const STATUS_VARIANT: Record<string, "secondary" | "default" | "outline" | "destructive"> = {
-  pending: "outline", submitted: "secondary", approved: "default", rejected: "destructive",
 };
 const PHOTO_AR: Record<string, string> = {
   odometer: "العداد", front: "أمامية", rear: "خلفية", left: "أيسر", right: "أيمن",
@@ -81,7 +75,7 @@ export default function InspectionsReview() {
     { key: "inspectionType", header: "النوع", render: (r) => TYPE_AR[r.inspectionType] ?? r.inspectionType },
     { key: "odometer", header: "العداد", render: (r) => (r.odometer != null ? r.odometer.toLocaleString("ar") : "—") },
     { key: "photoCount", header: "الصور", render: (r) => <span className="flex items-center gap-1"><ImageIcon className="h-3.5 w-3.5" />{r.photoCount}</span> },
-    { key: "status", header: "الحالة", render: (r) => <Badge variant={STATUS_VARIANT[r.status] ?? "outline"}>{STATUS_AR[r.status] ?? r.status}</Badge> },
+    { key: "status", header: "الحالة", render: (r) => <PageStatusBadge status={r.status} domain="inspection" /> },
     { key: "capturedAt", header: "وقت الالتقاط", render: (r) => (r.capturedAt ? new Date(r.capturedAt).toLocaleString("ar") : "—") },
     { key: "actions", header: "إجراء", render: (r) => <Button size="sm" variant="outline" onClick={() => openReview(r)}>مراجعة</Button> },
   ];
@@ -95,7 +89,7 @@ export default function InspectionsReview() {
       <div className="mb-3 flex gap-2">
         {(["submitted", "approved", "rejected", "all"] as const).map((s) => (
           <Button key={s} size="sm" variant={status === s ? "default" : "outline"} onClick={() => setStatus(s)}>
-            {s === "all" ? "الكل" : STATUS_AR[s]}
+            {s === "all" ? "الكل" : resolveStatus(s, "inspection")?.label ?? s}
           </Button>
         ))}
       </div>
@@ -116,7 +110,7 @@ export default function InspectionsReview() {
               <div className="flex flex-wrap gap-3">
                 <span>النوع: <b>{TYPE_AR[selected.inspectionType] ?? selected.inspectionType}</b></span>
                 <span>العداد: <b>{selected.odometer != null ? selected.odometer.toLocaleString("ar") : "—"}</b></span>
-                <span>الحالة: <Badge variant={STATUS_VARIANT[selected.status] ?? "outline"}>{STATUS_AR[selected.status] ?? selected.status}</Badge></span>
+                <span>الحالة: <PageStatusBadge status={selected.status} domain="inspection" /></span>
               </div>
 
               <div>

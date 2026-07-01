@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { exportRowsToCsv } from "@/lib/unified-export";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, PageStatusBadge, resolveStatus } from "@workspace/ui-core";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -88,25 +88,10 @@ interface SummaryResp {
 interface SeasonOpt { id: number; title: string }
 interface SubAgentOpt { id: number; name: string; nuskCode: string | null }
 
-const STATUS_LABELS: Record<string, string> = {
-  draft:           "مسودة",
-  approved:        "معتمدة",
-  sent:            "مُرسلة",
-  partially_paid:  "مدفوعة جزئياً",
-  paid:            "مدفوعة",
-  overdue:         "متأخّرة",
-  cancelled:       "ملغاة",
-};
-
-const STATUS_TONES: Record<string, string> = {
-  draft:           "bg-status-neutral-surface text-status-neutral-foreground",
-  approved:        "bg-status-info-surface text-status-info-foreground",
-  sent:            "bg-status-info-surface text-status-info-foreground",
-  partially_paid:  "bg-status-warning-surface text-status-warning-foreground",
-  paid:            "bg-status-success-surface text-status-success-foreground",
-  overdue:         "bg-status-error-surface text-status-error-foreground",
-  cancelled:       "bg-status-neutral-surface text-status-neutral-foreground",
-};
+// حالات الفاتورة من المصدر القانوني الواحد (domain="invoice")؛ نُبقي مفاتيح
+// الفلترة السبعة كما كانت بالضبط، والتسميات تأتي من STATUS_MAP.
+const INVOICE_STATUS_KEYS = ["draft", "approved", "sent", "partially_paid", "paid", "overdue", "cancelled"] as const;
+const statusLabelOf = (s: string) => resolveStatus(s, "invoice")?.label ?? s;
 
 function num(v: number | string | null | undefined): number {
   return Number(v ?? 0);
@@ -344,8 +329,8 @@ export default function UmrahSalesInvoicesSummaryReport() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">كل الحالات</SelectItem>
-                {Object.entries(STATUS_LABELS).map(([k, v]) => (
-                  <SelectItem key={k} value={k}>{v}</SelectItem>
+                {INVOICE_STATUS_KEYS.map((k) => (
+                  <SelectItem key={k} value={k}>{statusLabelOf(k)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -399,7 +384,7 @@ export default function UmrahSalesInvoicesSummaryReport() {
               <BreakdownRows
                 rows={byStatus as unknown as Array<Record<string, unknown>>}
                 testid="sales-invoices-breakdown-status"
-                label={(r) => STATUS_LABELS[r.status as string] || (r.status as string)}
+                label={(r) => statusLabelOf(r.status as string)}
               />
             </TabsContent>
             <TabsContent value="month">
@@ -471,9 +456,7 @@ export default function UmrahSalesInvoicesSummaryReport() {
                           </Link>
                         </td>
                         <td className="p-2">
-                          <Badge className={`text-[10px] ${STATUS_TONES[r.status] || ""}`}>
-                            {STATUS_LABELS[r.status] || r.status}
-                          </Badge>
+                          <PageStatusBadge status={r.status} domain="invoice" />
                         </td>
                         <td className="p-2">{r.invoiceDate ? formatUmrahDate(r.invoiceDate) : "—"}</td>
                         <td className={`p-2 ${overdue ? "text-status-error-foreground font-semibold" : ""}`}>

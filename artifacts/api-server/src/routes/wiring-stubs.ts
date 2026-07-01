@@ -28,7 +28,7 @@ function scope(req: AuthedReq): { companyId: number; branchId: number | null } {
 }
 
 export const warehouseStubsRouter = Router();
-export const documentsStubsRouter = Router();
+// documentsStubsRouter أُزيل: نقاط OCR الأربع صارت تنفيذًا حقيقيًا في routes/documents.ts (م٢-ج).
 export const hrStubsRouter = Router();
 export const financeStubsRouter = Router();
 export const adminStubsRouter = Router();
@@ -55,29 +55,10 @@ function notImplemented(res: Response, feature: string): void {
 
 
 /* ============================================================
- * Documents — OCR (4). Mounted under /documents.
+ * Documents — OCR: نُقِلت الأربع نقاط (extractions/confirm/reject/rerun) إلى
+ * routes/documents.ts بتنفيذ حقيقي (خدمة documentOcrService + تأكيد بشري + Audit).
+ * أُزيلت الـstubs هنا تفاديًا لتعارض المسارات تحت /documents (م٢-ج).
  * ============================================================ */
-documentsStubsRouter.get("/ocr/extractions", requireMinLevel(10), authorize({ feature: "documents.my", action: "list" }), async (req, res) => {
-  try {
-    const { companyId } = scope(req as any);
-    const status = (req.query.status as string) || null;
-    const params: unknown[] = [companyId];
-    let sql = `SELECT * FROM document_ocr_extractions WHERE "companyId"=$1`;
-    if (status) { sql += ` AND status=$2`; params.push(status); }
-    sql += ` ORDER BY id DESC LIMIT 100`;
-    const data = await rawQuery(sql, params).catch(() => []);
-    res.json({ data, total: data.length });
-  } catch (e) { handleRouteError(e, res, "wiring-stubs"); }
-});
-documentsStubsRouter.post("/ocr/extractions/:id/confirm", requireMinLevel(10), authorize({ feature: "documents.my", action: "update" }), async (_req, res) => {
-  notImplemented(res, "documents.ocr.confirm");
-});
-documentsStubsRouter.post("/ocr/extractions/:id/reject", requireMinLevel(10), authorize({ feature: "documents.my", action: "update" }), async (_req, res) => {
-  notImplemented(res, "documents.ocr.reject");
-});
-documentsStubsRouter.post("/:id/ocr/rerun", requireMinLevel(10), authorize({ feature: "documents.my", action: "update" }), async (_req, res) => {
-  notImplemented(res, "documents.ocr.rerun");
-});
 
 /* ============================================================
  * HR Saudi compliance — banks / WPS / Mudad / credentials (7).

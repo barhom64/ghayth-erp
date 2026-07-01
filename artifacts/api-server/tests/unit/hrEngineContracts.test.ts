@@ -67,7 +67,8 @@ describe("hrEngine GL account resolution patterns", () => {
 
   it("postMonthlyAccrualsGL resolves 4 accounts: leave + EOS expense/liability", () => {
     const idx = ENGINE_SRC.indexOf("async postMonthlyAccrualsGL");
-    const section = ENGINE_SRC.slice(idx, idx + 1400);
+    // window widened: the per-employee `breakdown` param + doc grew the function.
+    const section = ENGINE_SRC.slice(idx, idx + 2400);
     expect(section).toContain("hr_leave_accrual_expense");
     // Leave-accrual LIABILITY must honour finance's controllable mapping key
     // `leave_accrual_liability` (accounting_mappings → 2150, migration 365 /
@@ -216,10 +217,15 @@ describe("hrEngine debit/credit structure", () => {
     expect(section).toContain("debit: 0, credit: amount");
   });
 
-  it("postMonthlyAccrualsGL: filters zero-value lines", () => {
+  it("postMonthlyAccrualsGL: filters zero-value lines (aggregate fallback)", () => {
     const idx = ENGINE_SRC.indexOf("async postMonthlyAccrualsGL");
-    const section = ENGINE_SRC.slice(idx, idx + 1800);
+    // window widened past the per-employee `breakdown` branch to the aggregate
+    // fallback, which still drops zero-value account lines.
+    const section = ENGINE_SRC.slice(idx, idx + 3600);
     expect(section).toContain(".filter(l => l.debit > 0 || l.credit > 0)");
+    // per-employee branch skips zero amounts per leg (no zero lines emitted).
+    expect(section).toContain("if (leave > 0)");
+    expect(section).toContain("if (eos > 0)");
   });
 });
 

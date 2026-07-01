@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { LoadingSpinner } from "@/components/shared/loading-error-states";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
@@ -81,7 +81,7 @@ export default function ArCollectionWorkbenchPage() {
   const [filter, setFilter] = useState<Filter>("overdue");
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
 
-  const { data, isLoading } = useApiQuery<AgingResp>(
+  const { data, isLoading, isError } = useApiQuery<AgingResp>(
     ["ar-collection", today],
     `/finance/ar-aging?asOfDate=${today}`,
   );
@@ -259,6 +259,8 @@ export default function ArCollectionWorkbenchPage() {
 
       {isLoading ? (
         <LoadingSpinner />
+      ) : isError ? (
+        <ErrorState />
       ) : !data ? (
         <Card><CardContent className="py-12 text-center text-muted-foreground">لا توجد بيانات</CardContent></Card>
       ) : (

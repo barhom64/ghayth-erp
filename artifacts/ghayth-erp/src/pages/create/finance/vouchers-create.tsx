@@ -23,7 +23,8 @@ import { deriveRelatedEntity, voucherCounterAccountHint, VOUCHER_COUNTER_ACCOUNT
 import { buildAllocationPayload } from "@/components/shared/line-allocation-panel";
 import { AlertCircle, Paperclip, Lock, ChevronDown } from "lucide-react";
 import { usePermission } from "@/components/shared/permission-gate";
-import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
+import { type Attachment } from "@/components/shared/file-drop-zone";
+import { FinancialAttachmentViewer } from "@/components/shared/financial-attachment-viewer";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
 import { SupplierContextCard } from "@/components/shared/supplier-context-card";
 import { ClientContextCard } from "@/components/shared/client-context-card";
@@ -183,6 +184,38 @@ export default function VouchersCreate() {
     setForm(prev => ({ ...prev, [field]: val }));
   };
 
+  // #2237 — financial attachment workspace: feed the side viewer from the
+  // current attachment (uploaded file or pasted link); upload/replace/remove go
+  // through the SAME state the form uses (attachmentUrl/attachments). The viewer
+  // is display-only — it never touches the journal.
+  const ATTACHMENT_TYPE_LABELS: Record<string, string> = {
+    receipt: "وصل استلام", invoice: "فاتورة", transfer: "إشعار تحويل",
+    check: "شيك", contract: "عقد", approval: "موافقة", other: "أخرى",
+  };
+  const viewerAttachments = form.attachmentUrl
+    ? [{
+        url: form.attachmentUrl,
+        name: attachments[0]?.name,
+        type: attachments[0]?.type ?? null,
+        documentType: ATTACHMENT_TYPE_LABELS[form.attachmentType] ?? form.attachmentType,
+        serialNo: null,
+        status: "linked",
+      }]
+    : [];
+  const applyAttachmentFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      setAttachments([{ name: file.name, size: file.size, type: file.type, dataUrl }]);
+      setForm((prev) => ({ ...prev, attachmentUrl: dataUrl }));
+    };
+    reader.readAsDataURL(file);
+  };
+  const clearAttachment = () => {
+    setAttachments([]);
+    setForm((prev) => (prev.attachmentUrl.startsWith("data:") ? { ...prev, attachmentUrl: "" } : prev));
+  };
+
   const handleTaxCodeChange = (val: string) => {
     if (val === "_none") {
       setForm(prev => ({ ...prev, taxCodeId: "", vatRate: "" }));
@@ -304,6 +337,23 @@ export default function VouchersCreate() {
           <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
+      <div data-form className="lg:grid lg:grid-cols-[1fr_360px] lg:gap-4 lg:items-start">
+        {/* #2237 — financial attachment workspace: the document sits beside the
+            form (left in RTL, sticky) during entry instead of a bottom upload
+            field. Same reusable viewer used in expenses/vendor-invoice. */}
+        <aside className="mb-4 lg:mb-0 lg:order-2 lg:sticky lg:top-4">
+          <FinancialAttachmentViewer
+            mode="create"
+            attachments={viewerAttachments}
+            documentType={ATTACHMENT_TYPE_LABELS[form.attachmentType] ?? form.attachmentType}
+            canReplace={canManualOverride}
+            canDownload
+            onUpload={applyAttachmentFile}
+            onReplace={applyAttachmentFile}
+            onRemove={clearAttachment}
+          />
+        </aside>
+        <div className="min-w-0 lg:order-1">
       <ActiveContextNotice ctx={activeCtx} />
       <CreationDateField />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -501,6 +551,7 @@ export default function VouchersCreate() {
             label="الفرع"
             required
             error={fieldErrors.branchId}
+            autoSelectOwnBranch
           />
           <DepartmentSelect
             value={form.departmentId}
@@ -555,18 +606,13 @@ export default function VouchersCreate() {
             </p>
           </div>
         )}
-        {/* #1715 (owner feedback) — رفع الملف هو الأساس ويُحقّق شرط «المرفق
-            إلزامي» مباشرةً؛ حقل الرابط ثانوي. */}
-        <FileDropZone
-          files={attachments}
-          maxSizeMB={2}
-          label="ارفع المستند الداعم (إشعار تحويل / وصل استلام / فاتورة)"
-          onFilesChange={(f) => {
-            setAttachments(f);
-            if (f.length > 0) setField("attachmentUrl", f[0].dataUrl);
-            else if (form.attachmentUrl.startsWith("data:")) setField("attachmentUrl", "");
-          }}
-        />
+        {/* #2237 — رفع/استبدال المستند يتم من لوحة «مستند السجل المالي» الجانبية
+            التي تعرضه أثناء الإدخال؛ فأُزيل مربّع الرفع المكرّر الذي كان هنا (كان
+            يكتب نفس الحالة attachmentUrl/attachments)، وبقي تصنيف النوع والرابط
+            البديل والتحذير الإلزامي. رفع المستند يُحقّق شرط «المرفق إلزامي» مباشرةً. */}
+        <p className="text-xs text-muted-foreground">
+          ارفع المستند الداعم (إشعار تحويل / وصل استلام / فاتورة) من لوحة «مستند السجل المالي» الجانبية. الحقول أدناه لتصنيف نوع المستند، أو للصق رابطه إن كان مرفوعًا على نظام آخر.
+        </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <TextField label="أو الصق رابط المستند (اختياري)"
             value={form.attachmentUrl.startsWith("data:") ? "" : form.attachmentUrl}
@@ -621,6 +667,8 @@ export default function VouchersCreate() {
         <Button onClick={handleSubmit} disabled={!form.amount || createMut.isPending || !activeCtx.ready} rateLimitAware>
           {createMut.isPending ? "جاري الحفظ..." : `حفظ سند ${form.type === "receipt" ? "القبض" : "الصرف"}`}
         </Button>
+      </div>
+        </div>
       </div>
     </CreatePageLayout>
   );

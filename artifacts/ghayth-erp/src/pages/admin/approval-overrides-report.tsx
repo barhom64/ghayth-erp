@@ -124,7 +124,7 @@ export default function ApprovalOverridesReportPage() {
       subtitle="كل قرارات تجاوز سلسلة الاعتماد — متاح للمراجع الخارجي والمدير المالي"
       breadcrumbs={[
         { href: "/admin", label: "الإدارة" },
-        { label: "تجاوز Workflow" },
+        { label: "تجاوز سير العمل" },
       ]}
       actions={
         <>

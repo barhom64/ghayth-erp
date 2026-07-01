@@ -50,6 +50,7 @@ import {
 } from "../lib/employeeLifecycleEngine.js";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
+import { registerEntityParty } from "../lib/partyService.js";
 import type { EmployeeRow, EmployeeAssignmentRow } from "../lib/dbTypes.js";
 
 // Extended employee row — schema has many more columns than the early
@@ -663,6 +664,14 @@ router.post("/quick-activate", authorize({ feature: "hr.employees", action: "cre
         status: "inactive", assignmentId, onboardingTasksCreated: onboardingTaskCount,
       },
     });
+
+    // ── Master-data identity (migration 249) ──
+    // Link the person to ONE party so an employee who is also a driver/
+    // supplier/client resolves to a single 360° record immediately. Non-fatal.
+    registerEntityParty(scope.companyId, "employees", empId, "employee", {
+      displayName: name, nationalId: nationalId || null,
+      phone: phone || null, email: email || null, kind: "person",
+    }).catch((e) => logger.error(e, "[partyService] employees registration failed"));
 
     // ── رابط الاستكمال الذاتي ──
     // حين يتوفّر بريد الموظف، نُصدِر رمزًا مؤقتًا ونرسل له رابطًا يفتح صفحة
@@ -1709,9 +1718,9 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       // ── Step 8c: Driver-vehicle binding ──
       // When the new employee is a driver and the operator chose a
       // vehicle in the form, validate the vehicle belongs to the same
-      // company and create the assignment row. We use UPDATE
-      // fleet_vehicles SET "currentDriverId" = empId so the existing
-      // driver-detail screens pick it up without a new entity.
+      // company, then ensure a fleet_drivers row linked to this employee
+      // (INSERT … ON CONFLICT DO NOTHING) so the existing driver-detail
+      // and assignment screens pick the person up without a new entity.
       const wantsVehicle = ((body as any).vehicleId as number | null | undefined) ?? null;
       const effectiveRole = role || "employee";
       if (wantsVehicle && (effectiveRole === "driver" || effectiveRole === "fleet_driver")) {
@@ -1785,6 +1794,14 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
 
     const { empId, assignmentId, finalEmpNumber, userId, createdNewUser, loginEmail, onboardingTaskCount } = result;
     let accountInviteWarning: string | null = null;
+
+    // ── Master-data identity (migration 249) ──
+    // Link the person to ONE party (dedupe across driver/supplier/client/…).
+    // Non-fatal: a registry-link failure must not block onboarding.
+    registerEntityParty(scope.companyId, "employees", empId, "employee", {
+      displayName: name, nationalId: nationalId || null,
+      phone: phone || null, email: email || null, kind: "person",
+    }).catch((e) => logger.error(e, "[partyService] employees onboard registration failed"));
 
     // ── Step 8: Notify manager and HR ──
     const managerAssignmentId = await getManagerAssignmentId(scope.companyId, targetBranchId);
@@ -2376,6 +2393,11 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
               e."iqamaNumber", e."iqamaExpiry", e."passportNumber", e."passportExpiry",
               e."borderNumber", e."visaNumber", e."visaType", e."visaExpiry",
               e."sponsorNumber", e."workPermitNumber", e."workPermitExpiry", e."iqamaStatus",
+              -- بيانات مالية + جهة طوارئ: تُحفظ عند الإنشاء/التعديل لكن لم تكن
+              -- تُقرأ في GET التفاصيل (نقص بيانات) — الرواتب تحتاج الآيبان،
+              -- والموارد البشرية تحتاج جهة الطوارئ عند الأزمة.
+              e."bankName", e."bankAccount", e.iban,
+              e."emergencyContact", e."emergencyPhone",
               ea.id AS "assignmentId",
               COALESCE(jt.name, ea."jobTitle") AS "jobTitle", ea."jobTitleId",
               ea.role, ea.salary, ea."hireDate",
@@ -3604,6 +3626,105 @@ router.post(
       handleRouteError(err, res, "Lifecycle transition error:");
     }
   }
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// البند ٣ — عقد HR: تطبيق مستخرَج OCR مؤكَّد (وثيقة هوية/إقامة) على الموظف.
+//
+// حدّ المسار: مسار الوثائق (خادم) لا يكتب في كيان الموظف؛ يمرّر الحقول المؤكَّدة،
+// وهذا العقد المملوك لـHR يكتبها داخل نطاقه — بصلاحية HR (لا صلاحية الوثائق) + عزل
+// companyId + تدقيق. السياسة: «املأ الفارغ فقط» — لا يطمس رقم/انتهاء إقامة قائمًا
+// (حقل امتثال حسّاس)؛ القائم يبقى ويُبلَّغ في skipped. يدعم: الإقامة (أعمدة الموظف)
+// ورخصة القيادة (صف employee_documents، إنشاء إن غاب بلا تكرار). (دفعتا ١ و٣ من البند ٣.)
+// ─────────────────────────────────────────────────────────────────────────────
+router.post(
+  "/:id/ocr-apply",
+  authorize({ feature: "hr.employees", action: "update", resource: { table: "employees", idParam: "id" } }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const docType = String(req.body?.docType ?? "");
+      const fields = req.body?.fields && typeof req.body.fields === "object" ? req.body.fields : {};
+      const [emp] = await rawQuery<{ id: number; iqamaNumber: string | null; iqamaExpiry: string | null }>(
+        `SELECT id, "iqamaNumber", "iqamaExpiry" FROM employees WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!emp) throw new NotFoundError("الموظف غير موجود");
+
+      // إقامة/هوية → أعمدة الموظف (iqamaNumber/iqamaExpiry) بسياسة «املأ الفارغ فقط».
+      if (/iqama|residence|الإقامة|الاقامة|هوية|national/i.test(docType)) {
+        const idNumber = typeof fields.idNumber === "string" && /^[12]\d{9}$/.test(fields.idNumber) ? fields.idNumber : null;
+        const expiry =
+          typeof fields.expiryDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(fields.expiryDate) ? fields.expiryDate : null;
+        const setIqamaNumber = !!idNumber && !emp.iqamaNumber;
+        const setIqamaExpiry = !!expiry && !emp.iqamaExpiry;
+        const applied: string[] = [];
+        const skipped: string[] = [];
+        if (idNumber) (setIqamaNumber ? applied : skipped).push("iqamaNumber");
+        if (expiry) (setIqamaExpiry ? applied : skipped).push("iqamaExpiry");
+        if (!applied.length) {
+          res.json({ ok: true, applied, skipped, message: "لا حقول فارغة للتعبئة — القيم القائمة محفوظة." });
+          return;
+        }
+        await rawExecute(
+          `UPDATE employees SET
+             "iqamaNumber" = COALESCE(NULLIF("iqamaNumber", ''), $1),
+             "iqamaExpiry" = COALESCE("iqamaExpiry", $2),
+             "updatedAt"   = NOW()
+           WHERE id=$3 AND "companyId"=$4 AND "deletedAt" IS NULL`,
+          [setIqamaNumber ? idNumber : null, setIqamaExpiry ? expiry : null, id, scope.companyId],
+        );
+        void createAuditLog({
+          companyId: scope.companyId, userId: scope.userId,
+          action: "employee.ocr.applied", entity: "employees", entityId: id,
+          after: { docType, applied, skipped },
+        }).catch((e) => logger.error(e, "employee ocr apply audit failed"));
+        res.json({ ok: true, applied, skipped });
+        return;
+      }
+
+      // رخصة قيادة → صف في employee_documents (لا أعمدة مباشرة على الموظف). سياسة
+      // «لا تكرار/لا طمس»: نُنشئ صفًّا فقط إن لم تكن هناك رخصة قائمة؛ القائمة تبقى.
+      if (/driving_license|driving|license|رخصة/i.test(docType)) {
+        const num =
+          typeof fields.licenseNumber === "string" && fields.licenseNumber.trim() ? fields.licenseNumber.trim().slice(0, 100) : null;
+        const expiry =
+          typeof fields.expiryDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(fields.expiryDate) ? fields.expiryDate : null;
+        if (!num && !expiry) {
+          res.json({ ok: true, applied: [], skipped: [], message: "لا حقول للتطبيق." });
+          return;
+        }
+        const [existing] = await rawQuery<{ id: number }>(
+          `SELECT id FROM employee_documents WHERE "companyId"=$1 AND "employeeId"=$2 AND type='driving_license' LIMIT 1`,
+          [scope.companyId, id],
+        );
+        if (existing) {
+          res.json({ ok: true, applied: [], skipped: ["driving_license"], message: "وثيقة رخصة قائمة — لم تُكرَّر." });
+          return;
+        }
+        const { insertId } = await rawExecute(
+          `INSERT INTO employee_documents ("companyId","employeeId",type,name,number,"expiryDate")
+           VALUES ($1,$2,'driving_license','رخصة قيادة',$3,$4)`,
+          [scope.companyId, id, num, expiry],
+        );
+        void createAuditLog({
+          companyId: scope.companyId, userId: scope.userId,
+          action: "employee.ocr.applied", entity: "employee_documents", entityId: insertId,
+          after: { employeeId: id, docType: "driving_license", number: num, expiryDate: expiry },
+        }).catch((e) => logger.error(e, "employee license ocr apply audit failed"));
+        res.json({ ok: true, applied: ["driving_license"], skipped: [], id: insertId });
+        return;
+      }
+
+      throw new ValidationError("نوع المستند غير مدعوم بعد للتطبيق الآلي على الموظف", {
+        field: "docType",
+        fix: "المدعوم: وثيقة الهوية/الإقامة، ورخصة القيادة.",
+      });
+    } catch (err) {
+      handleRouteError(err, res, "employee OCR apply error:");
+    }
+  },
 );
 
 export default router;

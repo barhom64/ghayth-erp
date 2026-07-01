@@ -22,13 +22,14 @@ import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import {
   DetailPageLayout,
   type ExtraTab,
+  EntityDocuments,
+  PROPERTY_ATTACHMENT_CATEGORIES,
 } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { EntityObligations } from "@/components/shared/entity-obligations";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
-import { EntityAttachmentPanel } from "@/components/shared/entity-attachment-panel";
 import { PropertyAlertsPanel, buildContractAlerts } from "@/components/shared/property-alerts-panel";
 import { Input } from "@/components/ui/input";
 import {
@@ -458,11 +459,14 @@ export default function ContractDetailPage() {
       label: "المرفقات",
       icon: FolderOpen,
       content: () => (
-        <EntityAttachmentPanel
+        <EntityDocuments
           entityType="rental_contract"
           entityId={Number(id)}
-          label="مرفقات العقد"
+          title="مرفقات العقد"
+          categories={PROPERTY_ATTACHMENT_CATEGORIES}
           defaultCategory="contract_pdf"
+          quickUpload
+          viewMode="grid"
         />
       ),
     },

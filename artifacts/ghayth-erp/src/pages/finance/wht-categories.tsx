@@ -193,7 +193,7 @@ export default function WhtCategoriesPage() {
         onExportCSV={() => exportToCSV(filtered, [
           { key: "code", label: "الرمز" },
           { key: "name", label: "الاسم" },
-          { key: "nameEn", label: "Name (EN)" },
+          { key: "nameEn", label: "الاسم (إنجليزي)" },
           { key: "rate", label: "النسبة %" },
           { key: "appliesTo", label: "ينطبق على" },
           { key: "isActive", label: "نشط" },

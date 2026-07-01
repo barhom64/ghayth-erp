@@ -15,6 +15,7 @@ import { TextField, NumberField } from "@/components/shared/form-field-wrapper";
 import { LineAllocationPanel, type LineAllocation, deriveAllocationStatus, buildAllocationPayload } from "@/components/shared/line-allocation-panel";
 import { BranchSelect, PostingAccountSelect } from "@/components/shared/entity-selects";
 import { roundMoney, formatCurrency , todayLocal } from "@/lib/formatters";
+import { JOURNAL_TEMPLATES, type JournalTemplate } from "@/lib/journal-templates";
 
 interface JournalLine {
   accountCode: string;
@@ -62,6 +63,21 @@ export default function JournalCreate() {
 
   const addLine = () => setLines([...lines, { accountCode: "", description: "", debit: "", credit: "", costCenter: "", departmentId: "", projectId: "" }]);
   const removeLine = (idx: number) => { if (lines.length > 2) setLines(lines.filter((_, i) => i !== idx)); };
+
+  // البند ٢/م٦ — تطبيق قالب جاهز (دُمج من journal-quick-templates): يملأ حسابات السطرين
+  // ووصفهما + وصف القيد، ويترك المبالغ ليُدخلها المستخدم في الجدول. نفس ترحيل
+  // /finance/journal بلا دورة جديدة — مجرّد تعبئة مسبقة للقيود الشائعة.
+  const applyTemplate = (t: JournalTemplate) => {
+    setForm((f) => ({ ...f, description: t.defaultDescription }));
+    setLines(
+      t.lines.map((l) => ({
+        accountCode: l.defaultAccountCode ?? "",
+        description: l.label,
+        debit: "", credit: "",
+        costCenter: "", departmentId: "", projectId: "",
+      })),
+    );
+  };
 
   const totalDebit = roundMoney(lines.reduce((s, l) => s + roundMoney(l.debit), 0));
   const totalCredit = roundMoney(lines.reduce((s, l) => s + roundMoney(l.credit), 0));
@@ -120,6 +136,28 @@ export default function JournalCreate() {
           <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
+      {/* البند ٢/م٦ — منتقي القوالب الجاهزة (دُمج من journal-quick-templates المُحوَّلة
+          بـredirect): يملأ قيدًا شائعًا (الحسابات + الوصف) ثم يُدخل المستخدم المبالغ. */}
+      <div className="mb-5">
+        <Label className="text-sm font-medium mb-1.5 block">قالب جاهز (اختياري)</Label>
+        <Select
+          value=""
+          onValueChange={(id) => {
+            const t = JOURNAL_TEMPLATES.find((x) => x.id === id);
+            if (t) applyTemplate(t);
+          }}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="اختر قالبًا لقيد شائع (إهلاك، استحقاق، عمولة…) لتعبئة سريعة" />
+          </SelectTrigger>
+          <SelectContent>
+            {JOURNAL_TEMPLATES.map((t) => (
+              <SelectItem key={t.id} value={t.id}>{t.name} — {t.category}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         {/* #1715 review — the JE number is assigned by the server on save (it
             ignores any client ref), so don't show a fake JE-… that won't match. */}
@@ -130,6 +168,7 @@ export default function JournalCreate() {
           onChange={(v) => setForm((f) => ({ ...f, branchId: String(v ?? "") }))}
           label="الفرع"
           allowCreate={false}
+          autoSelectOwnBranch
         />
         <TextField label="الوصف" value={form.description} onChange={(v) => setForm((f) => ({ ...f, description: v }))} className="md:col-span-2" />
       </div>

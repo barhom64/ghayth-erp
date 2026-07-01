@@ -27,6 +27,7 @@
 
 import { rawExecute, rawQuery } from "../rawdb.js";
 import { logger } from "../logger.js";
+import { haversineMeters } from "../algorithms.js";
 
 export interface OptimizationInput {
   companyId: number;
@@ -80,18 +81,9 @@ export const VRP_INPUT_LIMITS = {
  * during optimisation; the dispatcher can re-run with real distances
  * later if the SPA wires that toggle in).
  */
-export function haversineMeters(
-  lat1: number, lng1: number, lat2: number, lng2: number,
-): number {
-  const R = 6_371_000;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
-}
+// Straight-line proxy — single shared impl in ../algorithms (deduped). Used by
+// the optimizer internally; re-exported so callers/tests keep importing it here.
+export { haversineMeters };
 
 // ── Solver ──────────────────────────────────────────────────────────
 

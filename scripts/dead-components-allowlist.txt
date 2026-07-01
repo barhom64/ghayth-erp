@@ -1,0 +1,21 @@
+# مكوّنات يتيمة مجمّدة كأساس — حارس check-dead-components.
+# الكاشف يحسب إعادة التصدير من lib/* فلا يُصنّف المكوّن الحيّ خلف الـkit يتيمًا.
+# نُظّفت الأيتام: 3 صفحات BI (#3004)، 29 مكوّنًا (#3007)، وseparator+toggle
+# (تأثير السلسلة) في هذا الـPR. المتبقّي أدناه مُبقًى عمدًا (redirect stubs مالية،
+# doc 25 §٨: تحويل لا حذف):
+# م٨ (التبديل) — سند القبض/الصرف والمصروف القديمان: مساراهما يُحوَّلان بـ redirect إلى
+# «تسجيل واقعة» الموحّد (/finance/documents/create)؛ الملفان مُبقيان للمرجع/التراجع
+# (doc 25 §٨: تحويل لا حذف). مُدرجان أيضًا في scripts/src/audit-routes.mjs.
+pages/create/finance/vouchers-create.tsx
+pages/create/finance/expenses-create.tsx
+# م٨ (إكمال التبديل) — customer-receipt محوّلة بـ redirect إلى /finance/collect (§٧.٥ ثبتت). مُبقاة.
+pages/create/finance/customer-receipt.tsx
+# البند ٢/م٦ — journal-quick-templates: قوالبها الـ١٢ دُمجت في «قيد يومية» (منتقي قالب)
+# وبياناتها صارت lib/journal-templates.ts؛ مسارها يُحوَّل بـ redirect إلى /finance/journal/create
+# (§٨ تحويل لا حذف، الملف مُبقى كـredirect stub). مُدرج أيضًا في scripts/src/audit-routes.mjs.
+pages/create/finance/journal-quick-templates.tsx
+# توحيد القراءة الضوئية — صندوق المسح القديم (documents-ocr-inbox) نسخة أضعف بلا رفع ملف
+# ولا تطبيق على كيان؛ وُحِّد في «قراءة المستندات (OCR)» (documents/ocr-review)، ومساره
+# /documents/ocr-inbox يُحوَّل بـ redirect إليها. الملف مُبقًى (تحويل لا حذف؛ تقاعده بقرار
+# مستقل من المالك). مُدرج أيضًا في scripts/src/audit-routes.mjs.
+pages/documents-ocr-inbox.tsx

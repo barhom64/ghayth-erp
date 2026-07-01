@@ -244,7 +244,7 @@ export default function FleetTelematicsAiAlerts() {
               size="sm"
               onClick={() => dismissMut.mutate({ id: a.id })}
               disabled={dismissMut.isPending}
-              title="تجاهل (false positive)"
+              title="تجاهل (إنذار كاذب)"
             >
               <XCircle className="h-4 w-4 text-muted-foreground" />
             </GuardedButton>

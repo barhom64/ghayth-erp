@@ -9,6 +9,7 @@ import { CreatePageLayout } from "@workspace/ui-core";
 import { DatePicker } from "@/components/ui/date-picker";
 import { useToast } from "@/hooks/use-toast";
 import { ClientSelect } from "@/components/shared/entity-selects";
+import { ClientContextCard } from "@/components/shared/client-context-card";
 import { todayLocal } from "@/lib/formatters";
 
 const PAYMENT_METHODS = [
@@ -79,6 +80,12 @@ export default function CustomerAdvanceCreate() {
             label="العميل"
             required
           />
+          {form.clientId && (
+            <div className="md:col-span-2">
+              {/* الكيان يقود التجربة: الحالة المالية للعميل أمامك قبل تسجيل السُّلفة. */}
+              <ClientContextCard clientId={form.clientId} section="invoice" />
+            </div>
+          )}
           <NumberField
             label="المبلغ (ريال)"
             required

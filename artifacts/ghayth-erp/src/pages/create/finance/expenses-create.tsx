@@ -21,7 +21,7 @@ import { filterAccountsForPaymentMethod, isMoneyAccount } from "@/lib/finance-ac
 import { AlertCircle, Paperclip, Link2, Plus, Trash2, Split, Lock, ChevronDown } from "lucide-react";
 import { usePermission } from "@/components/shared/permission-gate";
 import { AdvancedSection } from "@/components/shared/advanced-section";
-import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
+import { type Attachment } from "@/components/shared/file-drop-zone";
 import { CostCenterSelect, ProjectSelect, BranchSelect, DepartmentSelect, EmployeeSelect, VehicleSelect } from "@/components/shared/entity-selects";
 import { LineAllocationPanel, type LineAllocation, deriveAllocationStatus, buildAllocationPayload } from "@/components/shared/line-allocation-panel";
 import { EMPTY_ALLOCATION_TARGET, buildOperationalEffectsPayload, type AllocationTargetValue } from "@/components/shared/allocation-target-select";
@@ -850,6 +850,7 @@ export default function ExpensesCreate() {
               value={form.branchId}
               onChange={(v) => setForm({ ...form, branchId: v })}
               label="الفرع"
+              autoSelectOwnBranch
             />
             <DepartmentSelect
               value={form.departmentId}
@@ -999,23 +1000,15 @@ export default function ExpensesCreate() {
               <p className="text-sm text-status-error-foreground">هذا النوع من العمليات يستوجب إرفاق مستند داعم (فاتورة، وصل استلام، أو إشعار تحويل) قبل الحفظ.</p>
             </div>
           )}
-          {/* #1715 (owner feedback) — رفع الملف هو الأساس: رفع مستند يُحقّق شرط
-              «المرفق إلزامي» مباشرةً (يُخزَّن كمرجع في attachmentUrl)؛ حقل الرابط
-              ثانوي لمن لديه رابط جاهز. سابقًا كان الحقل يطلب «رابطًا» ورفع الملف
-              لا يُرسَل ولا يُحقّق الشرط. */}
-          <FileDropZone
-            files={attachments}
-            maxSizeMB={2}
-            label="ارفع المستند الداعم (فاتورة / وصل استلام / إشعار تحويل)"
-            onFilesChange={(f) => {
-              setAttachments(f);
-              setForm((prev) => {
-                if (f.length > 0) return { ...prev, attachmentUrl: f[0].dataUrl };
-                // only clear when the value WAS an uploaded file, not a typed link
-                return prev.attachmentUrl.startsWith("data:") ? { ...prev, attachmentUrl: "" } : prev;
-              });
-            }}
-          />
+          {/* #2237 — رفع/استبدال المستند يتم من لوحة «مستند السجل المالي»
+              الجانبية (FinancialAttachmentViewer) التي تعرضه أثناء الإدخال؛
+              فأُزيل مربّع الرفع المكرّر الذي كان هنا (كان يكتب نفس الحالة
+              attachmentUrl/attachments)، وبقي تصنيف النوع والرابط البديل
+              والتحذير الإلزامي. رفع المستند (عبر اللوحة الجانبية أو لصق رابط)
+              يُحقّق شرط «المرفق إلزامي» مباشرةً. */}
+          <p className="text-xs text-muted-foreground">
+            ارفع المستند الداعم (فاتورة / وصل استلام / إشعار تحويل) من لوحة «مستند السجل المالي» الجانبية. الحقول أدناه لتصنيف نوع المستند، أو للصق رابطه إن كان مرفوعًا على نظام آخر.
+          </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <TextField label="أو الصق رابط المستند (اختياري)"
               value={form.attachmentUrl.startsWith("data:") ? "" : form.attachmentUrl}

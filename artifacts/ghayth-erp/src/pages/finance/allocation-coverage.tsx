@@ -181,7 +181,7 @@ export default function AllocationCoveragePage() {
   return (
     <PageShell
       title="تشخيص محرك التوجيه"
-      subtitle="كم % من البنود يحصل توجيه تلقائي؟ كم unmapped؟ — لتقييم نضج النظام"
+      subtitle="كم % من البنود يحصل توجيه تلقائي؟ وكم بندًا غير مُوجَّه؟ — لتقييم نضج النظام"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
         { href: "/finance/allocation-rules", label: "قواعد التوجيه" },

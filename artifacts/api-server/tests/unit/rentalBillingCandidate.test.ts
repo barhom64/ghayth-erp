@@ -34,17 +34,18 @@ describe("#1812 — fleetEngine.createRentalBillingCandidate", () => {
     expect(ENGINE).toMatch(/createRentalBillingCandidate[\s\S]{0,600}actualEndDate: string/);
   });
 
-  it("idempotent on (companyId, 'fleet_rental_contract', sourceId) via ON CONFLICT", () => {
-    const block = ENGINE.slice(ENGINE.indexOf("createRentalBillingCandidate"));
-    expect(block).toMatch(/'fleet_rental_contract'/);
-    expect(block).toMatch(/ON CONFLICT \("companyId", "sourceType", "sourceId"\) DO NOTHING/);
+  it("idempotent on (companyId, fleet_rental_contract, sourceId) — mapper sets sourceType, shared writer owns ON CONFLICT", () => {
+    const rentalBody = ENGINE.slice(ENGINE.indexOf("async createRentalBillingCandidate("));
+    expect(rentalBody).toMatch(/sourceType: "fleet_rental_contract"/);
+    const writer = ENGINE.slice(ENGINE.indexOf("async createBillingCandidate("), ENGINE.indexOf("async createCargoBillingCandidate("));
+    expect(writer).toMatch(/ON CONFLICT \("companyId", "sourceType", "sourceId"\) DO NOTHING/);
   });
 
-  it("quantity = rental days, unitOfMeasure = 'day' (duration-based recognition)", () => {
-    const block = ENGINE.slice(ENGINE.indexOf("createRentalBillingCandidate"));
+  it("quantity = rental days, unitOfMeasure = day (duration-based recognition)", () => {
+    const block = ENGINE.slice(ENGINE.indexOf("async createRentalBillingCandidate("));
     expect(block).toMatch(/rentalDays/);
     expect(block).toMatch(/Math\.max\(1, Math\.round\(\(end\.getTime\(\) - start\.getTime\(\)\) \/ 86400000\) \+ 1\)/);
-    expect(block).toMatch(/'day'/);
+    expect(block).toMatch(/unitOfMeasure: "day"/);
   });
 
   it("suggestedRevenue combines totalAmount + overageAmount; zero-value contracts skip handoff", () => {
@@ -58,15 +59,15 @@ describe("#1812 — fleetEngine.createRentalBillingCandidate", () => {
     expect(block).toMatch(/إيجار مركبة للفترة/);
   });
 
-  it("serviceType = 'rental', operationalStatus = 'returned'", () => {
-    const block = ENGINE.slice(ENGINE.indexOf("createRentalBillingCandidate"));
-    expect(block).toMatch(/'rental'/);
-    expect(block).toMatch(/'returned'/);
+  it("serviceType = rental, operationalStatus = returned", () => {
+    const block = ENGINE.slice(ENGINE.indexOf("async createRentalBillingCandidate("));
+    expect(block).toMatch(/serviceType: "rental"/);
+    expect(block).toMatch(/operationalStatus: "returned"/);
   });
 
-  it("emits fleet.rental.billing_candidate.created only on fresh insert", () => {
-    const block = ENGINE.slice(ENGINE.indexOf("createRentalBillingCandidate"));
-    expect(block).toMatch(/if \(!row\.existed\)[\s\S]{0,200}fleet\.rental\.billing_candidate\.created/);
+  it("emits fleet.rental.billing_candidate.created only on a fresh insert", () => {
+    const block = ENGINE.slice(ENGINE.indexOf("async createRentalBillingCandidate("));
+    expect(block).toMatch(/if \(r\?\.created\)[\s\S]{0,200}fleet\.rental\.billing_candidate\.created/);
   });
 });
 

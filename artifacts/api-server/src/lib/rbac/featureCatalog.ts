@@ -118,6 +118,15 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
     sensitiveFields: ["iban", "iqamaOrId", "amount", "bankRefNumber"],
     displayOrder: 143 },
 
+  // أجر السائق بالساعة (الدفعة 2). إعداد معدّل القيادة/التوقف ونوع الدفع
+  // (شهري/بالساعة): افتراضي الشركة وتجاوز لكل سائق. سياسة أجر تملكها HR —
+  // الأسطول يوفّر الساعات فقط. الحقول حسّاسة (بيانات أجر).
+  { key: "hr.driver_pay", parentKey: "hr.payroll", moduleKey: "hr", labelAr: "معدّلات أجر السائق",
+    descriptionAr: "معدّل ساعة القيادة/التوقف ونوع الدفع (شهري/بالساعة) للسائقين — افتراضي الشركة وتجاوز لكل سائق",
+    availableActions: ALL_ACTIONS, availableScopes: ["company"],
+    sensitiveFields: ["drivingHourlyRate", "stopHourlyRate"],
+    displayOrder: 144 },
+
   { key: "hr.saudization", parentKey: "hr", moduleKey: "hr", labelAr: "السعودة (نطاقات)",
     descriptionAr: "متابعة نسبة السعودة وتصنيف الشركة في نطاقات + تاريخ اللقطات الشهرية",
     availableActions: ["view", "list", "update", "export"],
@@ -339,6 +348,20 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
     icon: "Calendar",
     availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],
     approvableActions: ["approve"], displayOrder: 333 },
+  // أجر السائق بالساعة (الدفعة 1). ساعات القيادة/التوقف اليومية: مشتقّة من
+  // التتبع + يدوية، باعتماد بشري. `approve` منفصل عن `update` لفصل الإدخال عن
+  // الاعتماد (نفس نمط fleet.bookings:approve — منع اعتماد المُدخِل لساعاته).
+  // نطاق `self` يتيح للسائق رؤية ساعاته فقط.
+  { key: "fleet.driver_hours", parentKey: "fleet", moduleKey: "fleet", labelAr: "ساعات عمل السائق",
+    icon: "Clock",
+    availableActions: ALL_ACTIONS, availableScopes: ["self", "branch", "company"],
+    approvableActions: ["approve"], displayOrder: 334 },
+  // مكافآت حركات النقل (الدفعة أ). يمنحها المشرف على حركة (أمر توزيع) بمبلغ
+  // مقطوع، باعتماد منفصل عن المنح (approve ≠ update). تُرحَّل في الرواتب لاحقًا.
+  { key: "fleet.movement_bonus", parentKey: "fleet", moduleKey: "fleet", labelAr: "مكافآت حركات النقل",
+    icon: "Award",
+    availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],
+    approvableActions: ["approve"], displayOrder: 335 },
   // Self-service driver surface (#1354). Granted to the "driver" role
   // and only the "driver" role — replaces the standalone driver portal
   // that lived under a separate JWT type. The driver logs in with the
@@ -602,6 +625,13 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
   // ═══════════════════════════════════════════════════════════════
   { key: "intelligence", moduleKey: "admin", labelAr: "التتبع والتحليل", icon: "Activity",
     availableActions: ["create", "list", "view"], availableScopes: ALL_SCOPES, displayOrder: 1820 },
+
+  // ═══════════════════════════════════════════════════════════════
+  // Website / CMS — الموقع الإلكتروني (multi-tenant site control)
+  // ═══════════════════════════════════════════════════════════════
+  { key: "website", moduleKey: "website", labelAr: "الموقع الإلكتروني", icon: "Globe",
+    availableActions: ["view", "list", "create", "update", "delete"],
+    availableScopes: ["company", "multi_company", "all"], displayOrder: 1900 },
 ];
 
 /**

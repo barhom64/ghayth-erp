@@ -1052,7 +1052,7 @@ export async function registerPayment(scope: Scope, input: RegisterPaymentInput)
 
   // GL: payment journal — BLOCKING (financial integrity)
   const [cashCode, arPayCode] = await Promise.all([
-    getAccountCodeFromMapping(scope.companyId, "invoice_payment_cash", "debit", method === "cash" ? "1100" : "1110"),
+    getAccountCodeFromMapping(scope.companyId, "invoice_payment_cash", "debit", method === "cash" ? "1111" : "1124"),
     getAccountCodeFromMapping(scope.companyId, "invoice_payment_ar", "credit", "1131"),
   ]);
   // Carry umrahAgentId on both legs so AR aging by agent stays drillable

@@ -12,6 +12,7 @@ import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawd
 import { requestIdempotencyToken, markIdempotencyReplay } from "../lib/requestIdempotency.js";
 import { cascadeDispatchToBooking } from "../lib/transportDispatchCascade.js";
 import { logger } from "../lib/logger.js";
+import { registerEntityParty } from "../lib/partyService.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { hashPassword } from "../lib/auth.js";
 import { issueNumber, voidNumber } from "../lib/numberingService.js";
@@ -310,6 +311,8 @@ const cancelTripSchema = z.object({
 
 const completeMaintenanceSchema = z.object({
   cost: z.coerce.number().nonnegative().optional(),
+  // البند ٤ ج-٥ — مَن يتحمّل الصيانة (يلتقطه المُكمِل ويُحمَل على ترشيح المحاسب كافتراض).
+  costBearer: z.enum(["company", "driver", "insurance", "warranty", "customer", "tenant", "third_party"]).optional(),
 });
 
 const updateTripSchema = z.object({
@@ -523,11 +526,20 @@ router.get("/vehicles", authorize({ feature: "fleet.vehicles", action: "list" })
          GROUP BY "vehicleId"
        )
        SELECT v.*,
+              COALESCE(av."driverId", v."assignedDriverId") AS "currentDriverId",
               d.name AS "driverName",
               COALESCE(gc."govLinkCount", 0)::int AS "govLinkCount",
               ie."insuranceExpiry"
        FROM fleet_vehicles v
-       LEFT JOIN fleet_drivers d ON d.id = v."assignedDriverId" AND d."deletedAt" IS NULL
+       LEFT JOIN LATERAL (
+         SELECT vda."driverId"
+           FROM vehicle_driver_assignments vda
+          WHERE vda."vehicleId" = v.id AND vda."companyId" = v."companyId"
+            AND vda.status = 'active' AND vda."assignmentType" = 'primary'
+          ORDER BY vda."startDate" DESC
+          LIMIT 1
+       ) av ON TRUE
+       LEFT JOIN fleet_drivers d ON d.id = COALESCE(av."driverId", v."assignedDriverId") AND d."deletedAt" IS NULL
        LEFT JOIN gov_counts gc ON gc."entityId" = v.id
        LEFT JOIN insurance_expiry ie ON ie."vehicleId" = v.id
        WHERE ${where} AND v."deletedAt" IS NULL
@@ -787,11 +799,26 @@ router.post("/me/fuel-logs", authorize({ feature: "fleet.driver.me", action: "up
     const mileageAtFuel = Number(b.mileageAtFuel || b.mileage) || null;
     const stationName = b.stationName || b.station || null;
 
-    const { insertId } = await rawExecute(
-      `INSERT INTO fleet_fuel_logs ("companyId","vehicleId","driverId","fuelDate",liters,"costPerLiter","totalCost","mileageAtFuel","stationName","tripId")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [driver.companyId, resolvedVehicleId, driver.id, fuelDate, liters, costPerLiter, totalCost, mileageAtFuel, stationName, validatedTripId]);
-    assertInsert(insertId, "fleet_fuel_logs");
+    // Fuel-log INSERT + odometer advance are wrapped in one transaction so the
+    // two writes are atomic (no partial state if the second fails). The inner
+    // rawExecute calls auto-join the ambient transaction via ALS.
+    const insertId = await withTransaction(async () => {
+      const ins = await rawExecute(
+        `INSERT INTO fleet_fuel_logs ("companyId","vehicleId","driverId","fuelDate",liters,"costPerLiter","totalCost","mileageAtFuel","stationName","tripId")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [driver.companyId, resolvedVehicleId, driver.id, fuelDate, liters, costPerLiter, totalCost, mileageAtFuel, stationName, validatedTripId]);
+      assertInsert(ins.insertId, "fleet_fuel_logs");
+      // Advance the vehicle odometer to the fuel reading (monotonic — GREATEST,
+      // never decreases), so currentMileage stays fresh and the next form
+      // auto-fills the true reading. Mirrors the trip-completion update pattern.
+      if (mileageAtFuel != null) {
+        await rawExecute(
+          `UPDATE fleet_vehicles SET "currentMileage" = GREATEST(COALESCE("currentMileage", 0), $1), "updatedAt" = NOW()
+            WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
+          [mileageAtFuel, resolvedVehicleId, driver.companyId]);
+      }
+      return ins.insertId;
+    });
 
     // مرشّح مصروف للمالية (لا ترحيل مباشر للدفتر) — يُجسّده المحاسب لاحقًا.
     if (totalCost > 0) {
@@ -1238,7 +1265,7 @@ router.get("/accidents", authorize({ feature: "fleet.vehicles", action: "list" }
 // PATCH /accidents/:id/assess — المشرف يقيّم الحادث: يحدّد المتحمّل والكلفة فيُرحَّل
 // القيد حسب السياسة المعتمدة (الدفعة C2). يمسّ الدفتر — محروس بـfleet.vehicles.
 const assessAccidentSchema = z.object({
-  costBearer: z.enum(["company", "driver", "insurance", "customer", "tenant", "third_party"]),
+  costBearer: z.enum(["company", "driver", "insurance", "warranty", "customer", "tenant", "third_party"]),
   estimatedCost: z.coerce.number().nonnegative("الكلفة يجب ألا تكون سالبة"),
   assessmentNotes: z.string().optional(),
 });
@@ -1737,6 +1764,13 @@ router.post("/drivers", authorize({ feature: "fleet.vehicles", action: "create" 
 
     createSubsidiaryAccountsForEntity(scope.companyId, "driver", insertId, name, { branchId: scope.branchId, actorUserId: scope.userId }).catch((e) => logger.error(e, "fleet background task failed"));
 
+    // Master-data identity (migration 249): link the driver to ONE party so a
+    // driver who is also an employee/client resolves to a single 360° record
+    // immediately. Non-fatal: a registry-link failure must not block creation.
+    registerEntityParty(scope.companyId, "fleet_drivers", insertId, "driver", {
+      displayName: name, nationalId: b.nationalId || null, phone: phone || null, kind: "person",
+    }).catch((e) => logger.error(e, "[partyService] fleet_drivers registration failed"));
+
     createAuditLog({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -1762,7 +1796,30 @@ router.get("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "view
   try {
     const scope = req.scope!;
     const vehicleId = parseId(req.params.id, "id");
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT v.*, d.name AS "driverName", d.phone AS "driverPhone" FROM fleet_vehicles v LEFT JOIN fleet_drivers d ON d.id = v."assignedDriverId" AND d."deletedAt" IS NULL WHERE v.id=$1 AND v."companyId"=$2 AND v."deletedAt" IS NULL`, [vehicleId, scope.companyId]);
+    // Current driver = the ACTIVE PRIMARY row in vehicle_driver_assignments
+    // (the temporal source of truth; one active-primary per vehicle is enforced
+    // by uq_vehicle_active_primary, migration 267). Falls back to the legacy
+    // fleet_vehicles.assignedDriverId for vehicles created before the assignment
+    // model — so no data migration is required and old rows keep resolving.
+    // `currentDriverId` is the unified value; `assignedDriverId` stays in v.* for
+    // backward compatibility. driverName/driverPhone now reflect the CURRENT driver.
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `SELECT v.*,
+              COALESCE(av."driverId", v."assignedDriverId") AS "currentDriverId",
+              d.name AS "driverName", d.phone AS "driverPhone"
+         FROM fleet_vehicles v
+         LEFT JOIN LATERAL (
+           SELECT vda."driverId"
+             FROM vehicle_driver_assignments vda
+            WHERE vda."vehicleId" = v.id AND vda."companyId" = v."companyId"
+              AND vda.status = 'active' AND vda."assignmentType" = 'primary'
+            ORDER BY vda."startDate" DESC
+            LIMIT 1
+         ) av ON TRUE
+         LEFT JOIN fleet_drivers d ON d.id = COALESCE(av."driverId", v."assignedDriverId") AND d."deletedAt" IS NULL
+        WHERE v.id=$1 AND v."companyId"=$2 AND v."deletedAt" IS NULL`,
+      [vehicleId, scope.companyId],
+    );
     if (!row) throw new NotFoundError("المركبة غير موجودة");
     const [trips, maintenance, fuelLogs, insurance] = await Promise.all([
       rawQuery<Record<string, unknown>>(
@@ -3238,8 +3295,12 @@ router.post("/maintenance", authorize({ feature: "fleet.maintenance", action: "c
     );
     const assignedMechanic = b.performedBy || (mechanics[0]?.name ?? null);
 
-    const defaultNextDate = new Date();
-    defaultNextDate.setMonth(defaultNextDate.getMonth() + 3);
+    // Next-service reminder = 3 months from the Riyadh wall-clock date (not the
+    // UTC `new Date()` "now", which drifts the date across the day boundary in
+    // +03). Derived from currentDateInTz so the reminder is anchored to local
+    // time; setUTCMonth on the parsed midnight is calendar-correct.
+    const defaultNextDate = new Date(`${currentDateInTz("Asia/Riyadh")}T00:00:00Z`);
+    defaultNextDate.setUTCMonth(defaultNextDate.getUTCMonth() + 3);
     const effectiveNextServiceDate = b.nextServiceDate || toDateISO(defaultNextDate);
 
     const insertId = await withTransaction(async (client) => {
@@ -3251,6 +3312,15 @@ router.post("/maintenance", authorize({ feature: "fleet.maintenance", action: "c
 
       if (b.vehicleId) {
         await client.query(`UPDATE fleet_vehicles SET status='maintenance', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='available' AND "deletedAt" IS NULL`, [b.vehicleId, scope.companyId]);
+        // Advance the odometer to the service reading (monotonic — GREATEST,
+        // never decreases), keeping currentMileage fresh for the next form.
+        const svcMileage = Number(b.mileageAtService) || null;
+        if (svcMileage != null) {
+          await client.query(
+            `UPDATE fleet_vehicles SET "currentMileage" = GREATEST(COALESCE("currentMileage", 0), $1), "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
+            [svcMileage, b.vehicleId, scope.companyId],
+          );
+        }
       }
 
       return maintId;
@@ -3373,7 +3443,7 @@ router.post("/maintenance/:id/complete", authorize({ feature: "fleet.maintenance
       const { fleetEngine } = await import("../lib/engines/index.js");
       await fleetEngine.createMaintenanceExpenseCandidate(
         { companyId: scope.companyId, branchId: vehicleBranchId, createdBy: scope.activeAssignmentId ?? scope.userId },
-        { id, vehicleId: m.vehicleId as number, cost: finalCost, type: m.type as string | undefined, description: `مصروف صيانة مركبة${plateLabel} / ${m.type ?? ""} / ${m.description ?? ""}` }
+        { id, vehicleId: m.vehicleId as number, cost: finalCost, type: m.type as string | undefined, description: `مصروف صيانة مركبة${plateLabel} / ${m.type ?? ""} / ${m.description ?? ""}`, costBearer: b.costBearer }
       ).catch((e: unknown) => logger.error(e, "Maintenance expense candidate failed:"));
     }
 
@@ -3785,6 +3855,48 @@ router.get("/fuel-logs/:id", authorize({ feature: "fleet.trips", action: "view" 
     res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "Fleet fuel detail error:"); }
 });
+
+// ─── GET /vehicles/:id/fuel-efficiency — كفاءة وقود المركبة + شذوذ الاستهلاك (ج-٣) ─
+// طبقة تحليلية للقراءة فقط: كم/لتر بين تعبئتين + وسم الشذوذ (انخفاض كفاءة/تراجع عدّاد/
+// قيمة غير معقولة). لا قيد ولا كتابة — يحمّل سطور تعبئة المركبة ويستدعي الدالة النقية.
+router.get(
+  "/vehicles/:id/fuel-efficiency",
+  authorize({ feature: "fleet.vehicles", action: "view", resource: { table: "fleet_vehicles", idParam: "id" } }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const vehicleId = parseId(req.params.id, "id");
+      const { dateFrom, dateTo } = req.query as Record<string, string | undefined>;
+      const params: unknown[] = [vehicleId, scope.companyId];
+      let where = `f."vehicleId" = $1 AND f."companyId" = $2 AND f."deletedAt" IS NULL`;
+      let idx = 3;
+      if (dateFrom) { where += ` AND f."fuelDate" >= $${idx}::date`; params.push(dateFrom); idx++; }
+      if (dateTo) { where += ` AND f."fuelDate" <= $${idx}::date`; params.push(dateTo); idx++; }
+      const rows = await rawQuery<{ id: number; fuelDate: string; liters: string; mileageAtFuel: number | null; totalCost: string }>(
+        `SELECT f.id, to_char(f."fuelDate", 'YYYY-MM-DD') AS "fuelDate", f.liters, f."mileageAtFuel", f."totalCost"
+           FROM fleet_fuel_logs f
+          WHERE ${where}
+          ORDER BY f."fuelDate" ASC, f.id ASC
+          LIMIT 2000`,
+        params,
+      );
+      const { computeFuelEfficiency } = await import("../lib/fleet/fuelEfficiency.js");
+      const report = computeFuelEfficiency(
+        vehicleId,
+        rows.map((r) => ({
+          id: Number(r.id),
+          fuelDate: r.fuelDate,
+          liters: Number(r.liters) || 0,
+          mileageAtFuel: r.mileageAtFuel != null ? Number(r.mileageAtFuel) : null,
+          totalCost: Number(r.totalCost) || 0,
+        })),
+      );
+      res.json(report);
+    } catch (err) {
+      handleRouteError(err, res, "vehicle fuel efficiency error:");
+    }
+  },
+);
 
 router.post("/fuel-logs", authorize({ feature: "fleet.trips", action: "create" }), async (req, res) => {
   try {
@@ -5636,5 +5748,208 @@ router.get("/rental-contracts/:id/payments", authorize({ feature: "fleet.vehicle
     res.json({ data: rows, total: rows.length });
   } catch (err) { handleRouteError(err, res, "rental payments list error"); }
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// البند ٣ (دفعة ٢) — عقد الأسطول: تطبيق مستخرَج OCR مؤكَّد (استمارة مركبة) على المركبة.
+//
+// حدّ المسار: مسار الوثائق (خادم) لا يكتب في جدول المركبة؛ يمرّر الحقول المؤكَّدة، وهذا
+// العقد المملوك للأسطول يكتبها داخل نطاقه — بصلاحية fleet.vehicles (لا صلاحية الوثائق)
+// + ACL للصف + عزل companyId + تدقيق. السياسة: «املأ الفارغ فقط» — لا يطمس لوحة/هيكل/
+// انتهاء استمارة قائمًا؛ القائم يبقى ويُبلَّغ في skipped. (نفس نمط عقد HR في الموظف.)
+// ─────────────────────────────────────────────────────────────────────────────
+router.post(
+  "/vehicles/:id/ocr-apply",
+  authorize({ feature: "fleet.vehicles", action: "update", resource: { table: "fleet_vehicles", idParam: "id" } }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const docType = String(req.body?.docType ?? "");
+      const fields = req.body?.fields && typeof req.body.fields === "object" ? req.body.fields : {};
+      if (!/vehicle|registration|استمارة|مركبة|سيارة/i.test(docType)) {
+        throw new ValidationError("نوع المستند غير مدعوم بعد للتطبيق الآلي على المركبة", {
+          field: "docType",
+          fix: "الدفعة الحالية تدعم استمارة المركبة فقط.",
+        });
+      }
+      const [veh] = await rawQuery<{ id: number; plateNumber: string | null; vinNumber: string | null; registrationExpiry: string | null }>(
+        `SELECT id, "plateNumber", "vinNumber", "registrationExpiry" FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!veh) throw new NotFoundError("المركبة غير موجودة");
+      const plate =
+        typeof fields.plateNumber === "string" && fields.plateNumber.trim() ? fields.plateNumber.trim().slice(0, 20) : null;
+      const vin =
+        typeof fields.vinNumber === "string" && /^[A-HJ-NPR-Z0-9]{11,17}$/i.test(fields.vinNumber) ? fields.vinNumber.toUpperCase() : null;
+      const expiry =
+        typeof fields.registrationExpiry === "string" && /^\d{4}-\d{2}-\d{2}$/.test(fields.registrationExpiry) ? fields.registrationExpiry : null;
+      const setPlate = !!plate && !veh.plateNumber;
+      const setVin = !!vin && !veh.vinNumber;
+      const setExpiry = !!expiry && !veh.registrationExpiry;
+      const applied: string[] = [];
+      const skipped: string[] = [];
+      if (plate) (setPlate ? applied : skipped).push("plateNumber");
+      if (vin) (setVin ? applied : skipped).push("vinNumber");
+      if (expiry) (setExpiry ? applied : skipped).push("registrationExpiry");
+      if (!applied.length) {
+        res.json({ ok: true, applied, skipped, message: "لا حقول فارغة للتعبئة — القيم القائمة محفوظة." });
+        return;
+      }
+      await rawExecute(
+        `UPDATE fleet_vehicles SET
+           "plateNumber"        = COALESCE(NULLIF("plateNumber", ''), $1),
+           "vinNumber"          = COALESCE(NULLIF("vinNumber", ''), $2),
+           "registrationExpiry" = COALESCE("registrationExpiry", $3),
+           "updatedAt"          = NOW()
+         WHERE id=$4 AND "companyId"=$5 AND "deletedAt" IS NULL`,
+        [setPlate ? plate : null, setVin ? vin : null, setExpiry ? expiry : null, id, scope.companyId],
+      );
+      void createAuditLog({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "vehicle.ocr.applied",
+        entity: "fleet_vehicles",
+        entityId: id,
+        after: { docType, applied, skipped },
+      }).catch((e) => logger.error(e, "vehicle ocr apply audit failed"));
+      res.json({ ok: true, applied, skipped });
+    } catch (err) {
+      handleRouteError(err, res, "vehicle OCR apply error:");
+    }
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// البند ٤ (شريحة ١) — واقعة «وقود» المركبة (الكيان يقود التجربة، ملحق أ §أ.١).
+//
+// تركيبٌ لمحرّك المالية الخادم postFinancialDocument (م٥، مُختبَر بـassertion): بند
+// وقود + تخصيص المركبة + costBearer → المحرّك يحلّ الحساب الفرعي للوحة تلقائيًّا
+// (substituteSubsidiaryAccountCodes)، ويفرّع المتحمِّل (company→مصروف · سائق/موظف→ذمته)،
+// ويضع بُعد vehicleId، ويُرحّل القيد المتوازن. ثم السجل التشغيلي + تحديث العداد. لا منطق
+// دفتر جديد (التوجيه المحاسبي يقرّره المحرّك حسب التوجيه — مبدأ إبراهيم). RBAC الأسطول +
+// عقد خدمة للمالية (صفر SQL دفتر عابر في هذا الملف) + عزل companyId + Audit.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post(
+  "/vehicles/:id/fuel-event",
+  authorize({ feature: "fleet.vehicles", action: "update", resource: { table: "fleet_vehicles", idParam: "id" } }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const vehicleId = parseId(req.params.id, "id");
+      const b = (req.body ?? {}) as Record<string, unknown>;
+      const liters = Number(b.liters) || 0;
+      const costPerLiter = Number(b.costPerLiter) || 0;
+      const mileageAtFuel = b.mileageAtFuel != null && Number.isFinite(Number(b.mileageAtFuel)) ? Number(b.mileageAtFuel) : null;
+      const vatRatePercent = b.vatRatePercent != null && Number.isFinite(Number(b.vatRatePercent)) ? Number(b.vatRatePercent) : 0;
+      const stationName = typeof b.stationName === "string" ? b.stationName.slice(0, 120) : null;
+      const fuelDate = typeof b.fuelDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.fuelDate) ? b.fuelDate : todayISO();
+      const driverId = b.driverId != null && Number.isInteger(Number(b.driverId)) && Number(b.driverId) > 0 ? Number(b.driverId) : null;
+      // costBearer: مَن يتحمّل التكلفة — شركة (تشغيلي، الافتراض) أو سائق/موظف… (→ ذمته عبر م٥).
+      const costBearer = typeof b.costBearer === "string" && b.costBearer.trim() ? b.costBearer.trim() : "company";
+      // ج-٤: طريقة الدفع — نقدًا (الافتراض) أو آجلًا على ذمة مورّد محطة الوقود. الآجل يستلزم مورّدًا
+      // معتمدًا (suppliers.id) يُربط به الالتزام (لا تَدِين «لا أحد»).
+      const paymentMethod = b.paymentMethod === "credit" ? "credit" : "cash";
+      const supplierId = b.supplierId != null && Number.isInteger(Number(b.supplierId)) && Number(b.supplierId) > 0 ? Number(b.supplierId) : null;
+      if (liters <= 0 || costPerLiter <= 0) {
+        throw new ValidationError("اللترات وسعر اللتر مطلوبان وموجبان", { field: "liters" });
+      }
+      if (paymentMethod === "credit" && !supplierId) {
+        throw new ValidationError("الشراء الآجل يستلزم تحديد مورّد الوقود", { field: "supplierId" });
+      }
+      const [veh] = await rawQuery<{ id: number }>(
+        `SELECT id FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [vehicleId, scope.companyId],
+      );
+      if (!veh) throw new NotFoundError("المركبة غير موجودة");
+      const totalNet = Math.round(liters * costPerLiter * 100) / 100;
+
+      // حلّ الحسابات عبر محرّك المالية (عقد خدمة): حساب وقود المركبة + مصدر النقد + ضريبة المدخلات.
+      const { financialEngine } = await import("../lib/engines/financialEngine.js");
+      // أوراق قابلة للترحيل (الدستور م١٧ / check:postable-fallbacks): fleet_fuel_expense→5510
+      // (وقود الأسطول، postable)؛ vat_input→1180؛ fleet_cash_source→1111؛ purchase_vendor_ap→2111.
+      // الـenricher يستبدل 5510 بحساب الوقود الفرعي للوحة (بُعد vehicleId)، و2111 بالحساب
+      // الفرعي للمورّد (بُعد vendorId) عند الترحيل — الحساب الخاص لكل كيان.
+      const fuelAccount = await financialEngine.resolveAccountCode(scope.companyId, "fleet_fuel_expense", "debit", "5510");
+      // ج-٤: ساق الدائن — نقدًا (مصدر نقد الأسطول) أو آجلًا على ذمة المورّد (شراء آجل).
+      const creditAccount = paymentMethod === "credit"
+        ? await financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "credit", "2111")
+        : await financialEngine.resolveAccountCode(scope.companyId, "fleet_cash_source", "credit", "1111");
+      const vatAccount = vatRatePercent > 0 ? await financialEngine.resolveAccountCode(scope.companyId, "vat_input", "debit", "1180") : null;
+
+      // الترحيل عبر محرّك م٥ المُختبَر (idempotent على sourceKey): يحلّ الحساب الفرعي للوحة + يفرّع costBearer.
+      const sourceKey = `fleet:fuel:${scope.companyId}:${vehicleId}:${fuelDate}:${mileageAtFuel ?? "x"}:${Math.round(totalNet * 100)}`;
+      const { postFinancialDocument } = await import("../lib/financeDocumentService.js");
+      const posted = await postFinancialDocument({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        createdBy: scope.userId ?? 0,
+        documentKind: "expense",
+        direction: "payment",
+        cashAccountCode: creditAccount,
+        vatAccountCode: vatAccount,
+        // ج-٤: عند الآجل اختِم vendorId على ساق ذمة المورّد (ربط الالتزام + الحساب الفرعي للمورّد).
+        ...(paymentMethod === "credit" && supplierId ? { cashAccountDims: { vendorId: supplierId } } : {}),
+        ref: `FUEL-${vehicleId}-${fuelDate}`,
+        description: `وقود المركبة — ${liters} لتر${paymentMethod === "credit" ? " (آجل)" : ""}`,
+        sourceKey,
+        postingDate: fuelDate,
+        rawLines: [
+          {
+            lineNo: 1,
+            quantity: liters,
+            unitPrice: costPerLiter,
+            taxRatePercent: vatRatePercent,
+            counterAccountCode: fuelAccount,
+            itemName: "وقود",
+            allocations: [
+              {
+                entityType: "vehicle",
+                entityId: vehicleId,
+                allocationType: "percent",
+                percent: 100,
+                costBearer,
+                ...(driverId ? { dims: { driverId } } : {}),
+              },
+            ],
+          },
+        ],
+        headerMeta: { relatedEntity: { type: "vehicle", id: vehicleId }, operationType: "fuel" },
+      });
+
+      // السجل التشغيلي + العداد (كتابتا الأسطول داخل معاملة — لا كتابة جزئية).
+      let fuelLogId = 0;
+      await withTransaction(async () => {
+        const totalCost = Math.round((totalNet + totalNet * (vatRatePercent / 100)) * 100) / 100;
+        const { insertId } = await rawExecute(
+          `INSERT INTO fleet_fuel_logs ("companyId","vehicleId","driverId","fuelDate",liters,"costPerLiter","totalCost","mileageAtFuel","stationName")
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [scope.companyId, vehicleId, driverId, fuelDate, liters, costPerLiter, totalCost, mileageAtFuel, stationName],
+        );
+        assertInsert(insertId, "fleet_fuel_logs");
+        fuelLogId = insertId;
+        if (mileageAtFuel != null) {
+          await rawExecute(
+            `UPDATE fleet_vehicles SET "currentMileage" = GREATEST(COALESCE("currentMileage", 0), $1), "updatedAt" = NOW()
+             WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
+            [mileageAtFuel, vehicleId, scope.companyId],
+          );
+        }
+      });
+
+      void createAuditLog({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "fleet.fuel_event.posted",
+        entity: "fleet_vehicles",
+        entityId: vehicleId,
+        after: { journalId: posted.journalId, fuelLogId, liters, costPerLiter, costBearer, paymentMethod, supplierId, alreadyExists: posted.alreadyExists },
+      }).catch((e) => logger.error(e, "fuel event audit failed"));
+
+      res.status(201).json({ ok: true, journalId: posted.journalId, fuelLogId, costBearer, paymentMethod, supplierId });
+    } catch (err) {
+      handleRouteError(err, res, "vehicle fuel event error:");
+    }
+  },
+);
 
 export default router;

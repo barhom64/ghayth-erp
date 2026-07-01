@@ -262,18 +262,22 @@ reportsRouter.get("/reports/cash-flow", authorize({ feature: "finance.reports", 
     const from = startDate || toDateISO(new Date(currentYear(), 0, 1));
     const to = endDate || todayISO();
 
-    // Dynamically discover cash/bank accounts by type+code prefix (11xx or
-    // explicit mappings). Fall back to defaults if none found.
+    // Discover cash/bank accounts by code prefix. النقد تحت 111x (الصندوق:
+    // 1110/1111/1112/1113) والبنوك تحت 112x (1120/1124…) في الشجرة المعتمدة.
+    // كان الشرط `LIKE '11%'` يجرف كامل شجرة الأصول المتداولة — الذمم المدينة
+    // 113x (عملاء/شيكات/مخصص ديون) والمخزون/المصروفات المدفوعة مقدمًا/ضريبة
+    // المدخلات — فيُبالَغ في «النقد» ويُصنَّف أي قيد يمسّ الذمم كحركة نقدية.
+    // القصر على 111x/112x يطابق تعريف النقد وما يعادله. (اعتماد إبراهيم 2026-07-01.)
     const cashAccountsRows = await rawQuery<Record<string, unknown>>(
       `SELECT code FROM chart_of_accounts
         WHERE "companyId" = $1 AND type = 'asset'
-          AND (code LIKE '11%' OR code IN ('1100','1110','1120','1130'))
+          AND (code LIKE '111%' OR code LIKE '112%')
           AND "deletedAt" IS NULL`,
       [scope.companyId]
     );
     const cashCodes = cashAccountsRows.length > 0
       ? cashAccountsRows.map((r: Record<string, unknown>) => r.code)
-      : ["1100", "1110"];
+      : ["1110", "1120"];
 
     const isCashPrivileged = scope.isOwner || OWNER_GM_ROLES.includes(scope.role);
     const cashBranchIds = !isCashPrivileged && scope.allowedBranches.length > 0

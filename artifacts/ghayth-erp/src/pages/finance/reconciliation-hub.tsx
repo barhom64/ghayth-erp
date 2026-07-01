@@ -69,34 +69,34 @@ const RECON_ROWS: ReconRowConfig[] = [
   {
     key: "cash",
     label: "النقد والبنوك",
-    description: "حسابات النقدية (11x) vs الـ Treasury",
+    description: "حسابات النقدية (11x) مقابل الخزينة",
     icon: Banknote,
     glCodePrefix: "11",
     subledgerHref: "/finance/treasury",
-    subledgerLabel: "Treasury",
+    subledgerLabel: "الخزينة",
   },
   {
     key: "ar",
     label: "ذمم العملاء (AR)",
-    description: "حسابات الذمم المدينة (12x) vs AR Aging",
+    description: "حسابات الذمم المدينة (12x) مقابل أعمار الذمم المدينة",
     icon: ReceiptText,
     glCodePrefix: "12",
     subledgerHref: "/finance/ar-aging",
-    subledgerLabel: "AR Aging",
+    subledgerLabel: "أعمار الذمم المدينة",
   },
   {
     key: "ap",
     label: "ذمم الموردين (AP)",
-    description: "حسابات الذمم الدائنة (21x) vs AP Aging",
+    description: "حسابات الذمم الدائنة (21x) مقابل أعمار الذمم الدائنة",
     icon: ReceiptText,
     glCodePrefix: "21",
     subledgerHref: "/finance/ap-aging",
-    subledgerLabel: "AP Aging",
+    subledgerLabel: "أعمار الذمم الدائنة",
   },
   {
     key: "vat",
     label: "ضريبة القيمة المضافة",
-    description: "حساب VAT الإجمالي vs مجموع VAT في الفواتير",
+    description: "حساب ضريبة القيمة المضافة الإجمالي مقابل مجموعها في الفواتير",
     icon: Percent,
     glCodePrefix: "213",
     subledgerHref: "/finance/reports/vat-reconciliation",
@@ -105,7 +105,7 @@ const RECON_ROWS: ReconRowConfig[] = [
   {
     key: "inventory",
     label: "المخزون",
-    description: "حسابات المخزون (13x) vs تقييم المخزون",
+    description: "حسابات المخزون (13x) مقابل تقييم المخزون",
     icon: Package,
     glCodePrefix: "13",
     subledgerHref: "/finance/inventory-valuation",
@@ -258,7 +258,7 @@ export default function ReconciliationHubPage() {
   return (
     <PageShell
       title="مركز التسوية المحاسبية"
-      subtitle="فحص تطابق الـ GL مع الـ sub-ledgers — لكل ضابط محاسبي: هل دفتر الأستاذ يطابق المصدر الفرعي؟"
+      subtitle="فحص تطابق دفتر الأستاذ العام (GL) مع الدفاتر الفرعية — لكل ضابط محاسبي: هل دفتر الأستاذ يطابق المصدر الفرعي؟"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
         { label: "التسوية المحاسبية" },

@@ -15,6 +15,7 @@ import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requireMinLevel } from "../middlewares/roleGuard.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { assertNotSelfApproval } from "../lib/rbac/selfApprovalCreators.js";
 import { issueNumber } from "../lib/numberingService.js";
 import {
   emitEvent,
@@ -62,6 +63,477 @@ import { logger } from "../lib/logger.js";
 
 export const journalRouter = Router();
 journalRouter.use(authMiddleware);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// م١-ب — «المستند المالي» الموحّد (قبض/صرف بجدول بنود + توزيع + مرفقات).
+// المنفذ الجديد بجانب /vouchers و/expenses القديمة (تبقى عاملة حتى التبديل §٨).
+// يُعيد استخدام postFinancialDocument (محرّك القيد المعتمد). docs/25 §٢ ; #2994.
+// ─────────────────────────────────────────────────────────────────────────────
+const documentAllocationSchema = z.object({
+  entityType: z.string(),
+  entityId: z.any(),
+  allocationType: z.enum(["amount", "percent", "quantity"]).optional().default("amount"),
+  amount: z.any().optional(),
+  percent: z.any().optional(),
+  quantity: z.any().optional(),
+  costBearer: z.string().optional(),
+  reason: z.string().optional(),
+});
+const documentLineSchema = z.object({
+  itemId: z.any().optional(),
+  itemName: z.string().optional(),
+  description: z.string().optional(),
+  quantity: z.any(),
+  unitPrice: z.any(),
+  unit: z.string().optional(),
+  taxRatePercent: z.any().optional(),
+  taxCodeId: z.any().optional(),
+  counterAccountCode: z.string().optional(),
+  costCenter: z.string().optional(),
+  allocations: z.array(documentAllocationSchema).optional(),
+});
+const createFinancialDocumentSchema = z.object({
+  direction: z.enum(["receipt", "payment"]),
+  documentKind: z.enum(["voucher", "expense"]).optional().default("voucher"),
+  cashAccountCode: z.string().min(1),
+  vatAccountCode: z.string().optional(),
+  description: z.string().optional(),
+  date: z.string().optional(),
+  branchId: z.any().optional(),
+  reference: z.string().optional(),
+  lines: z.array(documentLineSchema).min(1, "بند واحد على الأقل مطلوب"),
+  attachments: z.array(z.object({
+    url: z.string(),
+    fileName: z.string().optional(),
+    mimeType: z.string().optional(),
+    documentType: z.string().optional(),
+    serialNo: z.string().optional(),
+    lineNo: z.any().optional(),
+  })).optional(),
+});
+
+journalRouter.post("/documents", authorize({ feature: "finance.journal", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(createFinancialDocumentSchema.safeParse(req.body ?? {}));
+
+    const branchId = b.branchId != null && b.branchId !== "" ? Number(b.branchId) : (scope.branchId ?? null);
+    if (branchId == null) {
+      throw new ValidationError("الفرع مطلوب لتسجيل الواقعة", { field: "branchId", fix: "حدّد الفرع" });
+    }
+    if (!scope.isOwner && !OWNER_GM_ROLES.includes(scope.role) &&
+        scope.allowedBranches.length > 0 && !scope.allowedBranches.includes(branchId)) {
+      throw new ForbiddenError("لا تملك صلاحية التسجيل في هذا الفرع", { field: "branchId" });
+    }
+
+    const isReceipt = b.direction === "receipt";
+    const fallbackCounter = isReceipt ? "4930" : "5399"; // إيرادات/مصروفات متنوعة (توجيه تلقائي — يُشتقّ من الكيان في م٤)
+    const rawLines = b.lines.map((l, i) => ({
+      lineNo: i + 1,
+      quantity: Number(l.quantity) || 0,
+      unitPrice: Number(l.unitPrice) || 0,
+      taxRatePercent: l.taxRatePercent != null ? Number(l.taxRatePercent) : 0,
+      counterAccountCode: l.counterAccountCode || fallbackCounter,
+      itemId: l.itemId != null && l.itemId !== "" ? Number(l.itemId) : null,
+      itemName: l.itemName ?? null,
+      description: l.description ?? null,
+      unit: l.unit ?? null,
+      taxCodeId: l.taxCodeId != null && l.taxCodeId !== "" ? Number(l.taxCodeId) : null,
+      costCenter: l.costCenter ?? null,
+      allocations: l.allocations?.map((a) => ({
+        entityType: a.entityType,
+        entityId: Number(a.entityId),
+        allocationType: a.allocationType,
+        amount: a.amount != null ? Number(a.amount) : undefined,
+        percent: a.percent != null ? Number(a.percent) : undefined,
+        quantity: a.quantity != null ? Number(a.quantity) : undefined,
+        costBearer: a.costBearer ?? null,
+        reason: a.reason ?? null,
+      })),
+    }));
+    const hasVat = rawLines.some((l) => (l.taxRatePercent || 0) > 0);
+    const vatAccountCode = b.vatAccountCode || (hasVat ? (isReceipt ? "2131" : "1180") : undefined);
+
+    // معاينة القيد المشتقّ — بناء نقي بلا ترحيل (الذيل §٢.٦).
+    if (isDryRun(req)) {
+      const { buildDocumentPersistencePlan } = await import("../lib/financeDocumentJournal.js");
+      const plan = buildDocumentPersistencePlan(
+        { direction: b.direction, cashAccountCode: b.cashAccountCode, vatAccountCode },
+        rawLines,
+      );
+      res.json({ dryRun: true, lines: plan.journalLegs, totals: plan.totals });
+      return;
+    }
+
+    const idempotencyToken = requestIdempotencyToken(req);
+    const { postFinancialDocument } = await import("../lib/financeDocumentService.js");
+    const result = await postFinancialDocument({
+      companyId: scope.companyId,
+      branchId,
+      createdBy: scope.activeAssignmentId,
+      documentKind: b.documentKind,
+      direction: b.direction,
+      cashAccountCode: b.cashAccountCode,
+      vatAccountCode,
+      ref: `${isReceipt ? "RV" : "PV"}-${idempotencyToken}`,
+      description: b.description || (isReceipt ? "قبض" : "صرف"),
+      sourceKey: `finance:document:${idempotencyToken}`,
+      postingDate: b.date ? toDateISO(b.date) : undefined,
+      rawLines,
+      attachments: b.attachments?.map((a) => ({
+        url: a.url, fileName: a.fileName ?? null, mimeType: a.mimeType ?? null,
+        documentType: a.documentType ?? null, serialNo: a.serialNo ?? null,
+        lineNo: a.lineNo != null && a.lineNo !== "" ? Number(a.lineNo) : null,
+      })),
+      headerMeta: { reference: b.reference ?? null, operationType: b.direction },
+    });
+
+    // أثر تدقيق إلزامي لكل إجراء تشغيلي (الدستور قاعدة ١٢) — مرة واحدة عند الإنشاء
+    // الفعلي؛ إعادة التشغيل (idempotent) لا تُكرّر الأثر.
+    if (!result.alreadyExists) {
+      await createAuditLog({
+        companyId: scope.companyId,
+        branchId: branchId ?? undefined,
+        userId: scope.userId,
+        action: "financial_document.created",
+        entity: "journal_entries",
+        entityId: result.journalId,
+        after: {
+          direction: b.direction,
+          documentKind: b.documentKind,
+          cashAccountCode: b.cashAccountCode,
+          lineCount: rawLines.length,
+          total: roundTo2(rawLines.reduce((s, l) => s + l.quantity * l.unitPrice * (1 + (l.taxRatePercent || 0) / 100), 0)),
+        },
+        activeRoleKey: scope.selectedRoleKey ?? null,
+      });
+    }
+
+    res.status(result.alreadyExists ? 200 : 201).json({
+      journalId: result.journalId,
+      documentLineIds: result.documentLineIds,
+      alreadyExists: result.alreadyExists,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "خطأ في تسجيل الواقعة المالية");
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// م٢-أ — بوابة الاستيراد (Excel/CSV حتمي). تُحوّل ملفًا → **نفس بنود
+// POST /documents**؛ قراءة فقط (لا كتابة، لا أثر). الاشتقاق + المعاينة + الحفظ +
+// الأثر يبقى كلّه في /documents (محرّك واحد، لا ازدواج منطق). الجسم المُعاد جاهز
+// لإرساله إلى /documents بـ dryRun للمعاينة ثم بلا dryRun للحفظ.
+// المرجع: docs/25 §٧ (م٢) + §١١.٣ (الطبقة أ — حتمي ١٠٠٪ صفر تكلفة).
+// ─────────────────────────────────────────────────────────────────────────────
+
+// قوالب الاستيراد الجاهزة (قوالب أمثلة) — لاختيار التعيين + تنزيل قالب CSV.
+journalRouter.get("/documents/import/templates", authorize({ feature: "finance.journal", action: "create" }), async (_req, res) => {
+  try {
+    const { FINANCE_IMPORT_TEMPLATES, FINANCE_IMPORT_FIELDS, templateToCsv } = await import("../lib/financeImportParse.js");
+    res.json({
+      templates: FINANCE_IMPORT_TEMPLATES.map((t) => ({
+        key: t.key,
+        title: t.title,
+        direction: t.direction,
+        documentKind: t.documentKind,
+        note: t.note ?? null,
+        sampleHeaders: t.sampleHeaders,
+        sampleCsv: templateToCsv(t),
+      })),
+      // كتالوج الحقول لمحرّر التعيين (م٢-ب) — مصدر واحد للواجهة.
+      fields: FINANCE_IMPORT_FIELDS,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "خطأ في جلب قوالب الاستيراد");
+  }
+});
+
+const importAnalyzeSchema = z.object({
+  source: z.enum(["csv", "excel"]),
+  templateKey: z.string().min(1),
+  // CSV: نص الملف مباشرةً؛ Excel: محتوى الملف بترميز base64.
+  content: z.string().min(1),
+  // م٢-ب — تعيين يدوي/محفوظ يَجُبّ الكشف التلقائي (sourceHeader → field؛ "" = تجاهل).
+  mapping: z.record(z.string(), z.string()).optional(),
+});
+
+journalRouter.post("/documents/import/analyze", authorize({ feature: "finance.journal", action: "create" }), async (req, res) => {
+  try {
+    const b = zodParse(importAnalyzeSchema.safeParse(req.body ?? {}));
+    const { parseCsvTable, aoaToTable, mapTableToDocument, detectMapping, sanitizeMapping, findTemplate } =
+      await import("../lib/financeImportParse.js");
+    const template = findTemplate(b.templateKey);
+    if (!template) throw new ValidationError("قالب استيراد غير معروف", { field: "templateKey" });
+
+    let table;
+    if (b.source === "csv") {
+      table = parseCsvTable(b.content);
+    } else {
+      const { parseFirstSheetAOA } = await import("../lib/excelCompat.js");
+      const buf = Buffer.from(b.content, "base64");
+      if (buf.length === 0) throw new ValidationError("تعذّر قراءة ملف Excel (محتوى غير صالح)");
+      const aoa = await parseFirstSheetAOA(buf);
+      table = aoaToTable(aoa);
+    }
+    if (table.headers.length === 0) throw new ValidationError("الملف فارغ أو بلا ترويسة");
+
+    // التعيين الفعّال: المحفوظ/اليدوي (مُنقّى) يَجُبّ الكشف التلقائي من القالب.
+    const override = b.mapping ? sanitizeMapping(b.mapping) : undefined;
+    const result = mapTableToDocument(table, template, override);
+    // الكشف الافتراضي لكل ترويسة — يملأ محرّر التعيين في الواجهة.
+    const detectedMapping = detectMapping(table, template);
+    // جسم جاهز لـ POST /finance/documents (نفس المحرّك للمعاينة بـ dryRun ثم للحفظ).
+    const documentBody = {
+      direction: result.direction,
+      documentKind: result.documentKind,
+      lines: result.lines.map((l) => ({
+        itemName: l.itemName,
+        description: l.description,
+        quantity: l.quantity,
+        unit: l.unit,
+        unitPrice: l.unitPrice,
+        taxRatePercent: l.taxRatePercent,
+        counterAccountCode: l.counterAccountCode,
+        costCenter: l.costCenter,
+      })),
+    };
+    res.json({
+      direction: result.direction,
+      documentKind: result.documentKind,
+      lines: result.lines,
+      warnings: result.warnings,
+      stats: result.stats,
+      documentBody,
+      // الترويسات الخام + الكشف الافتراضي + التعيين المُطبَّق — لمحرّر التعيين (م٢-ب).
+      headers: table.headers,
+      detectedMapping,
+      appliedMapping: override ?? null,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "خطأ في تحليل ملف الاستيراد");
+  }
+});
+
+// م٢-ب — التعيينات المحفوظة (financial_import_mapping_presets). قراءة/حفظ/حذف
+// تعيين «ترويسة المصدر → حقل» لكل (شركة، مستخدم، قالب) ليُطبَّق تلقائيًا لاحقًا.
+// نمط مطابق لـ umrah/import/presets (هجرة 234) لكن مملوك للمالية (قاعدة ٨). هذه
+// كتابات إعداد (لا دفتر/تشغيل) — مُدرجة في allowlist تدقيق التغطية كنظيرتها بالعمرة.
+const importPresetSchema = z.object({
+  name: z.string().min(1).max(120),
+  templateKey: z.string().min(1).max(40),
+  mapping: z.record(z.string(), z.string()).default({}),
+  isDefault: z.boolean().optional().default(false),
+});
+
+journalRouter.get("/documents/import/presets", authorize({ feature: "finance.journal", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { templateKey } = req.query as Record<string, string | undefined>;
+    const params: unknown[] = [scope.companyId, scope.userId];
+    let extraWhere = "";
+    if (templateKey) {
+      params.push(templateKey);
+      extraWhere = ` AND "templateKey" = $${params.length}`;
+    }
+    const rows = await rawQuery(
+      `SELECT id, name, "templateKey", mapping, "isDefault", "createdAt", "updatedAt"
+         FROM financial_import_mapping_presets
+        WHERE "companyId" = $1 AND "userId" = $2 AND "deletedAt" IS NULL${extraWhere}
+        ORDER BY "isDefault" DESC, "updatedAt" DESC
+        LIMIT 200`,
+      params,
+    );
+    res.json(maskFields(req, { data: rows }));
+  } catch (err) {
+    handleRouteError(err, res, "خطأ في جلب تعيينات الاستيراد");
+  }
+});
+
+journalRouter.post("/documents/import/presets", authorize({ feature: "finance.journal", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(importPresetSchema.safeParse(req.body ?? {}));
+    const { sanitizeMapping, findTemplate } = await import("../lib/financeImportParse.js");
+    if (!findTemplate(b.templateKey)) throw new ValidationError("قالب استيراد غير معروف", { field: "templateKey" });
+    const cleanMapping = sanitizeMapping(b.mapping);
+    await withTransaction(async (client) => {
+      if (b.isDefault) {
+        await client.query(
+          `UPDATE financial_import_mapping_presets
+              SET "isDefault" = false, "updatedAt" = NOW()
+            WHERE "companyId" = $1 AND "userId" = $2 AND "templateKey" = $3
+              AND "deletedAt" IS NULL AND "isDefault" = true`,
+          [scope.companyId, scope.userId, b.templateKey],
+        );
+      }
+      await client.query(
+        `INSERT INTO financial_import_mapping_presets
+           ("companyId", "branchId", "userId", name, "templateKey", mapping, "isDefault")
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)
+         ON CONFLICT ("companyId", "userId", "templateKey", name) WHERE "deletedAt" IS NULL
+         DO UPDATE SET mapping = EXCLUDED.mapping, "isDefault" = EXCLUDED."isDefault", "updatedAt" = NOW()`,
+        [scope.companyId, scope.branchId ?? null, scope.userId, b.name, b.templateKey, JSON.stringify(cleanMapping), b.isDefault],
+      );
+    });
+    res.status(201).json({ ok: true });
+  } catch (err) {
+    handleRouteError(err, res, "خطأ في حفظ تعيين الاستيراد");
+  }
+});
+
+journalRouter.delete("/documents/import/presets/:id", authorize({ feature: "finance.journal", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    await rawExecute(
+      `UPDATE financial_import_mapping_presets
+          SET "deletedAt" = NOW(), "updatedAt" = NOW()
+        WHERE id = $1 AND "companyId" = $2 AND "userId" = $3 AND "deletedAt" IS NULL`,
+      [id, scope.companyId, scope.userId],
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    handleRouteError(err, res, "خطأ في حذف تعيين الاستيراد");
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// م٣ — تحصيل العميل داخل «قبض» (مطابقة آلية). يجلب فواتير العميل المفتوحة + يطبّق
+// FIFO (أو تخصيص يدوي) + الزائد دفعة مقدمة، عبر محرّك postCustomerReceipt المعتمد
+// (لا ازدواج قيد). preview قراءة فقط؛ collect يُرحّل ويُدقّق ويُطلق نفس حدث
+// finance.payment.received (نفس سلسلة سند القبض). docs/25 §٧.٣ + §٩.٣.
+// ─────────────────────────────────────────────────────────────────────────────
+const collectionApplicationSchema = z.object({ invoiceId: z.any(), amount: z.any() });
+const collectPreviewSchema = z.object({
+  clientId: z.any(),
+  amount: z.any(),
+  // تخصيص يدوي يَجُبّ FIFO (السداد الجزئي/الانتقائي). غيابه = FIFO تلقائي.
+  applications: z.array(collectionApplicationSchema).optional(),
+});
+const collectPostSchema = collectPreviewSchema.extend({
+  method: z.enum(["cash", "bank", "transfer", "check", "bank_transfer"]).optional().default("bank"),
+  cashAccountCode: z.string().optional(),
+  date: z.string().optional(),
+  branchId: z.any().optional(),
+  reference: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+function normalizeCollectionApplications(apps?: { invoiceId?: unknown; amount?: unknown }[]) {
+  const cleaned = apps
+    ?.map((a) => ({ invoiceId: Number(a.invoiceId), amount: Number(a.amount) }))
+    .filter((a) => Number.isInteger(a.invoiceId) && a.invoiceId > 0 && a.amount > 0);
+  return cleaned && cleaned.length > 0 ? cleaned : undefined;
+}
+
+journalRouter.post("/documents/collect/preview", authorize({ feature: "finance.journal", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(collectPreviewSchema.safeParse(req.body ?? {}));
+    const clientId = Number(b.clientId);
+    const amount = Number(b.amount);
+    if (!Number.isInteger(clientId) || clientId <= 0) throw new ValidationError("اختر العميل", { field: "clientId" });
+    if (!(amount > 0)) throw new ValidationError("أدخل مبلغًا أكبر من صفر", { field: "amount" });
+    const { previewCollection } = await import("../lib/financeCollectionService.js");
+    const preview = await previewCollection({
+      companyId: scope.companyId,
+      clientId,
+      amount,
+      applications: normalizeCollectionApplications(b.applications),
+    });
+    res.json(preview);
+  } catch (err) {
+    handleRouteError(err, res, "خطأ في معاينة التحصيل");
+  }
+});
+
+journalRouter.post("/documents/collect", authorize({ feature: "finance.journal", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(collectPostSchema.safeParse(req.body ?? {}));
+    const clientId = Number(b.clientId);
+    const amount = Number(b.amount);
+    if (!Number.isInteger(clientId) || clientId <= 0) throw new ValidationError("اختر العميل", { field: "clientId" });
+    if (!(amount > 0)) throw new ValidationError("أدخل مبلغًا أكبر من صفر", { field: "amount" });
+
+    // حلّ الفرع — نفس سياسة /documents.
+    const branchId = b.branchId != null && b.branchId !== "" ? Number(b.branchId) : (scope.branchId ?? null);
+    if (branchId == null) throw new ValidationError("الفرع مطلوب لتسجيل التحصيل", { field: "branchId" });
+    if (!scope.isOwner && !OWNER_GM_ROLES.includes(scope.role) &&
+        scope.allowedBranches.length > 0 && !scope.allowedBranches.includes(branchId)) {
+      throw new ForbiddenError("لا تملك صلاحية التسجيل في هذا الفرع", { field: "branchId" });
+    }
+
+    // معاينة القيد/التخصيص المشتقّ بلا ترحيل (الذيل §٢.٦).
+    if (isDryRun(req)) {
+      const { previewCollection } = await import("../lib/financeCollectionService.js");
+      const preview = await previewCollection({
+        companyId: scope.companyId,
+        clientId,
+        amount,
+        applications: normalizeCollectionApplications(b.applications),
+      });
+      res.json({ dryRun: true, ...preview });
+      return;
+    }
+
+    // مفتاح ثابت متوافق مع receiptKey (^[A-Za-z0-9_-]{8,64}$) مشتقّ من رمز الطلب.
+    const idempotencyToken = requestIdempotencyToken(req);
+    const receiptKey = `rcpt-${idempotencyToken}`.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
+
+    const { postCollection } = await import("../lib/financeCollectionService.js");
+    const result = await postCollection({
+      companyId: scope.companyId,
+      branchId,
+      createdBy: scope.activeAssignmentId,
+      clientId,
+      amount,
+      method: b.method,
+      cashAccountCode: b.cashAccountCode ?? null,
+      receiptKey,
+      receivedDate: b.date ? toDateISO(b.date) : undefined,
+      reference: b.reference ?? null,
+      notes: b.notes ?? null,
+      applications: normalizeCollectionApplications(b.applications),
+      // فاتورة مُطبَّقة قد تكون على فرع آخر — يجب أن يملك المُدخِل صلاحيته.
+      assertBranchAccess: (documentBranchId) => {
+        if (!scope.isOwner && !OWNER_GM_ROLES.includes(scope.role) &&
+            scope.allowedBranches.length > 0 && !scope.allowedBranches.includes(documentBranchId)) {
+          throw new ForbiddenError("فاتورة على فرع خارج صلاحيتك", { field: "applications" });
+        }
+      },
+    });
+
+    // أثر تدقيق + حدث (القاعدة 12 + سلسلة سند القبض) — مرة واحدة عند الترحيل الفعلي.
+    if (!result.alreadyExists) {
+      await createAuditLog({
+        companyId: scope.companyId,
+        branchId,
+        userId: scope.userId,
+        action: "financial_document.collected",
+        entity: "journal_entries",
+        entityId: result.journalId,
+        after: { clientId, amount, applied: result.applied.length, leftover: result.leftover, advanceId: result.advanceId },
+        activeRoleKey: scope.selectedRoleKey ?? null,
+      });
+      emitEvent({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "finance.payment.received",
+        entity: "journal_entries",
+        entityId: result.journalId,
+        // voucherId مطلوب في كتالوج الحدث (eventPayloadContract) — نفس انبعاث سند القبض.
+        after: { voucherId: result.journalId, clientId, amount },
+        details: JSON.stringify({ voucherId: result.journalId, clientId, amount, applied: result.applied.length, leftover: result.leftover }),
+      }).catch((e) => logger.error(e, "finance collect event failed"));
+    }
+
+    res.status(result.alreadyExists ? 200 : 201).json(result);
+  } catch (err) {
+    handleRouteError(err, res, "خطأ في تسجيل التحصيل");
+  }
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ZOD SCHEMAS — request body validation
@@ -1421,7 +1893,11 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
     });
     markIdempotencyReplay(req, res, alreadyExists);
 
-    emitEvent({ companyId: effectiveCompanyId, userId: scope.userId, action: "expense.created", entity: "expenses", entityId: journalId, details: JSON.stringify({ ref, accountCode, amount: baseAmount, vatAmount: computedVat, totalWithVat, sourceAccountCode: sourceAcct, approvalRequired: approvalResult.requiresApproval, operationType, expenseType, relatedEntityType, relatedEntityId }) }).catch((e) => logger.error(e, "finance-journal background task failed"));
+    // id/name مطلوبان في عقد expense.created بالكتالوج (eventCatalog.ts) لأثر
+    // Audit/Event سليم. تُوضَع في `after` تحديدًا لأن emitEvent يعيد بناء حمولة
+    // eventBus.emit من قائمة بيضاء تشمل after دون الحقول العلوية المخصّصة؛
+    // والمدقّق يقرأ payload.after?.[field]. id = قيد المصروف، name = مرجعه (EXP-…).
+    emitEvent({ companyId: effectiveCompanyId, userId: scope.userId, action: "expense.created", entity: "expenses", entityId: journalId, after: { id: journalId, name: ref }, details: JSON.stringify({ ref, accountCode, amount: baseAmount, vatAmount: computedVat, totalWithVat, sourceAccountCode: sourceAcct, approvalRequired: approvalResult.requiresApproval, operationType, expenseType, relatedEntityType, relatedEntityId }) }).catch((e) => logger.error(e, "finance-journal background task failed"));
 
     const [createdExpense] = await rawQuery<Record<string, unknown>>(
       `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit)) AS lines
@@ -1512,7 +1988,13 @@ async function resolveVendorInvoicePlan(
   const totalWithVat = roundTo2(totalNet + totalVat);
   let vatInputAccountCode: string | null = null;
   if (totalVat > 0) {
-    vatInputAccountCode = await financialEngine.resolveAccountCode(scope.companyId, "vat_input", "debit", "1180");
+    const general = await financialEngine.resolveAccountCode(scope.companyId, "vat_input", "debit", "1180");
+    // البند ٤ — حساب ضريبة المدخلات على حساب رمز ضريبة الوثيقة (أول بند خاضع
+    // للضريبة يحمل رمزًا)، وإلا الرمز القياسي للشركة، وإلا العام. سطر الضريبة
+    // رأسيّ واحد، فبنودٌ مختلطة الرموز تأخذ أوّل رمز (نظير قيد المبيعات).
+    const { resolveInputVatAccount, pickDocTaxCodeFromLines } = await import("../lib/taxCodes.js");
+    const docTaxCode = pickDocTaxCodeFromLines(p.lines);
+    vatInputAccountCode = await resolveInputVatAccount(scope.companyId, docTaxCode, general);
   }
 
   const lines = buildVendorInvoiceLines({
@@ -1845,6 +2327,13 @@ journalRouter.patch("/expenses/:id/approve", authorize({ feature: "finance.journ
         newStatus === "rejected" ? "يجب ذكر سبب الرفض" : "يجب ذكر سبب الإرجاع",
         { field: "notes", fix: "أدخل سبب القرار في حقل الملاحظات" }
       );
+    }
+
+    // Maker-checker: the creator may not APPROVE their own expense — the same
+    // segregation the unified approval chain enforces. Only self-approval is
+    // blocked (reject/return stay open); owners (no employeeId) are exempt.
+    if (newStatus === "approved") {
+      await assertNotSelfApproval("expense", expenseId, scope.companyId, scope.employeeId);
     }
 
     // Central lifecycle engine: expense approval uses the shared `status`
@@ -2549,18 +3038,27 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
           // over-allocate a PO/Nusk invoice. Σ must include withheld
           // amounts on previous allocations (gross discharged), so the
           // SUM picks up amount + whtAmount.
+          // FOR UPDATE locks the obligation row inside this voucher's
+          // transaction (rawQuery is ALS-bound to the active tx). Without the
+          // lock two concurrent vouchers paying the SAME PO/nusk both read a
+          // stale Σ below (neither tx sees the other's uncommitted allocation
+          // under READ COMMITTED) and both pass the #901 cap → over-allocation.
+          // With it, the second voucher waits, then re-reads Σ including the
+          // first's committed allocation and is capped correctly.
           let obligationCap: number | null = null;
           if (a.obligationType === "purchase_order") {
             const [po] = await rawQuery<{ totalAmount: string | number }>(
               `SELECT "totalAmount" FROM purchase_orders
-                WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+                WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+                FOR UPDATE`,
               [a.obligationId, scope.companyId]
             );
             if (po) obligationCap = Number(po.totalAmount);
           } else if (a.obligationType === "nusk_invoice") {
             const [ni] = await rawQuery<{ totalAmount: string | number; refundAmount: string | number }>(
               `SELECT "totalAmount", "refundAmount" FROM umrah_nusk_invoices
-                WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+                WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+                FOR UPDATE`,
               [a.obligationId, scope.companyId]
             );
             if (ni) obligationCap = Number(ni.totalAmount) - Number(ni.refundAmount ?? 0);
@@ -2875,6 +3373,13 @@ journalRouter.patch("/salary-advances/:id/approve", authorize({ feature: "financ
         field: "notes",
         fix: "اكتب سبب رفض السلفة",
       });
+    }
+
+    // Maker-checker: the creator may not APPROVE their own salary advance —
+    // the same segregation the unified approval chain enforces. Only
+    // self-approval is blocked; owners (no employeeId) are exempt.
+    if (newStatus === "approved") {
+      await assertNotSelfApproval("salary_advance", advanceId, scope.companyId, scope.employeeId);
     }
 
     // Central lifecycle engine: salary advances live on journal_entries

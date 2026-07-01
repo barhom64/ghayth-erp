@@ -1,0 +1,264 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * ===================================================
+ * WAFD DESIGN SYSTEM — Warm Welcome Sanctuary
+ * ===================================================
+ * Primary: Teal #1B8A8A (فيروزي عميق)
+ * Secondary: Light Teal #2DB8B8
+ * Dark: #1C1C1C (أسود دافئ)
+ * Gray: #9B9B9B (رمادي متوسط)
+ * Cream: #F9F6F0 (كريمي دافئ)
+ * Gold: #C8A96E (ذهبي خفيف)
+ * ===================================================
+ */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-wafd-teal: var(--wafd-teal);
+  --color-wafd-teal-light: var(--wafd-teal-light);
+  --color-wafd-dark: var(--wafd-dark);
+  --color-wafd-gray: var(--wafd-gray);
+  --color-wafd-cream: var(--wafd-cream);
+  --color-wafd-gold: var(--wafd-gold);
+}
+
+:root {
+  --radius: 0.5rem;
+
+  /* WAFD Brand Colors */
+  --wafd-teal: oklch(0.52 0.12 185);
+  --wafd-teal-light: oklch(0.65 0.12 185);
+  --wafd-teal-dark: oklch(0.38 0.10 185);
+  --wafd-dark: oklch(0.14 0.005 0);
+  --wafd-gray: oklch(0.62 0.005 0);
+  --wafd-gray-light: oklch(0.88 0.003 0);
+  --wafd-cream: oklch(0.975 0.008 80);
+  --wafd-gold: oklch(0.72 0.09 75);
+  --wafd-gold-light: oklch(0.85 0.07 75);
+
+  /* Semantic Colors */
+  --primary: var(--wafd-teal);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.94 0.008 185);
+  --secondary-foreground: var(--wafd-teal-dark);
+  --background: var(--wafd-cream);
+  --foreground: var(--wafd-dark);
+  --card: oklch(1 0 0);
+  --card-foreground: var(--wafd-dark);
+  --popover: oklch(1 0 0);
+  --popover-foreground: var(--wafd-dark);
+  --muted: oklch(0.95 0.005 80);
+  --muted-foreground: var(--wafd-gray);
+  --accent: oklch(0.94 0.008 185);
+  --accent-foreground: var(--wafd-teal-dark);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.90 0.006 80);
+  --input: oklch(0.90 0.006 80);
+  --ring: var(--wafd-teal);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Tajawal', 'Cairo', sans-serif;
+    direction: rtl;
+  }
+  h1, h2, h3 {
+    font-family: 'Cairo', 'Amiri', sans-serif;
+  }
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [type="button"]:not(:disabled),
+  [type="submit"]:not(:disabled),
+  [type="reset"]:not(:disabled),
+  a[href],
+  select:not(:disabled),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled) {
+    @apply cursor-pointer;
+  }
+}
+
+@layer components {
+  .container {
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .flex {
+    min-height: 0;
+    min-width: 0;
+  }
+
+  @media (min-width: 640px) {
+    .container {
+      padding-left: 1.5rem;
+      padding-right: 1.5rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .container {
+      padding-left: 2rem;
+      padding-right: 2rem;
+      max-width: 1280px;
+    }
+  }
+
+  /* WAFD Custom Utilities */
+  .wafd-gradient-teal {
+    background: linear-gradient(135deg, oklch(0.52 0.12 185) 0%, oklch(0.38 0.10 185) 100%);
+  }
+
+  .wafd-gradient-dark {
+    background: linear-gradient(180deg, oklch(0.14 0.005 0) 0%, oklch(0.20 0.008 185) 100%);
+  }
+
+  .wafd-text-gradient {
+    background: linear-gradient(135deg, oklch(0.52 0.12 185), oklch(0.72 0.09 75));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .wafd-gold-line {
+    display: inline-block;
+    width: 3rem;
+    height: 2px;
+    background: linear-gradient(90deg, oklch(0.72 0.09 75), oklch(0.85 0.07 75));
+    border-radius: 2px;
+  }
+
+  .wafd-card-hover {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+  }
+  .wafd-card-hover:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 20px 40px oklch(0.52 0.12 185 / 0.15);
+  }
+
+  .wafd-btn-glow:hover {
+    box-shadow: 0 0 20px oklch(0.52 0.12 185 / 0.5), 0 4px 15px oklch(0.52 0.12 185 / 0.3);
+  }
+
+  .wafd-section-wave {
+    position: relative;
+  }
+  .wafd-section-wave::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: inherit;
+    clip-path: ellipse(55% 100% at 50% 0%);
+  }
+
+  /* Scroll animation classes */
+  .wafd-reveal {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.7s ease, transform 0.7s ease;
+  }
+  .wafd-reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  /* SEO: جعل عناوين H1/H2/H3 مرئية دائماً لمحركات البحث حتى قبل تفعيل الجافا سكريبت */
+  .wafd-reveal > h1,
+  .wafd-reveal > h2,
+  .wafd-reveal > h3,
+  .wafd-reveal h1,
+  .wafd-reveal h2,
+  .wafd-reveal h3 {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  /* WhatsApp float button pulse */
+  @keyframes wafd-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 oklch(0.52 0.12 185 / 0.4); }
+    50% { box-shadow: 0 0 0 12px oklch(0.52 0.12 185 / 0); }
+  }
+  .wafd-pulse {
+    animation: wafd-pulse 2.5s ease-in-out infinite;
+  }
+
+  /* Floating particles */
+  @keyframes wafd-float {
+    0%, 100% { transform: translateY(0px) rotate(0deg); opacity: 0.3; }
+    50% { transform: translateY(-20px) rotate(180deg); opacity: 0.6; }
+  }
+
+  /* Counter animation */
+  @keyframes wafd-count-up {
+    from { opacity: 0; transform: scale(0.8); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  /* Shimmer effect */
+  @keyframes wafd-shimmer {
+    0% { background-position: -200% center; }
+    100% { background-position: 200% center; }
+  }
+
+  .wafd-shimmer-text {
+    background: linear-gradient(90deg, oklch(0.72 0.09 75) 25%, oklch(0.90 0.05 75) 50%, oklch(0.72 0.09 75) 75%);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: wafd-shimmer 3s linear infinite;
+  }
+
+  /* Islamic pattern overlay */
+  .wafd-pattern-overlay {
+    background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%231B8A8A' fill-opacity='0.04'%3E%3Cpath d='M30 0l8.66 5v10L30 20l-8.66-5V5L30 0zm0 40l8.66 5v10L30 60l-8.66-5V45L30 40z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  }
+
+  /* Progress bar */
+  #scroll-progress {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 0%;
+    height: 3px;
+    background: linear-gradient(90deg, oklch(0.52 0.12 185), oklch(0.72 0.09 75));
+    z-index: 9999;
+    transition: width 0.1s linear;
+  }
+}

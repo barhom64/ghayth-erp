@@ -609,7 +609,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       { label: "اعتماد المصروفات", icon: CheckSquare, link: "/finance/expenses?tab=pending", minRoleLevel: 40 },
     ],
     "/finance/vouchers": [
-      { label: "سند جديد", icon: Plus, link: "/finance/vouchers/create" },
+      { label: "سند جديد", icon: Plus, link: "/finance/documents/create" },
     ],
     "/finance/purchase-orders": [
       { label: "طلب شراء جديد", icon: Plus, link: "/finance/purchase-orders?action=new" },
@@ -1069,8 +1069,15 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                           <div className={`h-4 w-4 rounded border flex items-center justify-center ${isSelected ? "bg-blue-600 border-blue-600" : "border-border"}`}>
                             {isSelected && <CheckCircle className="h-3 w-3 text-white" />}
                           </div>
-                          <Building2 className={`h-4 w-4 ${isSelected ? "text-status-info-foreground" : "text-muted-foreground"}`} />
-                          <span>{branch.name}</span>
+                          <Building2 className={`h-4 w-4 shrink-0 ${isSelected ? "text-status-info-foreground" : "text-muted-foreground"}`} />
+                          <div className="flex flex-col min-w-0">
+                            <span className="truncate">{branch.name}</span>
+                            {companies.length > 1 && (
+                              <span className="text-[11px] text-muted-foreground truncate">
+                                {companies.find(c => c.id === branch.companyId)?.name || ""}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </DropdownMenuItem>
                     );

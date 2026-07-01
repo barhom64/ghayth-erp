@@ -7,6 +7,7 @@ import {
   Banknote, AlertTriangle, CalendarDays, TrendingUp, Info,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ContextWarning } from "./context-card-kit";
 
 export type EmployeeContextSection = "loans" | "leaves" | "violations" | "overtime";
 
@@ -253,10 +254,9 @@ function LoansSection({
         </div>
       )}
       {installmentWarning && (
-        <div className="flex items-center gap-1.5 text-xs text-status-error-foreground bg-status-error-surface border border-status-error-surface rounded p-1.5">
-          <AlertTriangle className="h-3 w-3" />
-          <span>الخصم الشهري الحالي يتجاوز 30% من الراتب — يُنصح بعدم إضافة سلفة جديدة</span>
-        </div>
+        <ContextWarning icon={AlertTriangle}>
+          الخصم الشهري الحالي يتجاوز 30% من الراتب — يُنصح بعدم إضافة سلفة جديدة
+        </ContextWarning>
       )}
     </div>
   );
@@ -296,10 +296,9 @@ function LeavesSection({
         </div>
       </div>
       {pendingLeaves.length > 0 && (
-        <div className="flex items-center gap-1.5 text-xs text-status-warning-foreground bg-status-warning-surface border border-status-warning-surface rounded p-1.5">
-          <AlertTriangle className="h-3 w-3" />
-          <span>يوجد {pendingLeaves.length} طلب إجازة بانتظار الموافقة — راجع قبل تقديم طلب جديد</span>
-        </div>
+        <ContextWarning icon={AlertTriangle} tone="warning">
+          يوجد {pendingLeaves.length} طلب إجازة بانتظار الموافقة — راجع قبل تقديم طلب جديد
+        </ContextWarning>
       )}
     </div>
   );
@@ -336,10 +335,9 @@ function ViolationsSection({
         </div>
       </div>
       {recentViolations.length >= 3 && (
-        <div className="flex items-center gap-1.5 text-xs text-status-error-foreground bg-status-error-surface border border-status-error-surface rounded p-1.5">
-          <AlertTriangle className="h-3 w-3" />
-          <span>تكرار المخالفات هذا الشهر — سيُطبَّق سلم العقوبات تلقائياً عند إضافة مخالفة جديدة</span>
-        </div>
+        <ContextWarning icon={AlertTriangle}>
+          تكرار المخالفات هذا الشهر — سيُطبَّق سلم العقوبات تلقائياً عند إضافة مخالفة جديدة
+        </ContextWarning>
       )}
     </div>
   );
@@ -376,10 +374,9 @@ function OvertimeSection({
         </div>
       </div>
       {totalHoursThisMonth > 40 && (
-        <div className="flex items-center gap-1.5 text-xs text-status-warning-foreground bg-status-warning-surface border border-status-warning-surface rounded p-1.5">
-          <AlertTriangle className="h-3 w-3" />
-          <span>تجاوزت الساعات الإضافية 40 ساعة هذا الشهر — قد يتطلب موافقة إضافية</span>
-        </div>
+        <ContextWarning icon={AlertTriangle} tone="warning">
+          تجاوزت الساعات الإضافية 40 ساعة هذا الشهر — قد يتطلب موافقة إضافية
+        </ContextWarning>
       )}
     </div>
   );

@@ -61,7 +61,7 @@ const CARDS: SettingsCard[] = [
   {
     href: "/finance/cost-centers",
     title: "مراكز التكلفة (Cost Centers)",
-    description: "أبعاد محاسبية لكل بند JE — تحليل الأرباح حسب المشروع / المركبة / الإدارة. تستخدمها قواعد التوجيه عبر استراتيجيات from_*.",
+    description: "أبعاد محاسبية لكل بند قيد (JE) — تحليل الأرباح حسب المشروع / المركبة / الإدارة. تستخدمها قواعد التوجيه عبر استراتيجيات from_*.",
     icon: Layers,
     iconClass: "text-purple-600 bg-purple-50",
     group: "registries",
@@ -71,7 +71,7 @@ const CARDS: SettingsCard[] = [
   {
     href: "/finance/allocation-rules",
     title: "قواعد التوجيه المحاسبي",
-    description: "Auto-routing rules — تحدد كيف يتم توجيه كل بند مالي إلى حسابه ومركز تكلفته وكيانه التشغيلي تلقائياً.",
+    description: "قواعد توجيه تلقائية — تحدد كيف يتم توجيه كل بند مالي إلى حسابه ومركز تكلفته وكيانه التشغيلي تلقائياً.",
     icon: Workflow,
     iconClass: "text-emerald-700 bg-emerald-50",
     group: "allocation",
@@ -79,15 +79,15 @@ const CARDS: SettingsCard[] = [
   {
     href: "/finance/product-catalog",
     title: "كتالوج المنتجات والخدمات",
-    description: "Product Accounting Catalog — كل منتج/خدمة له توجيه افتراضي للحساب ومركز التكلفة والكيان المرتبط ينطبق تلقائياً عند الاختيار.",
+    description: "كتالوج محاسبي للمنتجات — كل منتج/خدمة له توجيه افتراضي للحساب ومركز التكلفة والكيان المرتبط ينطبق تلقائياً عند الاختيار.",
     icon: Package,
     iconClass: "text-status-info-foreground bg-status-info-surface",
     group: "allocation",
   },
   {
     href: "/finance/allocation-results",
-    title: "سجل توجيه البنود (Audit Trail)",
-    description: "كل قرار توجيه يحفظه الـ resolver — أي بند، أي قاعدة، أي حساب ومركز تكلفة. الـ override اليدوي مع السبب.",
+    title: "سجل توجيه البنود (سجل التدقيق)",
+    description: "كل قرار توجيه يحفظه محرك التوجيه — أي بند، أي قاعدة، أي حساب ومركز تكلفة. التجاوز اليدوي مع السبب.",
     icon: Eye,
     iconClass: "text-orange-600 bg-orange-50",
     group: "allocation",
@@ -95,7 +95,7 @@ const CARDS: SettingsCard[] = [
   {
     href: "/finance/allocation-override-log",
     title: "سجل تجاوزات التخصيص",
-    description: "كل اعتماد بصلاحية finance.allocation.override تجاوز الإلزام — مع السبب المكتوب وقائمة الـ blockers وقت الاعتماد. للمراجعة والحوكمة.",
+    description: "كل اعتماد بصلاحية finance.allocation.override تجاوز الإلزام — مع السبب المكتوب وقائمة الموانع وقت الاعتماد. للمراجعة والحوكمة.",
     icon: ShieldAlert,
     iconClass: "text-status-warning-foreground bg-status-warning-surface",
     group: "allocation",

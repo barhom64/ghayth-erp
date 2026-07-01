@@ -17,6 +17,30 @@ const forgotPasswordSchema = z.object({
   email: z.string().email("الرجاء إدخال بريد إلكتروني صحيح"),
 });
 
+// التقاط طلبات/استفسارات الزوّار من الموقع العام مباشرةً في CRM غيث (فرصة جديدة).
+// جسر إلى النواة الموجودة — لا backend مكرر. يُحفظ كـ crm_opportunity بمرحلة "lead".
+// خريطة المواقع العامة → معرّف الشركة (tenant مثبّت على الخادم). لا نثق أبداً
+// بـ companyId قادم من العميل (يفتح كتابة عبر-المستأجرين + تعداد الشركات).
+// إضافة موقع عام جديد = سطر هنا فقط.
+const PUBLIC_SITE_COMPANY: Record<string, number> = {
+  wafd: 4,
+};
+
+const publicLeadSchema = z.object({
+  site: z.string().trim().min(1).max(40),
+  name: z.string().trim().min(2, "الاسم مطلوب").max(160),
+  phone: z.string().trim().min(4, "رقم الجوال مطلوب").max(40),
+  email: z.string().trim().email("بريد إلكتروني غير صحيح").max(160).optional().or(z.literal("")).transform((v) => (v ? v : undefined)),
+  subject: z.string().trim().max(200).optional(),
+  message: z.string().trim().max(4000).optional(),
+  source: z.string().trim().max(60).optional(),
+  // معرّف الحملة العامة التي جاء منها العميل (اختياري) — يُحَل إلى campaignId
+  // على الخادم ضمن الشركة المُستأجِرة فقط، لا نثق بأي معرّف رقمي من العميل.
+  campaignSlug: z.string().trim().max(120).optional(),
+  // حقل فخّ (honeypot) — يجب أن يبقى فارغاً؛ يملؤه البوت فقط.
+  website: z.string().max(200).optional(),
+});
+
 const router = Router();
 
 const publicLimiter = rateLimit({
@@ -322,6 +346,215 @@ router.post("/onboarding/:token", publicLimiter, async (req, res) => {
   } catch (err) {
     handleRouteError(err, res, "إرسال بيانات الاستكمال الذاتي");
   }
+});
+
+// POST /api/public/leads — استقبال طلب/استفسار من موقع وفد العام وتحويله إلى
+// فرصة CRM في غيث. عام تماماً (قبل authMiddleware) ومحمي بـ anonymousIpLimiter
+// + publicLimiter. لا backend مكرر — يكتب في نفس جدول crm_opportunities.
+router.post("/leads", publicLimiter, async (req, res) => {
+  try {
+    const b = zodParse(publicLeadSchema.safeParse(req.body ?? {}));
+
+    // رسالة قبول موحّدة لكل المسارات المقبولة/المُسقَطة — تمنع تعداد المستأجرين
+    // أو كشف اصطياد البوتات عبر فروق الاستجابة.
+    const accepted = { ok: true, message: "تم استلام طلبك بنجاح. سيتواصل معك فريقنا قريباً." } as const;
+
+    // فخّ البوتات: لو امتلأ الحقل المخفي، نقبل صورياً ونُسقط الطلب بصمت.
+    if (b.website && b.website.trim()) {
+      res.status(201).json(accepted);
+      return;
+    }
+
+    // المستأجر يُحَل على الخادم من خريطة مثبّتة — لا نثق بأي companyId من العميل.
+    const companyId = PUBLIC_SITE_COMPANY[b.site];
+    if (!companyId) {
+      res.status(201).json(accepted);
+      return;
+    }
+
+    // التحقق أن الشركة موجودة وفعّالة قبل الكتابة (companies تُدار بـ status، لا deletedAt).
+    const [company] = await rawQuery<{ id: number; status: string | null }>(
+      `SELECT id, status FROM companies WHERE id = $1 LIMIT 1`,
+      [companyId],
+    );
+    if (!company || (company.status && company.status !== "active")) {
+      // استجابة موحّدة — لا نكشف أن الموقع غير مُفعّل.
+      res.status(201).json(accepted);
+      return;
+    }
+
+    // عزو العميل المحتمل للحملة: نحلّ slug الحملة إلى معرّفها داخل نفس الشركة
+    // فقط (حملة عامة + غير محذوفة). نتجاهل أي slug غير مطابق بصمت (لا يفشل الطلب).
+    // عند وجود حملة نجعل source = اسم الحملة كي يظهر العزو في عمود المصدر القائم.
+    let campaignId: number | null = null;
+    let leadSource = b.source?.trim() || "website";
+    if (b.campaignSlug) {
+      const [campaign] = await rawQuery<{ id: number; name: string }>(
+        `SELECT id, name FROM marketing_campaigns
+           WHERE "companyId"=$1 AND LOWER(slug)=LOWER($2)
+             AND "isPublic"=true AND "deletedAt" IS NULL
+           LIMIT 1`,
+        [companyId, b.campaignSlug],
+      );
+      if (campaign) {
+        campaignId = campaign.id;
+        leadSource = campaign.name;
+      }
+    }
+
+    const title = b.subject?.trim()
+      ? `${b.subject.trim()} — ${b.name}`
+      : `استفسار من الموقع — ${b.name}`;
+    const notesParts = [b.message?.trim(), b.subject?.trim() ? `الموضوع: ${b.subject.trim()}` : null].filter(Boolean);
+    const notes = notesParts.length ? notesParts.join("\n") : null;
+
+    // ملكية الكتابة في crm_opportunities تبقى في المسار القائد (CRM) — نمرّر عبر
+    // عقد CRM الخادم بدل الكتابة المباشرة (حدّ المجال). نفس الجدول، لا backend مكرر.
+    const { createOpportunityFromInboundComm } = await import("./crm.js");
+    const insertId = await createOpportunityFromInboundComm({
+      companyId,
+      title,
+      contactName: b.name,
+      contactPhone: b.phone,
+      contactEmail: b.email ?? null,
+      source: leadSource,
+      notes,
+      campaignId,
+    });
+
+    // إشعار فريق المبيعات بالفرصة الجديدة (إرسال فقط — لا سياسة).
+    void sendNotification({
+      companyId,
+      type: "crm_opportunity",
+      title: "طلب جديد من الموقع",
+      body: `${b.name} — ${b.phone}${b.email ? ` — ${b.email}` : ""}`,
+      priority: "high",
+      targetRole: "sales_manager",
+      refType: "crm_opportunities",
+      refId: insertId,
+      actionUrl: `/crm/opportunities/${insertId}`,
+      channels: ["in_app"],
+    }).catch((e) => logger.error(e, "public lead notify failed"));
+
+    void createAuditLog({
+      companyId, userId: 0,
+      action: "crm.public_lead_captured", entity: "crm_opportunities", entityId: insertId,
+      after: { name: b.name, source: leadSource, campaignId },
+    }).catch((e) => logger.error(e, "publicData background task failed"));
+    void emitEvent({
+      companyId, branchId: 0, userId: 0,
+      action: "crm.lead.captured", entity: "crm_opportunities", entityId: insertId,
+      details: JSON.stringify({ source: b.source?.trim() || "website" }),
+    }).catch((e) => logger.error(e, "publicData background task failed"));
+
+    res.status(201).json({ ok: true, message: "تم استلام طلبك بنجاح. سيتواصل معك فريقنا قريباً." });
+  } catch (err) {
+    handleRouteError(err, res, "إرسال طلب من الموقع");
+  }
+});
+
+// ── محتوى الموقع العام (واجهة قراءة CMS متعددة المستأجرين) ──────────────────
+// المستأجر يُحَل على الخادم من site_config (slug أو customDomain)، لا نثق أبداً
+// بـ companyId من العميل. نُظهر فقط المواقع المُفعّلة + الصفوف النشطة.
+// الحلّ مفصول حسب العمود لتفادي الغموض: lookup الـ slug يفحص slug فقط،
+// و by-host يفحص customDomain فقط. هكذا لا يتسبب تطابق slug مستأجر مع
+// customDomain مستأجر آخر في تسريب محتوى عبر المستأجرين (كل عمود فريد منفرداً).
+async function resolveSiteBySlug(slug: string): Promise<Record<string, unknown> | null> {
+  const key = (slug || "").trim().toLowerCase();
+  if (!key) return null;
+  const [cfg] = await rawQuery<Record<string, unknown>>(
+    `SELECT * FROM site_config WHERE enabled = true AND LOWER(slug) = $1 LIMIT 1`,
+    [key],
+  );
+  return cfg ?? null;
+}
+
+async function resolveSiteByHost(host: string): Promise<Record<string, unknown> | null> {
+  const key = (host || "").trim().toLowerCase();
+  if (!key) return null;
+  const [cfg] = await rawQuery<Record<string, unknown>>(
+    `SELECT * FROM site_config WHERE enabled = true AND LOWER("customDomain") = $1 LIMIT 1`,
+    [key],
+  );
+  return cfg ?? null;
+}
+
+async function fetchSiteContent(cfg: Record<string, unknown>) {
+  const companyId = cfg.companyId as number;
+  const [packages, services, hotels, faqs, testimonials, team, gallery, banners, navItems, rawCampaigns] = await Promise.all([
+    rawQuery(`SELECT * FROM site_packages WHERE "companyId"=$1 AND "isActive"=true AND "deletedAt" IS NULL ORDER BY "sortOrder" ASC, id ASC`, [companyId]),
+    rawQuery(`SELECT * FROM site_services WHERE "companyId"=$1 AND "isActive"=true AND "deletedAt" IS NULL ORDER BY "sortOrder" ASC, id ASC`, [companyId]),
+    rawQuery(`SELECT * FROM site_hotels WHERE "companyId"=$1 AND "isActive"=true AND "deletedAt" IS NULL ORDER BY "sortOrder" ASC, id ASC`, [companyId]),
+    rawQuery(`SELECT * FROM site_faqs WHERE "companyId"=$1 AND "isActive"=true AND "deletedAt" IS NULL ORDER BY "sortOrder" ASC, id ASC`, [companyId]),
+    rawQuery(`SELECT * FROM site_testimonials WHERE "companyId"=$1 AND "isActive"=true AND "deletedAt" IS NULL ORDER BY "sortOrder" ASC, id ASC`, [companyId]),
+    rawQuery(`SELECT * FROM site_team WHERE "companyId"=$1 AND "isActive"=true AND "deletedAt" IS NULL ORDER BY "sortOrder" ASC, id ASC`, [companyId]),
+    rawQuery(`SELECT * FROM site_gallery WHERE "companyId"=$1 AND "isActive"=true AND "deletedAt" IS NULL ORDER BY "sortOrder" ASC, id ASC`, [companyId]),
+    // البانرات: تُعرض فقط ضمن نافذة التفعيل الزمنية (إن وُجدت).
+    rawQuery(
+      `SELECT * FROM site_banners WHERE "companyId"=$1 AND "isActive"=true AND "deletedAt" IS NULL
+         AND ("startsAt" IS NULL OR "startsAt" <= NOW())
+         AND ("endsAt" IS NULL OR "endsAt" >= NOW())
+       ORDER BY "sortOrder" ASC, id ASC`,
+      [companyId],
+    ),
+    rawQuery(`SELECT * FROM site_nav_items WHERE "companyId"=$1 AND "isActive"=true AND "deletedAt" IS NULL ORDER BY "sortOrder" ASC, id ASC`, [companyId]),
+    // الحملات العامة: نختار حقول العرض الآمنة فقط (لا نسرّب الميزانية/الإنفاق/
+    // الإيراد). تُعرض فقط الحملات المنشورة النشطة ضمن نافذتها الزمنية (إن وُجدت).
+    rawQuery(
+      `SELECT id, slug, name, "publicHeadline", "publicBody", "publicImageUrl", "publicCtaLabel"
+         FROM marketing_campaigns
+        WHERE "companyId"=$1 AND "isPublic"=true AND "deletedAt" IS NULL
+          AND slug IS NOT NULL
+          AND (status IS NULL OR status <> 'archived')
+          AND ("startDate" IS NULL OR "startDate" <= NOW())
+          AND ("endDate" IS NULL OR "endDate" >= NOW())
+        ORDER BY "startDate" DESC NULLS LAST, id DESC`,
+      [companyId],
+    ),
+  ]);
+  const campaigns = (rawCampaigns as Array<Record<string, unknown>>).map((c) => ({
+    id: c.id,
+    slug: c.slug,
+    name: c.name,
+    headline: c.publicHeadline ?? null,
+    body: c.publicBody ?? null,
+    imageUrl: c.publicImageUrl ?? null,
+    ctaLabel: c.publicCtaLabel ?? null,
+  }));
+  return { config: cfg, packages, services, hotels, faqs, testimonials, team, gallery, banners, navItems, campaigns };
+}
+
+// حلّ المستأجر من ترويسة Host (للقالب القياسي المنشور على نطاق مخصّص).
+// يجب أن يُسجَّل قبل "/site/:slug" وإلا التقطه المعامل :slug (تظليل المسار).
+router.get("/site/by-host", publicLimiter, async (req, res) => {
+  try {
+    const host = String(req.headers.host || "").split(":")[0];
+    const cfg = await resolveSiteByHost(host);
+    if (!cfg) { res.status(404).json({ error: "الموقع غير موجود", code: "NOT_FOUND" }); return; }
+    res.json(await fetchSiteContent(cfg));
+  } catch (err) { handleRouteError(err, res, "public site by-host"); }
+});
+
+router.get("/site/:slug", publicLimiter, async (req, res) => {
+  try {
+    const cfg = await resolveSiteBySlug(String(req.params.slug));
+    if (!cfg) { res.status(404).json({ error: "الموقع غير موجود", code: "NOT_FOUND" }); return; }
+    res.json(await fetchSiteContent(cfg));
+  } catch (err) { handleRouteError(err, res, "public site get"); }
+});
+
+router.get("/site/:slug/posts", publicLimiter, async (req, res) => {
+  try {
+    const cfg = await resolveSiteBySlug(String(req.params.slug));
+    if (!cfg) { res.status(404).json({ error: "الموقع غير موجود", code: "NOT_FOUND" }); return; }
+    const companyId = cfg.companyId as number;
+    const posts = await rawQuery(
+      `SELECT * FROM site_posts WHERE "companyId"=$1 AND status='published' AND "deletedAt" IS NULL
+       ORDER BY "publishedAt" DESC NULLS LAST, "sortOrder" ASC, id ASC`,
+      [companyId],
+    );
+    res.json({ posts });
+  } catch (err) { handleRouteError(err, res, "public site posts"); }
 });
 
 export default router;

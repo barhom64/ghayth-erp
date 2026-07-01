@@ -496,10 +496,12 @@ describe("POST /invoices/:id/debit-memo — atomic memo + counters + GL", () => 
   it("posts the JE INSIDE the withTransaction and stamps memo.journalId atomically", () => {
     const start = INV_ROUTE.indexOf('"/invoices/:id/debit-memo"');
     expect(start).toBeGreaterThan(-1);
-    // Bound the slice to this route only — the next route (memos GET)
-    // would be a different scope. Use a generous upper bound on the
-    // assumption the debit-memo route is < 8000 chars.
-    const block = INV_ROUTE.slice(start, start + 8000);
+    // Bound the slice to this route only — the debit-memo POST is followed
+    // by other routes each with its own withTransaction. Bound to the next
+    // route registration (dynamic) rather than a fixed char count: البند ٤
+    // وسّع هذا المعالج فتجاوز الحدّ الثابت السابق (8000).
+    const nextRoute = INV_ROUTE.indexOf("invoicesRouter.", start + 10);
+    const block = INV_ROUTE.slice(start, nextRoute > start ? nextRoute : start + 12000);
     const txnStart = block.indexOf("withTransaction(async (client)");
     expect(txnStart).toBeGreaterThan(-1);
     const memoInsertIdx = block.indexOf("INSERT INTO debit_memos", txnStart);

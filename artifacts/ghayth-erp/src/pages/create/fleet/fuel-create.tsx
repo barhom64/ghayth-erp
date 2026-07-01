@@ -11,6 +11,7 @@ import { useFieldErrors } from "@/hooks/use-field-errors";
 import { VehicleContextCard } from "@/components/shared/vehicle-context-card";
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { VehicleSelect, DriverSelect } from "@/components/shared/entity-selects";
+import { useVehicleDriverDefault, useVehicleMileageDefault } from "@/hooks/use-vehicle-driver-default";
 
 const DRAFT_KEY = "fleet_fuel_create";
 const INITIAL = {
@@ -25,6 +26,14 @@ export default function FuelCreate() {
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const { fieldErrors, validate, setApiError } = useFieldErrors();
+  // الكيان يقود التجربة: اختيار المركبة يُعبّئ سائقها المعيَّن تلقائيًا.
+  const { driverName: autoDriverName } = useVehicleDriverDefault(
+    form.vehicleId,
+    form.driverId,
+    (v) => setForm((f) => ({ ...f, driverId: v })),
+  );
+  // ويُعبّئ قراءة العداد بعدّاد المركبة الحالي (قابل للتعديل).
+  useVehicleMileageDefault(form.vehicleId, form.mileageAtFuel, (v) => setForm((f) => ({ ...f, mileageAtFuel: v })));
 
   const handleSubmit = async () => {
     const firstError = validate({
@@ -76,7 +85,12 @@ export default function FuelCreate() {
             </div>
           )}
         </div>
-        <DriverSelect value={form.driverId} onChange={(v) => setForm((f) => ({ ...f, driverId: v }))} label="السائق" />
+        <div>
+          <DriverSelect value={form.driverId} onChange={(v) => setForm((f) => ({ ...f, driverId: v }))} label="السائق" />
+          {autoDriverName && form.driverId && (
+            <p className="text-xs text-muted-foreground mt-1">عُبّئ تلقائيًا من سائق المركبة المعيَّن ({autoDriverName}) — يمكنك تغييره.</p>
+          )}
+        </div>
         <NumberField label="اللترات" required value={form.liters} onChange={(v) => setForm((f) => ({ ...f, liters: v }))} step={0.01} min={0} error={fieldErrors.liters} />
         <NumberField label="سعر اللتر" value={form.costPerLiter} onChange={(v) => setForm((f) => ({ ...f, costPerLiter: v }))} step={0.01} min={0} />
         {totalCost > 0 && (

@@ -61,7 +61,7 @@ export default function AdminEventOutbox() {
   return (
     <PageShell
       title="صندوق الأحداث الصادرة"
-      subtitle="مراقبة الأحداث المُلتقطة في الـoutbox المعاملاتي — قيد الانتظار مقابل المُعالَجة — وتفريغها عند الطلب"
+      subtitle="مراقبة الأحداث المُلتقطة في صندوق الصادر المعاملاتي — قيد الانتظار مقابل المُعالَجة — وتفريغها عند الطلب"
       breadcrumbs={[
         { href: "/dashboard", label: "لوحة التحكم" },
         { label: "صندوق الأحداث الصادرة" },
@@ -80,7 +80,7 @@ export default function AdminEventOutbox() {
                 toast({ title: `تم تفريغ ${Number(res.drained).toLocaleString("ar-SA")} حدثاً — المتبقي قيد الانتظار: ${Number(res.pending).toLocaleString("ar-SA")}` });
                 refetch();
               } catch (e: any) {
-                toast({ variant: "destructive", title: e?.message || "فشل تفريغ الـoutbox" });
+                toast({ variant: "destructive", title: e?.message || "فشل تفريغ صندوق الصادر" });
               }
             }}
           >
@@ -112,7 +112,7 @@ export default function AdminEventOutbox() {
         <Card className="mt-4 border-status-info-surface/40">
           <CardContent className="p-4 text-sm text-muted-foreground leading-relaxed">
             {pending === 0
-              ? "لا توجد أحداث عالقة — الـoutbox فارغ من المعلّق. التفريغ يعمل تلقائياً ضمن دورة الصيانة؛ هذا الزر للتفريغ اليدوي عند الحاجة."
+              ? "لا توجد أحداث عالقة — صندوق الصادر فارغ من المعلّق. التفريغ يعمل تلقائياً ضمن دورة الصيانة؛ هذا الزر للتفريغ اليدوي عند الحاجة."
               : `يوجد ${Number(pending).toLocaleString("ar-SA")} حدثاً قيد الانتظار. اضغط «تفريغ الآن» لتعليم الأحداث المُلتقطة والمُرسَلة كـ«مُعالَجة». لا يُعيد البثّ (إعادة البثّ مرحلة لاحقة).`}
           </CardContent>
         </Card>

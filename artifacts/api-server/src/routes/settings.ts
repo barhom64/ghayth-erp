@@ -19,6 +19,7 @@ import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { createCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
 import { reloadCronScheduler } from "../lib/cronScheduler.js";
 import { bootstrapCompany } from "../lib/companyBootstrap.js";
+import { previewCompanyPurge, purgeCompanies } from "../lib/purgeCompany.js";
 import {
   TASK_SLA_REMINDER_SETTING_KEY,
   DEFAULT_TASK_SLA_REMINDER_CONFIG,
@@ -121,6 +122,7 @@ const createCompanySchema = z.object({
   nameEn: z.string().optional(),
   taxNumber: z.string().optional(),
   crNumber: z.string().optional(),
+  parentCompanyId: z.number().int().positive().nullable().optional(),
 });
 
 const updateCompanySchema = z.object({
@@ -128,6 +130,7 @@ const updateCompanySchema = z.object({
   nameEn: z.string().optional(),
   taxNumber: z.string().optional(),
   crNumber: z.string().optional(),
+  parentCompanyId: z.number().int().positive().nullable().optional(),
 });
 
 const systemControlsSchema = z.record(z.string().min(1), z.unknown());
@@ -888,6 +891,14 @@ router.post("/companies", authorize({ feature: "settings", action: "update" }), 
     const body = zodParse(createCompanySchema.safeParse(req.body));
     const scope = req.scope!;
     const { name, nameEn, taxNumber, crNumber } = body;
+    // Validate the optional parent BEFORE creating the company, so an invalid
+    // parent rejects the whole request instead of leaving a half-created company.
+    if (body.parentCompanyId !== undefined && body.parentCompanyId !== null) {
+      const parentId = body.parentCompanyId;
+      if (!scope.allowedCompanies.includes(parentId)) throw new ForbiddenError("لا تملك صلاحية على الشركة الأم المحددة");
+      const [parentExists] = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE id=$1`, [parentId]);
+      if (!parentExists) throw new NotFoundError("الشركة الأم غير موجودة");
+    }
     const r = await rawExecute(`INSERT INTO companies (name, "nameEn", "vatNumber", "crNumber") VALUES ($1,$2,$3,$4)`, [name, nameEn || null, taxNumber || null, crNumber || null]);
     const companyId = r.insertId;
 
@@ -913,6 +924,12 @@ router.post("/companies", authorize({ feature: "settings", action: "update" }), 
       } catch (_cleanupErr) { logger.error(_cleanupErr, "cleanup error"); }
       handleRouteError(bootstrapErr, res, "Bootstrap company error");
       return;
+    }
+
+    // Apply the optional parent-company link (already validated above). A
+    // brand-new company is a leaf, so no cycle is possible here.
+    if (body.parentCompanyId !== undefined && body.parentCompanyId !== null && body.parentCompanyId !== companyId) {
+      await rawExecute(`UPDATE companies SET "parentCompanyId"=$1 WHERE id=$2`, [body.parentCompanyId, companyId]);
     }
 
     createAuditLog({
@@ -944,6 +961,62 @@ router.post("/companies", authorize({ feature: "settings", action: "update" }), 
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
+/* ── Company hard-purge (owner only) ────────────────────────────────────────
+ * Two-step, owner-gated permanent deletion of an ENTIRE company and all of its
+ * data across the schema. `purge-preview` returns the per-table row counts that
+ * WOULD be deleted (read-only); `purge` performs the irreversible delete inside
+ * a single transaction. The plain DELETE /companies/:id cannot remove a company
+ * that has any child data (half the FKs to companies are NO ACTION) — this
+ * clears dependents in FK-safe order first. See lib/purgeCompany.ts. Mounted
+ * before /companies/:id so the literal paths are not captured by the :id param.
+ */
+const companyPurgeSchema = z.object({
+  companyIds: z.array(z.number().int().positive()).min(1).max(20),
+  confirm: z.boolean().optional(),
+});
+
+router.post("/companies/purge-preview", authorize({ feature: "settings", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!scope.isOwner) throw new ForbiddenError("هذه العملية متاحة للمالك فقط");
+    const { companyIds } = zodParse(companyPurgeSchema.safeParse(req.body ?? {}));
+    for (const id of companyIds) {
+      if (!scope.allowedCompanies?.includes(id) && scope.companyId !== id) {
+        throw new ForbiddenError(`لا تملك صلاحية على الشركة رقم ${id}`);
+      }
+      if (id === scope.companyId) throw new ValidationError("لا يمكنك حذف الشركة الحالية — بدّل إلى شركة أخرى أولاً");
+    }
+    const preview = await withTransaction((client) => previewCompanyPurge(client, companyIds));
+    res.json({ companyIds, ...preview });
+  } catch (err) { handleRouteError(err, res, "settings"); }
+});
+
+router.post("/companies/purge", authorize({ feature: "settings", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!scope.isOwner) throw new ForbiddenError("هذه العملية متاحة للمالك فقط");
+    const { companyIds, confirm } = zodParse(companyPurgeSchema.safeParse(req.body ?? {}));
+    if (confirm !== true) throw new ValidationError("يجب تأكيد الحذف النهائي (confirm=true)");
+    for (const id of companyIds) {
+      if (!scope.allowedCompanies?.includes(id) && scope.companyId !== id) {
+        throw new ForbiddenError(`لا تملك صلاحية على الشركة رقم ${id}`);
+      }
+      if (id === scope.companyId) throw new ValidationError("لا يمكنك حذف الشركة الحالية — بدّل إلى شركة أخرى أولاً");
+    }
+    const before = await withTransaction((client) => previewCompanyPurge(client, companyIds));
+    const result = await withTransaction((client) => purgeCompanies(client, companyIds));
+    for (const id of companyIds) {
+      createAuditLog({
+        companyId: scope.companyId, userId: scope.userId, action: "settings.deleted",
+        entity: "companies", entityId: id,
+        before: { purgedCompanyId: id, preview: before.rows, totalRows: result.total },
+      }).catch((e) => logger.error(e, "settings background task failed"));
+    }
+    logger.warn({ companyIds, total: result.total, passes: result.passes, by: scope.userId }, "company hard-purge executed");
+    res.json({ success: true, ...result });
+  } catch (err) { handleRouteError(err, res, "settings"); }
+});
+
 router.put("/companies/:id", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(updateCompanySchema.safeParse(req.body));
@@ -955,6 +1028,32 @@ router.put("/companies/:id", authorize({ feature: "settings", action: "update" }
     }
     const { affectedRows } = await rawExecute(`UPDATE companies SET name=$1, "nameEn"=$2, "vatNumber"=$3, "crNumber"=$4 WHERE id=$5 RETURNING id`, [name, nameEn || null, taxNumber || null, crNumber || null, id]);
     if (!affectedRows) throw new NotFoundError("الشركة غير موجودة");
+
+    // Optional parent-company link: set, change, or clear (null) the parent.
+    if (body.parentCompanyId !== undefined) {
+      const parentId = body.parentCompanyId;
+      if (parentId === null) {
+        await rawExecute(`UPDATE companies SET "parentCompanyId"=NULL WHERE id=$1`, [id]);
+      } else {
+        if (parentId === id) throw new ValidationError("لا يمكن أن تكون الشركة تابعة لنفسها");
+        if (!scope.allowedCompanies?.includes(parentId)) throw new ForbiddenError("لا تملك صلاحية على الشركة الأم المحددة");
+        const [parent] = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE id=$1`, [parentId]);
+        if (!parent) throw new NotFoundError("الشركة الأم غير موجودة");
+        // Reject ANY cycle (A→B→C→A), not just a direct 2-cycle: walk the
+        // proposed parent's ancestry chain; if it already contains this company,
+        // linking would close a loop.
+        const cycle = await rawQuery<{ one: number }>(
+          `WITH RECURSIVE anc AS (
+             SELECT c0.id AS id, c0."parentCompanyId" AS "parentCompanyId" FROM companies c0 WHERE c0.id = $1
+             UNION ALL
+             SELECT c.id AS id, c."parentCompanyId" AS "parentCompanyId" FROM companies c JOIN anc ON c.id = anc."parentCompanyId"
+           ) SELECT 1 AS one FROM anc WHERE anc.id = $2 LIMIT 1`,
+          [parentId, id],
+        );
+        if (cycle.length > 0) throw new ValidationError("لا يمكن إنشاء ارتباط دائري بين الشركات");
+        await rawExecute(`UPDATE companies SET "parentCompanyId"=$1 WHERE id=$2`, [parentId, id]);
+      }
+    }
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "settings.updated",
       entity: "companies", entityId: id,
@@ -963,6 +1062,42 @@ router.put("/companies/:id", authorize({ feature: "settings", action: "update" }
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: id, details: JSON.stringify({ key: "company" }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
+});
+
+// البند ٣ (دفعة ٣) — عقد الإعدادات: تطبيق مستخرَج OCR مؤكَّد (سجل تجاري) على الشركة.
+// حدّ المسار: الوثائق (خادم) لا تكتب على الشركة؛ هذا العقد المملوك للإعدادات يكتب
+// crNumber بصلاحية settings + حارس ملكية الشركة (نفس PUT أعلاه) + تدقيق، بسياسة «املأ
+// الفارغ فقط» (لا يطمس سجلًا تجاريًّا قائمًا). جهة الإصدار بلا عمود → تبقى للمراجعة.
+router.post("/companies/:id/ocr-apply", authorize({ feature: "settings", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    if (!scope.allowedCompanies?.includes(id) && scope.companyId !== id) {
+      throw new ForbiddenError("لا يمكنك تعديل شركة لا تملك صلاحية عليها");
+    }
+    const docType = String(req.body?.docType ?? "");
+    const fields = req.body?.fields && typeof req.body.fields === "object" ? req.body.fields : {};
+    if (!/commercial|سجل\s*تجاري|cr_?reg|registration/i.test(docType)) {
+      throw new ValidationError("نوع المستند غير مدعوم بعد للتطبيق على الشركة", { field: "docType", fix: "المدعوم: السجل التجاري." });
+    }
+    const crNumber = typeof fields.crNumber === "string" && /^\d{10}$/.test(fields.crNumber) ? fields.crNumber : null;
+    if (!crNumber) {
+      res.json({ ok: true, applied: [], skipped: [], message: "لا رقم سجل صالح للتطبيق." });
+      return;
+    }
+    const [comp] = await rawQuery<{ id: number; crNumber: string | null }>(`SELECT id, "crNumber" FROM companies WHERE id=$1`, [id]);
+    if (!comp) throw new NotFoundError("الشركة غير موجودة");
+    if (comp.crNumber) {
+      res.json({ ok: true, applied: [], skipped: ["crNumber"], message: "سجل تجاري قائم — لم يُطمَس." });
+      return;
+    }
+    await rawExecute(`UPDATE companies SET "crNumber"=$1 WHERE id=$2`, [crNumber, id]);
+    void createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "company.ocr.applied",
+      entity: "companies", entityId: id, after: { docType, applied: ["crNumber"], crNumber },
+    }).catch((e) => logger.error(e, "company ocr apply audit failed"));
+    res.json({ ok: true, applied: ["crNumber"], skipped: [] });
+  } catch (err) { handleRouteError(err, res, "company OCR apply error:"); }
 });
 
 router.delete("/companies/:id", authorize({ feature: "settings", action: "update" }), async (req, res) => {

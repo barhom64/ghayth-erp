@@ -271,7 +271,7 @@ export default function AdminCommunicationControl() {
         { href: "/dashboard", label: "لوحة التحكم" },
         { label: "مركز التحكّم بالاتصالات" },
       ]}
-      subtitle="الـ Unified Inbox، سجل المزوّدات مع الـ failover، وقواعد منع تسريب البيانات (DLP)"
+      subtitle="صندوق الوارد الموحّد، سجل المزوّدات مع التحويل عند الفشل، وقواعد منع تسريب البيانات (DLP)"
       actions={
         <RefreshAction onRefresh={refreshAll} />
       }

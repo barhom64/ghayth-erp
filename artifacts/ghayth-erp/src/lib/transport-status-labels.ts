@@ -20,6 +20,18 @@
  *
  * Owner's rule (RM-03): «صفر fallback إنجليزي خام». Every status
  * returned by the API must surface in Arabic on the operator screen.
+ *
+ * ── علاقتها بـ STATUS_MAP (page-status-badge.tsx) — فصل مقصود لا تكرار ──
+ * هذا القاموس هو المصدر الموحّد لحالات مسار **النقل/الأسطول اللوجستي**
+ * (٩ كيانات)، وهو ثمرة توحيد مقصود سابق (TA-T18، انظر
+ * transportDriverStatusUnification.test.ts) ومحروس بـ ٨ ملفات اختبار +
+ * اختبار انحراف يقرأ enums الخادم. يملك لوحة ألوان لوجستية أغنى
+ * (purple/orange/rose لمراحل الشحن) وتسميات مناسبة للسياق (rental active=
+ * «فعّال» لا «نشط» العام). بينما STATUS_MAP هو السجل العام عبر-المسارات
+ * بألوان دلالية (success/info/…). التقاطع في trip/vehicle/driver مقصود:
+ * التسمية تتبع السياق. **لا تُدمَج القسريّة بينهما** — الدمج يكسر الاختبارات
+ * الثمانية ويفقد اللوحة اللوجستية ويهدم توحيدًا قائمًا. (قرار معماري
+ * معتمد من إبراهيم 2026-07-01.)
  */
 
 export type TransportEntity =

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -26,21 +26,14 @@ import { LiveImpactPreview } from "@/components/shared/impact-preview";
 import { FinancialAttachmentViewer } from "@/components/shared/financial-attachment-viewer";
 import { SupplierItemPicker, type SupplierItem } from "@/components/shared/supplier-item-picker";
 import { useSupplierFinanceDefaults, useSupplierItems } from "@/lib/financial-memory";
+import { ACCOUNT_PURPOSE_OPTIONS } from "@/lib/finance/account-purposes";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
 // accountPurpose options (TEXT). The financial engine resolves each to a GL
 // account on the server — the UI NEVER carries a GL code (FIN-P11 #2241).
-const ACCOUNT_PURPOSE_OPTIONS: { value: string; label: string }[] = [
-  { value: "general_expense", label: "مصروف عام / إداري" },
-  { value: "service_expense", label: "خدمات / أتعاب مهنية" },
-  { value: "vehicle_expense", label: "مصروف مركبات (صيانة/وقود)" },
-  { value: "project_cost", label: "تكلفة مشروع/مقاولات" },
-  { value: "store_inventory", label: "مخزون / بضاعة" },
-  { value: "inventory_receipt", label: "استلام مخزون" },
-  { value: "fixed_asset_purchase", label: "شراء أصل ثابت (رسملة)" },
-  { value: "supplier_prepayment", label: "دفعة مقدمة لمورد" },
-];
+// ACCOUNT_PURPOSE_OPTIONS مُوحَّد في @/lib/finance/account-purposes (مصدر واحد
+// مع صفحة فاتورة المورد التشغيلية م٤؛ المفاتيح عقدٌ مع المحرّك المالي).
 
 interface VendorInvoiceLine {
   itemId?: number;
@@ -88,6 +81,17 @@ export default function VendorInvoiceCreate() {
   const { data: accountsData, isLoading: accountsLoading, isError } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
   const accounts = accountsData?.data || [];
   const moneyAccounts = accounts.filter((a: any) => isMoneyAccount(a));
+
+  // البند ٤ — أكواد الضريبة الفعّالة لمنتقي رمز ضريبة البند (بدل النص الحر).
+  // رمز البند يحدّد حساب ضريبة المدخلات في المعالج (resolveVendorInvoicePlan).
+  const { data: taxCodesData } = useApiQuery<{ data: Array<{ code: string; name: string; rate: number | string; isActive: boolean }> }>(
+    ["tax-codes"],
+    "/finance/tax-codes",
+  );
+  const taxCodes = useMemo(
+    () => (taxCodesData?.data ?? []).filter((t) => t.isActive && t.code),
+    [taxCodesData],
+  );
 
   const [supplierId, setSupplierId] = useState("");
   const [paid, setPaid] = useState(false);
@@ -253,7 +257,7 @@ export default function VendorInvoiceCreate() {
             <h3 className="font-semibold text-sm text-muted-foreground">بيانات الفاتورة</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <SupplierSelect value={supplierId} onChange={setSupplierId} label="المورد" required />
-              <BranchSelect value={branchId} onChange={setBranchId} label="الفرع" required />
+              <BranchSelect value={branchId} onChange={setBranchId} label="الفرع" required autoSelectOwnBranch />
               <TextField label="رقم الفاتورة" value={invoiceNo} onChange={setInvoiceNo} placeholder="رقم فاتورة المورد" />
               <FormFieldWrapper label="تاريخ الفاتورة" required>
                 <DatePicker value={invoiceDate} onChange={setInvoiceDate} />
@@ -352,7 +356,21 @@ export default function VendorInvoiceCreate() {
                   )}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <CostCenterSelect value={line.costCenterId} onChange={(v) => updateLine(i, { costCenterId: v })} label="مركز التكلفة" />
-                    <TextField label="رمز الضريبة" value={line.taxCode} onChange={(v) => updateLine(i, { taxCode: v })} placeholder="رمز" />
+                    {/* البند ٤ — منتقٍ بدل النص الحر (الدستور: لا إدخال حر بحقل مرتبط
+                        بكيان). رمز البند يحدّد حساب ضريبة المدخلات في المعالج. */}
+                    <FormFieldWrapper label="رمز الضريبة">
+                      <Select value={line.taxCode || "_none"} onValueChange={(v) => updateLine(i, { taxCode: v === "_none" ? "" : v })}>
+                        <SelectTrigger><SelectValue placeholder="اختر رمز الضريبة..." /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="_none">— بدون —</SelectItem>
+                          {taxCodes.map((t) => (
+                            <SelectItem key={t.code} value={t.code}>
+                              {t.code} ({Number(t.rate).toFixed(0)}%) — {t.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormFieldWrapper>
                   </div>
                   {/* per-line dimensions */}
                   <LineAllocationPanel

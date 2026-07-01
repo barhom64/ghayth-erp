@@ -151,7 +151,7 @@ export default function UmrahTransportRequestsPage() {
   return (
     <PageShell
       title="طلبات النقل عبر العقد الموحّد"
-      subtitle="POST /umrah/groups/:id/transport-requests — المسار الموحَّد لربط العمرة بأسطول النقل."
+      subtitle="المسار الموحَّد لربط العمرة بأسطول النقل."
       breadcrumbs={[
         { href: "/umrah", label: "إدارة العمرة" },
         { label: "طلبات النقل (العقد الموحّد)" },

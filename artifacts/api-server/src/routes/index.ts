@@ -27,6 +27,7 @@ import fleetInspectionsRouter from "./fleet-inspections.js";
 import fleetTelematicsRouter from "./fleet-telematics.js";
 import fleetTelematicsWebhookRouter from "./fleet-telematics-webhook.js";
 import cargoRouter from "./cargo.js";
+import siteRouter from "./site.js";
 import warehouseRouter from "./warehouse.js";
 import { warehouseCycleCountsRouter } from "./warehouse-cycle-counts.js";
 import { warehouseAdvancedRouter } from "./warehouse-advanced.js";
@@ -95,6 +96,8 @@ import { transportBookingsRouter } from "./transport-bookings.js";
 import { vehicleProfileRouter } from "./vehicle-profile.js";
 import { transportPricingRouter } from "./transport-pricing.js";
 import { transportPlanningRouter } from "./transport-planning.js";
+import { fleetDriverHoursRouter } from "./fleet-driver-hours.js"; // أجر السائق بالساعة — الدفعة 1
+import { fleetMovementBonusesRouter } from "./fleet-movement-bonuses.js"; // مكافآت حركات النقل — الدفعة أ
 import { transportCalendarRouter } from "./transport-calendar.js"; // TR-022
 import { fleetOptimizerRouter } from "./fleet-optimizer.js"; // TA-T18-VRP Phase 2
 import { transportIntegrationRouter } from "./transport-integration.js";
@@ -169,7 +172,6 @@ import umrahEmployeeAssignmentsRouter from "./umrah-employee-assignments.js";
 import operationsCenterRouter from "./operationsCenter.js";
 import {
   warehouseStubsRouter,
-  documentsStubsRouter,
   hrStubsRouter,
   financeStubsRouter,
   adminStubsRouter,
@@ -207,6 +209,7 @@ import disciplineRouter from "./hr-discipline.js";
 import orgRouter from "./org.js";
 import loansRouter from "./hr-loans.js";
 import overtimeRouter from "./hr-overtime.js";
+import driverPayRouter from "./hr-driver-pay.js"; // معدّلات أجر السائق — الدفعة 2
 import exitRouter from "./hr-exit.js";
 import wpsRouter from "./hr-wps.js";
 import complianceRouter from "./hr-compliance.js";
@@ -407,6 +410,10 @@ router.use(csrfMiddleware);
 // reach /admin/subscription and pay — non-owners get a 402.
 router.use(subscriptionGate);
 
+// Website CMS (multi-tenant). Per-route RBAC (feature "website") + CSRF; no
+// requireModule gate so owner/GM reach it without a module subscription key.
+router.use("/site", siteRouter);
+
 // Per-user catch-all limiter for ALL authenticated /api traffic. Replaces
 // the blanket per-IP globalLimiter that used to live in app.ts. Mounted
 // here so it runs after authMiddleware (req.scope is set) and BEFORE any
@@ -490,6 +497,7 @@ router.use("/hr", requireModule("hr"), hrRouter);
 router.use("/hr/discipline", requireModule("hr"), disciplineRouter);
 router.use("/hr", requireModule("hr"), loansRouter);
 router.use("/hr", requireModule("hr"), overtimeRouter);
+router.use("/hr", requireModule("hr"), driverPayRouter); // معدّلات أجر السائق — الدفعة 2
 router.use("/hr", requireModule("hr"), exitRouter);
 router.use("/hr", requireModule("hr"), wpsRouter);
 router.use("/hr", requireModule("hr"), complianceRouter);
@@ -578,6 +586,8 @@ router.use(transportBookingsRouter);
 router.use(vehicleProfileRouter);
 router.use(transportPricingRouter);
 router.use(transportPlanningRouter);
+router.use(fleetDriverHoursRouter);  // أجر السائق بالساعة — ساعات العمل (الدفعة 1)
+router.use(fleetMovementBonusesRouter); // مكافآت حركات النقل (الدفعة أ)
 router.use(transportCalendarRouter); // TR-022 unified transport calendar
 router.use(fleetOptimizerRouter);    // TA-T18-VRP Phase 2 batch optimizer
 router.use(transportIntegrationRouter);
@@ -742,7 +752,7 @@ router.use("/operations-center", requireModule("operations"), requireMinLevel(50
 // stand-ins; real implementations carry their own authorize/requireMinLevel.
 // GAP_MATRIX P1 — role ladder: 20 not a real role level; corrected to 10.
 router.use("/warehouse", requireModule("warehouse"), requireMinLevel(10), warehouseStubsRouter);
-router.use("/documents", requireModule("documents"), requireMinLevel(10), documentsStubsRouter);
+// /documents OCR stubs نُقِلت إلى routes/documents.ts بتنفيذ حقيقي (م٢-ج) — لا stub متبقٍّ.
 router.use("/hr", requireModule("hr"), requireMinLevel(10), hrStubsRouter);
 // Pricing rules — real CRUD + engine preview (migration 171). Mounted BEFORE
 // financeStubsRouter so /finance/pricing/* resolves to the real handlers (the

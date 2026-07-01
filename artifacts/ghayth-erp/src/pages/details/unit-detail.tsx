@@ -2,6 +2,7 @@ import { useState } from "react";
 import { z } from "zod";
 import { useRoute, Link, useLocation } from "wouter";
 import { useApiQuery, apiFetch, useApiMutation } from "@/lib/api";
+import { priorityLabel } from "@/lib/priority-labels";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,11 +43,12 @@ import { CheckSquare, BookOpen } from "lucide-react";
 import {
   DetailPageLayout,
   EntityComments,
+  EntityDocuments,
+  PROPERTY_ATTACHMENT_CATEGORIES,
 } from "@workspace/entity-kit";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { PrintButton } from "@/components/shared/print-button";
-import { EntityAttachmentPanel } from "@/components/shared/entity-attachment-panel";
 import { PropertyAlertsPanel, buildUnitAlerts } from "@/components/shared/property-alerts-panel";
 
 const TABS = [
@@ -691,7 +693,7 @@ export default function UnitDetail() {
                 columns={[
                   { key: "category", header: "الفئة", render: (m) => <span className="font-medium">{m.category || "-"}</span> },
                   { key: "description", header: "الوصف", render: (m) => <span className="text-muted-foreground max-w-xs truncate block">{m.description || "-"}</span> },
-                  { key: "priority", header: "الأولوية", render: (m) => <PageStatusBadge status={m.priority} /> },
+                  { key: "priority", header: "الأولوية", render: (m) => <PageStatusBadge status={m.priority}>{m.priority === "urgent" ? "عاجلة" : priorityLabel(m.priority)}</PageStatusBadge> },
                   { key: "status", header: "الحالة", render: (m) => <PageStatusBadge status={m.status} /> },
                   { key: "actualCost", header: "التكلفة", render: (m) => <span className="text-muted-foreground">{m.actualCost != null ? formatCurrency(Number(m.actualCost)) : "-"}</span> },
                   { key: "materialsUsed", header: "المواد المستخدمة", render: (m) => {
@@ -718,11 +720,14 @@ export default function UnitDetail() {
       {activeTab === "attachments" && id && (
         <Card className="border-0 shadow-sm">
           <CardContent className="p-5">
-            <EntityAttachmentPanel
+            <EntityDocuments
               entityType="property_unit"
               entityId={Number(id)}
-              label="مرفقات الوحدة"
+              title="مرفقات الوحدة"
+              categories={PROPERTY_ATTACHMENT_CATEGORIES}
               defaultCategory="unit_photo_before"
+              quickUpload
+              viewMode="grid"
             />
           </CardContent>
         </Card>
@@ -861,7 +866,7 @@ export default function UnitDetail() {
                   <SelectItem value="low">منخفضة</SelectItem>
                   <SelectItem value="medium">متوسطة</SelectItem>
                   <SelectItem value="high">عالية</SelectItem>
-                  <SelectItem value="urgent">عاجلة</SelectItem>
+                  <SelectItem value="critical">حرجة</SelectItem>
                 </SelectContent>
               </Select>
             </div>

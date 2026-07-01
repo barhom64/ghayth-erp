@@ -21,12 +21,14 @@ const MATERIALIZE = readFileSync(join(apiSrc, "routes/transport-billing-candidat
 describe("#TA-T18 — maintenance expense candidate (finance boundary)", () => {
   it("engine exposes createMaintenanceExpenseCandidate creating a pending EXPENSE candidate", () => {
     expect(ENGINE).toMatch(/async createMaintenanceExpenseCandidate\(/);
-    const i = ENGINE.indexOf("createMaintenanceExpenseCandidate");
-    const block = ENGINE.slice(i, i + 1800);
-    expect(block).toMatch(/'maintenance'/);                         // sourceType
-    expect(block).toMatch(/"suggestedRevenue", "suggestedCost"/);   // carries cost
-    expect(block).toMatch(/NULL, \$6/);                             // revenue NULL, cost is the amount
-    expect(block).toMatch(/ON CONFLICT \("companyId", "sourceType", "sourceId"\) DO NOTHING/);
+    const i = ENGINE.indexOf("async createMaintenanceExpenseCandidate(");
+    const block = ENGINE.slice(i, i + 1200);
+    expect(block).toMatch(/sourceType: "maintenance"/);  // sourceType via the mapper
+    expect(block).toMatch(/suggestedCost: cost/);        // carries the cost
+    expect(block).not.toMatch(/suggestedRevenue/);       // pure expense ⇒ revenue omitted (NULL)
+    // Idempotency anchor now lives once in the shared writer.
+    const writer = ENGINE.slice(ENGINE.indexOf("async createBillingCandidate("), ENGINE.indexOf("async createCargoBillingCandidate("));
+    expect(writer).toMatch(/ON CONFLICT \("companyId", "sourceType", "sourceId"\) DO NOTHING/);
   });
 
   it("maintenance completion queues a candidate, NOT a direct GL post", () => {
@@ -53,8 +55,8 @@ describe("#TA-T18 — fuel + insurance expense candidates (same boundary)", () =
   it("engine exposes fuel + insurance expense candidate creators", () => {
     expect(ENGINE).toMatch(/async createFuelExpenseCandidate\(/);
     expect(ENGINE).toMatch(/async createInsuranceExpenseCandidate\(/);
-    expect(ENGINE).toMatch(/'fuel', \$3, \$4/);
-    expect(ENGINE).toMatch(/'insurance', \$3, \$4/);
+    expect(ENGINE).toMatch(/sourceType: "fuel"/);
+    expect(ENGINE).toMatch(/sourceType: "insurance"/);
   });
 
   it("fuel + insurance creation queues candidates, not a direct GL post", () => {

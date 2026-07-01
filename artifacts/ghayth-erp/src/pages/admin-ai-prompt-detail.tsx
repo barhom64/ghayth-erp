@@ -433,7 +433,7 @@ export default function AdminAiPromptDetailPage() {
                       <DataTable
                         columns={evalColumns}
                         data={evaluations}
-                        emptyMessage="لم يُجرَ أي تقييم على هذا الـ prompt"
+                        emptyMessage="لم يُجرَ أي تقييم على هذا الموجّه"
                         noToolbar
                       />
                     </PageStateWrapper>
@@ -449,7 +449,7 @@ export default function AdminAiPromptDetailPage() {
         <EntityEditDialog
           open={editOpen}
           onClose={() => setEditOpen(false)}
-          title="تعديل Prompt"
+          title="تعديل الموجّه"
           description="التعديل متاح فقط على المسودة. بعد إرسالها للمراجعة لا يمكن تعديل المحتوى."
           schema={promptEditSchema}
           defaultValues={{

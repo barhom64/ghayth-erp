@@ -27,6 +27,7 @@
  */
 
 import { rawQuery } from "../rawdb.js";
+import { ForbiddenError } from "../errorHandler.js";
 
 export interface RequesterIdentity {
   /** Creator's employee id — the canonical "same person" key. */
@@ -83,4 +84,31 @@ export async function resolveRequester(
     employeeId: row.employeeId ?? null,
     assignmentId: row.assignmentId ?? null,
   };
+}
+
+/**
+ * Maker-checker guard: throws `ForbiddenError` if the approver is the same
+ * employee who created the request. This is the SAME segregation-of-duties
+ * rule the unified approval-chain endpoint enforces (routes/hr.ts) — lifted
+ * into a shared helper so the finance-direct approval endpoints (custody /
+ * expense / salary-advance) enforce it too, instead of letting a creator
+ * self-approve their own already-posted entry via the direct path.
+ *
+ * Owners / non-employee approvers (null `approverEmployeeId`) are exempt,
+ * matching the chain's `scope.employeeId != null` guard. A creator that can't
+ * be resolved (null) does NOT block — fail-open here mirrors the chain, where
+ * the unresolved case already falls through; the resolver map is pinned by
+ * selfApprovalCreators.test.ts so a silent-skip regression is caught there.
+ */
+export async function assertNotSelfApproval(
+  refType: string,
+  refId: number,
+  companyId: number,
+  approverEmployeeId: number | null | undefined,
+): Promise<void> {
+  if (approverEmployeeId == null) return;
+  const creator = await resolveRequester(refType, refId, companyId);
+  if (creator?.employeeId != null && creator.employeeId === approverEmployeeId) {
+    throw new ForbiddenError("لا يمكنك الموافقة على طلبك الخاص");
+  }
 }

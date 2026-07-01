@@ -11,9 +11,10 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { FormShell, FormTextField, FormSelectField } from "@workspace/ui-core";
-import { FileText, Upload, Download, Plus, X, FileUp, Eye, List, LayoutGrid, ClipboardCheck, Printer, MessageCircle } from "lucide-react";
+import { FileText, Upload, Download, Plus, X, FileUp, Eye, List, LayoutGrid, ClipboardCheck, Printer, MessageCircle, Loader2, ExternalLink, Trash2 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { AttachmentPreview, type PreviewableAttachment } from "./attachment-preview";
 import { DecisionImpactPreview } from "./decision-impact";
 import { EntityComments } from "./entity-comments";
@@ -27,13 +28,52 @@ const uploadDocSchema = z.object({
   category: z.string(),
 });
 
-const CATEGORIES = [
+type DocCategory = { value: string; label: string };
+
+// القيم تطابق تعداد DOCUMENT_CATEGORIES الخلفي (وعليه تُحسب فترة الحفظ) — وإلا يُرفض
+// الرفع (Invalid enum). official/financial/other لم تكن ضمنه فكان الرفع بها يفشل؛
+// صُحّحت (التسميات العربية كما هي).
+const CATEGORIES: DocCategory[] = [
   { value: "contracts", label: "عقود" },
-  { value: "official", label: "وثائق رسمية" },
-  { value: "financial", label: "مالية" },
+  { value: "compliance", label: "وثائق رسمية" },
+  { value: "finance", label: "مالية" },
   { value: "hr", label: "موارد بشرية" },
   { value: "legal", label: "قانونية" },
-  { value: "other", label: "أخرى" },
+  { value: "general", label: "أخرى" },
+];
+
+/**
+ * تصنيفات مرفقات الأملاك — مشتركة مع صفحات العقود والوحدات. تُمرَّر عبر prop
+ * `categories` فلا تغيّر التصنيفات الافتراضية لباقي الاستخدامات.
+ */
+export const PROPERTY_ATTACHMENT_CATEGORIES: DocCategory[] = [
+  { value: "property_photo",       label: "صورة عقار" },
+  { value: "unit_photo_before",    label: "صورة وحدة (قبل)" },
+  { value: "unit_photo_after",     label: "صورة وحدة (بعد)" },
+  { value: "unit_handover",        label: "صورة تسليم" },
+  { value: "contract_pdf",         label: "ملف عقد" },
+  { value: "title_deed",           label: "صك ملكية" },
+  { value: "tenant_id",            label: "هوية مستأجر" },
+  { value: "payment_receipt",      label: "سند قبض" },
+  { value: "maintenance_photo",    label: "صورة صيانة" },
+  { value: "eviction_photo",       label: "صورة إخلاء" },
+  { value: "legal_notice",         label: "إشعار قانوني" },
+  { value: "other",                label: "أخرى" },
+];
+
+/**
+ * تصنيفات مرفقات العمرة — موحَّدة مع صفحات تفاصيل العمرة (المعتمر/الوكيل/الوكيل
+ * الفرعي/الموسم). تُمرَّر عبر prop `categories` فلا تؤثر على التصنيفات الافتراضية
+ * لباقي الاستخدامات.
+ */
+export const UMRAH_ATTACHMENT_CATEGORIES: DocCategory[] = [
+  { value: "passport",         label: "جواز سفر" },
+  { value: "visa",             label: "تأشيرة" },
+  { value: "contract",         label: "عقد" },
+  { value: "nusk_file",        label: "ملف نسك" },
+  { value: "identity",         label: "هوية / إقامة" },
+  { value: "transfer_receipt", label: "إيصال تحويل" },
+  { value: "other",            label: "أخرى" },
 ];
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
@@ -81,9 +121,15 @@ function formatSize(bytes: number) {
 }
 
 /** Arabic label for a document category (falls back to the raw value). */
-function categoryLabel(value?: string): string {
+function categoryLabel(value?: string, cats: DocCategory[] = CATEGORIES): string {
   if (!value) return "غير مصنّف";
-  return CATEGORIES.find((c) => c.value === value)?.label ?? value;
+  return cats.find((c) => c.value === value)?.label ?? value;
+}
+
+/** Whether a document is an image (by mime, falling back to file extension). */
+function isImageDoc(mime?: string, name?: string): boolean {
+  if (mime?.startsWith("image/")) return true;
+  return !!name && /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(name);
 }
 
 /**
@@ -108,15 +154,35 @@ interface EntityDocumentsProps {
    *  The caller gates this (e.g. reviewer perspective); the server enforces the
    *  approver-role permission regardless. Default false. */
   canReview?: boolean;
+  /** Category list used for labels + the upload picker. Defaults to the generic
+   *  document categories — pass a domain set (e.g. PROPERTY_ATTACHMENT_CATEGORIES)
+   *  to relabel without affecting other usages. */
+  categories?: DocCategory[];
+  /** Pre-selects this category in the upload dialog and is the category applied
+   *  to one-click quick uploads. */
+  defaultCategory?: string;
+  /** Compact attachment mode: a one-click upload button (no dialog) plus inline
+   *  image thumbnails in the grid. Off by default so existing usages are
+   *  unchanged. */
+  quickUpload?: boolean;
+  /** Show a per-document delete action (ghost Trash2 → ConfirmDeleteDialog →
+   *  DELETE /documents/:id, RBAC-gated on documents.delete + soft-delete). The
+   *  caller gates visibility; the server enforces the permission regardless.
+   *  Off by default so existing usages are unchanged. */
+  canDelete?: boolean;
 }
 
-export function EntityDocuments({ entityType, entityId, title = "المستندات المرتبطة", viewMode = "list", canReview = false }: EntityDocumentsProps) {
+export function EntityDocuments({ entityType, entityId, title = "المستندات المرتبطة", viewMode = "list", canReview = false, categories, defaultCategory, quickUpload = false, canDelete = false }: EntityDocumentsProps) {
   const { toast } = useToast();
+  const cats = categories ?? CATEGORIES;
   const [view, setView] = useState<"list" | "grid">(viewMode);
   const [grouped, setGrouped] = useState(false);
   const [reviewDoc, setReviewDoc] = useState<any | null>(null);
   const [commentsDoc, setCommentsDoc] = useState<any | null>(null);
+  const [deleteDoc, setDeleteDoc] = useState<any | null>(null);
   const [bundling, setBundling] = useState(false);
+  const [quickUploading, setQuickUploading] = useState(false);
+  const quickInputRef = useRef<HTMLInputElement>(null);
   const { data: docsResp, refetch } = useApiQuery<any>(
     ["entity-docs", entityType, String(entityId)],
     `/documents?entity=${entityType}&entityId=${entityId}`,
@@ -235,6 +301,60 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
     }
   };
 
+  // One-click quick upload (quickUpload mode): same 3-step contract as the
+  // dialog — request-url → PUT → /documents/upload — but auto-titles with the
+  // file name and applies `defaultCategory`. Keeps the content-hash fingerprint.
+  const handleQuickUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    setQuickUploading(true);
+    try {
+      const urlRes = await fetch(`${BASE}/api/storage/uploads/request-url`, {
+        method: "POST",
+        headers: { ...nativeAuthHeaders(), "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
+      });
+      if (urlRes.status === 429) {
+        throw new RateLimitError(notifyRateLimited(urlRes));
+      }
+      if (!urlRes.ok) throw new Error("فشل الرفع");
+      const { uploadURL, objectPath } = await urlRes.json();
+      const putRes = await fetch(uploadURL, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
+      if (!putRes.ok) throw new Error("فشل رفع الملف للتخزين");
+
+      // Best-effort content fingerprint for exact-duplicate detection.
+      const contentHash = await computeFileSha256(file);
+
+      await apiFetch("/documents/upload", {
+        method: "POST",
+        body: JSON.stringify({
+          title: file.name,
+          description: "",
+          fileName: file.name,
+          fileSize: file.size,
+          mimeType: file.type,
+          category: defaultCategory || null,
+          storageKey: objectPath,
+          ...(contentHash ? { contentHash } : {}),
+          entityLinks: [{ entityType, entityId: Number(entityId) }],
+        }),
+      });
+
+      toast({ title: "تم رفع المرفق بنجاح" });
+      refetch();
+    } catch (err: any) {
+      if (err instanceof RateLimitError) {
+        // notifyRateLimited already showed the debounced rate-limit toast.
+        return;
+      }
+      toast({ variant: "destructive", title: "فشل رفع المستند", description: err?.message || "حدث خطأ" });
+    } finally {
+      setQuickUploading(false);
+    }
+  };
+
   // Group documents by category, preserving first-seen order. Display-only.
   const docGroups: [string, any[]][] = (() => {
     const m = new Map<string, any[]>();
@@ -257,7 +377,7 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
 
   const docBadges = (d: any) => {
     const st = STATUS_MAP[d.status] || STATUS_MAP.draft;
-    const cat = CATEGORIES.find((c) => c.value === d.category);
+    const cat = cats.find((c) => c.value === d.category);
     const rv = d.reviewStatus ? REVIEW_STATUS_MAP[d.reviewStatus] : null;
     // Show the verdict once a decision exists, or always to a reviewer.
     const showReview = rv && (d.reviewStatus !== "new" || canReview);
@@ -301,12 +421,31 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
           </Button>
         </>
       )}
+      {/* مرفقات العمرة المُرحَّلة قد تحمل رابطًا خارجيًا (fileUrl) بلا storageKey.
+          مُقيَّد بوجود d.fileUrl فلا يظهر للاستخدامات العامة (fileUrl = null). */}
+      {d.fileUrl && (
+        <a
+          href={d.fileUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-md p-0 text-status-info-foreground hover:bg-surface-subtle"
+          title="فتح الرابط الخارجي"
+          aria-label="فتح"
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+        </a>
+      )}
       <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setCommentsDoc(d)} title="تعليقات المرفق">
         <MessageCircle className="h-3.5 w-3.5" />
       </Button>
       {canReview && (
         <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setReviewDoc(d)} title="مراجعة المرفق">
           <ClipboardCheck className="h-3.5 w-3.5" />
+        </Button>
+      )}
+      {canDelete && (
+        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-status-error-foreground" onClick={() => setDeleteDoc(d)} title="حذف المرفق">
+          <Trash2 className="h-3.5 w-3.5" />
         </Button>
       )}
     </>
@@ -347,9 +486,27 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
   const docGridCard = (d: any) => (
     <div key={d.id} className="flex flex-col gap-2 rounded-lg border p-3 hover:bg-surface-subtle transition-colors">
       <div className="flex items-start gap-2 min-w-0">
-        <div className="w-8 h-8 rounded bg-status-info-surface flex items-center justify-center flex-shrink-0">
-          <FileText className="h-4 w-4 text-status-info-foreground" />
-        </div>
+        {quickUpload && d.storageKey && isImageDoc(d.mimeType, d.fileName) ? (
+          // Inline thumbnail for image attachments (quickUpload mode only); falls
+          // back to the FileText icon if the preview endpoint can't render it.
+          <div className="w-8 h-8 rounded overflow-hidden bg-status-info-surface flex items-center justify-center flex-shrink-0">
+            <img
+              src={`/api/documents/${d.id}/preview`}
+              alt={d.title || d.fileName || "صورة"}
+              className="w-full h-full object-cover"
+              loading="lazy"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.display = "none";
+                (e.currentTarget.nextElementSibling as HTMLElement | null)?.classList.remove("hidden");
+              }}
+            />
+            <FileText className="hidden h-4 w-4 text-status-info-foreground" />
+          </div>
+        ) : (
+          <div className="w-8 h-8 rounded bg-status-info-surface flex items-center justify-center flex-shrink-0">
+            <FileText className="h-4 w-4 text-status-info-foreground" />
+          </div>
+        )}
         <div className="min-w-0 flex-1">
           <p className="font-medium text-sm truncate">{d.title}</p>
           {d.fileName && <p className="text-xs text-muted-foreground truncate">{d.fileName}</p>}
@@ -391,7 +548,29 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
             <FileText className="h-5 w-5 text-muted-foreground" />
             {title} ({docs.length})
           </CardTitle>
-          <UploadEntityDocDialog entityType={entityType} entityId={entityId} onSuccess={refetch} />
+          {quickUpload ? (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1"
+                disabled={quickUploading}
+                onClick={() => quickInputRef.current?.click()}
+              >
+                {quickUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                {quickUploading ? "جاري الرفع..." : "رفع ملف"}
+              </Button>
+              <input
+                ref={quickInputRef}
+                type="file"
+                className="hidden"
+                accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt,.csv"
+                onChange={handleQuickUpload}
+              />
+            </>
+          ) : (
+            <UploadEntityDocDialog entityType={entityType} entityId={entityId} onSuccess={refetch} cats={cats} defaultCategory={defaultCategory} />
+          )}
         </div>
       </CardHeader>
       <CardContent>
@@ -402,6 +581,7 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
             missingCount={missingRequired.length}
             canManage={canReview}
             onChanged={refetchReqs}
+            cats={cats}
           />
         )}
         {docs.length === 0 ? (
@@ -455,7 +635,7 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
               ? docGroups.map(([catVal, items]) => (
                   <div key={catVal || "__none__"} className="space-y-2">
                     <p className="text-xs font-semibold text-muted-foreground">
-                      {categoryLabel(catVal)} ({items.length})
+                      {categoryLabel(catVal, cats)} ({items.length})
                     </p>
                     {renderDocItems(items)}
                   </div>
@@ -495,6 +675,16 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
           )}
         </DialogContent>
       </Dialog>
+      {canDelete && deleteDoc && (
+        <ConfirmDeleteDialog
+          open={!!deleteDoc}
+          onOpenChange={(o) => { if (!o) setDeleteDoc(null); }}
+          entity={{ type: "document", id: deleteDoc.id, name: deleteDoc.title || deleteDoc.fileName || `مستند #${deleteDoc.id}` }}
+          deletePath={`/documents/${deleteDoc.id}`}
+          invalidateKeys={[["entity-docs", entityType, String(entityId)]]}
+          onDeleted={() => { setDeleteDoc(null); refetch(); }}
+        />
+      )}
     </Card>
   );
 }
@@ -506,13 +696,14 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
  * configurable without a separate settings trip. Adds no per-entity storage.
  */
 function RequirementsCompletenessCard({
-  entityType, items, missingCount, canManage, onChanged,
+  entityType, items, missingCount, canManage, onChanged, cats,
 }: {
   entityType: string;
   items: any[];
   missingCount: number;
   canManage: boolean;
   onChanged: () => void;
+  cats: DocCategory[];
 }) {
   const { toast } = useToast();
   const [adding, setAdding] = useState(false);
@@ -580,7 +771,7 @@ function RequirementsCompletenessCard({
                   <Badge variant="outline" className="text-[10px]">اختياري</Badge>
                 )}
                 <span>{r.label}</span>
-                {r.docCategory && <span className="text-muted-foreground">({categoryLabel(r.docCategory)})</span>}
+                {r.docCategory && <span className="text-muted-foreground">({categoryLabel(r.docCategory, cats)})</span>}
               </span>
               {canManage && (
                 <Button variant="ghost" size="sm" className="h-6 w-6 p-0" disabled={busy} onClick={() => removeRequirement(r.id)} title="حذف المتطلب">
@@ -611,7 +802,7 @@ function RequirementsCompletenessCard({
               className="mt-1 w-full rounded-md border px-2 py-1 text-xs"
             >
               <option value="">أي تصنيف</option>
-              {CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+              {cats.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
             </select>
           </div>
           <Button size="sm" className="h-7 text-xs" disabled={busy || !label.trim()} onClick={addRequirement} rateLimitAware>
@@ -735,7 +926,7 @@ function UploadSubmitButton({ file, uploading }: { file: File | null; uploading:
   );
 }
 
-function UploadEntityDocDialog({ entityType, entityId, onSuccess }: { entityType: string; entityId: number | string; onSuccess: () => void }) {
+function UploadEntityDocDialog({ entityType, entityId, onSuccess, cats = CATEGORIES, defaultCategory }: { entityType: string; entityId: number | string; onSuccess: () => void; cats?: DocCategory[]; defaultCategory?: string }) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -804,7 +995,7 @@ function UploadEntityDocDialog({ entityType, entityId, onSuccess }: { entityType
         </DialogHeader>
         <FormShell
           schema={uploadDocSchema}
-          defaultValues={{ title: "", category: "" }}
+          defaultValues={{ title: "", category: defaultCategory ?? "" }}
           hideSubmit
           className="space-y-4"
           onSubmit={handleUpload}
@@ -814,7 +1005,7 @@ function UploadEntityDocDialog({ entityType, entityId, onSuccess }: { entityType
             name="category"
             label="التصنيف"
             placeholder="اختر التصنيف"
-            options={CATEGORIES}
+            options={cats}
           />
           <div>
             <Label>الملف *</Label>

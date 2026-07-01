@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/wafd-site/"
+title = "موقع وفد الحديثة للاستثمار"
+version = "1.0.0"
+id = "artifacts/wafd-site"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/wafd-site/" ]
+localPort = 24443
+
+[services.development]
+run = "pnpm --filter @workspace/wafd-site run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/wafd-site", "run", "build" ]
+publicDir = "artifacts/wafd-site/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24443"
+BASE_PATH = "/wafd-site/"

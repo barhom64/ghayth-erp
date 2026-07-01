@@ -407,13 +407,13 @@ export default function MonthlyClosePackPage() {
             </CardHeader>
             <CardContent className="pt-0">
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-                <DrillLink href="/finance/reports/is-vs-budget" label="P&L vs Budget" />
+                <DrillLink href="/finance/reports/is-vs-budget" label="الدخل مقابل الميزانية" />
                 <DrillLink href="/finance/reports/cash-flow-statement" label="قائمة التدفقات" />
                 <DrillLink href="/finance/budget-heatmap" label="خريطة الميزانية" />
                 <DrillLink href="/finance/ar-collection-workbench" label="منضدة التحصيل" />
                 <DrillLink href="/finance/ap-payment-calendar" label="تقويم الدفعات" />
                 <DrillLink href="/finance/trial-balance-drilldown" label="ميزان مع تتبّع" />
-                <DrillLink href="/finance/cfo-cockpit" label="CFO Cockpit" />
+                <DrillLink href="/finance/cfo-cockpit" label="لوحة المدير المالي" />
                 <DrillLink href="/finance/period-close-preflight" label="فحص قبل الإقفال" />
               </div>
             </CardContent>

@@ -46,8 +46,11 @@ describe("no second amortization engine — REUSES #2247", () => {
     );
   });
 
-  it("opens a prepaid_amortization_schedule row (the #2247 table) for recognition", () => {
-    expect(ENGINE).toMatch(/INSERT INTO prepaid_amortization_schedules/);
+  it("delegates schedule opening to the shared openPrepaidSchedule helper (ج-٧)", () => {
+    // ج-٧ (DRY): الـINSERT انتقل لمحرّك الإطفاء (مالك الجدول)؛ هذا المحرّك يستدعي
+    // المُساعد المشترك openPrepaidSchedule بدل الإدراج المباشر (لا تكرار INSERT).
+    expect(ENGINE).toMatch(/openPrepaidSchedule\(/);
+    expect(ENGINE).not.toMatch(/INSERT INTO prepaid_amortization_schedules/);
     expect(ENGINE).toMatch(/sourceType[\s\S]*?\$\{kind\}_insurance|`\$\{kind\}_insurance`/);
   });
 
@@ -201,8 +204,10 @@ describe("engine — static contract", () => {
     expect(ENGINE).toMatch(/purchase_vendor_ap/);
   });
 
-  it("stores expenseAccountPurpose on the schedule — never a final expense code", () => {
-    expect(ENGINE).toMatch(/"expenseAccountPurpose"/);
+  it("passes expenseAccountPurpose to the schedule — never a final expense code", () => {
+    // ج-٧: العمود يُكتَب في المُساعد (مالك الجدول)؛ هذا المحرّك يمرّر الغرض النصّي
+    // expenseAccountPurpose لـopenPrepaidSchedule (لا كود مصروف نهائي مخزَّن).
+    expect(ENGINE).toMatch(/expenseAccountPurpose/);
     expect(ENGINE).not.toMatch(/expenseAccountCode/);
   });
 

@@ -25,12 +25,14 @@ export type ModuleType =
   | "store"
   | "support"
   | "settings"
-  | "umrah";
+  | "umrah"
+  | "website";
 
 const ALL_MODULES: ModuleType[] = [
   "home", "hr", "finance", "fleet", "property", "operations", "warehouse",
   "governance", "bi", "requests", "documents", "reports", "admin", "comms",
   "legal", "crm", "marketing", "store", "support", "settings", "umrah",
+  "website",
 ];
 
 export interface UserRole {
@@ -388,9 +390,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const list = Array.isArray(data) ? data : data?.data || [];
         setCompanies(list);
       })
-      .catch(() => setCompanies([]))
+      .catch(() => {
+        // Fall back to companies derived from the user's assignments (mirrors
+        // the branches fallback below) so a transient /settings/companies
+        // failure (429/network/timeout) does not silently empty the list and
+        // hide the topbar company switcher for the rest of the session.
+        if (assignments.length) {
+          const seen = new Set<number>();
+          const fallback: Company[] = [];
+          for (const a of assignments as any[]) {
+            if (a.companyId && !seen.has(a.companyId)) {
+              seen.add(a.companyId);
+              fallback.push({ id: a.companyId, name: a.companyName || `شركة #${a.companyId}` });
+            }
+          }
+          setCompanies(fallback);
+        } else {
+          setCompanies([]);
+        }
+      })
       .finally(() => setCompaniesLoading(false));
-  }, [isAuthenticated, refreshKey]);
+    // `assignments.length` is in the deps so that if the initial fetch fails
+    // before assignments are loaded, the effect re-runs once they arrive and
+    // the fallback above can populate the switcher (cold-start race).
+  }, [isAuthenticated, refreshKey, assignments.length]);
 
   useEffect(() => {
     if (!isAuthenticated) return;

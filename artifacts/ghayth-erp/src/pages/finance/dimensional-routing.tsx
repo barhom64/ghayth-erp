@@ -197,8 +197,8 @@ export default function DimensionalRoutingPage() {
         {/* Control-account / subsidiary-ledger substitution toggle.
             The deepest operator-facing knob: when ON, every JE post
             at runtime swaps control-account codes for the per-entity
-            subsidiary. OFF by default — surfaced so operators can opt
-            in once their reports are ready. */}
+            subsidiary. ON by default (البند ٤) — surfaced so operators
+            can opt OUT if their reports read literal leaf codes. */}
         {substitution && (
           <Card className="mb-4" data-testid="dim-routing-substitution">
             <CardContent className="p-3 flex items-center gap-3 flex-wrap">
@@ -208,8 +208,9 @@ export default function DimensionalRoutingPage() {
                   استبدال الحسابات الفرعية في القيود تلقائياً
                 </div>
                 <div className="text-xs text-muted-foreground mt-0.5">
-                  عند التفعيل: قيد مرتبط بالحساب الرئيسي (مثل 1121 سلفة) + موظف #42 يُسجَّل
-                  مباشرة على 1121-0042. الرصيد الأبوي يتجمّع تلقائياً عبر شجرة الحسابات.
+                  مُفعَّل افتراضيًّا: قيدٌ على حساب رئيسي (مثل 1121 سلفة) لموظف #42 يُسجَّل
+                  تلقائيًّا على حسابه الفرعي 1121-0042. الرصيد الأبوي يتجمّع عبر شجرة الحسابات —
+                  يمكن إيقافه لهذه الشركة إن كانت تقاريرها تقرأ الأكواد الورقية.
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
                   {substitution.subsidiaryCount.toLocaleString("ar-SA")} ربط حالي للحسابات الفرعية

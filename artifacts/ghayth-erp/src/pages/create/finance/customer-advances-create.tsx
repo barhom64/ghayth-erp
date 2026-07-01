@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { ClientSelect, BranchSelect } from "@/components/shared/entity-selects";
+import { ClientContextCard } from "@/components/shared/client-context-card";
 import { FinanceOperationContextPanel } from "@/components/shared/finance-operation-context-panel";
 import { EMPTY_ALLOCATION_TARGET, type AllocationTargetValue } from "@/components/shared/allocation-target-select";
 import { buildAllocationPayload } from "@/components/shared/line-allocation-panel";
@@ -100,12 +101,19 @@ export default function CustomerAdvancesCreate() {
             allowCreate={false}
           />
         </FormFieldWrapper>
+        {form.clientId && (
+          <div className="md:col-span-2">
+            {/* الكيان يقود التجربة: الحالة المالية للعميل أمامك قبل تسجيل الدفعة المقدمة. */}
+            <ClientContextCard clientId={form.clientId} section="invoice" />
+          </div>
+        )}
 
         <BranchSelect
           value={form.branchId}
           onChange={(v) => setForm((f) => ({ ...f, branchId: String(v ?? "") }))}
           label="الفرع"
           allowCreate={false}
+          autoSelectOwnBranch
         />
 
         <FormFieldWrapper label="تاريخ الاستلام" required error={fieldErrors.receivedDate}>

@@ -452,3 +452,65 @@ export async function syncLegacyToV2(): Promise<SyncSummary> {
 
   return summary;
 }
+
+/**
+ * Give every owner / general_manager user every ACTIVE, non-template role that
+ * exists in each company where they hold an active assignment, so the topbar
+ * role-switcher (الصفة) lists all roles and the admin can navigate "as" each
+ * role to verify behaviour.
+ *
+ * Why this exists as boot-time code (not migration 141):
+ *   Migration 141_admin_assign_all_rbac_roles.sql was meant to do this, but the
+ *   migration runner records every file in `schema_migrations` and SKIPS
+ *   already-applied ones — it does NOT replay 141 on each boot (its header
+ *   comment is wrong). So 141 ran ONCE, early, when only the first company
+ *   existed and before all roles/the admin were fully seeded, was recorded, and
+ *   never ran again. Result: companies created later (and any role added after)
+ *   never reached the admin → the dropdown only ever showed `owner`, and no
+ *   amount of restarting fixed it ("re-cycle on every restart").
+ *
+ * This function reasserts the grant deterministically on EVERY boot, covering
+ * all companies including newly-created ones. It is:
+ *   - additive only (ON CONFLICT DO NOTHING),
+ *   - is_primary=FALSE so it never displaces the user's primary role,
+ *   - authorization-neutral (owner already bypasses checkAccess) — it only
+ *     makes the roles selectable in the UI.
+ * The cache version is bumped only when new rows were actually granted, so a
+ * steady-state restart causes no needless cache churn.
+ */
+export async function ensureOwnersHaveAllRoles(): Promise<{ rolesGranted: number; companies: number }> {
+  return withTransaction(async (client) => {
+    const ins = await client.query(
+      `INSERT INTO rbac_user_roles ("userId", "companyId", role_id, "branchId", "departmentId", is_primary, "assignedBy", "createdAt")
+       SELECT u.id, ea."companyId", r.id, ea."branchId", ea."departmentId", FALSE, u.id, NOW()
+       FROM users u
+       JOIN employee_assignments ea
+         ON ea."employeeId" = u."employeeId"
+        AND ea.status = 'active'
+        AND ea.role IN ('owner', 'general_manager')
+       JOIN rbac_roles r
+         ON r."companyId" = ea."companyId"
+        AND r.is_active = TRUE
+        AND r.is_template = FALSE
+       ON CONFLICT ("userId", "companyId", role_id) DO NOTHING`
+    );
+    const rolesGranted = ins.rowCount ?? 0;
+    let companies = 0;
+    if (rolesGranted > 0) {
+      const bumped = await client.query(
+        `INSERT INTO rbac_cache_version ("companyId", version, "updatedAt")
+         SELECT DISTINCT ea."companyId", 1, NOW()
+         FROM users u
+         JOIN employee_assignments ea
+           ON ea."employeeId" = u."employeeId"
+          AND ea.status = 'active'
+          AND ea.role IN ('owner', 'general_manager')
+         ON CONFLICT ("companyId") DO UPDATE SET
+           version = rbac_cache_version.version + 1,
+           "updatedAt" = NOW()`
+      );
+      companies = bumped.rowCount ?? 0;
+    }
+    return { rolesGranted, companies };
+  });
+}

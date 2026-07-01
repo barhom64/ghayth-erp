@@ -10,6 +10,8 @@ import {
   DetailPageLayout,
   type RelatedEntity,
   EntityComments,
+  EntityDocuments,
+  UMRAH_ATTACHMENT_CATEGORIES,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntitySubsidiaryAccounts } from "@/components/shared/entity-subsidiary-accounts";
@@ -20,7 +22,6 @@ import { Badge } from "@/components/ui/badge";
 import { Edit, Phone, Mail, MapPin, Users, Wallet, TrendingUp } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
-import { UmrahAttachmentsPanel } from "@/components/shared/umrah-attachments-panel";
 import { EntityPnlButton } from "@/components/shared/entity-pnl-button";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
@@ -346,7 +347,17 @@ export default function UmrahAgentDetail() {
 
       {id && <EntityComments entityType="umrah-agent" entityId={id} />}
       {id && <EntityTags entityType="umrah-agent" entityId={id} />}
-      {id && <UmrahAttachmentsPanel entityType="agent" entityId={id} />}
+      {id && (
+        <EntityDocuments
+          entityType="umrah_agent"
+          entityId={id}
+          title="المرفقات"
+          categories={UMRAH_ATTACHMENT_CATEGORIES}
+          quickUpload
+          canDelete
+          viewMode="grid"
+        />
+      )}
     </div>
   );
 

@@ -16,6 +16,7 @@
 
 import { rawQuery } from "./rawdb.js";
 import { roundTo2 } from "./businessHelpers.js";
+import { resolveVatLegAccount } from "./vatLeg.js";
 
 export type TaxType = "standard" | "zero" | "exempt" | "out_of_scope" | "reverse_charge";
 
@@ -210,6 +211,65 @@ export async function getInputVatAccountCode(companyId: number, taxCode: string)
     [code.inputAccountId, companyId]
   );
   return rows[0]?.code ?? null;
+}
+
+/**
+ * البند ٤ (جانب المشتريات) — حساب ضريبة المدخلات للشركة. فواتير الشراء وأوامره
+ * لا تحمل رمز ضريبة لكل وثيقة (بخلاف فواتير المبيعات)، فيُشتقّ حساب المدخلات من
+ * رمز الضريبة القياسي للشركة (getDefaultTaxCode → inputAccountId). يرتدّ إلى
+ * `fallbackAccount` (تعيين الشركة العام) حين لا رمز قياسي أو لا حساب مدخلات
+ * مُهيّأ له — فيبقى السلوك مطابقًا تمامًا للسابق عند عدم التهيئة.
+ *
+ * نظير resolveVatLegAccount على جانب المبيعات، لكن المصدر هنا الرمز القياسي
+ * لا رمز الوثيقة (لغياب عمود taxCode على المشتريات). الدقّة لكل وثيقة تحتاج
+ * هجرة (عمود taxCode على purchase_orders/vendor_invoices) — خارج هذا النطاق.
+ */
+export async function resolveCompanyInputVatAccount(
+  companyId: number,
+  fallbackAccount: string,
+): Promise<string> {
+  const def = await getDefaultTaxCode(companyId);
+  const specific = def ? await getInputVatAccountCode(companyId, def.code) : null;
+  // القرار نفسه المثبَّت على جانب المبيعات: حساب الرمز إن وُجد، وإلا الاحتياطي.
+  return resolveVatLegAccount(specific, fallbackAccount);
+}
+
+/**
+ * البند ٤ (دقّة لكل وثيقة شراء) — حساب ضريبة المدخلات لوثيقة بعينها. تَرتُّب
+ * الاشتقاق: **رمز ضريبة الوثيقة** (إن حملته وكان حسابه مُهيّأً) ← **الرمز القياسي
+ * للشركة** ← **الاحتياطي العام**. فوثيقة برمز غير قياسي تُرحّل ضريبتها إلى حساب
+ * رمزها، والوثائق بلا رمز تبقى على الرمز القياسي (سلوك #3084).
+ *
+ * يُستعمل في المعالج الحقيقي لفاتورة المورد (resolveVendorInvoicePlan) حيث رمز
+ * الوثيقة يُشتقّ من بنودها (vendorInvoiceLineSchema.taxCode) — بلا هجرة.
+ */
+export async function resolveInputVatAccount(
+  companyId: number,
+  docTaxCode: string | null | undefined,
+  fallbackAccount: string,
+): Promise<string> {
+  const code = typeof docTaxCode === "string" ? docTaxCode.trim() : "";
+  if (code) {
+    const specific = await getInputVatAccountCode(companyId, code);
+    if (specific) return specific;
+  }
+  return resolveCompanyInputVatAccount(companyId, fallbackAccount);
+}
+
+/**
+ * البند ٤ — رمز ضريبة الوثيقة من بنودها: أوّل بند خاضع للضريبة (vatAmount > 0)
+ * يحمل رمزًا غير فارغ. سطر ضريبة المدخلات رأسيّ واحد، فالبنود مختلطة الرموز
+ * تأخذ أوّل رمز (نظير قيد سطر الضريبة الرأسي في المبيعات). لا بند برمز ⇒ null
+ * (يرتدّ resolveInputVatAccount عندئذٍ للرمز القياسي للشركة). وحدة نقية.
+ */
+export function pickDocTaxCodeFromLines(
+  lines: ReadonlyArray<{ taxCode?: string | null; vatAmount?: number | null }>,
+): string | null {
+  for (const l of lines) {
+    const code = (l.taxCode ?? "").trim();
+    if (Number(l.vatAmount) > 0 && code) return code;
+  }
+  return null;
 }
 
 /**

@@ -3,7 +3,6 @@ import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { checkDocumentAcl } from "../lib/documentAcl.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { ObjectStorageService } from "../lib/objectStorage.js";
-import { Readable } from "stream";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, ConflictError,
   parseId,
@@ -120,7 +119,14 @@ export const DOCUMENT_CATEGORIES = [
   "marketing",
   "general",
 ] as const;
-const documentCategorySchema = z.enum(DOCUMENT_CATEGORIES).optional();
+// تصنيف المستند: إمّا فئة مسار من DOCUMENT_CATEGORIES (تقود فترة الحفظ في
+// RETENTION_HORIZONS_YEARS أدناه)، أو **نوع مستند دقيق** خاص بمسار — مرفقات
+// العقارات/العمرة تستخدم قيمًا دقيقة (property_photo · title_deed · payment_receipt …)
+// مشروعة وتُعرض في الواجهة. كان z.enum يرفض هذه الدقيقة فيفشل رفعها (Invalid enum)؛
+// خُفِّف إلى نص مقيَّد. الكنس (retention/backfill) يطبّق الآفاق على فئات المسار المعروفة
+// فقط، فالقيم الدقيقة تُحفَظ تحفّظيًّا بلا كنس آلي (لا حذف مبكّر — آمن).
+// DOCUMENT_CATEGORIES يبقى المرجع المعتمد لفئات المسار وخريطة الحفظ.
+const documentCategorySchema = z.string().trim().max(64).optional();
 
 // M5 retention policy enforcement on document write paths. Maps
 // category → default retention horizon (years). The cron at retention-
@@ -433,20 +439,14 @@ router.get("/:id/download", authorize({ feature: "documents", action: "export" }
     ).catch((e) => logger.error(e, "document access log failed (download)"));
 
     try {
-      const objectFile = await objectStorageService.getObjectEntityFile(doc.storageKey);
-      const response = await objectStorageService.downloadObject(objectFile);
+      const obj = await objectStorageService.openObjectStream(doc.storageKey);
 
       res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(doc.fileName || 'file')}"`);
-      if (doc.mimeType) res.setHeader("Content-Type", doc.mimeType);
+      res.setHeader("Content-Type", doc.mimeType || obj.contentType);
       res.setHeader("X-Content-Type-Options", "nosniff");
-      res.status(response.status);
+      if (obj.size != null) res.setHeader("Content-Length", String(obj.size));
 
-      if (response.body) {
-        const nodeStream = Readable.fromWeb(response.body as ReadableStream<Uint8Array>);
-        nodeStream.pipe(res);
-      } else {
-        res.end();
-      }
+      obj.stream.pipe(res);
     } catch (e) {
       logger.error(e, "document download: file not found in storage");
       throw new NotFoundError("الملف غير موجود في التخزين");
@@ -486,21 +486,15 @@ router.get("/:id/preview", authorize({ feature: "documents", action: "export" })
     ).catch((e) => logger.error(e, "document access log failed (preview)"));
 
     try {
-      const objectFile = await objectStorageService.getObjectEntityFile(doc.storageKey);
-      const response = await objectStorageService.downloadObject(objectFile);
+      const obj = await objectStorageService.openObjectStream(doc.storageKey);
 
       res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(doc.fileName || 'file')}"`);
-      if (doc.mimeType) res.setHeader("Content-Type", doc.mimeType);
+      res.setHeader("Content-Type", doc.mimeType || obj.contentType);
       res.setHeader("X-Content-Type-Options", "nosniff");
       res.setHeader("Cache-Control", "private, max-age=300");
-      res.status(response.status);
+      if (obj.size != null) res.setHeader("Content-Length", String(obj.size));
 
-      if (response.body) {
-        const nodeStream = Readable.fromWeb(response.body as ReadableStream<Uint8Array>);
-        nodeStream.pipe(res);
-      } else {
-        res.end();
-      }
+      obj.stream.pipe(res);
     } catch (e) {
       logger.error(e, "document preview: file not found in storage");
       throw new NotFoundError("الملف غير موجود في التخزين");
@@ -1522,6 +1516,161 @@ router.delete("/:id/acls/:aclId", authorize({ feature: "documents", action: "upd
     }).catch((e) => logger.error(e, "documents acl-revoke audit failed"));
     res.json({ ok: true });
   } catch (err) { handleRouteError(err, res, "documents"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// م٢-ج — محرّك قراءة المستند (OCR، مسار الوثائق). يملأ سقالة الهجرة 171 + stubs.
+// tesseract داخلي (عربي+إنجليزي) → استخراج حقول بدرجة ثقة → **تأكيد بشري** قبل
+// التطبيق (docs/25 §١١.٣، الطبقة ب المساعِدة). يُعيد استخدام ObjectStorageService
+// لقراءة بايتات الملف + documentOcrService للقراءة والاستخراج.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/ocr/extractions", authorize({ feature: "documents.my", action: "list" }), async (req: Request, res: Response) => {
+  try {
+    const scope = req.scope!;
+    const status = (req.query.status as string) || null;
+    const params: unknown[] = [scope.companyId];
+    // ضمّ documents (نفس المسار) لإظهار عنوان المستند واسم ملفه، فيعرف المراجع ما يؤكّده.
+    let sql = `SELECT e.id, e."documentId", e."docType", e.fields, e.confidence, e.status,
+                      e."reviewedBy", e."reviewedAt", e."appliedTo", e."appliedToId", e."createdAt",
+                      d.title AS "docTitle", d."fileName"
+                 FROM document_ocr_extractions e
+                 LEFT JOIN documents d ON d.id = e."documentId" AND d."deletedAt" IS NULL
+                WHERE e."companyId"=$1 AND e."deletedAt" IS NULL`;
+    if (status) { sql += ` AND e.status=$2`; params.push(status); }
+    sql += ` ORDER BY e.id DESC LIMIT 100`;
+    const rows = await rawQuery<{ documentId: number }>(sql, params);
+    // رشّح بـACL المستند (نفس فلتر التنزيل/المعاينة): لا يُكشف مستخلَص مستند لا يُسمح
+    // للمستخدم بقراءته. الحالة الغالبة (لا صفوف ACL) ترجع true سريعًا.
+    const acl = await Promise.all(rows.map((r) => checkDocumentAcl(r.documentId, scope, "read")));
+    const data = rows.filter((_, i) => acl[i]);
+    res.json(maskFields(req, { data, total: data.length, extractions: data }));
+  } catch (err) { handleRouteError(err, res, "document OCR list"); }
+});
+
+router.post("/:id/ocr/rerun", authorize({ feature: "documents.my", action: "update" }), async (req: Request, res: Response) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [doc] = await rawQuery<{ id: number; storageKey: string | null; mimeType: string | null; category: string | null }>(
+      `SELECT id, "storageKey", "mimeType", category FROM documents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId],
+    );
+    if (!doc) throw new NotFoundError("المستند غير موجود");
+    // ACL لكل مستند (نفس فلتر التنزيل/المعاينة): قراءة OCR = قراءة محتوى الملف، فلا
+    // يجوز لمستخدم في المسار تشغيلها على مستند لا يُسمح له بقراءته. 404 لا 403 (لا تسريب).
+    if (!(await checkDocumentAcl(id, scope, "read"))) throw new NotFoundError("المستند غير موجود");
+    if (!doc.storageKey) throw new ValidationError("لا ملف مرفوع لهذا المستند");
+    if (doc.mimeType && !/^image\//i.test(doc.mimeType) && !/pdf/i.test(doc.mimeType)) {
+      throw new ValidationError("قراءة OCR تدعم الصور وملفات PDF حاليًا");
+    }
+    // اقرأ بايتات الملف من التخزين الكائني (تدفّق → Buffer).
+    const file = await objectStorageService.getObjectEntityFile(doc.storageKey);
+    const chunks: Buffer[] = [];
+    for await (const chunk of file.createReadStream()) chunks.push(chunk as Buffer);
+    const buffer = Buffer.concat(chunks);
+    // المحرّك (tesseract + mupdf كسولا التحميل): صورة أو PDF → نص ثم استخراج الحقول الحتمي.
+    const { runOcrDocument, extractFields } = await import("../lib/documentOcrService.js");
+    const ocr = await runOcrDocument(buffer, doc.mimeType);
+    const docType = (typeof req.body?.docType === "string" && req.body.docType) || doc.category || "invoice";
+    const { fields, fieldConfidence } = extractFields(ocr.text, docType);
+    const confidence = Math.round((Number(ocr.confidence) || 0) * (fieldConfidence / 100) * 100) / 100;
+    // أبطِل المعلّق السابق لنفس المستند ثم أدرج الاستخراج الجديد (pending → مراجعة بشرية).
+    await rawExecute(
+      `UPDATE document_ocr_extractions SET "deletedAt"=NOW() WHERE "companyId"=$1 AND "documentId"=$2 AND status='pending' AND "deletedAt" IS NULL`,
+      [scope.companyId, id],
+    );
+    const [ins] = await rawQuery<{ id: number }>(
+      `INSERT INTO document_ocr_extractions ("companyId","documentId","docType",fields,confidence,status)
+       VALUES ($1,$2,$3,$4::jsonb,$5,'pending') RETURNING id`,
+      [scope.companyId, id, docType, JSON.stringify(fields), confidence],
+    );
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "document.ocr.rerun", entity: "document_ocr_extractions", entityId: ins.id,
+      after: { documentId: id, confidence, ocrConfidence: ocr.confidence, fieldConfidence },
+    }).catch((e) => logger.error(e, "document ocr rerun audit failed"));
+    res.status(201).json({ id: ins.id, fields, confidence, ocrConfidence: ocr.confidence, status: "pending" });
+  } catch (err) { handleRouteError(err, res, "document OCR rerun"); }
+});
+
+router.post("/ocr/extractions/:id/confirm", authorize({ feature: "documents.my", action: "update" }), async (req: Request, res: Response) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    // الحقول المُراجَعة (إن أُرسلت) تحلّ محلّ المُستخرَجة؛ وإلا نُبقي المُستخرَجة كما هي
+    // (تأكيد سريع بلا تعديل من صندوق الوارد لا يجوز أن يمحو ما استُخرج).
+    const editedFields =
+      req.body?.fields && typeof req.body.fields === "object" && !Array.isArray(req.body.fields)
+        ? JSON.stringify(req.body.fields)
+        : null;
+    // الكيان المرتبط (موظف/مركبة/فاتورة…): يُسجَّل كبيانات وصفية على صف الاستخراج فقط.
+    // المسار الخادم (الوثائق) لا يكتب في كيان المسار القائد احترامًا لحدود المسارات؛
+    // تطبيق المستخرَج المؤكَّد على الكيان يتم لاحقًا عبر عقد المسار المالك.
+    const appliedTo =
+      typeof req.body?.appliedTo === "string" && /^[a-z_]{1,40}$/i.test(req.body.appliedTo) ? req.body.appliedTo : null;
+    const appliedToId =
+      req.body?.appliedToId != null && Number.isInteger(Number(req.body.appliedToId)) && Number(req.body.appliedToId) > 0
+        ? Number(req.body.appliedToId)
+        : null;
+    // ACL المستند قبل التعديل (نفس فلتر التنزيل): لا يراجِع مستخلَص مستند لا يُسمح بقراءته.
+    const [ext] = await rawQuery<{ documentId: number }>(
+      `SELECT "documentId" FROM document_ocr_extractions
+        WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL AND status='pending'`,
+      [id, scope.companyId],
+    );
+    if (!ext || !(await checkDocumentAcl(ext.documentId, scope, "read"))) {
+      throw new NotFoundError("استخراج غير موجود أو ليس قيد المراجعة");
+    }
+    const [row] = await rawQuery<{ id: number; documentId: number }>(
+      `UPDATE document_ocr_extractions
+          SET status='confirmed',
+              fields=COALESCE($3::jsonb, fields),
+              "appliedTo"=COALESCE($5, "appliedTo"),
+              "appliedToId"=COALESCE($6, "appliedToId"),
+              "reviewedBy"=$1, "reviewedAt"=NOW(), "updatedAt"=NOW()
+        WHERE id=$2 AND "companyId"=$4 AND "deletedAt" IS NULL AND status='pending'
+        RETURNING id, "documentId"`,
+      [scope.activeAssignmentId ?? scope.userId, id, editedFields, scope.companyId, appliedTo, appliedToId],
+    );
+    if (!row) throw new NotFoundError("استخراج غير موجود أو ليس قيد المراجعة");
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "document.ocr.confirmed", entity: "document_ocr_extractions", entityId: row.id,
+      after: { documentId: row.documentId, fieldsEdited: editedFields != null, appliedTo, appliedToId },
+    }).catch((e) => logger.error(e, "document ocr confirm audit failed"));
+    res.json({ ok: true, id: row.id, status: "confirmed" });
+  } catch (err) { handleRouteError(err, res, "document OCR confirm"); }
+});
+
+router.post("/ocr/extractions/:id/reject", authorize({ feature: "documents.my", action: "update" }), async (req: Request, res: Response) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const notes = typeof req.body?.notes === "string" ? req.body.notes : null;
+    // ACL المستند قبل التعديل (نفس فلتر التنزيل): لا يبتّ في مستخلَص مستند لا يُسمح بقراءته.
+    const [ext] = await rawQuery<{ documentId: number }>(
+      `SELECT "documentId" FROM document_ocr_extractions
+        WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL AND status='pending'`,
+      [id, scope.companyId],
+    );
+    if (!ext || !(await checkDocumentAcl(ext.documentId, scope, "read"))) {
+      throw new NotFoundError("استخراج غير موجود أو ليس قيد المراجعة");
+    }
+    const [row] = await rawQuery<{ id: number; documentId: number }>(
+      `UPDATE document_ocr_extractions
+          SET status='rejected', "reviewedBy"=$1, "reviewedAt"=NOW(), notes=$3, "updatedAt"=NOW()
+        WHERE id=$2 AND "companyId"=$4 AND "deletedAt" IS NULL AND status='pending'
+        RETURNING id, "documentId"`,
+      [scope.activeAssignmentId ?? scope.userId, id, notes, scope.companyId],
+    );
+    if (!row) throw new NotFoundError("استخراج غير موجود أو ليس قيد المراجعة");
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "document.ocr.rejected", entity: "document_ocr_extractions", entityId: row.id,
+      after: { documentId: row.documentId, notes },
+    }).catch((e) => logger.error(e, "document ocr reject audit failed"));
+    res.json({ ok: true, id: row.id, status: "rejected" });
+  } catch (err) { handleRouteError(err, res, "document OCR reject"); }
 });
 
 export default router;

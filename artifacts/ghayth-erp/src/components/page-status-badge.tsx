@@ -55,6 +55,14 @@ export interface StatusDef {
  * appear in multiple domains. The top-level key is just a hint for
  * readers of this file; the component resolves statuses by value first,
  * then by domain if provided.
+ *
+ * Scope note (قرار معماري 2026-07-01): this is the GENERIC cross-module
+ * registry with semantic tones. The transport/fleet logistics subsystem
+ * has its OWN deliberate unified dictionary — `lib/transport-status-labels.ts`
+ * — with a richer logistics palette (purple/orange/rose) and context labels,
+ * guarded by 8 tests + a server-enum drift test. The trip/vehicle/driver
+ * overlap is intentional (label follows context); the two registries are
+ * NOT to be force-merged. See that file's header for the rationale.
  */
 export const STATUS_MAP = {
   // ── Shared approval-flow statuses used across HR, finance, requests ──
@@ -406,6 +414,61 @@ export const STATUS_MAP = {
     field_visit:          { label: "زيارة ميدانية",   tone: "info"     },
     resolved:             { label: "تمت المعالجة",    tone: "success"  },
     closed:               { label: "مُغلقة",          tone: "neutral"  },
+  },
+
+  // ── Warehouse: cycle counts (جرد دوري) ─────────────────────────────
+  // Was duplicated as a local `STATUS_LABELS` map (shadcn variants) in
+  // both warehouse/cycle-counts.tsx and cycle-count-detail.tsx. Moved
+  // here so the arabic label + tone come from the same source as every
+  // other status chip. Labels preserved verbatim from the pages.
+  cycle_count: {
+    pending:              { label: "معلق",            tone: "warning"  },
+    in_progress:          { label: "قيد التنفيذ",     tone: "progress" },
+    reviewed:             { label: "مراجَع",          tone: "info"     },
+    approved:             { label: "معتمد",           tone: "success"  },
+    rejected:             { label: "مرفوض",           tone: "danger"   },
+  },
+
+  // ── Warehouse: lot lifecycle (التشغيلات/اللوطات) ───────────────────
+  lot: {
+    active:               { label: "نشط",             tone: "success"  },
+    quarantine:           { label: "حجر صحي",         tone: "warning"  },
+    expired:              { label: "منتهي",           tone: "danger"   },
+    recalled:             { label: "مستدعى",          tone: "danger"   },
+    disposed:             { label: "متلف",            tone: "muted"    },
+  },
+
+  // ── Warehouse: serial lifecycle (الأرقام التسلسلية) ────────────────
+  // Mirrors the backend SERIAL_STATUSES set verbatim
+  // (warehouse-advanced.ts:257 + DB check). The previous local page map
+  // offered `defective` (which the PATCH endpoint rejects) and lacked
+  // `warranty_repair` (so those rows showed raw english) — corrected here.
+  serial: {
+    in_stock:             { label: "في المخزن",       tone: "success"  },
+    reserved:             { label: "محجوز",           tone: "info"     },
+    sold:                 { label: "مُباع",           tone: "neutral"  },
+    returned:             { label: "مرتجع",           tone: "warning"  },
+    warranty_repair:      { label: "إصلاح بالضمان",   tone: "warning"  },
+    scrapped:             { label: "متلف",            tone: "muted"    },
+  },
+
+  // ── Fleet: inspection review (مراجعة فحص المركبة) ──────────────────
+  // Local STATUS_AR/STATUS_VARIANT in fleet/inspections-review.tsx.
+  // Labels preserved verbatim; `submitted` reads "قيد المراجعة" (في
+  // انتظار مراجعة الفاحص) لا "مُقدَّم" المشترك — لذا نطاق خاص.
+  inspection: {
+    pending:              { label: "قيد الانتظار",    tone: "warning"  },
+    submitted:            { label: "قيد المراجعة",    tone: "info"     },
+    approved:             { label: "معتمد",           tone: "success"  },
+    rejected:             { label: "مرفوض",           tone: "danger"   },
+  },
+
+  // ── Fleet: vehicle alerts (تنبيهات الأسطول) ────────────────────────
+  fleet_alert: {
+    active:               { label: "نشط",             tone: "danger"   },
+    acknowledged:         { label: "تمت المعاينة",    tone: "info"     },
+    resolved:             { label: "تم الحل",         tone: "success"  },
+    dismissed:            { label: "مُتجاهَل",         tone: "muted"    },
   },
 } as const satisfies Record<string, Record<string, StatusDef>>;
 

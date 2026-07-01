@@ -22,6 +22,7 @@ const { je } = vi.hoisted(() => ({ je: { current: {} as any } }));
 
 vi.mock("wouter", () => ({
   useRoute: () => [true, { id: "1" }],
+  useLocation: () => ["", () => {}],
   Link: ({ children }: any) => <a>{children}</a>,
 }));
 

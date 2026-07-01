@@ -32,6 +32,7 @@ import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { LinkedTasks } from "@/components/shared/linked-tasks";
+import { PartyProfileLink } from "@/components/shared/party-profile-link";
 import { useToast } from "@/hooks/use-toast";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { z } from "zod";
@@ -745,6 +746,7 @@ export default function ClientDetail() {
       hideTabs={[...new Set(["tasks" as const, ...registryHideTabs])]}
       actions={
         <>
+          <PartyProfileLink entityTable="clients" entityId={id} />
           {client && (
             <Badge className={cn("text-sm px-3 py-1", CLASSIFICATION_COLORS[client?.classification] || "bg-surface-subtle")}>
               {CLASSIFICATIONS[client?.classification] || client?.classification}

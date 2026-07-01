@@ -74,17 +74,21 @@ const allowedOrigins: Set<string> = new Set(config.corsOrigins);
 if (!config.isProduction) {
   // In dev, the Replit proxy serves apps on http(s)://localhost (port 80/443),
   // so the browser sends Origin: http://localhost for same-origin XHRs.
-  // Allow common dev origins so internal calls (e.g. activity tracking) don't 500.
-  allowedOrigins.add("http://localhost");
-  allowedOrigins.add("https://localhost");
+  // Allow common dev-only proxy ports so internal calls don't 500.
   allowedOrigins.add("http://localhost:3000");
   allowedOrigins.add("http://localhost:5173");
   allowedOrigins.add("http://localhost:80");
 }
-// Capacitor native shells: Android WebView uses Origin `https://localhost`
-// (already allowed above); iOS WKWebView uses the `capacitor://localhost`
-// scheme. Allow it so the native app's API calls aren't CORS-blocked. The
-// app ships the same SPA bundle — this is the only origin difference.
+// Capacitor native shells (ALL environments): the Android WebView sends
+// Origin `https://localhost` (some configs `http://localhost`); the iOS
+// WKWebView sends `capacitor://localhost`. These are the native app's fixed
+// origins — it ships the SAME SPA bundle, so origin is the only difference.
+// They MUST be allowed in production too: a published Android install hits
+// erp.door.sa from `https://localhost` and was being CORS-blocked because
+// these previously lived in the dev-only block above (the bug behind the
+// app's "انقطع الاتصال بالخادم" login failure).
+allowedOrigins.add("http://localhost");
+allowedOrigins.add("https://localhost");
 allowedOrigins.add("capacitor://localhost");
 
 const isProduction = config.isProduction;
@@ -129,6 +133,8 @@ app.use("/api/umrah/assign-bulk", express.json({ limit: "10mb" }));
 app.use("/api/storage", express.json({ limit: "10mb" }));
 // رفع وثائق الاستكمال الذاتي عبر base64 (ملف خام حتى 5MB ≈ 6.7MB بعد الترميز).
 app.use("/api/public/onboarding", express.json({ limit: "8mb" }));
+// رفع صور الموقع الإلكتروني عبر base64 (صورة خام حتى 5MB ≈ 6.7MB بعد الترميز).
+app.use("/api/site/upload-image", express.json({ limit: "8mb" }));
 // NF-COMM-01 / RD3-01 — capture raw body for inbound webhooks (WhatsApp +
 // PBX) so we can verify HMAC against the unmodified payload. Express
 // normally reparses on every retry; storing the buffer at parse time

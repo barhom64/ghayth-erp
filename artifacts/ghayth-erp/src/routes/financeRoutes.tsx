@@ -59,7 +59,12 @@ const ZatcaReportsHub = lazy(() => import("@/pages/finance/zatca-reports-hub"));
 const VatReconciliation = lazy(() => import("@/pages/finance/vat-reconciliation"));
 const VatFilingReadiness = lazy(() => import("@/pages/finance/vat-filing-readiness"));
 const Vouchers = lazy(() => import("@/pages/finance/vouchers"));
-const VouchersCreate = lazy(() => import("@/pages/create/finance/vouchers-create"));
+// الصفحة الموحّدة لتسجيل الواقعة المالية (تبويبات: قبض/صرف · مبيعات · مشتريات — تبدّل
+// النوع في المكان). تضمّ نماذج الأنواع الثلاثة، وكلٌّ يبقى على منفذه القائم (doc 25
+// §١١.٢: روحان لنفس السجل — لا نقل منطق، لا هجرة، لا مساس بالدفتر).
+const FinanceCreatePage = lazy(() => import("@/pages/create/finance/finance-create-page"));
+const FinancialImportGateway = lazy(() => import("@/pages/create/finance/financial-import-gateway"));
+const CustomerCollection = lazy(() => import("@/pages/create/finance/customer-collection"));
 const VoucherDetail = lazy(() => import("@/pages/details/voucher-detail"));
 const Journal = lazy(() => import("@/pages/finance/journal"));
 const JournalDetail = lazy(() => import("@/pages/finance/journal-detail"));
@@ -73,7 +78,7 @@ const Expenses = lazy(() => import("@/pages/finance/expenses"));
 const ExpenseBurnRate = lazy(() => import("@/pages/finance/expense-burn-rate"));
 const ExpenseBulkApprovals = lazy(() => import("@/pages/finance/expense-bulk-approvals"));
 const ExpenseDetail = lazy(() => import("@/pages/details/expense-detail"));
-const ExpensesCreate = lazy(() => import("@/pages/create/finance/expenses-create"));
+// م٨ — expenses-create محوّلة بـ redirect إلى المستند الموحّد (الملف مُبقًى، doc 25 §٨).
 const VendorInvoiceCreate = lazy(() => import("@/pages/create/finance/vendor-invoice-create"));
 // Duplicate multi-line form removed — the unified expenses-create
 // page now handles multi-line via "حفظ وإضافة آخر" button.
@@ -162,7 +167,6 @@ const BankGuarantees = lazy(() => import("@/pages/finance/bank-guarantees"));
 const JournalManual = lazy(() => import("@/pages/finance/journal-manual"));
 const GLPostingQueue = lazy(() => import("@/pages/finance/gl-posting-queue"));
 const JournalManualCreate = lazy(() => import("@/pages/create/finance/journal-manual-create"));
-const JournalQuickTemplates = lazy(() => import("@/pages/create/finance/journal-quick-templates"));
 const JournalReversal = lazy(() => import("@/pages/create/finance/journal-reversal"));
 const JournalManualDetail = lazy(() => import("@/pages/finance/journal-manual-detail"));
 const Intercompany = lazy(() => import("@/pages/finance/intercompany"));
@@ -194,7 +198,8 @@ const ProfitabilityUmrahAgent = lazy(() => import("@/pages/finance/profitability
 const CustomerAdvances = lazy(() => import("@/pages/finance/customer-advances"));
 const CustomerAdvancesCreate = lazy(() => import("@/pages/create/finance/customer-advances-create"));
 const CustomerAdvancesApply = lazy(() => import("@/pages/create/finance/customer-advances-apply"));
-const CustomerReceiptWizard = lazy(() => import("@/pages/create/finance/customer-receipt")); // originally PR #1178
+// م٨ (إكمال التبديل) — customer-receipt محوّلة بـ redirect إلى «تحصيل من عميل» الموحّد
+// (/finance/collect, م٣) بعد ثبوت بوابة §٧.٥ (٦/٦). الملف مُبقًى (doc 25 §٨).
 const Dunning = lazy(() => import("@/pages/finance/dunning"));
 const CollectionStages = lazy(() => import("@/pages/finance/collection-stages"));
 const BadDebt = lazy(() => import("@/pages/finance/bad-debt"));
@@ -283,7 +288,20 @@ export const financeRoutes = [
   // VAT reconciliation report — pre-filing sanity check (#1037 backend).
   { path: "/finance/reports/vat-reconciliation", component: VatReconciliation },
   { path: "/finance/vouchers", component: Vouchers },
-  { path: "/finance/vouchers/create", component: VouchersCreate },
+  // م٨ — التبديل: سند القبض/الصرف القديم يُحوَّل إلى «تسجيل واقعة» الموحّد (يشمله
+  // كحالة قبض/صرف بجدول بنود + توزيع + مرفقات). doc 25 §٨ (تحويل لا حذف).
+  { path: "/finance/vouchers/create", component: redirectTo("/finance/documents/create") },
+  // الصفحة الموحّدة (تبويبات قبض/صرف · مبيعات · مشتريات تبدّل النموذج في المكان —
+  // صفحة واحدة بدل ثلاث، «ادمجها كلها»). المساران القديمان للفاتورتين يعرضان **نفس
+  // الصفحة** بالنوع المناسب مُسبَقًا (يُشتَقّ من المسار) — لا إعادة توجيه، لا وميض.
+  { path: "/finance/documents/create", component: FinanceCreatePage },
+  // مسار ودود للقائمة (نظير /fleet/record-event) — يعرض نفس الصفحة الموحّدة. يبقى
+  // /documents/create المسار الكنسي للإنشاء؛ هذا للظهور في القائمة بلا /create.
+  { path: "/finance/record-event", component: FinanceCreatePage },
+  { path: "/finance/documents/import", component: FinancialImportGateway },
+  { path: "/finance/collect", component: CustomerCollection },
+  { path: "/finance/documents/invoice", component: FinanceCreatePage },
+  { path: "/finance/documents/vendor-invoice", component: FinanceCreatePage },
   { path: "/finance/vouchers/:id", component: VoucherDetail },
   { path: "/finance/journal", component: Journal },
   { path: "/finance/journal/activity", component: PostingActivity },
@@ -296,14 +314,15 @@ export const financeRoutes = [
   { path: "/finance/expenses", component: Expenses },
   { path: "/finance/expense-bulk-approvals", component: ExpenseBulkApprovals },
   { path: "/finance/expense-burn-rate", component: ExpenseBurnRate },
-  { path: "/finance/expenses/create", component: ExpensesCreate },
+  // م٨ — التبديل: المصروف القديم يُحوَّل إلى «تسجيل واقعة» الموحّد (صرف بجدول بنود).
+  { path: "/finance/expenses/create", component: redirectTo("/finance/documents/create") },
   // FIN-P11 (#2241) — vendor invoice (supplier bill): a SEPARATE multi-line
   // entry path from the expense/fuel path; credit leg = supplier payable (آجل)
   // or money source (paid).
   { path: "/finance/vendor-invoices/create", component: VendorInvoiceCreate },
   // Legacy multi-line route now redirects to the unified expenses-create
   // form, which supports multi-line via the "حفظ وإضافة آخر" button.
-  { path: "/finance/expenses/multi-line", component: redirectTo("/finance/expenses/create") },
+  { path: "/finance/expenses/multi-line", component: redirectTo("/finance/documents/create") },
   { path: "/finance/expenses/split", component: CostSplitter },
   { path: "/finance/expenses/:id", component: ExpenseDetail },
   { path: "/finance/budget", component: Budget },
@@ -375,7 +394,7 @@ export const financeRoutes = [
   { path: "/finance/tax", component: TaxSystem },
   { path: "/finance/tax-filing-calendar", component: TaxFilingCalendar },
   { path: "/finance/receivables", component: Receivables },
-  { path: "/finance/receivables/receipt", component: CustomerReceiptWizard },
+  { path: "/finance/receivables/receipt", component: redirectTo("/finance/collect") },
   { path: "/finance/customer-statement-print", component: CustomerStatementPrint },
   { path: "/finance/customer-360-sheet", component: Customer360Sheet },
   { path: "/finance/customer-risk", component: CustomerRisk },
@@ -418,7 +437,8 @@ export const financeRoutes = [
   // GAP_MATRIX P0 — manual journals touch the GL directly; gate at 70 (managers).
   { path: "/finance/journal-manual", component: JournalManual, minRoleLevel: 70 },
   { path: "/finance/journal-manual/create", component: JournalManualCreate, minRoleLevel: 70 },
-  { path: "/finance/journal-quick-templates", component: JournalQuickTemplates, minRoleLevel: 70 },
+  // البند ٢/م٦ — «قوالب قيود سريعة» دُمجت في «قيد يومية» كمنتقي قوالب → redirect (§٨).
+  { path: "/finance/journal-quick-templates", component: redirectTo("/finance/journal/create") },
   { path: "/finance/journal/reverse", component: JournalReversal, minRoleLevel: 70 },
   { path: "/finance/journal-manual/:id", component: JournalManualDetail, minRoleLevel: 70 },
   { path: "/finance/gl-posting-queue", component: GLPostingQueue },

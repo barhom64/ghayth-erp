@@ -44,8 +44,8 @@ const STAGES = [
   { stage: 2, label: "إشعار محاسب + إيميل ثاني",       days: 7,  color: "bg-cyan-100 text-cyan-800" },
   { stage: 3, label: "مهمة تحصيل ميداني",              days: 14, color: "bg-amber-100 text-status-warning-foreground" },
   { stage: 4, label: "تصعيد للمدير المالي",            days: 21, color: "bg-orange-100 text-orange-800" },
-  { stage: 5, label: "إشعار GM + غرامة 2%",            days: 30, color: "bg-red-100 text-status-error-foreground" },
-  { stage: 6, label: "إشعار قانوني + تصنيف churned",   days: 60, color: "bg-purple-100 text-purple-800" },
+  { stage: 5, label: "إشعار المدير العام + غرامة 2%",  days: 30, color: "bg-red-100 text-status-error-foreground" },
+  { stage: 6, label: "إشعار قانوني + تصنيف العميل منقطعًا", days: 60, color: "bg-purple-100 text-purple-800" },
 ];
 
 export default function CollectionStagesPage() {

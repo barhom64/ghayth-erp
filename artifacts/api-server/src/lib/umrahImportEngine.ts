@@ -6,6 +6,7 @@ import type pg from "pg";
 import { logger } from "./logger.js";
 import { encryptField, blindIndex } from "./fieldEncryption.js";
 import { resolveSettings } from "./settings.js";
+import { overstayPenaltyAmount } from "./umrahPenaltyMath.js";
 
 // ---------------------------------------------------------------------------
 // Arabic header → DB column mapping
@@ -1037,6 +1038,15 @@ export async function confirmMutamersImport(
   rows: ParsedRow[],
   fileName: string,
 ): Promise<ImportResult> {
+  // Overstay penalty config — read the SAME three company settings the daily
+  // auto-detection cron (umrahDailyOverstayScan) uses, so an overstay billed
+  // by import matches one billed by the cron exactly. Resolved ONCE per import
+  // (not per row). Replaces the former hard-coded flat `days × 200`.
+  const overstayCfg = {
+    perDay: Number((await resolveSettings("umrah.overstay_daily_penalty", scope.companyId)) ?? 0),
+    tierDays: Number((await resolveSettings("umrah.overstay_tier_days", scope.companyId)) ?? 0),
+    tierAmount: Number((await resolveSettings("umrah.overstay_tier_amount", scope.companyId)) ?? 0),
+  };
   return withTransaction(async (client) => {
     const batchRes = await client.query(
       `INSERT INTO umrah_import_batches
@@ -1127,7 +1137,7 @@ export async function confirmMutamersImport(
             newCount++;
 
             if (row.status === "overstayed" || row.status === "violated") {
-              await detectViolation(client, scope, row, res.rows[0].id, groupId, subAgentId, agentId);
+              await detectViolation(client, scope, row, res.rows[0].id, groupId, subAgentId, agentId, overstayCfg);
             }
           } else {
             const FIELDS = ["fullName", "nationality", "status", "passportNumber", "entryPort", "exitPort", "overstayDays", "actualStayDays", "entryDate", "exitDate"];
@@ -1179,7 +1189,7 @@ export async function confirmMutamersImport(
               if (hasFinancial) financialImpactCount++;
 
               if ((row.status === "overstayed" || row.status === "violated") && ex.status !== row.status) {
-                await detectViolation(client, scope, row, ex.id, groupId, subAgentId, agentId);
+                await detectViolation(client, scope, row, ex.id, groupId, subAgentId, agentId, overstayCfg);
               }
             } else {
               await logChange(client, batchId, "mutamer", ex.id, "skipped");
@@ -1866,6 +1876,7 @@ async function backfillGroupLinks(
 async function detectViolation(
   client: pg.PoolClient, scope: ImportScope, row: ParsedRow,
   mutamerId: number, groupId: number | null, subAgentId: number | null, agentId: number | null,
+  overstayCfg: { perDay: number; tierDays: number; tierAmount: number },
 ) {
   const type = row.status === "violated" ? "absconded" : "overstay";
   const [exists] = (await client.query(
@@ -1875,7 +1886,10 @@ async function detectViolation(
   )).rows;
   if (exists) return;
 
-  const penalty = type === "absconded" ? 2000 : (Number(row.overstayDays) || 0) * 200;
+  // Overstay uses the company's configured (tiered or per-day) rate — the SAME
+  // shared formula the daily cron uses — so the invoiced amount agrees no
+  // matter which path detected the overstay. Absconded stays a flat 2000.
+  const penalty = type === "absconded" ? 2000 : overstayPenaltyAmount(row.overstayDays, overstayCfg);
 
   await client.query(
     `INSERT INTO umrah_violations

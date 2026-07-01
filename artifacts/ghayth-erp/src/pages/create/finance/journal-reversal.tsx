@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
@@ -60,6 +60,13 @@ export default function JournalReversalPage() {
   const [reason, setReason] = useState("");
   const [reverseDate, setReverseDate] = useState(() => todayLocal());
   const [confirming, setConfirming] = useState(false);
+
+  // م٧ — وصول من صفحة تفاصيل القيد (?id=) يُختار القيد مسبقًا، فيصبح العكس إجراءً
+  // مبدوءًا من التفاصيل (doc 25 §٤) مع إبقاء المعاينة والسبب الإلزامي هنا.
+  useEffect(() => {
+    const qid = new URLSearchParams(window.location.search).get("id");
+    if (qid && /^\d+$/.test(qid)) setSelectedId(Number(qid));
+  }, []);
 
   const { data: jeList, isLoading } = useApiQuery<JeListResp>(
     ["journal-list-reversal-pick"],

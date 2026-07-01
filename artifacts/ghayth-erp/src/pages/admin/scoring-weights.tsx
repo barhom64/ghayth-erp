@@ -322,7 +322,7 @@ export default function ScoringWeightsPage() {
   return (
     <PageShell
       title="أوزان التقييم وترتيب الموظفين"
-      subtitle="تخصيص أوزان الأبعاد الستة + عرض ترتيب الموظفين حسب composite score (HR-020)"
+      subtitle="تخصيص أوزان الأبعاد الستة + عرض ترتيب الموظفين حسب الدرجة المركّبة (HR-020)"
       breadcrumbs={onHrRoute ? [
         { href: "/dashboard", label: "لوحة التحكم" },
         { href: "/hr", label: "الموارد البشرية" },

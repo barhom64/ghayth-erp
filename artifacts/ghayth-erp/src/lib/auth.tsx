@@ -1,6 +1,6 @@
 import { useState, useEffect, createContext, useContext, useCallback } from "react";
 import { useLocation } from "wouter";
-import { apiFetch } from "./api";
+import { apiFetch, isPreAuthPath } from "./api";
 import { clearNativeTokens } from "./native-auth";
 import { setObsUser } from "./observability";
 
@@ -135,7 +135,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       fetchUser();
     } else {
       setLoading(false);
-      setLocation("/login");
+      // Pre-auth public pages (password reset / activation / onboarding /
+      // print-verify / login itself) are reached with NO session by design.
+      // Redirecting them to /login here is what made password-reset links
+      // land on the login page instead of the set-password form — skip it.
+      if (!isPreAuthPath()) setLocation("/login");
     }
   }, []);
 

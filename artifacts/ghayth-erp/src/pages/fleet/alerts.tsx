@@ -19,7 +19,7 @@ import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
+import { PageStatusBadge, resolveStatus } from "@workspace/ui-core";
 
 const TYPE_LABELS: Record<string, string> = {
   insurance_expiry: "انتهاء تأمين",
@@ -39,12 +39,6 @@ const TYPE_LABELS: Record<string, string> = {
   violation: "مخالفة",
 };
 
-const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
-  active: { label: "نشط", tone: "bg-rose-100 text-rose-700" },
-  acknowledged: { label: "تمت المعاينة", tone: "bg-status-info-surface text-status-info-foreground" },
-  resolved: { label: "تم الحل", tone: "bg-status-success-surface text-status-success-foreground" },
-  dismissed: { label: "مُتجاهَل", tone: "bg-surface-subtle text-muted-foreground" },
-};
 
 export default function FleetAlerts() {
   const [filters, setFilters] = useFilters();
@@ -92,10 +86,7 @@ export default function FleetAlerts() {
     { key: "message", header: "الرسالة", sortable: true, className: "max-w-[360px]", render: (a) => a.message || "—" },
     {
       key: "status", header: "الحالة", sortable: true,
-      render: (a) => {
-        const info = STATUS_LABELS[a.status] ?? { label: a.status || "—", tone: "bg-surface-subtle" };
-        return <Badge variant="outline" className={info.tone}>{info.label}</Badge>;
-      },
+      render: (a) => <PageStatusBadge status={a.status} domain="fleet_alert" />,
     },
     {
       key: "actions", header: "إجراء",
@@ -148,7 +139,7 @@ export default function FleetAlerts() {
                 "الرسالة": a.message || "—",
                 "الشدة": a.severity || "—",
                 "التاريخ": a.createdAt || a.alertDate || "—",
-                "الحالة": STATUS_LABELS[a.status]?.label || a.status || "—",
+                "الحالة": resolveStatus(a.status, "fleet_alert")?.label || a.status || "—",
               })),
             })}
           />

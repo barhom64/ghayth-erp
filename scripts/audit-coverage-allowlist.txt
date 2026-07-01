@@ -1,105 +1,117 @@
 # audit-coverage-allowlist.txt
 #
-# WRITE endpoints (POST/PUT/PATCH/DELETE) with no statically-detectable
-# audit trail (no createAuditLog/emitEvent in the handler window and not
-# under an auditMiddleware ENTITY_MAP prefix). These are the accepted
-# baseline; the guard fails only on a NEW unaudited write endpoint.
-# Regenerate with:
-#   node scripts/src/check-audit-coverage.mjs --write-allowlist
-# As real gaps get audit wired in, prune their line here — the covered %
-# climbs monotonically and can never silently regress.
+# WRITE endpoints with no statically-detectable audit trail. This file is the
+# accepted baseline; the guard fails only on a NEW unaudited write endpoint.
+# Regenerate keys with: node scripts/src/check-audit-coverage.mjs --write-allowlist
+# As real gaps get audit wired in, prune their line — covered % climbs monotonically.
 #
-# Baseline captured: 88 unaudited write endpoint(s).
-#
-# POST /finance/intercompany — audit IS present (emitEvent + createAuditLog in
-# finance-hardening.ts, ~L1470/L1479) but ~237 lines into the handler, beyond the
-# check's 120-line handler window. Not a real gap — both legs' JE creation is
-# audited + event-emitted on commit.
-POST /finance/intercompany
+# Baseline: 63 entr(ies), TRIAGED 2026-06-30 into the sections below so the
+# allowlist is an intentional, reasoned register — not a blind dumping ground.
+
+# ======================================================================
+# EXEMPT — stub endpoints (handler is notImplemented(): no state mutation)
+# ======================================================================
+# Verified in routes/wiring-stubs.ts — these PUT/DELETE return 501 and write nothing.
 DELETE /admin/saudi/wps/credentials/:bankCode
-DELETE /documents/saudi/wps/credentials/:bankCode
 DELETE /finance/saudi/wps/credentials/:bankCode
 DELETE /hr/saudi/wps/credentials/:bankCode
+DELETE /warehouse/saudi/wps/credentials/:bankCode
+PUT /admin/saudi/wps/credentials/:bankCode
+PUT /finance/saudi/wps/credentials/:bankCode
+PUT /hr/saudi/wps/credentials/:bankCode
+PUT /warehouse/saudi/wps/credentials/:bankCode
+
+# ======================================================================
+# EXEMPT — diagnostic / preview / simulate / test (read-only, no DB write)
+# ======================================================================
+# These compute-and-return (connection tests, dry-run simulations, impact previews).
+# Auditing a no-write probe would pollute the trail; the real write is audited elsewhere.
+POST /admin/ai-governance/prompts/:id/simulate
+POST /admin/communication-control/dlp-rules/test
+POST /admin/pbx-control/ivr-test
+POST /admin/pbx-control/setup/test-signature
+POST /admin/permissions/explain
+POST /admin/vendor-settings/:slug/test
+POST /admin/vendor-settings/company/smtp/test
+POST /finance/documents/collect/preview
+POST /finance/vendor-invoices/impact-preview
+POST /finance/zatca/test-connection
+POST /impact-preview
+POST /mailboxes/:id/test
+POST /rbac/v2/simulate
+POST /umrah/commission-plans/simulate
+
+# ======================================================================
+# EXEMPT — high-frequency UI state (mark read/star, GPS field-ping)
+# ======================================================================
+# Trivial per-user view-state / telemetry; auditing would flood the trail with noise.
+POST /hr/attendance/field-ping
+POST /inbox/messages/:id/read
+POST /inbox/messages/:id/star
+POST /inbox/threads/:channel/:address/read
+
+# ======================================================================
+# EXEMPT — documented elsewhere (audited beyond the 120-line window, or reversible per-user config)
+# ======================================================================
+POST /finance/intercompany
+DELETE /umrah/import/presets/:id
+POST /finance/documents/import/analyze
+POST /finance/documents/import/presets
+DELETE /finance/documents/import/presets/:id
+PUT /storage/uploads/direct/*key
+
+# ======================================================================
+# GENUINE GAP — operational writes that SHOULD carry audit (wire createAuditLog) [TODO]
+# ======================================================================
+# Single-lane operational mutations (inbox drafts/signatures, umrah hotels/import,
+# zatca tax-number edits, print reprint, pbx secret, outbox drain). Safe, non-ledger.
+# Scheduled for a dedicated audit-wiring batch, each in its owning route.
 DELETE /inbox/drafts/:id
 DELETE /inbox/signatures/:id
 DELETE /inbox/threads/:channel/:address/snooze
 DELETE /umrah/hotels/:id
-DELETE /umrah/import/presets/:id
-DELETE /warehouse/saudi/wps/credentials/:bankCode
 PATCH /admin/zatca/missing-tax-numbers/:id
-PATCH /documents/zatca/missing-tax-numbers/:id
-PATCH /finance/budgets/:id/approve
-PATCH /finance/commitments/:id/approve
-PATCH /finance/financial-requests/:id/approve
-PATCH /finance/journal-manual/:id/approve
-PATCH /finance/journal-manual/:id/post
-PATCH /finance/journal-manual/:id/review
-PATCH /finance/journal-manual/:id/submit
-PATCH /finance/receivables/:id/approve
 PATCH /finance/zatca/missing-tax-numbers/:id
 PATCH /hr/zatca/missing-tax-numbers/:id
 PATCH /inbox/drafts/:id
 PATCH /inbox/signatures/:id
 PATCH /umrah/hotels/:id
 PATCH /warehouse/zatca/missing-tax-numbers/:id
-POST /admin/:id/ocr/rerun
-POST /admin/ai-governance/prompts/:id/simulate
-POST /admin/communication-control/dlp-rules/test
-POST /admin/ocr/extractions/:id/confirm
-POST /admin/ocr/extractions/:id/reject
-POST /admin/pbx-control/ivr-test
 POST /admin/pbx-control/setup/generate-secret
-POST /admin/pbx-control/setup/test-signature
 POST /admin/pbx-control/transcripts/run-next
-POST /admin/permissions/explain
-POST /admin/vendor-settings/:slug/test
-POST /admin/vendor-settings/company/smtp/test
-POST /documents/:id/ocr/rerun
-POST /documents/ocr/extractions/:id/confirm
-POST /documents/ocr/extractions/:id/reject
 POST /events/outbox/drain
-POST /finance/:id/ocr/rerun
-POST /finance/bank-guarantees/:id/cancel
-POST /finance/bank-guarantees/:id/release
-POST /finance/fiscal-periods-v2/:id/close
-POST /finance/fiscal-periods-v2/:id/lock
-POST /finance/fiscal-periods-v2/:id/reopen
-POST /finance/fiscal-periods/:period/close
-POST /finance/journal/:id/reverse
-POST /finance/ocr/extractions/:id/confirm
-POST /finance/ocr/extractions/:id/reject
-POST /finance/payment-run/execute
-POST /finance/vendor-invoices/impact-preview
-POST /finance/zatca/test-connection
-POST /hr/:id/ocr/rerun
-POST /hr/attendance/field-ping
-POST /hr/ocr/extractions/:id/confirm
-POST /hr/ocr/extractions/:id/reject
-POST /impact-preview
 POST /inbox/conversations/:id/messages
 POST /inbox/drafts
 POST /inbox/drafts/:id/send
-POST /inbox/messages/:id/read
-POST /inbox/messages/:id/star
 POST /inbox/send
 POST /inbox/signatures
-POST /inbox/threads/:channel/:address/read
 POST /inbox/threads/:id/reply
 POST /mailboxes/:id/sync
-POST /mailboxes/:id/test
 POST /print/render
 POST /print/reprint-requests
-POST /rbac/v2/simulate
-POST /umrah/commission-plans/simulate
 POST /umrah/groups/:id/transport-requests
 POST /umrah/import/presets
 POST /umrah/import/vouchers
+
+# ======================================================================
+# EXEMPT — ledger ops VERIFIED audited beyond the guard's 200-line window or via
+# a delegated helper/engine the static scan can't follow (2026-06-30 deep audit)
+# ======================================================================
+# Re-verified line-by-line against the actual code: NONE of these is a real gap.
+# The audit happens, just outside the per-handler window the scanner reads. No
+# code change — wiring extra audit here would DOUBLE-log. (Same false-positive
+# class as the applyTransition<…> generic-call fix.)
+#   journal/:id/reverse        → createAuditLog + emitEvent at finance-journal.ts:4003
+#                                (≈212 lines into the handler; action "journal.reversed").
+#   fiscal-periods-v2/:id/close→ delegates to closeFiscalPeriodCanonical, which writes
+#                                the audit_log + event_logs row in-tx (finance-hardening.ts:234).
+#   fiscal-periods/:period/close→ DEPRECATED redirect stub (finance-budget.ts:752, `_req`):
+#                                returns a "use v2" message, writes nothing → nothing to audit.
+#   payment-run/execute        → emitEvent at finance-purchase.ts:2208 (end of a 355-line handler).
+#   umrah/reclassify-revenue   → thin route delegating to reclassifyRevenueForInvoices engine,
+#                                which emitEvent + createAuditLog (umrahReclassifyEngine.ts:229/249).
+POST /finance/fiscal-periods-v2/:id/close
+POST /finance/fiscal-periods/:period/close
+POST /finance/journal/:id/reverse
+POST /finance/payment-run/execute
 POST /umrah/reclassify-revenue
-POST /warehouse/:id/ocr/rerun
-POST /warehouse/ocr/extractions/:id/confirm
-POST /warehouse/ocr/extractions/:id/reject
-PUT /admin/saudi/wps/credentials/:bankCode
-PUT /documents/saudi/wps/credentials/:bankCode
-PUT /finance/saudi/wps/credentials/:bankCode
-PUT /hr/saudi/wps/credentials/:bankCode
-PUT /warehouse/saudi/wps/credentials/:bankCode

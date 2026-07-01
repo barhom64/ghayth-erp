@@ -36,12 +36,32 @@ import { usePrintRows } from "@/hooks/use-print-rows";
 function PayrollLines({ runId }: { runId: number }) {
   const { data } = useApiQuery<any>(["payroll-lines", String(runId)], `/hr/payroll/${runId}/lines`, !!runId);
   const lines = data?.data || [];
+  // أجر السائق بالساعة (الدفعة 3): تُعرض أعمدة القيادة/التوقف فقط حين يحمل
+  // المسيّر أجر سائق — تبقى النظرة نظيفة لمسيّرات بلا سائقين ساعيين.
+  const hasDriverWages = lines.some(
+    (l: any) => Number(l.drivingHoursAmount) > 0 || Number(l.stopHoursAmount) > 0,
+  );
+  const driverCols: DataTableColumn<any>[] = hasDriverWages
+    ? [
+        { key: "drivingHoursAmount", header: "أجر القيادة", sortable: true, render: (v) => (
+          <span>{formatCurrency(Number(v.drivingHoursAmount || 0))}
+            <span className="block text-xs text-muted-foreground">{Number(v.drivingHours || 0).toFixed(2)} س</span>
+          </span>
+        ) },
+        { key: "stopHoursAmount", header: "أجر التوقف", sortable: true, render: (v) => (
+          <span>{formatCurrency(Number(v.stopHoursAmount || 0))}
+            <span className="block text-xs text-muted-foreground">{Number(v.stopHours || 0).toFixed(2)} س</span>
+          </span>
+        ) },
+      ]
+    : [];
   return (
     <DataTable
       columns={[
         { key: "employeeName", header: "الموظف", sortable: true, render: (v) => <span className="font-medium">{v.employeeName}</span> },
         { key: "basic", header: "الأساسي", sortable: true, render: (v) => <span>{formatCurrency(Number(v.basic))}</span> },
         { key: "grossSalary", header: "الإجمالي", sortable: true, render: (v) => <span>{formatCurrency(Number(v.grossSalary))}</span> },
+        ...driverCols,
         { key: "gosi", header: "التأمينات", sortable: true, render: (v) => <span className="text-orange-600">{formatCurrency(Number(v.gosi))}</span> },
         { key: "lateDeduction", header: "الخصومات", sortable: true, render: (v) => <span className="text-status-error-foreground">{formatCurrency(Number(v.lateDeduction))}</span> },
         { key: "netSalary", header: "الصافي", sortable: true, render: (v) => <span className="font-bold text-status-success-foreground">{formatCurrency(Number(v.netSalary))}</span> },

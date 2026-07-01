@@ -918,7 +918,7 @@ async function loadFleetMaintenance(companyId: number, id: string) {
             v."plateNumber", d.name AS "driverName"
      FROM fleet_maintenance fm
      LEFT JOIN fleet_vehicles v ON v.id = fm."vehicleId"
-     LEFT JOIN fleet_drivers d ON d.id = v."currentDriverId"
+     LEFT JOIN fleet_drivers d ON d.id = v."assignedDriverId"
      WHERE fm.id = $1 AND fm."companyId" = $2 LIMIT 1`,
     [id, companyId]
   );

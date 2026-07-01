@@ -146,6 +146,35 @@ describe("criticalPathLength", () => {
     ];
     expect(criticalPathLength(tasks)).toBe(10);
   });
+
+  // project_task_dependencies is inserted with no cycle check (routes/projects.ts),
+  // so a circular dependency is reachable from user input. Pre-fix this
+  // stack-overflowed the project-detail endpoint (500); now the back-edge is
+  // ignored so the result stays finite.
+  it("does not infinite-loop on a circular dependency (A→B→A)", () => {
+    const tasks = [
+      { id: 1, estimatedHours: 4, dependsOn: [2] },
+      { id: 2, estimatedHours: 6, dependsOn: [1] },
+    ];
+    const result = criticalPathLength(tasks);
+    expect(Number.isFinite(result)).toBe(true);
+    expect(result).toBe(10); // node 1 drops its back-edge into the cycle: 6 + 4
+  });
+
+  it("handles a self-dependency without recursing forever", () => {
+    expect(criticalPathLength([{ id: 1, estimatedHours: 5, dependsOn: [1] }])).toBe(5);
+  });
+
+  it("still computes the correct longest acyclic path when an unrelated cycle exists", () => {
+    const tasks = [
+      { id: 1, estimatedHours: 4, dependsOn: [2] }, // 1 ↔ 2 cycle
+      { id: 2, estimatedHours: 6, dependsOn: [1] },
+      { id: 10, estimatedHours: 3, dependsOn: [] }, // acyclic chain 10→11→12 = 12
+      { id: 11, estimatedHours: 5, dependsOn: [10] },
+      { id: 12, estimatedHours: 4, dependsOn: [11] },
+    ];
+    expect(criticalPathLength(tasks)).toBe(12);
+  });
 });
 
 describe("slaHours", () => {

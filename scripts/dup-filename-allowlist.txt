@@ -6,13 +6,14 @@
 #   node scripts/src/check-dup-filenames.mjs --write-allowlist
 # As duplicate sets are unified, prune the basename here.
 #
-# Baseline captured: 14 duplicated basename(s).
+# Baseline captured: 15 duplicated basename(s).
 calendar.tsx
 contracts-create.tsx
 correspondence.tsx
 dashboard.tsx
 invoices.tsx
 maintenance-create.tsx
+packages.tsx
 policies-tab.tsx
 profitability.tsx
 reports.tsx

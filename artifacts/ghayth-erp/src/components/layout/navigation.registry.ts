@@ -29,6 +29,7 @@ import {
   BarChart3, UserPlus, ClipboardList, Navigation, Percent, Zap,
   Sparkles, Brain, Search, ArrowLeftRight,
   Plus, Printer, CheckSquare, Download, Send, Star, Settings, BookOpen, Radar, Timer, ListChecks,
+  HelpCircle, Image as ImageIcon,
   BarChart2, ShieldAlert, Flag, Layers, Calculator, LayoutGrid,
   RefreshCw, Globe, TrendingDown as TrendingDown2,
   Satellite, Bot, HardDrive, Video as VideoIcon, Award,
@@ -268,6 +269,7 @@ export const allNavSections: NavSection[] = [
         { label: "الرواتب والمستحقات", path: "/hr/payroll", icon: DollarSign, children: [
           { label: "مسيرات الرواتب", path: "/hr/payroll", icon: DollarSign, subKey: "payroll" },
           { label: "مكونات الرواتب", path: "/hr/payroll/salary-components", icon: Percent, subKey: "payroll" },
+          { label: "معدّلات أجر السائق", path: "/hr/driver-pay-rates", icon: Percent, subKey: "payroll", perm: "hr.driver_pay:list" },
           { label: "سلف الموظفين", path: "/hr/loans", icon: Wallet, subKey: "payroll" },
           { label: "مكافأة نهاية الخدمة", path: "/hr/gratuity", icon: Banknote, subKey: "payroll" },
           { label: "الاستحقاقات الشهرية", path: "/hr/accruals", icon: ListChecks, subKey: "payroll" },
@@ -345,12 +347,16 @@ export const allNavSections: NavSection[] = [
           { label: "مركز التسويات", path: "/finance/reconciliation-hub", icon: RefreshCw },
           { label: "القيود اليدوية", path: "/finance/journal-manual", icon: FileSignature, minRoleLevel: 70 },
           { label: "قوالب القيود", path: "/finance/journal-templates", icon: FileText },
-          { label: "قوالب قيود سريعة", path: "/finance/journal-quick-templates", icon: Zap },
           { label: "معالج عكس قيد", path: "/finance/journal/reverse", icon: ArrowLeftRight },
           { label: "قيود دورية", path: "/finance/recurring-journals", icon: CalendarClock },
           { label: "تقويم الدورية", path: "/finance/recurring-calendar", icon: Calendar },
         ]},
         { label: "الفواتير والسندات", path: "/finance/invoices", icon: Receipt, children: [
+          // الإدخال الموحّد — «تسجيل واقعة مالية» (قبض/صرف · مبيعات · مشتريات في صفحة
+          // واحدة بتبويبات). المدخل الأساسي للإنشاء المالي، ظاهر في القائمة لا مخفيًّا
+          // خلف أزرار القوائم فقط. يستخدم مسار «record-event» الودود (نظير «تسجيل واقعة
+          // مركبة» /fleet/record-event) لا /create — احترامًا لحارس «لا إنشاء في القائمة».
+          { label: "تسجيل واقعة مالية", path: "/finance/record-event", icon: ClipboardCheck },
           { label: "الفواتير", path: "/finance/invoices", icon: Receipt },
           { label: "فواتير متكررة", path: "/finance/recurring-invoices", icon: CalendarClock },
           { label: "صف الإرسال", path: "/finance/invoice-send-queue", icon: Send },
@@ -361,7 +367,7 @@ export const allNavSections: NavSection[] = [
           { label: "تحويل بين الحسابات", path: "/finance/treasury/transfer", icon: ArrowLeftRight },
           { label: "النقد في الطريق", path: "/finance/cash-in-transit", icon: Banknote },
           { label: "المقبوضات", path: "/finance/receivables", icon: DollarSign },
-          { label: "سند قبض العميل (تطبيق تلقائي)", path: "/finance/receivables/receipt", icon: DollarSign },
+          { label: "تحصيل من عميل (مطابقة تلقائية)", path: "/finance/collect", icon: DollarSign },
           { label: "المدفوعات", path: "/finance/payments", icon: Wallet },
           { label: "دفعات مقدمة من العملاء", path: "/finance/customer-advances", icon: ArrowLeftRight },
           { label: "منضدة دفعات العملاء المقدمة", path: "/finance/customer-advances-workbench", icon: Briefcase },
@@ -590,7 +596,11 @@ export const allNavSections: NavSection[] = [
           // أُعيدت بعد سقوطها من المجموعة في إعادة تنظيم الأسطول، إذ اختفت قائمة
           // المركبات وزر الإضافة من القائمة رغم بقاء الصفحة قائمةً تعمل.
           { label: "المركبات", path: "/fleet", icon: Car, perm: "fleet.vehicles:list" },
+          // البند ٤ — «تسجيل واقعة مركبة» الموحّدة (الكيان يقود: وقود/صيانة/تأمين معًا).
+          { label: "تسجيل واقعة مركبة", path: "/fleet/record-event", icon: ClipboardCheck, perm: "fleet.vehicles:update" },
           { label: "السائقين", path: "/fleet/drivers", icon: User, perm: "fleet.vehicles:list" },
+          { label: "ساعات عمل السائق", path: "/fleet/driver-work-hours", icon: Clock, perm: "fleet.driver_hours:list" },
+          { label: "مكافآت حركات النقل", path: "/fleet/movement-bonuses", icon: Award, perm: "fleet.movement_bonus:list" },
           { label: "فحوص المركبات", path: "/fleet/inspections", icon: ClipboardCheck, perm: "fleet.vehicles:list" },
           { label: "الرحلات", path: "/fleet/trips", icon: Navigation, perm: "fleet.trips:list" },
           { label: "استهلاك الوقود", path: "/fleet/fuel", icon: Fuel, perm: "fleet.trips:list" },
@@ -891,8 +901,7 @@ export const allNavSections: NavSection[] = [
           { label: "جميع المستندات", path: "/documents", icon: FileText },
           { label: "المجلدات", path: "/documents/folders", icon: FolderOpen },
           { label: "الأرشيف", path: "/documents/archive", icon: Archive },
-          { label: "صندوق المسح الضوئي", path: "/documents/ocr-inbox", icon: FileText },
-          { label: "مراجعة المسح الضوئي", path: "/documents/ocr/review", icon: FileCheck },
+          { label: "قراءة المستندات (OCR)", path: "/documents/ocr/review", icon: FileCheck },
           { label: "القوالب", path: "/documents/templates", icon: FilePlus },
           { label: "رفع مستند", path: "/documents/upload", icon: FilePlus },
         ]},
@@ -1043,6 +1052,28 @@ export const allNavSections: NavSection[] = [
           { label: "قواعد الأعمال", path: "/settings/rules", icon: Zap, perm: "settings:write" },
           { label: "سجل مراجعة الإعدادات", path: "/settings/audit-log", icon: ScrollText, perm: ["audit:read", "settings:write"], permMode: "any" },
         ]},
+      ]},
+    ],
+  },
+  // ══════════════════════════════════════════════════════════════════════
+  // الموقع الإلكتروني — نظام إدارة محتوى موقع الشركة (متعدد المستأجرين).
+  // موائمة بدون تكرار: تتحكّم غيث في موقع كل شركة من واجهة الإدارة هذه.
+  // ══════════════════════════════════════════════════════════════════════
+  {
+    title: "الموقع الإلكتروني",
+    items: [
+      { label: "الموقع الإلكتروني", path: "/website", icon: Globe, module: "website", children: [
+        { label: "إعدادات الموقع", path: "/website", icon: Settings },
+        { label: "الباقات", path: "/website/packages", icon: Package },
+        { label: "الفنادق", path: "/website/hotels", icon: Building2 },
+        { label: "الخدمات", path: "/website/services", icon: LayoutGrid },
+        { label: "المدونة", path: "/website/posts", icon: FileText },
+        { label: "الأسئلة الشائعة", path: "/website/faqs", icon: HelpCircle },
+        { label: "آراء العملاء", path: "/website/testimonials", icon: MessageSquare },
+        { label: "فريق العمل", path: "/website/team", icon: Users },
+        { label: "معرض الصور", path: "/website/gallery", icon: ImageIcon },
+        { label: "البانرات الإعلانية", path: "/website/banners", icon: Megaphone },
+        { label: "قائمة التنقّل", path: "/website/nav-items", icon: Menu },
       ]},
     ],
   },

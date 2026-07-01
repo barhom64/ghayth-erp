@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, Fragment } from "react";
 import { API_BASE, nativeAuthHeaders } from "@/lib/api";
 import { z } from "zod";
 import { Link, useLocation } from "wouter";
@@ -50,14 +50,17 @@ import { useToast } from "@/hooks/use-toast";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
+import { groupByCategoryOrder } from "@/lib/document-grouping";
 
+// القيم تطابق تعداد DOCUMENT_CATEGORIES الخلفي (وعليه فترة الحفظ) — official/financial/
+// other لم تكن ضمنه فكان الرفع/الفلترة بها يفشل؛ صُحّحت (التسميات العربية كما هي).
 const CATEGORIES = [
   { value: "contracts", label: "عقود" },
-  { value: "official", label: "وثائق رسمية" },
-  { value: "financial", label: "مالية" },
+  { value: "compliance", label: "وثائق رسمية" },
+  { value: "finance", label: "مالية" },
   { value: "hr", label: "موارد بشرية" },
   { value: "legal", label: "قانونية" },
-  { value: "other", label: "أخرى" },
+  { value: "general", label: "أخرى" },
 ];
 
 const CATEGORY_EFFECTS: Record<string, { icon: string; approvedEffect: string; severity: "info" | "warning" | "success" }> = {
@@ -117,6 +120,13 @@ function DocumentsList() {
 
   const filtered = items.filter((d: any) =>
     !search || d.title?.includes(search) || d.fileName?.includes(search)
+  );
+  // «تنظيم المكتبة» (توجيه إبراهيم هـ) — كانت المستندات قائمة مسطّحة رغم وجود
+  // ٦ تصنيفات. نرتّبها حسب ترتيب CATEGORIES ونحسب عدّاد كل تصنيف عبر مُساعد نقي،
+  // فتُعرض مجمّعة برأس قسم «التصنيف (العدد)» عند عرض «الكل».
+  const { ordered: orderedFiltered, countByCat } = groupByCategoryOrder(
+    filtered as Array<{ category?: string | null } & Record<string, any>>,
+    CATEGORIES.map((c) => c.value),
   );
 
   const statusMut = useApiMutation<any, { id: number; status: string }>(
@@ -258,9 +268,10 @@ function DocumentsList() {
           payload={() => ({
             entity: {
               title: "سجل المستندات",
-              total: filtered.length,
+              total: orderedFiltered.length,
             },
-            items: filtered.map((d: any) => ({
+            // مرتّب حسب التصنيف ليطابق العرض المجمّع على الشاشة.
+            items: orderedFiltered.map((d: any) => ({
               "العنوان": d.title || "—",
               "الملف": d.fileName || "—",
               "التصنيف": CATEGORIES.find((c) => c.value === d.category)?.label || d.category || "—",
@@ -286,7 +297,21 @@ function DocumentsList() {
         </Card>
       ) : (
         <div className="space-y-2">
-          {filtered.map((d: any) => (
+          {orderedFiltered.map((d: any, idx: number) => {
+            // رأس قسم لكل تصنيف عند عرض «الكل» فقط (يظهر مرة عند بداية كل تصنيف).
+            const showHeader =
+              categoryFilter === "all" &&
+              (idx === 0 || orderedFiltered[idx - 1].category !== d.category);
+            return (
+            <Fragment key={d.id}>
+            {showHeader && (
+              <div className="flex items-center gap-2 px-1 pt-3 first:pt-0">
+                <h3 className="text-sm font-semibold text-muted-foreground">
+                  {CATEGORIES.find((c) => c.value === d.category)?.label || "أخرى"}
+                </h3>
+                <Badge variant="secondary" className="text-[10px]">{countByCat[d.category || "other"] || 0}</Badge>
+              </div>
+            )}
             <Card key={d.id} className="hover:shadow-sm transition-shadow">
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-4">
@@ -400,7 +425,9 @@ function DocumentsList() {
                 )}
               </CardContent>
             </Card>
-          ))}
+            </Fragment>
+            );
+          })}
         </div>
       )}
 

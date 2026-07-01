@@ -39,7 +39,7 @@ const PRIORITY_LABELS: Record<string, string> = {
   low: "منخفضة",
   medium: "متوسطة",
   high: "عالية",
-  urgent: "عاجلة",
+  critical: "حرجة",
 };
 
 function statusTone(status: string) {
@@ -54,7 +54,7 @@ function statusTone(status: string) {
 const requestEditSchema = z.object({
   title: z.string().min(1, "العنوان مطلوب"),
   description: z.string().optional().default(""),
-  priority: z.enum(["low", "medium", "high", "urgent"]),
+  priority: z.enum(["low", "medium", "high", "critical"]),
   notes: z.string().optional().default(""),
 });
 type RequestEditForm = z.infer<typeof requestEditSchema>;
@@ -353,7 +353,7 @@ export default function RequestDetail() {
                 { value: "low", label: "منخفضة" },
                 { value: "medium", label: "متوسطة" },
                 { value: "high", label: "عالية" },
-                { value: "urgent", label: "عاجلة" },
+                { value: "critical", label: "حرجة" },
               ]}
             />
             <FormTextareaField name="description" label="الوصف" className="md:col-span-2" />

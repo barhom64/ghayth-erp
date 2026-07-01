@@ -34,6 +34,7 @@ import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { registerObligation } from "../lib/obligationsEngine.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
+import { assertNotSelfApproval } from "../lib/rbac/selfApprovalCreators.js";
 import { markIdempotencyReplay, requestIdempotencyToken, boundedIdempotencyToken } from "../lib/requestIdempotency.js";
 import { assertDocumentBranchAccess } from "../lib/branchResolution.js";
 import { z } from "zod";
@@ -1021,6 +1022,11 @@ async function poApprovalAction(req: any, res: any, newStatus: "approved" | "rej
     // creation month is the budget period; validateBudget falls back to the
     // current period when createdAt is unexpectedly empty.
     if (newStatus === "approved") {
+      // Maker-checker: the creator may not APPROVE their own PO (a spend
+      // commitment) — the same segregation the unified approval chain
+      // enforces. Owners (no employeeId) are exempt.
+      await assertNotSelfApproval("purchase_order", id, scope.companyId, scope.employeeId);
+
       const poPeriod = String((po as Record<string, unknown>).createdAt ?? "").slice(0, 7) || undefined;
       const poLines = await rawQuery<{ accountCode: string; amt: string }>(
         `SELECT "accountCode", SUM("lineTotal")::text AS amt
@@ -1337,10 +1343,13 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
     // by (treatment-derived account + dimension signature) and emits
     // one DR per bucket. The VAT debit + GRNI credit stay header-level.
     const { financialEngine } = await import("../lib/engines/index.js");
-    const [vatAccount, grniAccount] = await Promise.all([
+    const { resolveCompanyInputVatAccount } = await import("../lib/taxCodes.js");
+    const [vatGeneral, grniAccount] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "purchase_grn_vat", "debit", "1180"),
       financialEngine.resolveAccountCode(scope.companyId, "purchase_grni", "credit", "2150"),
     ]);
+    // البند ٤ — ضريبة المدخلات على حساب الرمز القياسي للشركة إن هُيِّئ، وإلا العام.
+    const vatAccount = await resolveCompanyInputVatAccount(scope.companyId, vatGeneral);
 
     // Per-line DR routing uses the module-scope GRN_TREATMENT_PURPOSE map
     // (shared with the pre-flight gate above so they can never diverge).
@@ -3114,11 +3123,15 @@ purchaseRouter.post("/vendor-credits", authorize({ feature: "finance.purchase", 
     // F2 (audit follow-up): JE post + journalId stamp INSIDE the same
     // withTransaction. Same shape as customer-advances fix.
     const { financialEngine } = await import("../lib/engines/index.js");
-    const [apCode, returnsCode, vatInputCode] = await Promise.all([
+    const { resolveCompanyInputVatAccount } = await import("../lib/taxCodes.js");
+    const [apCode, returnsCode, vatInputGeneral] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2111"),
       financialEngine.resolveAccountCode(scope.companyId, "vendor_return_revenue", "credit", "5110"),
       financialEngine.resolveAccountCode(scope.companyId, "vat_input_reversal", "credit", "1180"),
     ]);
+    // البند ٤ — يُعكَس على نفس حساب رمز الشركة القياسي الذي حمّلته الفاتورة، وإلا
+    // العام؛ فتُغلق تسوية حساب ضريبة المدخلات صفرًا بين الفاتورة وإشعارها.
+    const vatInputCode = await resolveCompanyInputVatAccount(scope.companyId, vatInputGeneral);
 
     let memoId: number | null = null;
     let journalId: number | null = null;
@@ -3440,6 +3453,12 @@ purchaseRouter.post("/vendor-invoices", authorize({ feature: "finance.purchase",
     const { financialEngine } = await import("../lib/engines/index.js");
     const expenseCode = b.expenseAccountCode
       ?? await financialEngine.resolveAccountCode(scope.companyId, "vendor_invoice_expense", "debit", "5340");
+    // ⚠️ مسار مظلَّل (shadowed): معالج POST vendor-invoices في journalRouter
+    // (finance-journal:2123) مركَّب قبل purchaseRouter فيلتقط الطلب دائمًا —
+    // هذا المعالج لا تصله الواجهة. توصيل دقّة رمز ضريبة الوثيقة على المعالج
+    // الحقيقي (resolveVendorInvoicePlan، #3087)؛ لا تربط حساب رمز الضريبة هنا
+    // (أُزيل توصيل #3084 الخامل — تنظيف). ملاحظة: لا تُعِد كتابة تعريف مسار
+    // كامل (اسمٌ ثم نقطة ثم post) في تعليق هنا — يخدع حارس audit-coverage.
     const [vatInputCode, apCode] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "purchase_vat_input", "debit", "1180"),
       financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "credit", "2111"),

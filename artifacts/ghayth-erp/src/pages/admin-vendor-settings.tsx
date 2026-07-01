@@ -200,8 +200,10 @@ export default function AdminVendorSettings() {
           {vendors.map((v) => (
             <VendorCard key={v.slug} vendor={v} onChange={refetch} />
           ))}
-          <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
-            واتساب والإشعارات الفورية تُضبط من «قنوات الاتصال» في الإعدادات، وهيئة الزكاة من تبويب «هيئة الزكاة والضريبة» — هذه الصفحة للأسرار الخلفية فقط.
+          <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground leading-relaxed">
+            هذه الصفحة للأسرار الخلفية فقط (مفاتيح المزوّدين المشفّرة).
+            واتساب والإشعارات الفورية تُضبط من «قنوات الاتصال» في الإعدادات، وهيئة الزكاة من تبويب «هيئة الزكاة والضريبة»،
+            والربط التقني (استقبال واتساب، الويب هوك، GitHub) من «مركز التكاملات».
           </div>
           {vendors.length === 0 && (
             <Card>

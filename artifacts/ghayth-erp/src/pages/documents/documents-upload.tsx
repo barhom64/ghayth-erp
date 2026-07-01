@@ -27,13 +27,16 @@ type UploadForm = z.infer<typeof uploadSchema>;
 
 const BASE = API_BASE;
 
+// القيم يجب أن تطابق تعداد DOCUMENT_CATEGORIES الخلفي (وإلا يُرفض الرفع: Invalid enum).
+// official/financial/other لم تكن ضمن التعداد فكان الرفع بها يفشل — صُحّحت (التسميات
+// العربية كما هي، القيم لقيم التعداد الصحيحة).
 const CATEGORIES = [
   { value: "contracts", label: "عقود" },
-  { value: "official", label: "وثائق رسمية" },
-  { value: "financial", label: "مالية" },
+  { value: "compliance", label: "وثائق رسمية" },
+  { value: "finance", label: "مالية" },
   { value: "hr", label: "موارد بشرية" },
   { value: "legal", label: "قانونية" },
-  { value: "other", label: "أخرى" },
+  { value: "general", label: "أخرى" },
 ];
 
 const ENTITY_TYPES = [

@@ -22,6 +22,7 @@ import { fieldPingSchema, getFieldEligibility, recordFieldPing } from "../lib/fi
 import { auditFromRequest, emitEvent } from "../lib/businessHelpers.js";
 import { signFieldTrackingToken } from "../lib/auth.js";
 import { config } from "../lib/config.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -102,7 +103,7 @@ router.post("/ping", authorize({ feature: "hr.attendance.checkin", action: "crea
         auditFromRequest(req, "field_tracking.ping", "field_tracking_pings", r.id, {
           after: { lat: b.lat, lng: b.lng, accuracy: b.accuracy },
         });
-        emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "field_tracking.ping.accepted", entity: "field_tracking_pings", entityId: r.id, details: JSON.stringify({ lat: b.lat, lng: b.lng }) }).catch(() => {});
+        emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "field_tracking.ping.accepted", entity: "field_tracking_pings", entityId: r.id, details: JSON.stringify({ lat: b.lat, lng: b.lng }) }).catch((e) => logger.error(e, "field tracking background task failed"));
         return;
     }
   } catch (err) {

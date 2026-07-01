@@ -62,7 +62,7 @@ d("commission + CIP + datafix fallbacks resolve to postable leaves", () => {
       companyId, branchId, createdBy: 0,
       ref: `COMM-${Date.now()}`, description: "عمولة — اختبار",
       type: "general", sourceType: "commission", sourceId: 993001,
-      sourceKey: `test:commission:${Date.now()}`,
+      sourceKey: `test:commission:${companyId}:993001`,
       lines: [{ accountCode: exp, debit: 250, credit: 0 }, { accountCode: cash, debit: 0, credit: 250 }],
     });
     expect(res.journalId).toBeTruthy();
@@ -80,7 +80,7 @@ d("commission + CIP + datafix fallbacks resolve to postable leaves", () => {
       companyId, branchId, createdBy: 0,
       ref: `CIP-${Date.now()}`, description: "رسملة أعمال تحت التنفيذ — اختبار",
       type: "general", sourceType: "cip_capitalization", sourceId: 993002,
-      sourceKey: `test:cip:${Date.now()}`,
+      sourceKey: `test:cip:${companyId}:993002`,
       lines: [{ accountCode: asset, debit: 1000, credit: 0 }, { accountCode: cip, debit: 0, credit: 1000 }],
     });
     expect(res.journalId).toBeTruthy();

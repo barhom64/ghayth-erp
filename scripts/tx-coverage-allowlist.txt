@@ -16,3 +16,7 @@ routes/transport-planning.ts:POST /transport/dispatch-orders/:id/navigation/ping
 # numbering_assignments backfill is a non-blocking `.catch(() => {})` link, not a
 # second business write; the group INSERT is the only durable write. Moved as-is.
 routes/umrah-groups.ts:POST /groups
+# البند ٣ (دفعة ٣) — OCR apply على الموظف: فرعا docType حصريّان متبادلان لا يجتمعان في
+# طلب واحد: «إقامة» → UPDATE employees فقط؛ «رخصة قيادة» → INSERT employee_documents فقط.
+# كل فرع كتابة مفردة؛ لا طلب يكتب الجدولين معًا → لا خطر كتابة جزئية، فلا حاجة لمعاملة.
+routes/employees.ts:POST /:id/ocr-apply

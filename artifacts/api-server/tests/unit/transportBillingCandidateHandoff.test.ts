@@ -26,20 +26,23 @@ describe("#1733 — transport→finance handoff: engine", () => {
     expect(FLEET_ENGINE).toMatch(/async createCargoBillingCandidate\(/);
   });
 
-  it("createCargoBillingCandidate inserts into transport_billing_candidates, not journal_entries", () => {
-    const block = FLEET_ENGINE.match(
-      /async createCargoBillingCandidate\([\s\S]*?\n\s\s\}\n/,
-    )?.[0];
-    expect(block).toBeTruthy();
-    expect(block!).toContain("transport_billing_candidates");
-    expect(block!).not.toMatch(/postJournalEntry/);
+  it("billing candidates insert into transport_billing_candidates, not journal_entries (cargo delegates to the shared writer)", () => {
+    // The six creators now delegate to ONE createBillingCandidate writer (was
+    // six copy-pasted INSERT blocks). Cargo maps + delegates; the writer owns
+    // the INSERT — neither posts a journal entry on the transport path.
+    const cargo = FLEET_ENGINE.match(/async createCargoBillingCandidate\([\s\S]*?\n\s\s\}\n/)?.[0];
+    expect(cargo).toBeTruthy();
+    expect(cargo!).toContain("this.createBillingCandidate(");
+    expect(cargo!).not.toMatch(/postJournalEntry/);
+    const writer = FLEET_ENGINE.match(/async createBillingCandidate\([\s\S]*?\n\s\s\}\n/)?.[0];
+    expect(writer).toBeTruthy();
+    expect(writer!).toContain("transport_billing_candidates");
+    expect(writer!).not.toMatch(/postJournalEntry|journal_entries/);
   });
 
-  it("createCargoBillingCandidate uses ON CONFLICT for idempotency", () => {
-    const block = FLEET_ENGINE.match(
-      /async createCargoBillingCandidate\([\s\S]*?\n\s\s\}\n/,
-    )?.[0]!;
-    expect(block).toMatch(/ON CONFLICT[^)]*sourceType[^)]*sourceId/i);
+  it("the shared createBillingCandidate writer uses ON CONFLICT for idempotency", () => {
+    const writer = FLEET_ENGINE.match(/async createBillingCandidate\([\s\S]*?\n\s\s\}\n/)?.[0]!;
+    expect(writer).toMatch(/ON CONFLICT[^)]*sourceType[^)]*sourceId/i);
   });
 
   it("postCargoDeliveryGL remains for accountant-side materialisation", () => {
@@ -238,5 +241,87 @@ describe("#1733 — createCargoBillingCandidate behaviour", () => {
     );
 
     expect(result).toEqual({ id: 42, created: false });
+  });
+});
+
+// البند ٤ شريحة ٢ — costBearer لصيانة المركبة يصل من واجهة المحاسب حتى توجيه القيد.
+describe("البند ٤ — costBearer للصيانة عبر المادْيَلة (خلفية + واجهة)", () => {
+  const INTAKE_FE = readFileSync(
+    join(apiSrc, "../../ghayth-erp/src/pages/finance/finance-intake-center.tsx"), "utf8");
+
+  it("materialize schema accepts costBearer (نفس enum تقييم الحادث canonical)", () => {
+    expect(HANDOFF_ROUTE).toMatch(/costBearer: z\.enum\(\["company", "driver", "insurance", "warranty", "customer", "tenant", "third_party"\]\)\.optional\(\)/);
+  });
+
+  it("فرع الصيانة يمرّر costBearer إلى postMaintenanceGL", () => {
+    const mi = HANDOFF_ROUTE.indexOf('sourceType === "maintenance"');
+    expect(mi).toBeGreaterThan(0);
+    expect(HANDOFF_ROUTE.slice(mi, mi + 320)).toMatch(/costBearer: overrides\.costBearer/);
+  });
+
+  it("واجهة مركز التلقّي تُظهر منتقي «مَن يتحمّل» للصيانة وترسله فقط لها", () => {
+    expect(INTAKE_FE).toMatch(/مَن يتحمّل التكلفة/);
+    // المنتقي مشروط بكون الترشيح صيانة.
+    expect(INTAKE_FE).toMatch(/dialog\.row\.sourceType === "maintenance" && \(/);
+    // يُرسَل costBearer فقط لترشيح الصيانة (الخلفية تتجاهله لغيره).
+    expect(INTAKE_FE).toMatch(/sourceType === "maintenance" \? \{ costBearer \} : \{\}/);
+  });
+});
+
+// البند ٤ ج-٥ — التقاط costBearer تشغيليًّا عند إكمال الصيانة (يصل المحاسب كافتراض).
+describe("البند ٤ ج-٥ — costBearer مُلتقَط على الترشيح (تشغيلي → افتراض المحاسب)", () => {
+  const INTAKE_FE = readFileSync(
+    join(apiSrc, "../../ghayth-erp/src/pages/finance/finance-intake-center.tsx"), "utf8");
+  const MAINT_DETAIL_FE = readFileSync(
+    join(apiSrc, "../../ghayth-erp/src/pages/details/maintenance-detail.tsx"), "utf8");
+  const MIG = readFileSync(join(apiSrc, "migrations/428_maintenance_candidate_cost_bearer.sql"), "utf8");
+
+  it("هجرة 428 تضيف عمود costBearer (additive، nullable، @rollback)", () => {
+    expect(MIG).toMatch(/ADD COLUMN IF NOT EXISTS "costBearer" TEXT/);
+    expect(MIG).toMatch(/@rollback/);
+    expect(MIG).toMatch(/DROP COLUMN IF EXISTS "costBearer"/);
+  });
+
+  it("completeMaintenanceSchema يقبل costBearer ويُمرَّر للترشيح", () => {
+    const i = FLEET_ROUTE.indexOf("completeMaintenanceSchema = z.object(");
+    expect(FLEET_ROUTE.slice(i, i + 260)).toMatch(/costBearer: z\.enum\(/);
+    expect(FLEET_ROUTE).toMatch(/createMaintenanceExpenseCandidate\([\s\S]{0,400}costBearer: b\.costBearer/);
+  });
+
+  it("الكاتب المشترك يُدرج costBearer في transport_billing_candidates", () => {
+    expect(FLEET_ENGINE).toMatch(/notes, "createdBy", "costBearer"/);
+    expect(FLEET_ENGINE).toMatch(/c\.costBearer \?\? null/);
+  });
+
+  it("المادْيَلة: تجاوز المحاسب أولًا ثم قيمة الترشيح ثم الافتراض", () => {
+    expect(HANDOFF_ROUTE).toMatch(/"suggestedRevenue", "suggestedCost", "costBearer", status/);
+    expect(HANDOFF_ROUTE).toMatch(/costBearer: overrides\.costBearer \?\? candidate\.costBearer \?\? undefined/);
+  });
+
+  it("واجهة المحاسب تُهيّئ المنتقي على اختيار المُكمِل (row.costBearer)", () => {
+    expect(INTAKE_FE).toMatch(/setCostBearer\(row\.costBearer \?\? "company"\)/);
+  });
+
+  it("شاشة تفاصيل الصيانة: المُكمِل يختار مَن يتحمّل ويُرسَل في جسم الإكمال", () => {
+    expect(MAINT_DETAIL_FE).toMatch(/data-testid="maint-complete-cost-bearer"/);
+    expect(MAINT_DETAIL_FE).toMatch(/costBearer: completeCostBearer/);
+  });
+});
+
+// البند ٤ ج-٦ — رمز costBearer «warranty» صريح، مستردّ مثل التأمين في كل المواضع.
+describe("البند ٤ ج-٦ — costBearer «warranty» (مستردّ، مُعمَّم)", () => {
+  it("محرّك الأسطول: warranty في قائمة المستردّ (صيانة + حادث)", () => {
+    const hits = FLEET_ENGINE.match(/\["insurance", "warranty", "customer", "tenant", "third_party"\]/g) ?? [];
+    expect(hits.length).toBeGreaterThanOrEqual(2); // postMaintenanceGL + postAccidentGL
+  });
+  it("enums الصيانة/الحادث/المادْيَلة تقبل warranty", () => {
+    expect(FLEET_ROUTE).toMatch(/z\.enum\(\["company", "driver", "insurance", "warranty", "customer", "tenant", "third_party"\]\)/);
+    expect(HANDOFF_ROUTE).toMatch(/"insurance", "warranty", "customer", "tenant", "third_party"/);
+  });
+  it("واجهتا الصيانة (مركز التلقّي + تفاصيل الصيانة) تعرضان خيار الضمان", () => {
+    const INTAKE = readFileSync(join(apiSrc, "../../ghayth-erp/src/pages/finance/finance-intake-center.tsx"), "utf8");
+    const DETAIL = readFileSync(join(apiSrc, "../../ghayth-erp/src/pages/details/maintenance-detail.tsx"), "utf8");
+    expect(INTAKE).toMatch(/value="warranty"/);
+    expect(DETAIL).toMatch(/value="warranty"/);
   });
 });

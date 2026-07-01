@@ -232,6 +232,19 @@ class HREngineImpl implements DomainEngine {
        *  credit side carries it; subtracting it from the derived
        *  salary-expense figure keeps the entry balanced and honest. */
       totalCommission?: number;
+      /** أجر السائق بالساعة المُستهلك في هذا المسيّر (الدفعة 3). حين > 0،
+       *  يُصدَر سطر مدين على حساب «مصروف أجور السائقين بالساعة» (العملية
+       *  `payroll_driver_wages_expense`، الافتراضي 5220) — منفصل عن الراتب.
+       *  المستدعي أضافه لصافي كل سطر (→ totalBankPayout)، فالطرف الدائن يحمله؛
+       *  وطرحُه من رقم الراتب المُشتقّ يُبقي القيد متوازنًا. يُحلّ الحساب فقط
+       *  حين > 0 (الشركات بلا أجر سائقين لا تمسّ الحساب). */
+      totalDriverWages?: number;
+      /** مكافآت حركات النقل المُستهلكة في هذا المسيّر (الدفعة ب). حين > 0،
+       *  يُصدَر سطر مدين «مصروف مكافآت السائقين» (`payroll_driver_bonus_expense`،
+       *  الافتراضي 5245) — منفصل عن الراتب، حافز لا يخضع لـGOSI. المستدعي أضافه
+       *  للصافي (→ totalBankPayout)؛ وطرحُه من الراتب المُشتقّ يُبقي القيد متوازنًا.
+       *  يُحلّ الحساب فقط حين > 0. */
+      totalBonuses?: number;
       /**
        * Optional per-employee breakdown. When provided, the salary +
        * GOSI expense + overtime DR lines are split per employee with
@@ -255,6 +268,10 @@ class HREngineImpl implements DomainEngine {
         /** Per-employee umrah commission — splits the commission-expense
          *  DR per employee (dimensional like salary/OT/GOSI). */
         commission?: number;
+        /** أجر السائق بالساعة للموظف — يقسّم مدين 5220 لكل موظف (dimensional). */
+        driverWages?: number;
+        /** مكافأة حركات النقل للموظف — تقسّم مدين 5245 لكل موظف (dimensional). */
+        bonus?: number;
         /** #2303 — per-employee deduction split. Each is CREDITED to its own
          *  account (per-employee, dimensional) instead of bundling into the
          *  generic deductions-payable clearing (2150):
@@ -299,6 +316,24 @@ class HREngineImpl implements DomainEngine {
     ]);
     const totalWht = roundTo2(payroll.totalWht ?? 0);
     const totalCommission = roundTo2(payroll.totalCommission ?? 0);
+    const totalDriverWages = roundTo2(payroll.totalDriverWages ?? 0);
+    // أجر السائق بالساعة (الدفعة 3) — يُحلّ الحساب فقط حين > 0، فالشركات بلا
+    // أجر سائقين لا تستدعي assertPostableAccount على 5220 (صفر مخاطرة عليها).
+    let driverWagesExpenseCode: string | null = null;
+    if (totalDriverWages > 0) {
+      driverWagesExpenseCode = await financialEngine.resolveAccountCode(
+        ctx.companyId, "payroll_driver_wages_expense", "debit", "5220",
+      );
+    }
+    const totalBonuses = roundTo2(payroll.totalBonuses ?? 0);
+    // مكافآت حركات النقل (الدفعة ب) — يُحلّ الحساب فقط حين > 0 (صفر مخاطرة على
+    // الشركات بلا مكافآت). حافز لا يخضع لـGOSI.
+    let bonusExpenseCode: string | null = null;
+    if (totalBonuses > 0) {
+      bonusExpenseCode = await financialEngine.resolveAccountCode(
+        ctx.companyId, "payroll_driver_bonus_expense", "debit", "5245",
+      );
+    }
 
     // The six payroll aggregates are each rounded independently, so Σdebit
     // can drift a sub-cent from Σcredit. The salary-expense debit is DERIVED
@@ -317,7 +352,9 @@ class HREngineImpl implements DomainEngine {
     // it joins the running total. Commission joined the credit side
     // inside bankPayout (net pay grew by it), so the commission DR is
     // subtracted here to keep salary expense pure.
-    const totalGross = roundTo2(bankPayout + gosiPayable + otherDeductions + totalWht - totalOvertime - gosiEmployer - totalCommission);
+    // أجر السائق بالساعة طرفُ مدين مستقلّ (5220) أُضيف لصافي السطر (→ bankPayout)،
+    // فيُطرح من الراتب المُشتقّ ليبقى القيد متوازنًا (نفس منطق العمولة).
+    const totalGross = roundTo2(bankPayout + gosiPayable + otherDeductions + totalWht - totalOvertime - gosiEmployer - totalCommission - totalDriverWages - totalBonuses);
 
     // Build debit lines — per-employee when breakdown is provided,
     // otherwise the legacy aggregate. salary_payable + gosi_payable stay
@@ -334,25 +371,29 @@ class HREngineImpl implements DomainEngine {
       // Validate the breakdown sums match the aggregates within a
       // small rounding tolerance. If they diverge by more than a
       // cent the breakdown is unreliable — fall back to aggregate.
-      let sumBasic = 0, sumOT = 0, sumGosi = 0, sumCommission = 0;
+      let sumBasic = 0, sumOT = 0, sumGosi = 0, sumCommission = 0, sumDriverWages = 0, sumBonuses = 0;
       for (const e of payroll.breakdown) {
         sumBasic += roundTo2(e.basic);
         sumOT += roundTo2(e.overtime);
         sumGosi += roundTo2(e.gosiEmployer);
         sumCommission += roundTo2(e.commission ?? 0);
+        sumDriverWages += roundTo2(e.driverWages ?? 0);
+        sumBonuses += roundTo2(e.bonus ?? 0);
       }
       const grossDiff = Math.abs(roundTo2(sumBasic) - totalGross);
       const otDiff = Math.abs(roundTo2(sumOT) - totalOvertime);
       const gosiDiff = Math.abs(roundTo2(sumGosi) - gosiEmployer);
       const commissionDiff = Math.abs(roundTo2(sumCommission) - totalCommission);
-      breakdownTrusted = grossDiff < 0.5 && otDiff < 0.5 && gosiDiff < 0.5 && commissionDiff < 0.5;
+      const driverWagesDiff = Math.abs(roundTo2(sumDriverWages) - totalDriverWages);
+      const bonusDiff = Math.abs(roundTo2(sumBonuses) - totalBonuses);
+      breakdownTrusted = grossDiff < 0.5 && otDiff < 0.5 && gosiDiff < 0.5 && commissionDiff < 0.5 && driverWagesDiff < 0.5 && bonusDiff < 0.5;
 
       if (breakdownTrusted) {
         // Per-employee DR lines for salary + overtime + GOSI + commission.
         // The rounding remainder lands on the LAST employee row in
         // each bucket so the bucket total stays exact.
         const lastIdx = payroll.breakdown.length - 1;
-        let runningBasic = 0, runningOT = 0, runningGosi = 0, runningCommission = 0;
+        let runningBasic = 0, runningOT = 0, runningGosi = 0, runningCommission = 0, runningDriverWages = 0, runningBonus = 0;
         for (let i = 0; i < payroll.breakdown.length; i++) {
           const e = payroll.breakdown[i];
           const basicRounded = i === lastIdx
@@ -367,6 +408,12 @@ class HREngineImpl implements DomainEngine {
           const commissionRounded = i === lastIdx
             ? roundTo2(totalCommission - runningCommission)
             : roundTo2(e.commission ?? 0);
+          const driverWagesRounded = i === lastIdx
+            ? roundTo2(totalDriverWages - runningDriverWages)
+            : roundTo2(e.driverWages ?? 0);
+          const bonusRounded = i === lastIdx
+            ? roundTo2(totalBonuses - runningBonus)
+            : roundTo2(e.bonus ?? 0);
           if (basicRounded > 0) {
             debitLines.push({
               accountCode: salaryExpenseCode, debit: basicRounded, credit: 0,
@@ -399,6 +446,26 @@ class HREngineImpl implements DomainEngine {
             });
             runningCommission = roundTo2(runningCommission + commissionRounded);
           }
+          // أجر السائق بالساعة (5220) — مدين لكل موظف، dimensional. الحساب
+          // مُحلّ فقط حين totalDriverWages > 0، فالحارس يحميه.
+          if (driverWagesExpenseCode && driverWagesRounded > 0) {
+            debitLines.push({
+              accountCode: driverWagesExpenseCode, debit: driverWagesRounded, credit: 0,
+              employeeId: e.employeeId,
+              ...(e.departmentId != null ? { departmentId: e.departmentId } : {}),
+            });
+            runningDriverWages = roundTo2(runningDriverWages + driverWagesRounded);
+          }
+          // مكافأة حركات النقل (5245) — مدين لكل موظف، dimensional. الحساب
+          // مُحلّ فقط حين totalBonuses > 0.
+          if (bonusExpenseCode && bonusRounded > 0) {
+            debitLines.push({
+              accountCode: bonusExpenseCode, debit: bonusRounded, credit: 0,
+              employeeId: e.employeeId,
+              ...(e.departmentId != null ? { departmentId: e.departmentId } : {}),
+            });
+            runningBonus = roundTo2(runningBonus + bonusRounded);
+          }
         }
       } else {
         // Breakdown didn't reconcile — fall back to aggregate lines
@@ -410,6 +477,12 @@ class HREngineImpl implements DomainEngine {
           { accountCode: gosiExpenseCode, debit: gosiEmployer, credit: 0 },
           { accountCode: commissionExpenseCode, debit: totalCommission, credit: 0 },
         );
+        if (driverWagesExpenseCode && totalDriverWages > 0) {
+          debitLines.push({ accountCode: driverWagesExpenseCode, debit: totalDriverWages, credit: 0 });
+        }
+        if (bonusExpenseCode && totalBonuses > 0) {
+          debitLines.push({ accountCode: bonusExpenseCode, debit: totalBonuses, credit: 0 });
+        }
       }
     } else {
       // Legacy aggregate lines.
@@ -773,6 +846,12 @@ class HREngineImpl implements DomainEngine {
       totalLeaveAccrual: number;
       totalEosAccrual: number;
       employeeCount: number;
+      // اختياري: تفصيل per-employee. عند توفّره تُبنى سطور القيد لكل موظف بأبعاد
+      // employeeId/branchId (تنقيب الالتزام/المصروف لكل موظف) بدل سطر إجمالي واحد
+      // لكل حساب — الإجماليات والحسابات مطابقة تمامًا. عند غيابه: السلوك الإجمالي
+      // كما كان (توافق خلفي). 2150 حساب مشترك فلا بُعد موظف مفروض عليه في العقد —
+      // البُعد مُسجَّل للتقارير فقط، لا إنفاذ.
+      breakdown?: Array<{ employeeId: number; branchId?: number | null; leaveAccrual: number; eosAccrual: number }>;
     }
   ) {
     const [leaveExpenseCode, leaveLiabilityCode, eosExpenseCode, eosLiabilityCode] = await Promise.all([
@@ -788,12 +867,32 @@ class HREngineImpl implements DomainEngine {
       financialEngine.resolveAccountCode(ctx.companyId, "hr_eos_accrual_liability", "credit", "2220"),
     ]);
 
-    const lines = [
-      { accountCode: leaveExpenseCode, debit: accruals.totalLeaveAccrual, credit: 0 },
-      { accountCode: eosExpenseCode, debit: accruals.totalEosAccrual, credit: 0 },
-      { accountCode: leaveLiabilityCode, debit: 0, credit: accruals.totalLeaveAccrual },
-      { accountCode: eosLiabilityCode, debit: 0, credit: accruals.totalEosAccrual },
-    ].filter(l => l.debit > 0 || l.credit > 0);
+    const rows = accruals.breakdown?.filter((r) => Number(r.leaveAccrual) > 0 || Number(r.eosAccrual) > 0) ?? [];
+    const lines = rows.length > 0
+      // per-employee: سطرا إجازة + سطرا نهاية خدمة لكل موظف، بأبعاد employeeId/branchId.
+      ? rows.flatMap((r) => {
+          const employeeId = Number(r.employeeId);
+          const branchId = r.branchId != null ? Number(r.branchId) : undefined;
+          const leave = Number(r.leaveAccrual) || 0;
+          const eos = Number(r.eosAccrual) || 0;
+          const ls: Array<{ accountCode: string; debit: number; credit: number; employeeId?: number; branchId?: number }> = [];
+          if (leave > 0) {
+            ls.push({ accountCode: leaveExpenseCode, debit: leave, credit: 0, employeeId, branchId });
+            ls.push({ accountCode: leaveLiabilityCode, debit: 0, credit: leave, employeeId, branchId });
+          }
+          if (eos > 0) {
+            ls.push({ accountCode: eosExpenseCode, debit: eos, credit: 0, employeeId, branchId });
+            ls.push({ accountCode: eosLiabilityCode, debit: 0, credit: eos, employeeId, branchId });
+          }
+          return ls;
+        })
+      // إجمالي (توافق خلفي عند غياب التفصيل): سطر واحد لكل حساب.
+      : [
+          { accountCode: leaveExpenseCode, debit: accruals.totalLeaveAccrual, credit: 0 },
+          { accountCode: eosExpenseCode, debit: accruals.totalEosAccrual, credit: 0 },
+          { accountCode: leaveLiabilityCode, debit: 0, credit: accruals.totalLeaveAccrual },
+          { accountCode: eosLiabilityCode, debit: 0, credit: accruals.totalEosAccrual },
+        ].filter(l => l.debit > 0 || l.credit > 0);
 
     return financialEngine.postJournalEntry({
       companyId: ctx.companyId,

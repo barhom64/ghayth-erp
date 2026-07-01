@@ -6,7 +6,7 @@
  * inline (department, job-title, cost-center, etc.) using the SAME
  * unified create form — not a fragmented "quick add". The contract
  * is implemented by `buildEntitySelect()` which renders both a
- * `<SearchableSelectField>` and a `<QuickCreateDialog>` so the
+ * `<SearchableSelectField>` and an `<AllowCreateDrawer>` so the
  * inline-create flow always runs the real backend route + invalidates
  * the same React Query cache key.
  *
@@ -21,13 +21,15 @@
  *      gated by `allowCreate` — if the gate vanishes, even pickers
  *      that opt out get the create button. If the gate fires when
  *      `allowCreate=false`, opt-outs become noisy.
- *   3. The `QuickCreateDialog` is mounted alongside the picker and
- *      hits the same `createApiPath` + invalidates the same
- *      `queryKey` — proves the inline create runs through the real
- *      backend route (no fake local-only entity).
- *   4. The 9 canonical reference selects exist and ride on
- *      `buildEntitySelect` (so they inherit the gates above
- *      automatically).
+ *   3. The `AllowCreateDrawer` is mounted alongside the picker; its
+ *      generic-config path hits the same `createApiPath` + invalidates
+ *      the same `queryKey` — proves the inline create runs through the
+ *      real backend route (no fake local-only entity).
+ *   4. The 8 const-style canonical reference selects exist and ride on
+ *      `buildEntitySelect` (so they inherit the gates above automatically).
+ *      BranchSelect is a 9th — pinned separately since B2 made it a
+ *      base+wrapper (`BranchSelectBase` rides buildEntitySelect; the exported
+ *      `BranchSelect` adds the own-branch auto-select/lock on top).
  *   5. The HR-required canonical pickers — `EmployeeSelect`,
  *      `DepartmentSelect`, `JobTitleSelect`, `CostCenterMasterSelect`
  *      — are present. Wave 1 forms will consume these.
@@ -52,14 +54,20 @@ describe("HR-Wave-0 / 0.4 — buildEntitySelect defaults + plumbing", () => {
     expect(ENTITY_SELECTS_SRC).toMatch(/allowCreate = config\.allowCreateDefault \?\? true,/);
   });
 
-  it("onCreateNew is gated by allowCreate — opt-outs MUST hide the «+» button", () => {
-    expect(ENTITY_SELECTS_SRC).toMatch(/onCreateNew=\{allowCreate \? \(\) => setShowCreate\(true\) : undefined\}/);
+  it("onCreateNew is gated by allowCreate (+ the B2 disabled lock) — opt-outs / locked pickers MUST hide the «+» button", () => {
+    // B2 (توجيه إبراهيم) added a `&& !disabled` gate so a BranchSelect locked
+    // to the user's own branch (autoSelectOwnBranch + single branch) also hides
+    // «+». The original allowCreate gate is preserved — strengthened, not removed.
+    expect(ENTITY_SELECTS_SRC).toMatch(/onCreateNew=\{allowCreate && !disabled \? \(\) => setShowCreate\(true\) : undefined\}/);
   });
 
-  it("QuickCreateDialog rides on the same queryKey so the cache invalidates after inline create", () => {
-    expect(ENTITY_SELECTS_SRC).toMatch(/<QuickCreateDialog/);
-    expect(ENTITY_SELECTS_SRC).toMatch(/apiPath=\{config\.apiPath\}|apiPath=\{config\.createApiPath\}/);
-    expect(ENTITY_SELECTS_SRC).toMatch(/invalidateKey=\{config\.queryKey\}/);
+  it("inline-create rides on the same queryKey via the unified drawer so the cache invalidates", () => {
+    // QuickCreateDialog retired — the generic-config path of AllowCreateDrawer
+    // carries the same createApiPath + queryKey (invalidateKey) into the unified
+    // drawer, so inline create still runs the real route + invalidates the cache.
+    expect(ENTITY_SELECTS_SRC).toMatch(/<AllowCreateDrawer/);
+    expect(ENTITY_SELECTS_SRC).toMatch(/apiPath: config\.createApiPath/);
+    expect(ENTITY_SELECTS_SRC).toMatch(/invalidateKey: config\.queryKey/);
   });
 
   it("post-create handler selects the new entity by id and refetches the list", () => {
@@ -83,6 +91,10 @@ describe("HR-Wave-0 / 0.4 — canonical reference selects exist + ride buildEnti
   //   (b) bind to a known backend endpoint
   //   (c) wire up createApiPath so the inline-create flow has somewhere
   //       to POST.
+  // NOTE: BranchSelect is asserted separately (it became a base+wrapper in B2 —
+  // `const BranchSelectBase = buildEntitySelect(...)` + an `export function
+  // BranchSelect` that adds autoSelectOwnBranch). It still rides buildEntitySelect
+  // via the base; see the dedicated «BranchSelect wrapper (B2)» block below.
   const CANONICAL_SELECTS = [
     { name: "EmployeeSelect", endpoint: "/employees?limit=500", createApiPath: "/employees" },
     { name: "DepartmentSelect", endpoint: "/settings/departments", createApiPath: "/settings/departments" },
@@ -90,7 +102,6 @@ describe("HR-Wave-0 / 0.4 — canonical reference selects exist + ride buildEnti
     { name: "CostCenterMasterSelect", endpoint: "/finance/cost-centers?limit=500", createApiPath: "/finance/cost-centers" },
     { name: "ClientSelect", endpoint: "/clients?limit=500", createApiPath: "/clients" },
     { name: "VendorSelect", endpoint: "/finance/vendors?limit=500", createApiPath: "/finance/vendors" },
-    { name: "BranchSelect", endpoint: "/settings/branches", createApiPath: "/settings/branches" },
     { name: "ProjectSelect", endpoint: "/projects?limit=500", createApiPath: "/projects" },
     { name: "VehicleSelect", endpoint: "/fleet/vehicles?limit=500", createApiPath: "/fleet/vehicles" },
   ];
@@ -111,6 +122,28 @@ describe("HR-Wave-0 / 0.4 — canonical reference selects exist + ride buildEnti
       if (re.test(ENTITY_SELECTS_SRC)) count += 1;
     }
     expect(count).toBe(CANONICAL_SELECTS.length);
+  });
+});
+
+describe("B2 (توجيه إبراهيم) — BranchSelect wrapper still rides buildEntitySelect + adds own-branch behavior", () => {
+  it("the base rides buildEntitySelect and binds the real /settings/branches route", () => {
+    // BranchSelect's create plumbing (allowCreate gate + drawer + invalidate) is
+    // inherited from this base — the wrapper only adds auto-select/lock on top.
+    expect(ENTITY_SELECTS_SRC).toMatch(
+      /const BranchSelectBase = buildEntitySelect\(\{[\s\S]*?endpoint: "\/settings\/branches"[\s\S]*?createApiPath: "\/settings\/branches"/,
+    );
+  });
+
+  it("BranchSelect is exported as a wrapper that delegates to the base", () => {
+    expect(ENTITY_SELECTS_SRC).toMatch(/export function BranchSelect\(/);
+    expect(ENTITY_SELECTS_SRC).toMatch(/<BranchSelectBase\b/);
+  });
+
+  it("auto-select/lock decision rides the pure decideOwnBranch helper (testable, not buried in JSX)", () => {
+    expect(ENTITY_SELECTS_SRC).toMatch(/export function decideOwnBranch\(/);
+    expect(ENTITY_SELECTS_SRC).toMatch(/autoSelectOwnBranch/);
+    // own-branch is read from the shared context, never a cross-module fetch.
+    expect(ENTITY_SELECTS_SRC).toMatch(/useAppContextOptional\(\)/);
   });
 });
 

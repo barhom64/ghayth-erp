@@ -38,36 +38,23 @@ describe("umrahDailyOverstayScan — settings batch read", () => {
   });
 });
 
-describe("umrahDailyOverstayScan — tiered vs per-day selection", () => {
-  it("uses tiered formula when BOTH tier_days > 0 AND tier_amount > 0", () => {
-    // useTiered must require BOTH — operators who set only one (e.g.
-    // tierDays=10 but forgot tierAmount) would get penalty=0 forever
-    // if we used OR; pin the AND so partial config is treated as
-    // intentional fallback to per-day.
-    expect(CRON).toMatch(/const useTiered = tierDays > 0 && tierAmount > 0/);
+describe("umrahDailyOverstayScan — delegates billing to the shared helper", () => {
+  it("builds overstayCfg from the three settings keys", () => {
+    // The cron still reads the same three keys; it now hands them to the
+    // shared math helper instead of inlining the formula.
+    expect(CRON).toMatch(/perDay: penaltyByKey\["umrah\.overstay_daily_penalty"\] \?\? 0/);
+    expect(CRON).toMatch(/tierDays: penaltyByKey\["umrah\.overstay_tier_days"\] \?\? 0/);
+    expect(CRON).toMatch(/tierAmount: penaltyByKey\["umrah\.overstay_tier_amount"\] \?\? 0/);
   });
 
-  it("tiered penalty = ceil(overDays / tierDays) × tierAmount", () => {
-    // The user's example: 25-day stay on 20-day program → overDays=5
-    // → ceil(5/10)=1 → 1×50 = 50. 15 over → ceil(15/10)=2 → 100.
-    // 20 over → ceil(20/10)=2 → 100 (NOT 3 — matches the "every 10
-    // days" rule). Pin Math.ceil so a future "floor" or no-rounding
-    // refactor can't silently change billing semantics.
-    expect(CRON).toMatch(/useTiered\s*\?\s*Math\.ceil\(overDays \/ tierDays\) \* tierAmount\s*:\s*overDays \* perDay/);
-  });
-
-  it("falls back to overDays × perDay when tier config is missing (regression safety)", () => {
-    // Companies that haven't set the new keys keep the pre-PR formula
-    // verbatim. The per-day path must produce the SAME number it
-    // produced before this PR landed.
-    expect(CRON).toMatch(/overDays \* perDay/);
-  });
-
-  it("overDays is clamped to non-negative (defence against bad pilgrim data)", () => {
-    // A negative overDays would yield negative penalty under either
-    // model. Pin the clamp so it can't slip back into a future
-    // refactor that "simplifies" the arithmetic.
-    expect(CRON).toMatch(/const overDays = Math\.max\(0, Number\(o\.overDays\) \|\| 0\)/);
+  it("computes the penalty via the shared overstayPenaltyAmount helper (single source of truth)", () => {
+    // The tiered/per-day formula + Math.ceil + non-negative clamp now live in
+    // lib/umrahPenaltyMath.ts (pinned by umrahOverstayPenaltyMath.test.ts) and
+    // are SHARED with the mutamers import (umrahImportEngine.detectViolation),
+    // so an overstay billed by either path produces the IDENTICAL amount.
+    // Pre-fix the import hard-coded a divergent flat `days × 200`.
+    expect(CRON).toMatch(/import \{ overstayPenaltyAmount \} from "\.\/umrahPenaltyMath\.js"/);
+    expect(CRON).toMatch(/const penalty = overstayPenaltyAmount\(o\.overDays, overstayCfg\)/);
   });
 });
 

@@ -47,7 +47,7 @@ import {
   PageStatusBadge, DataTable, type DataTableColumn, PageShell,
 } from "@workspace/ui-core";
 import {
-  Plus, Pencil, Trash2, Play, CalendarRange, Route as RouteIcon,
+  Plus, Pencil, Trash2, Play, CalendarRange, Route as RouteIcon, Truck,
 } from "lucide-react";
 import { RefreshAction } from "@/components/page-actions";
 import { GuardedButton, usePermission } from "@/components/shared/permission-gate";
@@ -68,6 +68,26 @@ const STATUS_OPTIONS = [
 ] as const;
 
 const STATUS_EDIT_OPTIONS = STATUS_OPTIONS.filter((o) => o.value !== "all");
+
+// أصناف المركبات (عائلة الحمولة) — تطابق سلّم الحمولة القانوني في الخادم
+// (pickup → truck → trailer). تُعرض عربيًا وتُخزَّن بالكود الذي يطابقه الترشيح.
+const VEHICLE_CLASS_OPTIONS = [
+  { value: "pickup", label: "نصف نقل (بيك أب)" },
+  { value: "truck", label: "شاحنة" },
+  { value: "trailer", label: "مقطورة (تريلا)" },
+] as const;
+
+// أصناف الرخص — مرآة LICENSE_CLASS_OPTIONS في نموذج إنشاء السائق
+// (pages/create/fleet/driver-create-form.tsx). الكود قانوني، العرض عربي.
+const LICENSE_CLASS_OPTIONS = [
+  { value: "private", label: "خاصة" },
+  { value: "light_trans", label: "نقل خفيف" },
+  { value: "medium", label: "نقل متوسط" },
+  { value: "heavy", label: "نقل ثقيل" },
+  { value: "public_trans", label: "نقل عام" },
+  { value: "motorcycle", label: "دراجة نارية" },
+  { value: "equipment", label: "معدات ثقيلة" },
+] as const;
 
 // Bit 0 = Sunday Riyadh local, ..., bit 6 = Saturday — same convention
 // as the server's `matchingDatesInRange` generator + cron walker.
@@ -144,6 +164,17 @@ const EMPTY_FORM: PatternFormState = {
   notes: "",
 };
 
+// قالب «نقل ثقيل» الجاهز — قيم مُسبقة فوق EMPTY_FORM (شاحنة + رخصة نقل ثقيل +
+// وحدة طن). كل القيم قابلة للتعديل من الحوار. يبقى الرمز/الأيام/المسار/الوزن
+// للمستخدم (الرمز فريد لكل شركة، الأيام إلزامية، الوزن يختلف لكل رحلة).
+const HEAVY_TRANSPORT_PRESET: Partial<PatternFormState> = {
+  name: "نقل ثقيل",
+  defaultVehicleClass: "truck",
+  defaultLicenseClass: "heavy",
+  defaultCargoUnit: "طن",
+  notes: "قالب جاهز للنقل الثقيل — شاحنة + رخصة نقل ثقيل. عدّل المسار والأيام والوزن حسب الرحلة.",
+};
+
 /** Empty string → null. Anything else → trimmed string. */
 function strOrNull(v: string): string | null {
   const t = v.trim();
@@ -214,6 +245,13 @@ export default function TransportRoutePatternsPage() {
 
   const openCreate = () => {
     setForm(EMPTY_FORM);
+    setEditing(false);
+    setDialogOpen(true);
+  };
+
+  // يفتح حوار الإنشاء مُهيّأً مسبقًا بقيم النقل الثقيل (قابلة للتعديل بالكامل).
+  const openHeavyPreset = () => {
+    setForm({ ...EMPTY_FORM, ...HEAVY_TRANSPORT_PRESET });
     setEditing(false);
     setDialogOpen(true);
   };
@@ -501,7 +539,7 @@ export default function TransportRoutePatternsPage() {
   return (
     <PageShell
       title="قوالب المسارات المتكررة"
-      subtitle="قوالب الحجوزات الدورية للشحن — تُوَلِّد حجوزات transport_bookings بمصدر recurring_schedule"
+      subtitle="قوالب الحجوزات الدورية للشحن — تُوَلِّد حجوزات نقل تلقائيًا بمصدر «جدول دوري»"
       breadcrumbs={[
         { href: "/fleet", label: "الأسطول" },
         { label: "قوالب المسارات" },
@@ -525,6 +563,9 @@ export default function TransportRoutePatternsPage() {
             })}
           />
           <RefreshAction onRefresh={() => refetch()} />
+          <GuardedButton perm="fleet.bookings:create" size="sm" variant="outline" onClick={openHeavyPreset}>
+            <Truck className="h-4 w-4 me-1" />قالب نقل ثقيل
+          </GuardedButton>
           <GuardedButton perm="fleet.bookings:create" size="sm" onClick={openCreate}>
             <Plus className="h-4 w-4 me-1" />قالب جديد
           </GuardedButton>
@@ -685,22 +726,18 @@ export default function TransportRoutePatternsPage() {
               />
             </div>
 
-            <div>
-              <Label className="text-xs">صنف المركبة الافتراضي</Label>
-              <Input
-                value={form.defaultVehicleClass}
-                onChange={(e) => setForm((s) => ({ ...s, defaultVehicleClass: e.target.value }))}
-                maxLength={32}
-              />
-            </div>
-            <div>
-              <Label className="text-xs">صنف الرخصة الافتراضي</Label>
-              <Input
-                value={form.defaultLicenseClass}
-                onChange={(e) => setForm((s) => ({ ...s, defaultLicenseClass: e.target.value }))}
-                maxLength={32}
-              />
-            </div>
+            <ClassSelectField
+              label="صنف المركبة الافتراضي"
+              value={form.defaultVehicleClass}
+              options={VEHICLE_CLASS_OPTIONS}
+              onChange={(v) => setForm((s) => ({ ...s, defaultVehicleClass: v }))}
+            />
+            <ClassSelectField
+              label="صنف الرخصة الافتراضي"
+              value={form.defaultLicenseClass}
+              options={LICENSE_CLASS_OPTIONS}
+              onChange={(v) => setForm((s) => ({ ...s, defaultLicenseClass: v }))}
+            />
 
             <div>
               <Label className="text-xs">الوزن الافتراضي</Label>
@@ -850,6 +887,37 @@ export default function TransportRoutePatternsPage() {
 }
 
 /* ── helpers ─────────────────────────────────────────────────────── */
+
+// قائمة صنف (مركبة/رخصة) تعرض عربيًا وتخزّن الكود القانوني. «— غير محدّد» ↔ "".
+// تحفظ قيمة قديمة غير قانونية بإضافتها كخيار حتى لا يضيع تعديل قالب سابق.
+function ClassSelectField({
+  label, value, options, onChange,
+}: {
+  label: string;
+  value: string;
+  options: readonly { value: string; label: string }[];
+  onChange: (v: string) => void;
+}) {
+  const known = value === "" || options.some((o) => o.value === value);
+  const merged = known ? options : [{ value, label: value }, ...options];
+  return (
+    <div>
+      <Label className="text-xs">{label}</Label>
+      <Select
+        value={value === "" ? "_none" : value}
+        onValueChange={(v) => onChange(v === "_none" ? "" : v)}
+      >
+        <SelectTrigger><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="_none">— غير محدّد</SelectItem>
+          {merged.map((o) => (
+            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
 
 function KpiTile({
   label, value, icon: Icon, tone,

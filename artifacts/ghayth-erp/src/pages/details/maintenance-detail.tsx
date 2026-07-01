@@ -21,6 +21,7 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Wrench, Car, User, CheckCircle2, XCircle } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -73,9 +74,12 @@ export default function MaintenanceDetail() {
   // booking. Buttons are status-gated to match the backend's 409 guard.
   const [completeOpen, setCompleteOpen] = useState(false);
   const [completeOdometer, setCompleteOdometer] = useState("");
+  // البند ٤ ج-٥ — مَن يتحمّل الصيانة (يلتقطه المُكمِل، يصل المحاسب كافتراض).
+  const [completeCostBearer, setCompleteCostBearer] = useState("company");
   const handleComplete = () => {
     if (!id) return;
     setCompleteOdometer("");
+    setCompleteCostBearer("company");
     setCompleteOpen(true);
   };
   const confirmComplete = async () => {
@@ -85,7 +89,10 @@ export default function MaintenanceDetail() {
     try {
       await apiFetch(`/fleet/maintenance/${id}/complete`, {
         method: "POST",
-        body: JSON.stringify(completeOdometer ? { odometer: Number(completeOdometer) } : {}),
+        body: JSON.stringify({
+          ...(completeOdometer ? { odometer: Number(completeOdometer) } : {}),
+          costBearer: completeCostBearer,
+        }),
       });
       toast({ title: "تم إكمال الصيانة" });
       refetch();
@@ -372,6 +379,20 @@ export default function MaintenanceDetail() {
         <div className="space-y-2 py-2">
           <Label className="text-xs">قراءة عداد المركبة (اختياري)</Label>
           <Input type="number" inputMode="numeric" value={completeOdometer} onChange={(e) => setCompleteOdometer(e.target.value)} />
+        </div>
+        <div className="space-y-2 pb-2">
+          <Label className="text-xs">مَن يتحمّل التكلفة</Label>
+          <Select value={completeCostBearer} onValueChange={setCompleteCostBearer}>
+            <SelectTrigger data-testid="maint-complete-cost-bearer"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="company">الشركة (مصروف صيانة المركبة)</SelectItem>
+              <SelectItem value="driver">السائق (يُسترَدّ بخصم الراتب)</SelectItem>
+              <SelectItem value="insurance">التأمين (ذمة مدينة مستردّة)</SelectItem>
+              <SelectItem value="warranty">الضمان (ذمة مدينة مستردّة)</SelectItem>
+              <SelectItem value="third_party">طرف ثالث (ذمة مدينة مستردّة)</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">يصل المحاسب كافتراض عند ترحيل القيد — يبقى تعديله ممكنًا.</p>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setCompleteOpen(false)}>إلغاء</Button>

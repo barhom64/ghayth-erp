@@ -1,4 +1,4 @@
-import { useRoute, Link } from "wouter";
+import { useRoute, Link, useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import {
@@ -101,6 +101,7 @@ const TYPE_LABEL: Record<string, string> = {
 export default function JournalDetailPage() {
   const [, params] = useRoute<{ id: string }>("/finance/journal/:id");
   const id = params?.id;
+  const [, setLocation] = useLocation();
 
   const { data: je, isLoading, isError } = useApiQuery<JournalDetail>(
     ["journal-detail", id ?? ""],
@@ -244,6 +245,20 @@ export default function JournalDetailPage() {
             >
               <CheckCircle className="h-4 w-4" />
               ترحيل
+            </GuardedButton>
+          )}
+          {/* م٧ — عكس القيد إجراءٌ على صفحة التفاصيل (لا صفحة إنشاء، doc 25 §٤):
+              يظهر للقيد المُرحَّل غير المعكوس، ويفتح تدفّق العكس القائم مُسبق الاختيار. */}
+          {je.postingStatus === "posted" && !je.reversedById && je.status !== "reversed" && (
+            <GuardedButton
+              perm="finance:approve"
+              size="sm"
+              variant="outline"
+              onClick={() => setLocation(`/finance/journal/reverse?id=${id}`)}
+              className="gap-1"
+            >
+              <ArrowLeftRight className="h-4 w-4" />
+              عكس القيد
             </GuardedButton>
           )}
           <PrintButton entityType="journal_entry" entityId={id ?? ""} />

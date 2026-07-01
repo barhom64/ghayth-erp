@@ -28,12 +28,28 @@ type RequestScope = NonNullable<ExpressRequest["scope"]>;
 export async function createOpportunityFromInboundComm(params: {
   companyId: number;
   title: string;
+  contactName?: string | null;
+  contactPhone?: string | null;
+  contactEmail?: string | null;
+  source?: string | null;
+  notes?: string | null;
+  campaignId?: number | null;
 }): Promise<number> {
-  const { companyId, title } = params;
+  const { companyId, title, contactName, contactPhone, contactEmail, source, notes, campaignId } = params;
   const { insertId } = await rawExecute(
-    `INSERT INTO crm_opportunities ("companyId", title, stage, status, "createdAt")
-     VALUES ($1, $2, 'lead', 'active', NOW())`,
-    [companyId, title],
+    `INSERT INTO crm_opportunities
+       ("companyId", title, "contactName", "contactPhone", "contactEmail", source, "campaignId", stage, status, notes, "createdAt")
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'lead', 'open', $8, NOW())`,
+    [
+      companyId,
+      title,
+      contactName ?? null,
+      contactPhone ?? null,
+      contactEmail ?? null,
+      source ?? null,
+      campaignId ?? null,
+      notes ?? null,
+    ],
   );
   assertInsert(insertId, "crm_opportunities");
   return insertId;

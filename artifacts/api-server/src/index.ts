@@ -13,7 +13,7 @@ import "./lib/integrations/githubSupportSync.js";
 import { seedDemoData } from "./lib/seedDemoData.js";
 import { bootstrapAdminUser } from "./lib/bootstrapAdmin.js";
 import { syncFeatureCatalog } from "./lib/rbac/catalogSync.js";
-import { syncLegacyToV2 } from "./lib/rbac/autoMigrate.js";
+import { syncLegacyToV2, ensureOwnersHaveAllRoles } from "./lib/rbac/autoMigrate.js";
 import { ensureVendorSecretsSeed, warmVendorSettingsCache } from "./lib/vendorSettings.js";
 import { pool } from "./lib/rawdb.js";
 import { config, assertEnvOrExit, describeConfig } from "./lib/config.js";
@@ -113,6 +113,11 @@ async function start() {
     logger.info({ ...cat }, "RBAC v2: feature catalog synced");
     const sync = await syncLegacyToV2();
     logger.info({ ...sync }, "RBAC v2: legacy roles auto-migrated");
+    // Reassert the owner/GM "all roles" grant on every boot (migration 141 is
+    // one-shot and never replays, so new companies / new roles never reached the
+    // admin — the role-switcher only ever showed `owner`). Idempotent + additive.
+    const ownerRoles = await ensureOwnersHaveAllRoles();
+    logger.info({ ...ownerRoles }, "RBAC v2: owners/GMs granted all company roles");
   } catch (rbacErr) {
     logger.warn({ err: rbacErr }, "RBAC v2 sync skipped or failed (legacy RBAC still active)");
   }

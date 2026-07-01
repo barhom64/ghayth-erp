@@ -11,10 +11,11 @@ import { PrintButton } from "@/components/shared/print-button";
 
 // Standalone /umrah/attachments page — surfaces every row from
 // `umrah_attachments` (PR #312) in a single browsable table. The
-// reusable UmrahAttachmentsPanel still drops into detail pages
-// scoped per-entity; this page is the cross-entity index that ops
-// + auditors hit when they want to find "everything pinned to
-// pilgrim X" without navigating into each detail page.
+// per-entity attachments now render via the unified EntityDocuments
+// panel inside each detail page (معتمر / وكيل / وكيل فرعي / موسم);
+// this page is the cross-entity index that ops + auditors hit when
+// they want to find "everything pinned to pilgrim X" without
+// navigating into each detail page.
 
 const ATTACH_ENTITY_TYPES = [
   { value: "",              label: "كل الأنواع" },

@@ -33,10 +33,13 @@ const STATUS_LABELS: Record<string, string> = {
   scheduled: "مجدول",
 };
 
+// القيمة المعتمدة للأولوية العليا «critical/حرجة» (موحّدة مع بقية النظام). يُبقى
+// «urgent/عاجلة» كتسمية إرث لعرض الصفوف القديمة المخزّنة (الباك-إند حرّ النص) بلا هجرة.
 const PRIORITY_LABELS: Record<string, string> = {
   low: "منخفضة",
   medium: "متوسطة",
   high: "عالية",
+  critical: "حرجة",
   urgent: "عاجلة",
 };
 
@@ -60,7 +63,7 @@ const maintenanceEditSchema = z.object({
   title: z.string().min(1, "العنوان مطلوب"),
   description: z.string().optional().default(""),
   category: z.string().optional().default(""),
-  priority: z.enum(["low", "medium", "high", "urgent"]),
+  priority: z.enum(["low", "medium", "high", "critical", "urgent"]),
   status: z.enum(["pending", "in_progress", "completed", "cancelled"]),
   estimatedCost: z.coerce.number().optional().default(0),
   scheduledDate: z.string().optional().default(""),
@@ -181,7 +184,7 @@ export default function PropertyMaintenanceDetail() {
             {item?.priority && (
               <div>
                 <p className="text-xs text-muted-foreground mb-0.5">الأولوية</p>
-                <Badge variant={item.priority === "urgent" || item.priority === "high" ? "destructive" : "outline"}>
+                <Badge variant={item.priority === "critical" || item.priority === "urgent" || item.priority === "high" ? "destructive" : "outline"}>
                   {PRIORITY_LABELS[item.priority] || item.priority}
                 </Badge>
               </div>
@@ -347,7 +350,7 @@ export default function PropertyMaintenanceDetail() {
               { value: "low", label: "منخفضة" },
               { value: "medium", label: "متوسطة" },
               { value: "high", label: "عالية" },
-              { value: "urgent", label: "عاجلة" },
+              { value: "critical", label: "حرجة" },
             ]}
           />
           <FormSelectField

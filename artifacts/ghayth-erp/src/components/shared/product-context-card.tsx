@@ -6,6 +6,7 @@ import {
   Package, AlertTriangle, TrendingDown, TrendingUp, DollarSign, Box,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ContextCardSkeleton, ContextStat, ContextWarning } from "./context-card-kit";
 
 export type ProductContextSection = "in" | "out";
 
@@ -65,18 +66,7 @@ export function ProductContextCard({
 
   if (!hasId) return null;
 
-  if (isLoading) {
-    return (
-      <Card className={cn("border-border bg-surface-subtle/50 animate-pulse", className)}>
-        <CardContent className="p-4">
-          <div className="h-4 w-32 bg-gray-200 rounded mb-3" />
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {[1, 2, 3, 4].map((i) => <div key={i} className="h-12 bg-gray-100 rounded" />)}
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
+  if (isLoading) return <ContextCardSkeleton className={className} />;
 
   if (!product) return null;
 
@@ -124,65 +114,44 @@ export function ProductContextCard({
 
         {/* Stock grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          <div className={cn(
-            "bg-white rounded p-2 border",
-            outOfStock ? "border-status-error-surface" : lowStock ? "border-status-warning-surface" : "border-border"
-          )}>
-            <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">
-              <Box className="h-3 w-3" />
-              <span>الرصيد الحالي</span>
-            </p>
-            <p className={cn(
-              "text-sm font-semibold",
-              outOfStock ? "text-status-error-foreground" : lowStock ? "text-status-warning-foreground" : "text-gray-800"
-            )}>
-              {formatNumber(current)} {product.unit || ""}
-            </p>
-          </div>
-          <div className="bg-white rounded p-2 border border-border">
-            <p className="text-xs text-muted-foreground mb-0.5">الحد الأدنى</p>
-            <p className="text-sm font-semibold text-gray-800">
-              {formatNumber(min)} {product.unit || ""}
-            </p>
-          </div>
-          <div className="bg-white rounded p-2 border border-border">
-            <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">
-              <DollarSign className="h-3 w-3" />
-              <span>سعر التكلفة</span>
-            </p>
-            <p className="text-sm font-semibold text-gray-800">
-              {product.costPrice ? formatCurrency(Number(product.costPrice)) : "—"}
-            </p>
-          </div>
-          <div className="bg-white rounded p-2 border border-border">
-            <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">
-              <DollarSign className="h-3 w-3" />
-              <span>سعر البيع</span>
-            </p>
-            <p className="text-sm font-semibold text-gray-800">
-              {product.sellPrice ? formatCurrency(Number(product.sellPrice)) : "—"}
-            </p>
-          </div>
+          <ContextStat
+            icon={Box}
+            label="الرصيد الحالي"
+            borderTone={outOfStock ? "border-status-error-surface" : lowStock ? "border-status-warning-surface" : undefined}
+            tone={outOfStock ? "text-status-error-foreground" : lowStock ? "text-status-warning-foreground" : undefined}
+            value={`${formatNumber(current)} ${product.unit || ""}`}
+          />
+          <ContextStat
+            label="الحد الأدنى"
+            value={`${formatNumber(min)} ${product.unit || ""}`}
+          />
+          <ContextStat
+            icon={DollarSign}
+            label="سعر التكلفة"
+            value={product.costPrice ? formatCurrency(Number(product.costPrice)) : "—"}
+          />
+          <ContextStat
+            icon={DollarSign}
+            label="سعر البيع"
+            value={product.sellPrice ? formatCurrency(Number(product.sellPrice)) : "—"}
+          />
         </div>
 
         {/* Warnings */}
         {inactive && (
-          <div className="flex items-center gap-1.5 text-xs text-status-error-foreground bg-status-error-surface border border-status-error-surface rounded p-1.5">
-            <AlertTriangle className="h-3 w-3" />
-            <span>المنتج غير نشط — يجب تفعيله أولاً قبل تسجيل حركات جديدة</span>
-          </div>
+          <ContextWarning icon={AlertTriangle}>
+            المنتج غير نشط — يجب تفعيله أولاً قبل تسجيل حركات جديدة
+          </ContextWarning>
         )}
         {outOfStock && section === "out" && (
-          <div className="flex items-center gap-1.5 text-xs text-status-error-foreground bg-status-error-surface border border-status-error-surface rounded p-1.5">
-            <AlertTriangle className="h-3 w-3" />
-            <span>المنتج نفد من المخزون — لا يمكن الصرف</span>
-          </div>
+          <ContextWarning icon={AlertTriangle}>
+            المنتج نفد من المخزون — لا يمكن الصرف
+          </ContextWarning>
         )}
         {issueRisk && !outOfStock && (
-          <div className="flex items-center gap-1.5 text-xs text-status-warning-foreground bg-status-warning-surface border border-status-warning-surface rounded p-1.5">
-            <TrendingDown className="h-3 w-3" />
-            <span>الرصيد قريب من الحد الأدنى — راجع قبل الصرف الكبير</span>
-          </div>
+          <ContextWarning icon={TrendingDown} tone="warning">
+            الرصيد قريب من الحد الأدنى — راجع قبل الصرف الكبير
+          </ContextWarning>
         )}
 
         {/* Recent movements */}

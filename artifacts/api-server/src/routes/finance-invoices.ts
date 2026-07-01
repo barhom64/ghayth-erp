@@ -39,6 +39,11 @@ import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { markIdempotencyReplay, requestIdempotencyToken } from "../lib/requestIdempotency.js";
 import { resolveTransactionBranch, assertDocumentBranchAccess } from "../lib/branchResolution.js";
+import { resolveBadDebtPolicy, STANDARD_BAD_DEBT_RATES, BAD_DEBT_POLICY_SETTING_KEY } from "../lib/badDebtPolicy.js";
+import { postBadDebtProvision, readAllowanceBalance } from "../lib/finance/badDebtProvision.js";
+import { postBadDebtWriteOff } from "../lib/finance/badDebtWriteOff.js";
+import { resolveSettings, upsertSetting } from "../lib/settings.js";
+import { resolveVatLegAccount, buildVatLeg } from "../lib/vatLeg.js";
 import { z } from "zod";
 
 // ── Zod schemas for POST route validation ──────────────────────────────────
@@ -124,6 +129,9 @@ const createCreditMemoSchema = z.object({
   reason: z.string().min(1, "السبب مطلوب").max(2000, "النص طويل جدًا"),
   vatIncluded: z.boolean().optional(),
   memoDate: z.string().optional(),
+  // شريحة 4 — ربط اختياري بمرشّح خصم نقل: عند الإصدار تُطلق المالية حدثًا
+  // يربط المرشّح بالإشعار في مسار النقل (لا تكتب المالية جدول النقل).
+  deductionCandidateId: z.coerce.number().int().positive().optional(),
 });
 
 // Preview-time schema — same shape, but `reason` is optional since the
@@ -201,6 +209,9 @@ const impactPreviewSchema = z.object({
   clientId: z.coerce.number().optional(),
   lines: z.array(z.any()).optional(),
   taxRate: z.coerce.number().nonnegative().max(100, "نسبة الضريبة يجب ألا تتجاوز 100").optional(),
+  // البند ٤ — رمز ضريبة رأس الفاتورة (اختياري) كي تعكس المعاينة حساب الرمز
+  // الفعلي الذي سيرحّل عند الاعتماد، لا الحساب العام فقط.
+  taxCode: z.string().trim().min(1).optional(),
   dueInDays: z.coerce.number().optional(),
 });
 
@@ -380,10 +391,21 @@ invoicesRouter.post("/invoices/impact-preview", authorize({ feature: "finance.in
     let clientName = "";
     if (clientId) {
       const [client] = await rawQuery<Record<string, unknown>>(
-        `SELECT name FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        `SELECT name, "isBlacklisted" FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
         [Number(clientId), scope.companyId]
       );
       clientName = (client?.name as string | undefined) || "";
+      // Spec ملف 03 §تحصيل 6 مراحل (يوم 30): when the daily overdue cron
+      // blacklists a client, this MUST actually block new invoices —
+      // otherwise the GM-escalation email lies. Codex review on PR #3012.
+      // Override is available via PATCH /clients/:id (admin) which lifts
+      // the flag once the GM decides to accept the risk or the client pays.
+      if (client?.isBlacklisted === true) {
+        throw new ForbiddenError(
+          `العميل ${clientName || `#${clientId}`} محظور بسبب فواتير متأخرة. لا يمكن إصدار فاتورة جديدة قبل تحصيل المستحقات أو رفع الحظر من قِبَل المدير العام.`,
+          { field: "clientId", fix: "حصّل المستحقات المتأخرة أو اطلب من المدير العام رفع الحظر من ملف العميل." }
+        );
+      }
     }
 
     const subtotal = (Array.isArray(lines) ? lines : []).reduce((sum: number, l: any) => {
@@ -400,11 +422,17 @@ invoicesRouter.post("/invoices/impact-preview", authorize({ feature: "finance.in
     // Read-only: this never pre-fills the line override; the server still
     // resolves the account at save.
     const { financialEngine } = await import("../lib/engines/index.js");
-    const [arAccountCode, revenueAccountCode, vatAccountCode] = await Promise.all([
+    const { getOutputVatAccountCode } = await import("../lib/taxCodes.js");
+    const [arAccountCode, revenueAccountCode, vatFallback, vatSpecific] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "debit", "1131"),
       financialEngine.resolveAccountCode(scope.companyId, "invoice_revenue", "credit", "4111"),
       financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "credit", "2131"),
+      // البند ٤ — حساب رمز الضريبة إن أُرسل في المعاينة، وإلا الاحتياطي العام.
+      raw.taxCode
+        ? getOutputVatAccountCode(scope.companyId, raw.taxCode as string)
+        : Promise.resolve(null),
     ]);
+    const vatAccountCode = resolveVatLegAccount(vatSpecific, vatFallback);
 
     const items: Array<{ category: string; label: string; value: string; severity: "info" | "warning" | "danger" | "success" }> = [];
 
@@ -1037,11 +1065,17 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
 
     // GL accounts resolved up-front (reads, no transaction needed).
     const { financialEngine } = await import("../lib/engines/index.js");
-    const [invArCode, invRevenueCode, invVatPayableCode] = await Promise.all([
+    const { getOutputVatAccountCode } = await import("../lib/taxCodes.js");
+    const [invArCode, invRevenueCode, invVatFallback, invVatSpecific] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "debit", "1131"),
       financialEngine.resolveAccountCode(scope.companyId, "invoice_revenue", "credit", "4111"),
       financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "credit", "2131"),
+      // البند ٤ — حساب رمز ضريبة الفاتورة إن هُيِّئ، وإلا الاحتياطي العام أدناه.
+      invoice.taxCode
+        ? getOutputVatAccountCode(scope.companyId, invoice.taxCode as string)
+        : Promise.resolve(null),
     ]);
+    const invVatPayableCode = resolveVatLegAccount(invVatSpecific, invVatFallback);
 
     // Atomic approval: status flip + GL post + denormalised counters
     // either all commit or all roll back. Without this wrapping, a DB
@@ -1447,8 +1481,9 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
           // VAT payable carries clientId so per-customer VAT analysis (and
           // VAT-collected-by-customer reports) tie out from the GL. Without
           // this, the AR shows the gross-up against the customer but the
-          // VAT obligation is unattributed.
-          { accountCode: invVatPayableCode, debit: 0, credit: Number(invoice.vatAmount || 0), clientId: invoice.clientId as number | undefined } as any,
+          // VAT obligation is unattributed. البند ٤ — invVatPayableCode هو حساب
+          // رمز الضريبة إن هُيِّئ. keepZero يُبقي السطر غير مشروط كما كان.
+          ...buildVatLeg({ amount: Number(invoice.vatAmount || 0), side: "credit", accountCode: invVatPayableCode, clientId: invoice.clientId as number | undefined, keepZero: true }) as any[],
           ...cogsPlan.journalLines,
         ],
         guardTable: "invoices",
@@ -1624,11 +1659,17 @@ invoicesRouter.post("/invoices/:id/preview-posting", authorize({
 
     // Resolve GL accounts (read-only; doesn't post).
     const { financialEngine } = await import("../lib/engines/index.js");
-    const [invArCode, invRevenueCode, invVatPayableCode] = await Promise.all([
+    const { getOutputVatAccountCode } = await import("../lib/taxCodes.js");
+    const [invArCode, invRevenueCode, invVatFallback, invVatSpecific] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "debit", "1131"),
       financialEngine.resolveAccountCode(scope.companyId, "invoice_revenue", "credit", "4111"),
       financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "credit", "2131"),
+      // البند ٤ — المعاينة تعكس حساب رمز الضريبة الذي سيستخدمه الاعتماد (صدق المعاينة).
+      invoice.taxCode
+        ? getOutputVatAccountCode(scope.companyId, invoice.taxCode as string)
+        : Promise.resolve(null),
     ]);
+    const invVatPayableCode = resolveVatLegAccount(invVatSpecific, invVatFallback);
 
     // Read invoice_lines with dimensional fields (migration 200).
     const lines = await rawQuery<{
@@ -2769,9 +2810,9 @@ invoicesRouter.post("/invoices/:id/credit-memo/preview", authorize({
     const [invoice] = await rawQuery<{
       id: number; ref: string; total: string | number;
       paidAmount: string | number; vatRate: string | number | null;
-      branchId: number | null; clientId: number | null;
+      branchId: number | null; clientId: number | null; taxCode: string | null;
     }>(
-      `SELECT id, ref, total, "paidAmount", "vatRate", "branchId", "clientId"
+      `SELECT id, ref, total, "paidAmount", "vatRate", "branchId", "clientId", "taxCode"
          FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -2796,11 +2837,17 @@ invoicesRouter.post("/invoices/:id/credit-memo/preview", authorize({
     }
 
     const { financialEngine } = await import("../lib/engines/index.js");
-    const [previewSalesReturnsCode, previewVatPayableCode, previewArCode] = await Promise.all([
+    const { getOutputVatAccountCode } = await import("../lib/taxCodes.js");
+    const [previewSalesReturnsCode, previewVatFallback, previewArCode, previewVatSpecific] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "invoice_sales_returns", "debit", "4113"),
       financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "debit", "2131"),
       financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "credit", "1131"),
+      // البند ٤ — المعاينة تعكس حساب رمز الضريبة الذي سيعكسه إصدار الإشعار.
+      invoice.taxCode
+        ? getOutputVatAccountCode(scope.companyId, invoice.taxCode as string)
+        : Promise.resolve(null),
     ]);
+    const previewVatPayableCode = resolveVatLegAccount(previewVatSpecific, previewVatFallback);
 
     const vatRate = Number(invoice.vatRate ?? await getCompanyVatRate(scope.companyId));
     const previewNet = vatIncluded ? extractBaseFromGross(creditAmount, vatRate) : creditAmount;
@@ -2885,7 +2932,7 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
     const scope = req.scope!;
 
     const id = parseId(req.params.id, "id");
-    const { amount, reason, vatIncluded = true, memoDate } = zodParse(createCreditMemoSchema.safeParse(req.body));
+    const { amount, reason, vatIncluded = true, memoDate, deductionCandidateId } = zodParse(createCreditMemoSchema.safeParse(req.body));
 
     const creditAmount = roundTo2(Number(amount));
     const memoDateStr = memoDate
@@ -2897,7 +2944,8 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
     }
 
     const { financialEngine } = await import("../lib/engines/index.js");
-    const [salesReturnsCode, vatPayableCode, arCode] = await Promise.all([
+    const { getOutputVatAccountCode } = await import("../lib/taxCodes.js");
+    const [salesReturnsCode, vatPayableFallback, arCode] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "invoice_sales_returns", "debit", "4113"),
       financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "debit", "2131"),
       financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "credit", "1131"),
@@ -2933,7 +2981,7 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
     await withTransaction(async (client) => {
       const invRes = await client.query(
         `SELECT id, ref, "clientId", "companyId", "branchId", total, "vatAmount",
-                "paidAmount", "vatRate"
+                "paidAmount", "vatRate", "taxCode"
            FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL FOR UPDATE`,
         [id, scope.companyId]
       );
@@ -2941,6 +2989,12 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
       if (!invoice) {
         throw new NotFoundError("الفاتورة غير موجودة");
       }
+      // البند ٤ — يُعكَس سطر الضريبة على نفس حساب رمز ضريبة الفاتورة الذي رُحّل
+      // عند الاعتماد، وإلا الاحتياطي العام؛ فتُغلق تسوية الحساب صفرًا.
+      const vatPayableCode = resolveVatLegAccount(
+        invoice.taxCode ? await getOutputVatAccountCode(scope.companyId, invoice.taxCode) : null,
+        vatPayableFallback,
+      );
       const openBalance = roundTo2(Number(invoice.total) - Number(invoice.paidAmount));
       if (creditAmount > openBalance + 0.01) {
         throw new ValidationError(`المبلغ (${creditAmount}) يتجاوز الرصيد المفتوح (${openBalance})`);
@@ -3113,7 +3167,7 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
         sourceKey: `finance:credit_memo:${memoId}`,
         lines: [
           { accountCode: salesReturnsCode, debit: net, credit: 0, clientId: invoice.clientId },
-          ...(vat > 0 ? [{ accountCode: vatPayableCode, debit: vat, credit: 0, clientId: invoice.clientId }] : []),
+          ...buildVatLeg({ amount: vat, side: "debit", accountCode: vatPayableCode, clientId: invoice.clientId }),
           { accountCode: arCode, debit: 0, credit: creditAmount, clientId: invoice.clientId },
           // COGS reversal lines (DR Inventory / CR COGS) — only present
           // when the original sale had inventoried lines. Service-only
@@ -3161,6 +3215,20 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
       entityId: id,
       details: JSON.stringify({ memoId, amount: creditAmount, net, vat, reason }),
     }).catch((e) => logger.error(e, "finance-invoices background task failed"));
+
+    // شريحة 4 — اربط مرشّح خصم النقل بهذا الإشعار عبر حدث عابر للمسار؛ مستمع
+    // النقل يحدّث مرشّحه (status=issued + creditMemoId). المالية لا تكتب جدول النقل.
+    if (deductionCandidateId && memoId) {
+      emitEvent({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "transport.deduction.materialized",
+        entity: "credit_memos",
+        entityId: memoId,
+        deductionCandidateId,
+        creditMemoId: memoId,
+      }).catch((e) => logger.error(e, "transport deduction link emit failed"));
+    }
 
     const [memo] = await rawQuery<Record<string, unknown>>(`SELECT * FROM credit_memos WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [memoId, scope.companyId]);
     // cogsReversalWarnings is non-fatal — flagged when a restored lot's
@@ -3314,11 +3382,18 @@ invoicesRouter.post("/invoices/:id/amend", authorize({ feature: "finance.invoice
       const { planCogsReversal, applyStockReversals } = await import(
         "../lib/inventory/cogsPosting.js"
       );
-      const [salesReturnsCode, vatPayableCode, arCode] = await Promise.all([
+      const [salesReturnsCode, vatPayableFallback, arCode] = await Promise.all([
         financialEngine.resolveAccountCode(scope.companyId, "invoice_sales_returns", "debit", "4113"),
         financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "debit", "2131"),
         financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "credit", "1131"),
       ]);
+      // البند ٤ — يُعكَس سطر ضريبة الأصل على نفس حساب رمز ضريبته الذي رُحّل عند
+      // اعتماده، وإلا الاحتياطي العام؛ فتُغلق تسوية الحساب صفرًا.
+      const { getOutputVatAccountCode } = await import("../lib/taxCodes.js");
+      const vatPayableCode = resolveVatLegAccount(
+        original.taxCode ? await getOutputVatAccountCode(scope.companyId, original.taxCode as string) : null,
+        vatPayableFallback,
+      );
       const originalVat = roundTo2(Number(original.vatAmount));
       const originalNet = roundTo2(originalTotal - originalVat);
       const memoIssued = await issueNumber({
@@ -3430,7 +3505,7 @@ invoicesRouter.post("/invoices/:id/amend", authorize({ feature: "finance.invoice
         sourceKey: `finance:credit_memo:${memoId}`,
         lines: [
           { accountCode: salesReturnsCode, debit: originalNet, credit: 0, clientId: original.clientId as number | undefined },
-          ...(originalVat > 0 ? [{ accountCode: vatPayableCode, debit: originalVat, credit: 0, clientId: original.clientId as number | undefined }] : []),
+          ...buildVatLeg({ amount: originalVat, side: "debit", accountCode: vatPayableCode, clientId: original.clientId as number | undefined }),
           { accountCode: arCode, debit: 0, credit: originalTotal, clientId: original.clientId as number | undefined },
           // COGS reversal lines (DR Inventory / CR COGS) — empty for service-only invoices.
           ...cogsReversalPlan.journalLines,
@@ -3625,9 +3700,9 @@ invoicesRouter.post("/invoices/:id/debit-memo/preview", authorize({
 
     const [invoice] = await rawQuery<{
       id: number; ref: string; vatRate: string | number | null;
-      branchId: number | null; clientId: number | null;
+      branchId: number | null; clientId: number | null; taxCode: string | null;
     }>(
-      `SELECT id, ref, "vatRate", "branchId", "clientId"
+      `SELECT id, ref, "vatRate", "branchId", "clientId", "taxCode"
          FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -3642,11 +3717,17 @@ invoicesRouter.post("/invoices/:id/debit-memo/preview", authorize({
     }
 
     const { financialEngine } = await import("../lib/engines/index.js");
-    const [arCode, revenueCode, vatPayableCode] = await Promise.all([
+    const { getOutputVatAccountCode } = await import("../lib/taxCodes.js");
+    const [arCode, revenueCode, vatFallback, vatSpecific] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "debit", "1131"),
       financialEngine.resolveAccountCode(scope.companyId, "invoice_revenue", "credit", "4111"),
       financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "credit", "2131"),
+      // البند ٤ — المعاينة تعكس حساب رمز الضريبة الذي سيحمل الضريبة الإضافية.
+      invoice.taxCode
+        ? getOutputVatAccountCode(scope.companyId, invoice.taxCode as string)
+        : Promise.resolve(null),
     ]);
+    const vatPayableCode = resolveVatLegAccount(vatSpecific, vatFallback);
 
     const vatRate = Number(invoice.vatRate ?? await getCompanyVatRate(scope.companyId));
     const previewNet = vatIncluded ? extractBaseFromGross(chargeAmount, vatRate) : chargeAmount;
@@ -3692,7 +3773,7 @@ invoicesRouter.post("/invoices/:id/debit-memo", authorize({ feature: "finance.in
     const { amount, reason, vatIncluded = true, memoDate } = zodParse(createDebitMemoSchema.safeParse(req.body ?? {}));
 
     const [invoice] = await rawQuery<Record<string, unknown>>(
-      `SELECT id, ref, "clientId", "companyId", "branchId", total, "vatRate"
+      `SELECT id, ref, "clientId", "companyId", "branchId", total, "vatRate", "taxCode"
          FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -3716,11 +3797,17 @@ invoicesRouter.post("/invoices/:id/debit-memo", authorize({ feature: "finance.in
     const vat = roundTo2(chargeAmount - net);
 
     const { financialEngine } = await import("../lib/engines/index.js");
-    const [arCode, revenueCode, vatPayableCode] = await Promise.all([
+    const { getOutputVatAccountCode } = await import("../lib/taxCodes.js");
+    const [arCode, revenueCode, vatPayableFallback, vatSpecific] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "debit", "1131"),
       financialEngine.resolveAccountCode(scope.companyId, "invoice_revenue", "credit", "4111"),
       financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "credit", "2131"),
+      // البند ٤ — الضريبة الإضافية تُحمَّل على حساب رمز ضريبة الفاتورة إن هُيِّئ.
+      invoice.taxCode
+        ? getOutputVatAccountCode(scope.companyId, invoice.taxCode as string)
+        : Promise.resolve(null),
     ]);
+    const vatPayableCode = resolveVatLegAccount(vatSpecific, vatPayableFallback);
 
     let memoId: number | null = null;
     let debitMemoResult: { journalId: number; alreadyExists: boolean } | null = null;
@@ -3834,7 +3921,7 @@ invoicesRouter.post("/invoices/:id/debit-memo", authorize({ feature: "finance.in
         lines: [
           { accountCode: arCode, debit: chargeAmount, credit: 0, clientId: invoice.clientId as number | undefined },
           { accountCode: revenueCode, debit: 0, credit: net, clientId: invoice.clientId as number | undefined },
-          ...(vat > 0 ? [{ accountCode: vatPayableCode, debit: 0, credit: vat, clientId: invoice.clientId as number | undefined }] : []),
+          ...buildVatLeg({ amount: vat, side: "credit", accountCode: vatPayableCode, clientId: invoice.clientId as number | undefined }),
         ],
         guardTable: "debit_memos",
         guardId: memoId ?? 0,
@@ -3900,23 +3987,73 @@ invoicesRouter.get("/invoices/:id/memos", authorize({ feature: "finance.invoices
 // ─────────────────────────────────────────────────────────────────────────────
 // BAD DEBT PROVISIONING
 // Posts an allowance-for-doubtful-accounts entry based on aging buckets:
-//   DR 6200 Bad debt expense
-//   CR 1210 Allowance for doubtful accounts (contra-AR)
-// Rates default to: 0-30=0%, 31-60=5%, 61-90=25%, 90+=50% and are overridable
-// per request. Idempotent per period via ref `BAD-DEBT-{period}`.
+//   DR 5820 Bad debt expense
+//   CR 1135 Allowance for doubtful accounts (contra-AR)
+// Rates are the per-company controllable bad-debt policy (settings key
+// `finance.bad_debt_policy`) — STANDARD default current=0% / 1-30=5% /
+// 31-60=25% / 61-90=50% / 90+=75% — with an optional per-request override on
+// top (see lib/badDebtPolicy.ts). Idempotent per period via ref `BAD-DEBT-{period}`.
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ── سطح التحكم بسياسة مخصّص الديون (قابلة للتحكم لكل شركة + قياسي) ─────────────
+// GET: النِسَب المُحلّة لشركة المُستدعي (القياسي ← تهيئة الشركة) + القياسي للمرجع.
+invoicesRouter.get("/bad-debt/policy", authorize({ feature: "finance.collection", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rates = await resolveBadDebtPolicy(scope.companyId);
+    res.json({ key: BAD_DEBT_POLICY_SETTING_KEY, rates, standard: STANDARD_BAD_DEBT_RATES });
+  } catch (err) { handleRouteError(err, res, "Get bad-debt policy error:"); }
+});
+
+// PUT: يضبط نِسَب الشركة (تحديث جزئي — يُبقي الحقول غير المُرسَلة). كل نسبة ∈ [0,1].
+// يخزّن تجاوزات الشركة فقط فوق القياسي (لا يُجمّد القياسي للحقول غير المضبوطة).
+const badDebtPolicySchema = z.object({
+  rates: z.object({
+    current: z.coerce.number().min(0).max(1).optional(),
+    d30: z.coerce.number().min(0).max(1).optional(),
+    d60: z.coerce.number().min(0).max(1).optional(),
+    d90: z.coerce.number().min(0).max(1).optional(),
+    d90plus: z.coerce.number().min(0).max(1).optional(),
+  }),
+});
+invoicesRouter.put("/bad-debt/policy", authorize({ feature: "finance.collection", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const body = zodParse(badDebtPolicySchema.safeParse(req.body ?? {}));
+    // ادمج فوق تجاوزات الشركة الخام (لا المُحلّ) حتى تبقى الحقول غير المضبوطة
+    // ديناميكية على القياسي.
+    const storedRaw = await resolveSettings(BAD_DEBT_POLICY_SETTING_KEY, scope.companyId).catch(() => undefined);
+    const base = storedRaw && typeof storedRaw === "object" && !Array.isArray(storedRaw)
+      ? (storedRaw as Record<string, unknown>) : {};
+    const incoming = Object.fromEntries(
+      Object.entries(body.rates).filter(([, v]) => v !== undefined),
+    );
+    const merged = { ...base, ...incoming };
+    await upsertSetting("company", scope.companyId, BAD_DEBT_POLICY_SETTING_KEY, merged);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "settings", entityId: 0,
+      after: { key: BAD_DEBT_POLICY_SETTING_KEY, rates: merged },
+    }).catch((e) => logger.error(e, "bad-debt policy audit failed"));
+    // أعد النِسَب المُحلّة بعد الحفظ (شفافية: ما الذي سيُطبَّق فعلًا).
+    const rates = await resolveBadDebtPolicy(scope.companyId);
+    res.json({ key: BAD_DEBT_POLICY_SETTING_KEY, rates, standard: STANDARD_BAD_DEBT_RATES });
+  } catch (err) { handleRouteError(err, res, "Set bad-debt policy error:"); }
+});
 
 invoicesRouter.get("/bad-debt/preview", authorize({ feature: "finance.collection", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const asOf = (req.query.asOf as string) || todayISO();
-    const rates = {
-      current: Number.isFinite(Number(req.query.rateCurrent)) ? Number(req.query.rateCurrent) : 0,
-      d30: Number.isFinite(Number(req.query.rate30)) ? Number(req.query.rate30) : 0.05,
-      d60: Number.isFinite(Number(req.query.rate60)) ? Number(req.query.rate60) : 0.25,
-      d90: Number.isFinite(Number(req.query.rate90)) ? Number(req.query.rate90) : 0.5,
-      d90plus: Number.isFinite(Number(req.query.rate90plus)) ? Number(req.query.rate90plus) : 0.75,
+    // النِسَب: القياسي ← تهيئة الشركة (settings) ← تجاوز الطلب (query). مصدر واحد.
+    const override = {
+      current: Number.isFinite(Number(req.query.rateCurrent)) ? Number(req.query.rateCurrent) : undefined,
+      d30: Number.isFinite(Number(req.query.rate30)) ? Number(req.query.rate30) : undefined,
+      d60: Number.isFinite(Number(req.query.rate60)) ? Number(req.query.rate60) : undefined,
+      d90: Number.isFinite(Number(req.query.rate90)) ? Number(req.query.rate90) : undefined,
+      d90plus: Number.isFinite(Number(req.query.rate90plus)) ? Number(req.query.rate90plus) : undefined,
     };
+    const rates = await resolveBadDebtPolicy(scope.companyId, override);
 
     const invoices = await rawQuery<Record<string, unknown>>(
       `SELECT id, ref, "clientId", "createdAt", "dueDate", total, "paidAmount",
@@ -3924,6 +4061,7 @@ invoicesRouter.get("/bad-debt/preview", authorize({ feature: "finance.collection
          FROM invoices
         WHERE "companyId" = $1 AND "deletedAt" IS NULL
           AND "createdAt" <= $2
+          AND status <> 'written_off'
           AND (total - COALESCE("paidAmount",0)) > 0.01`,
       [scope.companyId, asOf]
     );
@@ -3952,9 +4090,128 @@ invoicesRouter.get("/bad-debt/preview", authorize({ feature: "finance.collection
     };
     const totalProvision = roundTo2(provision.current + provision.d30 + provision.d60 + provision.d90 + provision.d90plus);
 
-    res.json({ asOf, rates, buckets, provision, totalProvision, invoiceCount: invoices.length });
+    // الأثر المتوقع: المخصّص (1135) رصيدٌ مستهدف، فنعرض الرصيد الحالي والفرق الذي
+    // سيُرحَّل فعليًّا (delta-to-target) — لا الإجمالي الكامل.
+    const previewPeriod = (asOf || todayISO()).slice(0, 7);
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const allowanceCode = await financialEngine.resolveAccountCode(scope.companyId, "bad_debt_allowance", "credit", "1135");
+    const currentAllowance = await readAllowanceBalance(scope.companyId, allowanceCode, `BAD-DEBT-${previewPeriod}`);
+    const delta = roundTo2(totalProvision - currentAllowance);
+
+    res.json({ asOf, rates, buckets, provision, totalProvision, currentAllowance, delta, invoiceCount: invoices.length });
   } catch (err) {
     handleRouteError(err, res, "Bad debt preview error:");
+  }
+});
+
+// عتبة افتراضية للنظر في الشطب: ١٢ شهرًا (٣٦٥ يومًا) — تطابق شرط تخفيف ضريبة الديون
+// المعدومة لدى ZATCA (المادة ٤٠: مرور ١٢ شهرًا على التوريد). قابلة للتجاوز بـ ?minDaysOverdue=.
+const WRITEOFF_DEFAULT_DAYS = 365;
+
+// مرشّحو الشطب: ذمم مدينة متأخّرة فوق العتبة وغير مشطوبة بعد — للعرض والترشيح فقط.
+// لا ترحيل دفتر هنا؛ الترحيل (مدين 1135 المخصّص / دائن 1111 الذمم) يتمّ في مسار
+// الاعتماد المنفصل (الدفعة ٢) بعد اعتماد بشري + assertion. نفس تعريف الذمم القائمة
+// المستخدَم في المخصّص، مضافًا إليه استبعاد 'written_off'.
+invoicesRouter.get("/bad-debt/write-off-candidates", authorize({ feature: "finance.collection", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const asOf = (req.query.asOf as string) || todayISO();
+    const minDaysOverdue = Number.isFinite(Number(req.query.minDaysOverdue)) && Number(req.query.minDaysOverdue) > 0
+      ? Math.floor(Number(req.query.minDaysOverdue))
+      : WRITEOFF_DEFAULT_DAYS;
+
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT id, ref, "clientId", "createdAt", "dueDate", total, "paidAmount",
+              (total - COALESCE("paidAmount",0)) AS outstanding
+         FROM invoices
+        WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "createdAt" <= $2
+          AND status NOT IN ('draft','cancelled','paid','rejected','returned','written_off')
+          AND (total - COALESCE("paidAmount",0)) > 0.01`,
+      [scope.companyId, asOf]
+    );
+
+    const asOfMs = new Date(asOf).getTime();
+    const candidates = rows
+      .map((inv) => {
+        const due = inv.dueDate ? new Date(inv.dueDate as string | Date).getTime()
+          : new Date(inv.createdAt as string | Date).getTime() + 30 * 86400000;
+        const daysOverdue = Math.floor((asOfMs - due) / 86400000);
+        return { ...inv, outstanding: roundTo2(Number(inv.outstanding)), daysOverdue };
+      })
+      .filter((c) => c.daysOverdue >= minDaysOverdue)
+      .sort((a, b) => b.daysOverdue - a.daysOverdue);
+
+    res.json({
+      asOf,
+      minDaysOverdue,
+      count: candidates.length,
+      totalOutstanding: roundTo2(candidates.reduce((s, c) => s + Number(c.outstanding), 0)),
+      candidates,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Write-off candidates error:");
+  }
+});
+
+// شطب دين معدوم على فاتورة (الدفعة ٢ — يمسّ الدفتر). القيد: مدين مخصص الديون (الصافي)
+// + مدين ضريبة المخرجات (عكس — تخفيف ZATCA مادة ٤٠) / دائن ذمم العميل (الإجمالي)، ثم
+// إطفاء الفاتورة written_off. اعتماد بشري + إشعار العميل كتابيًّا شرطان (مادة ٤٠).
+const badDebtWriteOffSchema = z.object({
+  invoiceId: z.coerce.number().int().positive(),
+  reason: z.string().trim().max(500).optional(),
+  customerNotified: z.boolean().optional().default(false),
+});
+
+invoicesRouter.post("/bad-debt/write-off", authorize({ feature: "finance.collection", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { invoiceId, reason, customerNotified } = zodParse(badDebtWriteOffSchema.safeParse(req.body ?? {}));
+
+    // تخفيف ضريبة الديون المعدومة (ZATCA مادة ٤٠) يشترط إشعار العميل كتابيًّا بالمشطوب.
+    if (!customerNotified) {
+      throw new ValidationError(
+        "يلزم تأكيد إشعار العميل كتابيًّا بالمبلغ المشطوب (شرط تخفيف الضريبة — المادة ٤٠)",
+        { field: "customerNotified" },
+      );
+    }
+
+    const result = await postBadDebtWriteOff({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      invoiceId,
+      createdBy: scope.activeAssignmentId,
+      reason,
+    }).catch((je) => {
+      logger.error(je, "Bad debt write-off JE error:");
+      throw new IntegrationError(
+        "فشل ترحيل قيد شطب الدين المعدوم",
+        { field: "journalEntry", fix: "راجع إعدادات الحسابات (1135/2131/1131) ثم أعد المحاولة" },
+      );
+    });
+
+    if (result.reason === "not_found") throw new NotFoundError("الفاتورة غير موجودة");
+    if (result.reason === "period_closed") throw new ConflictError("لا يمكن الشطب في فترة مُقفلة");
+    if (result.reason === "no_balance") throw new ConflictError("لا يوجد رصيد قائم على الفاتورة للشطب");
+
+    // مشطوبة مسبقًا → لا عملية (idempotent).
+    if (!result.posted) {
+      res.status(200).json({ ...result, posted: false, message: "الفاتورة مشطوبة مسبقًا" });
+      return;
+    }
+
+    markIdempotencyReplay(req, res, false);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "bad_debt.written_off",
+      entity: "invoices",
+      entityId: invoiceId,
+      details: JSON.stringify({ journalId: result.journalId, outstanding: result.outstanding, net: result.net, vat: result.vat, reason, customerNotified }),
+    }).catch((e) => logger.error(e, "finance-invoices background task failed"));
+
+    res.status(201).json({ ...result, posted: true });
+  } catch (err) {
+    handleRouteError(err, res, "Bad debt write-off error:");
   }
 });
 
@@ -3968,12 +4225,6 @@ invoicesRouter.post("/bad-debt/post", authorize({ feature: "finance.collection",
     if (!/^\d{4}-\d{2}$/.test(targetPeriod)) {
       throw new ValidationError("صيغة الفترة غير صحيحة (YYYY-MM)");
     }
-    const targetDate = asOf || `${targetPeriod}-28`;
-    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, targetDate);
-    if (!periodCheck.open) {
-      throw new ConflictError(`لا يمكن تسجيل مخصص ديون في فترة مُقفلة: ${periodCheck.periodName ?? ""}`);
-    }
-
     const ref = `BAD-DEBT-${targetPeriod}`;
     const [existing] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM journal_entries WHERE "companyId"=$1 AND ref=$2 AND "deletedAt" IS NULL LIMIT 1`,
@@ -3986,92 +4237,58 @@ invoicesRouter.post("/bad-debt/post", authorize({ feature: "finance.collection",
       );
     }
 
-    const r = {
-      current: Number(rates?.current ?? 0),
-      d30: Number(rates?.d30 ?? 0.05),
-      d60: Number(rates?.d60 ?? 0.25),
-      d90: Number(rates?.d90 ?? 0.5),
-      d90plus: Number(rates?.d90plus ?? 0.75),
-    };
-
-    // Exclude draft + cancelled + paid invoices. Drafts haven't posted a GL
-    // AR DR yet — accruing an allowance for them would credit allowance for
-    // doubtful accounts against a receivable the GL doesn't show, breaking
-    // trial balance reconciliation. Cancelled/paid never accrue allowance.
-    // Status `sent` is treated as the legacy synonym for `approved` (some
-    // older invoices missed the schema update).
-    const invoices = await rawQuery<Record<string, unknown>>(
-      `SELECT "createdAt", "dueDate", (total - COALESCE("paidAmount",0)) AS outstanding
-         FROM invoices
-        WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "createdAt" <= $2
-          AND status NOT IN ('draft','cancelled','paid','rejected','returned')
-          AND (total - COALESCE("paidAmount",0)) > 0.01`,
-      [scope.companyId, targetDate]
-    );
-    const asOfMs = new Date(targetDate).getTime();
-    const buckets = { current: 0, d30: 0, d60: 0, d90: 0, d90plus: 0 };
-    for (const inv of invoices) {
-      const due = inv.dueDate ? new Date(inv.dueDate as string | Date).getTime()
-        : new Date(inv.createdAt as string | Date).getTime() + 30 * 86400000;
-      const d = Math.floor((asOfMs - due) / 86400000);
-      const amt = Number(inv.outstanding);
-      const ra = roundTo2(amt);
-      if (d <= 0) buckets.current = roundTo2(buckets.current + ra);
-      else if (d <= 30) buckets.d30 = roundTo2(buckets.d30 + ra);
-      else if (d <= 60) buckets.d60 = roundTo2(buckets.d60 + ra);
-      else if (d <= 90) buckets.d90 = roundTo2(buckets.d90 + ra);
-      else buckets.d90plus = roundTo2(buckets.d90plus + ra);
-    }
-    const total = roundTo2(
-      buckets.current * r.current + buckets.d30 * r.d30 + buckets.d60 * r.d60 + buckets.d90 * r.d90 + buckets.d90plus * r.d90plus
-    );
-
-    if (total <= 0) {
-      throw new ValidationError("لا يوجد مبلغ لمخصص الديون المشكوك فيها");
-    }
-
-    const { financialEngine } = await import("../lib/engines/index.js");
-    const [expenseCode, allowanceCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "bad_debt_expense", "debit", "5820"),
-      financialEngine.resolveAccountCode(scope.companyId, "bad_debt_allowance", "credit", "1135"),
-    ]);
-
-    let journalId: number | null = null;
-    try {
-      const badDebtResult = await financialEngine.postJournalEntry({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        createdBy: scope.activeAssignmentId,
-        ref,
-        description: `مخصص ديون مشكوك فيها ${targetPeriod}${notes ? ` — ${notes}` : ""}`,
-        sourceType: "bad_debt_allowance",
-        sourceId: 0,
-        sourceKey: `finance:bad_debt:${scope.companyId}:${targetPeriod}`,
-        lines: [
-          { accountCode: expenseCode, debit: total, credit: 0 },
-          { accountCode: allowanceCode, debit: 0, credit: total },
-        ],
-      });
-      journalId = badDebtResult.journalId;
-      markIdempotencyReplay(req, res, badDebtResult.alreadyExists);
-    } catch (je) {
+    // Delta-to-target: post only (aging target − current allowance balance) so the
+    // allowance (1135) reflects the aging-based target each period without the
+    // cumulative over-provision a full-total-per-period posting would cause. The
+    // engine resolves rates (standard←company←request), reads the current 1135
+    // balance, computes the signed delta, and posts it — shared with the monthly
+    // cron via the same ref/sourceKey (idempotent per period).
+    const result = await postBadDebtProvision({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      period: targetPeriod,
+      asOf,
+      rates: rates ?? undefined,
+      createdBy: scope.activeAssignmentId,
+      notes,
+    }).catch((je) => {
       logger.error(je, "Bad debt JE error:");
       throw new IntegrationError(
         "فشل تسجيل قيد مخصص الديون المشكوك فيها",
-        { field: "journalEntry", fix: "راجع إعدادات الحسابات (5170/1210) ثم أعد المحاولة" }
+        { field: "journalEntry", fix: "راجع إعدادات الحسابات (5820/1135) ثم أعد المحاولة" }
       );
+    });
+
+    if (result.reason === "period_closed") {
+      throw new ConflictError("لا يمكن تسجيل مخصص ديون في فترة مُقفلة");
     }
 
+    // Already at target → no journal entry needed (not an error — a no-op).
+    if (!result.posted) {
+      res.status(200).json({
+        ref, period: targetPeriod, posted: false,
+        message: "المخصّص مطابق للهدف بالتقادم — لا حاجة لتعديل",
+        target: result.target, currentAllowance: result.currentAllowance, delta: 0,
+        total: result.target, buckets: result.buckets, rates: result.rates,
+      });
+      return;
+    }
+
+    markIdempotencyReplay(req, res, false);
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "bad_debt.posted",
       entity: "journal_entries",
-      entityId: journalId ?? 0,
-      details: JSON.stringify({ period: targetPeriod, total, buckets, rates: r }),
+      entityId: result.journalId ?? 0,
+      details: JSON.stringify({ period: targetPeriod, target: result.target, delta: result.delta, currentAllowance: result.currentAllowance, buckets: result.buckets, rates: result.rates }),
     }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
-    res.status(201).json({ journalId, ref, period: targetPeriod, total, buckets, rates: r });
+    res.status(201).json({
+      journalId: result.journalId, ref, period: targetPeriod, posted: true,
+      target: result.target, currentAllowance: result.currentAllowance, delta: result.delta,
+      total: result.target, buckets: result.buckets, rates: result.rates,
+    });
   } catch (err) {
     handleRouteError(err, res, "Bad debt post error:");
   }

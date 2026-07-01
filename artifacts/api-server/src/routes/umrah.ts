@@ -30,6 +30,7 @@ import { sendMessage } from "../lib/messageSender.js";
 import { issueNumber } from "../lib/numberingService.js";
 import { applyTransition, lifecycleErrorResponse, LifecycleError } from "../lib/lifecycleEngine.js";
 import { logger } from "../lib/logger.js";
+import { registerEntityParty } from "../lib/partyService.js";
 import { resolveSettings } from "../lib/settings.js";
 import { encryptField, decryptPilgrimRow, blindIndex, SENSITIVE_PILGRIM_FIELDS, logSensitiveAccess } from "../lib/fieldEncryption.js";
 import {
@@ -799,6 +800,10 @@ router.post("/agents", authorize({ feature: "umrah", action: "create" }), async 
     // Per-agent revenue subsidiary account (#1594) — fire-and-forget; sales for
     // this agent route to its own revenue leaf via resolveRevenueAccount.
     createSubsidiaryAccountsForEntity(scope.companyId, "umrah_agent", rows[0].id as number, b.name, { branchId: scope.branchId, actorUserId: scope.userId }).catch((e) => logger.error(e, "umrah agent subsidiary auto-create failed"));
+    // Master-data identity (migration 249) — link the agent to ONE party. Non-fatal.
+    registerEntityParty(scope.companyId, "umrah_agents", rows[0].id as number, "agent", {
+      displayName: b.name, phone: b.phone ?? null, email: b.email ?? null, kind: "organization",
+    }).catch((e) => logger.error(e, "[partyService] umrah_agents registration failed"));
     // Per-agent cost centre — backs /reports/profitability/umrah-agent with a real
     // cost_centers row (the agent already had a subsidiary account + umrahAgentId
     // dimension, but no auto cost centre — the one asymmetry vs vehicle/property).
@@ -1486,6 +1491,13 @@ router.post("/pilgrims", authorize({ feature: "umrah", action: "create" }), asyn
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_pilgrims", entityId: rows[0]?.id, after: { fullName: String(b.fullName).trim() } }).catch((e) => logger.error(e, "umrah background task failed"));
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.pilgrim.created", entity: "umrah_pilgrims", entityId: rows[0]?.id, pilgrimId: Number(rows[0]?.id), packageId: b.packageId ? Number(b.packageId) : 0, passportNo: passportPlain, after: { fullName: String(b.fullName).trim() } }).catch((e) => logger.error(e, "umrah background task failed"));
+    // Master-data identity (migration 249) — link the pilgrim to ONE party.
+    // nationalId is intentionally NULL here: the passport is encrypted/sensitive
+    // and must not be written in plaintext to the registry; dedup falls back to
+    // phone. Non-fatal.
+    registerEntityParty(scope.companyId, "umrah_pilgrims", Number(rows[0]?.id), "pilgrim", {
+      displayName: String(b.fullName).trim(), phone: b.phone ?? null, nationalId: null, kind: "person",
+    }).catch((e) => logger.error(e, "[partyService] umrah_pilgrims registration failed"));
     res.status(201).json(decryptPilgrimRow(rows[0]));
   } catch (err) { handleRouteError(err, res, "Create pilgrim error"); }
 });

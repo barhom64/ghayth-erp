@@ -52,6 +52,18 @@ assert(
 assert(lineIsCrampedGrid([`<div className="grid grid-cols-7">`], 0, true) === false, "excluded file (calendar/guide/mock)");
 assert(!flags(`        // <div className="grid grid-cols-5"> legacy`), "commented-out line");
 assert(!flags(`         * a grid grid-cols-6 mentioned in JSDoc prose`), "JSDoc prose line");
+// variant prefixes that the old [a-z0-9]+ char-class couldn't parse — every
+// variant ends in `:`, so the lookbehind treats them all as prefixed (not bare)
+assert(!flags(`        <div className="grid min-[480px]:grid-cols-6">`), "arbitrary breakpoint min-[480px]: is a variant, not bare");
+assert(!flags(`        <div className="grid data-[open]:grid-cols-6">`), "data-attribute data-[open]: variant, not bare");
+assert(!flags(`        <div className="grid 2xl:grid-cols-6">`), "2xl: variant, not bare");
+// `grid-cols-` embedded in a larger token is not a bare grid-cols class
+assert(!flags(`        <div className="auto-grid-cols-6">`), "sub-token auto-grid-cols-6, not a bare class");
+// key-value where the col-span value sits ONE line ABOVE the grid (value-first)
+assert(
+  !lineIsCrampedGrid([`  <span className="col-span-2">value</span>`, `  <div className="grid grid-cols-4">`], 1, false),
+  "value-first key-value (col-span one line above the grid)",
+);
 
 if (failed) {
   console.error(`\n[check:mobile-grids:tests] ${failed} assertion(s) failed.`);

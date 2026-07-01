@@ -139,14 +139,24 @@ describe("invoice approval posts per-line revenue", () => {
   });
 
   it("approval VAT credit still uses invoice.vatAmount at header level", () => {
-    // The VAT line now also carries clientId so per-customer VAT reports
-    // tie out from the GL (silent dim-loss fix). Match the header values
-    // separately from the dim suffix.
+    // البند ٤ — سطر الضريبة يُبنى عبر buildVatLeg ويحمل clientId (تقارير الضريبة
+    // لكل عميل تُغلق من الدفتر)، وعلى حساب invVatPayableCode المحسوم من رمز الضريبة.
+    // keepZero يُبقي السطر غير مشروط كما كان قبل البند ٤ (لا يسقط عند ضريبة صفر).
     expect(INVOICES_ROUTE).toContain(
-      "accountCode: invVatPayableCode, debit: 0, credit: Number(invoice.vatAmount || 0)"
+      'buildVatLeg({ amount: Number(invoice.vatAmount || 0), side: "credit", accountCode: invVatPayableCode'
     );
     expect(INVOICES_ROUTE).toContain(
-      "clientId: invoice.clientId as number | undefined } as any,"
+      "clientId: invoice.clientId as number | undefined, keepZero: true })"
+    );
+  });
+
+  it("البند ٤ — حساب ضريبة الاعتماد يُشتق من رمز ضريبة الفاتورة مع ارتداد للحساب العام", () => {
+    // الحساب الخاص بالرمز يفوز، وإلا الاحتياطي العام (resolveAccountCode invoice_vat_payable).
+    expect(INVOICES_ROUTE).toContain(
+      "const invVatPayableCode = resolveVatLegAccount(invVatSpecific, invVatFallback);"
+    );
+    expect(INVOICES_ROUTE).toContain(
+      "getOutputVatAccountCode(scope.companyId, invoice.taxCode as string)"
     );
   });
 });

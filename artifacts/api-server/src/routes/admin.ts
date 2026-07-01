@@ -89,6 +89,7 @@ const updateUserSchema = z.object({
   isActive: z.boolean().optional(),
   role: z.string().min(1).optional(),
   employeeId: z.coerce.number().int().positive().optional().nullable(),
+  email: z.string().email("بريد إلكتروني غير صحيح").optional(),
 });
 
 const createUserRoleSchema = z.object({
@@ -339,7 +340,7 @@ router.patch("/users/:id", authorize({ feature: "admin", action: "update" }), as
       [id, scope.companyId]
     );
     if (!userBelongs) { throw new ForbiddenError("المستخدم لا ينتمي لشركتك"); }
-    const { isActive, role, employeeId } = zodParse(updateUserSchema.safeParse(req.body));
+    const { isActive, role, employeeId, email } = zodParse(updateUserSchema.safeParse(req.body));
     if (employeeId) {
       const [empCheck] = await rawQuery(
         `SELECT 1 FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 LIMIT 1`,
@@ -347,11 +348,24 @@ router.patch("/users/:id", authorize({ feature: "admin", action: "update" }), as
       );
       if (!empCheck) { throw new ForbiddenError("الموظف لا ينتمي لشركتك"); }
     }
+    let normalizedEmail: string | undefined;
+    if (email !== undefined) {
+      // users.email is the login identifier AND the recipient of every
+      // system link email (reset/invitation/activation). Normalize + enforce
+      // uniqueness so a changed login can't collide with another account.
+      normalizedEmail = email.trim().toLowerCase();
+      const [dup] = await rawQuery(
+        `SELECT id FROM users WHERE LOWER(email) = $1 AND id <> $2 LIMIT 1`,
+        [normalizedEmail, id]
+      );
+      if (dup) { throw new ValidationError("البريد الإلكتروني مستخدم لحساب آخر"); }
+    }
     const sets: string[] = [];
     const params: unknown[] = [];
     if (isActive !== undefined) { params.push(isActive); sets.push(`"isActive"=$${params.length}`); }
     if (role !== undefined) { params.push(role); sets.push(`role=$${params.length}`); }
     if (employeeId !== undefined) { params.push(employeeId || null); sets.push(`"employeeId"=$${params.length}`); }
+    if (normalizedEmail !== undefined) { params.push(normalizedEmail); sets.push(`email=$${params.length}`); }
     if (!sets.length) { throw new ValidationError("لا توجد بيانات للتحديث"); }
     params.push(id);
     await withTransaction(async (tx) => {
@@ -403,7 +417,7 @@ router.patch("/users/:id", authorize({ feature: "admin", action: "update" }), as
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "update", entity: "users", entityId: id,
-      after: { isActive, role, employeeId },
+      after: { isActive, role, employeeId, email: normalizedEmail },
     }).catch((e) => logger.error(e, "admin background task failed"));
     emitEvent({
       companyId: scope.companyId,

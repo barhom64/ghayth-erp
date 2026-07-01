@@ -368,87 +368,29 @@ async function detectAndApplyBaselineIfNeeded(client: any): Promise<void> {
     );
   }
 
-  // Resolve the two halves relative to the same repo root used for
-  // db/schema.sql above. The wrapper db/schema.sql is intentionally
-  // NOT opened here — its body is two `\ir` psql meta-commands that
-  // the `pg` driver cannot parse.
-  const baselineDir = dirname(baselinePath);
-  const prePath = resolve(baselineDir, "schema_pre.sql");
-  const postPath = resolve(baselineDir, "schema_post.sql");
-  for (const p of [prePath, postPath]) {
-    if (!existsSync(p)) {
-      throw new Error(`baseline half missing: ${p}`);
-    }
-  }
-
-  const metaStripRe = /^\\(?:restrict|unrestrict)\s+\S+\s*$/;
-  const unknownMetaRe = /^\s*\\/;
-  const loadHalf = async (filePath: string): Promise<void> => {
-    const raw = readFileSync(filePath, "utf-8");
-    const lines = raw.split("\n");
-    const kept: string[] = [];
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i] ?? "";
-      if (metaStripRe.test(line)) continue;
-      if (unknownMetaRe.test(line)) {
-        throw new Error(
-          `refusing baseline: unknown psql meta-command at ${filePath}:${i + 1}: ${line.trim()}`
-        );
-      }
-      kept.push(line);
-    }
-    const stripped = kept.join("\n");
-    await client.query(stripped);
-  };
-
-  await loadHalf(prePath);
-  await loadHalf(postPath);
-
-  // Pre-mark migrations baked into the dump as applied. Migrations
-  // ADDED AFTER the dump was generated are intentionally left unmarked
-  // so the delta loop below picks them up and applies them. The
-  // cutoff filename lives in db/.baseline-cutoff (version-controlled,
-  // bumped manually when the dump is regenerated). Without this gate
-  // every migration added after the dump silently fails to run on
-  // fresh bootstraps. Mirrors db/bootstrap.sh step 8.
-  //
-  // MUST run only after both halves apply successfully — if
-  // schema_post.sql throws, this block is skipped, so the next boot
-  // sees an empty schema_migrations and the partial-DB gate above
-  // refuses to retry on the partly-loaded schema.
-  const migrationsDir = resolve(__dirname, "./migrations");
-  const migrationFiles = readdirSync(migrationsDir)
-    .filter((f) => f.endsWith(".sql"))
-    .sort(compareMigrationFiles);
-
-  const cutoffPath = resolve(__dirname, "../../../../db/.baseline-cutoff");
-  let cutoff = "";
-  try {
-    cutoff = readFileSync(cutoffPath, "utf8")
-      .split("\n")
-      .find((l) => l.trim() && !l.startsWith("#"))?.trim() ?? "";
-  } catch {
-    logger.warn(`db/.baseline-cutoff missing — pre-marking ALL migrations (legacy behaviour)`);
-  }
-
-  let marked = 0;
-  let skipped = 0;
-  for (const file of migrationFiles) {
-    if (cutoff && compareMigrationFiles(file, cutoff) > 0) {
-      skipped++;
-      continue;
-    }
-    await client.query(
-      `INSERT INTO schema_migrations (filename) VALUES ($1)
-         ON CONFLICT (filename) DO NOTHING`,
-      [file]
-    );
-    marked++;
-  }
-
-  logger.info(
-    { marked, skipped, cutoff: cutoff || "(none)" },
-    `baseline loaded; ${marked} migrations pre-marked, ${skipped} left for delta loop`
+  // Truly fresh DB (schema_migrations empty, companies absent, no other
+  // public tables). The baseline dump (db/schema_pre.sql + schema_post.sql)
+  // begins with `SELECT pg_catalog.set_config('search_path','',false)` and
+  // is meant to be replayed by **psql** statement-by-statement. Replaying
+  // it through the node `pg` driver as a single simple-query batch does NOT
+  // reproduce psql's behaviour (it trips on the empty search_path and on
+  // statements psql executes individually), so it cannot reliably load the
+  // baseline. Owner decision (إبراهيم 2026-06-24): **psql owns baseline
+  // loading on every fresh deploy** via db/bootstrap.sh; runMigrations is
+  // delta-only on an already-bootstrapped DB. So instead of silently
+  // attempting an unreliable node-pg replay, we FAIL LOUD with actionable
+  // guidance — converting a deferred runtime «خطأ في هيكل قاعدة البيانات»
+  // into a clear boot-time abort. After bootstrap.sh runs, it pre-marks the
+  // baseline migrations (its step 8), so schema_migrations is non-empty and
+  // this function returns early at the migCount>0 gate above; the delta loop
+  // then applies anything newer.
+  throw new Error(
+    "قاعدة بيانات فارغة: لم يُشغَّل الأساس بعد. " +
+      "تحميل الأساس مملوك لـ db/bootstrap.sh (psql) لا لمحرّك الهجرات عند الإقلاع. " +
+      "شغّل db/bootstrap.sh أولًا لتهيئة السكيمة الكاملة، ثم أعد الإقلاع — " +
+      "عندها يقتصر runMigrations على تطبيق هجرات الـdelta الأحدث فقط. " +
+      "[fresh DB detected: baseline loading is owned by db/bootstrap.sh (psql), " +
+      "not the app-boot migration runner; run db/bootstrap.sh first, then restart]"
   );
 }
 

@@ -3,9 +3,8 @@ import { useApiQuery } from "@/lib/api";
 import { SearchableSelect } from "@/components/shared/searchable-select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ProductCreateForm } from "@/components/shared/product-create-form";
+import { isStockItem, ITEM_TYPE_LABEL } from "@/lib/item-type";
 
-// Item types with no stock balance — hidden from movement selectors.
-const NON_STOCK_ITEM_TYPES = new Set(["service", "digital", "asset"]);
 const FREE_VALUE = "_free";
 
 export interface ProductSelectProps {
@@ -46,12 +45,18 @@ export function ProductSelect({
   const { data: productsData, refetch } = useApiQuery<{ data: any[] }>(["warehouse-products-select"], "/warehouse/products?limit=500");
   const allProducts = productsData?.data || [];
   const products = stockableOnly
-    ? allProducts.filter((p: any) => !NON_STOCK_ITEM_TYPES.has(String(p.itemType ?? "product")))
+    ? allProducts.filter((p: any) => isStockItem(p.itemType))
     : allProducts;
 
   const options = [
     ...(includeFreeOption ? [{ value: FREE_VALUE, label: freeOptionLabel }] : []),
-    ...products.map((p: any) => ({ value: String(p.id), label: `${p.name}${p.sku ? ` · ${p.sku}` : ""}` })),
+    ...products.map((p: any) => ({
+      value: String(p.id),
+      label: `${p.name}${p.sku ? ` · ${p.sku}` : ""}`,
+      // D-2 (توجيه إبراهيم) — شارة النوع (منتج/خدمة/…) عند نقطة الاختيار في بند
+      // الفاتورة، فيميّز المستخدم الخدمة من المنتج دون فتح الكتالوج المحاسبي.
+      sublabel: ITEM_TYPE_LABEL[String(p.itemType ?? "product")],
+    })),
   ];
 
   // When the parent holds "" and a free option exists, surface the free line

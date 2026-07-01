@@ -3,9 +3,13 @@ import { redirectTo } from "@/components/shared/redirect-to";
 
 const Settings = lazy(() => import("@/pages/settings"));
 const SettingsRules = lazy(() => import("@/pages/settings-rules"));
+const PartyProfile = lazy(() => import("@/pages/settings/party-profile"));
 
 export const settingsRoutes = [
   { path: "/settings", component: Settings },
+  // الملف الموحّد 360° لطرف (parties، هجرة 249) — صفحة تفصيلية تُفتح عبر رابط
+  // «الملف الموحّد» من صفحات تفاصيل الكيانات (PartyProfileLink → /resolve).
+  { path: "/settings/party/:id", component: PartyProfile },
   { path: "/settings/branches", component: Settings },
   { path: "/settings/letterhead", component: Settings },
   { path: "/settings/departments", component: Settings },
