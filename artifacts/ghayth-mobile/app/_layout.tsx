@@ -1245,6 +1245,12 @@ function AuthGate() {
             <Stack.Screen name="admin/two-fa-status" options={{ title: 'حالة المصادقة الثنائية' }} />
             <Stack.Screen name="fleet/telematics-sync-logs" options={{ title: 'سجلات المزامنة' }} />
             <Stack.Screen name="fleet/telematics-video-access-logs" options={{ title: 'سجلات وصول الفيديو' }} />
+            <Stack.Screen name="m/my-space" options={{ title: 'مساحتي' }} />
+            <Stack.Screen name="m/my-attendance" options={{ title: 'حضوري' }} />
+            <Stack.Screen name="m/my-payslip" options={{ title: 'قسيمة الراتب' }} />
+            <Stack.Screen name="m/my-performance" options={{ title: 'أدائي' }} />
+            <Stack.Screen name="m/my-documents" options={{ title: 'مستنداتي' }} />
+            <Stack.Screen name="m/my-requests" options={{ title: 'طلباتي' }} />
             <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
