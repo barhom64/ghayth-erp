@@ -1,0 +1,38 @@
+import React from 'react';
+import { ScrollView, Text, View } from 'react-native';
+import { Stack, useLocalSearchParams } from 'expo-router';
+import { GLoadingState, GEmptyState } from '@workspace/ui-native';
+import { useColors } from '@/hooks/useColors';
+import { useList } from '@/hooks/useApi';
+
+interface Leave { id?: number; employeeName?: string; type?: string; startDate?: string; endDate?: string; days?: number; status?: string; }
+
+export default function LeaveDetail() {
+  const c = useColors();
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const { data, isLoading, isError, refetch } = useList<Leave>(`/api/hr/leaves/${id}`);
+  const d = (data && !Array.isArray(data)) ? data as Leave : null;
+  if (isLoading) return <GLoadingState text="جارٍ تحميل…" />;
+  if (isError) return <GEmptyState icon="alert-circle-outline" title="تعذّر التحميل" description="" actionLabel="إعادة المحاولة" onAction={refetch} />;
+  if (!d) return <GEmptyState icon="calendar-outline" title="لا توجد بيانات" description="" />;
+  return (
+    <ScrollView style={{ flex: 1, backgroundColor: c.bg }}>
+      <Stack.Screen options={{ title: 'تفاصيل الإجازة' }} />
+      <View style={{ padding: 16, gap: 12 }}>
+        {[
+          { label: 'الموظف', value: d.employeeName },
+          { label: 'نوع الإجازة', value: d.type },
+          { label: 'من', value: d.startDate ? new Date(d.startDate).toLocaleDateString('ar-SA', { month: 'short', day: 'numeric', year: 'numeric' }) : undefined },
+          { label: 'إلى', value: d.endDate ? new Date(d.endDate).toLocaleDateString('ar-SA', { month: 'short', day: 'numeric', year: 'numeric' }) : undefined },
+          { label: 'عدد الأيام', value: d.days != null ? String(d.days) : undefined },
+          { label: 'الحالة', value: d.status },
+        ].map(r => r.value ? (
+          <View key={r.label} style={{ backgroundColor: c.surface, borderRadius: 8, padding: 14 }}>
+            <Text style={{ color: c.textMuted, fontSize: 12 }}>{r.label}</Text>
+            <Text style={{ color: c.text, fontSize: 15, marginTop: 4 }}>{r.value}</Text>
+          </View>
+        ) : null)}
+      </View>
+    </ScrollView>
+  );
+}
