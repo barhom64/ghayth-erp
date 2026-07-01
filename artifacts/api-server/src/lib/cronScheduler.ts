@@ -36,6 +36,7 @@ import {
   shouldFireSlaReminder,
 } from "./inboxClassifier.js";
 import { processFallbackChains, dispatchNotification } from "./notificationDispatch.js";
+import { resolveTaxSettlementPolicy } from "./taxSettlementPolicy.js";
 import {
   resolveSystemSmtpConfig,
   formatFromHeader,
@@ -4590,6 +4591,99 @@ async function monthlyFxRevaluationReminder(): Promise<string> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// MONTHLY VAT SETTLEMENT REMINDER
+// يذكّر المدير المالي بتسوية إقرار ضريبة القيمة المضافة للفترة المنتهية إذا لم
+// تُرحَّل بعد ولها حركة. الدورية ومهلة الاستحقاق من السياسة القابلة للتحكم
+// (`finance.tax_settlement_policy`). إشعار فقط — لا يمسّ الدفتر. الترحيل بشري.
+// الدورية الربع سنوية تُذكِّر فقط بعد انتهاء ربع (آخر شهر = 3/6/9/12).
+// ─────────────────────────────────────────────────────────────────────────────
+async function monthlyVatSettlementReminder(): Promise<string> {
+  const companies = await rawQuery<{ id: number }>(
+    `SELECT id FROM companies WHERE status = 'active'`
+  );
+  // الفترة المنتهية = الشهر السابق للشهر الحالي.
+  const [cy, cm] = currentPeriod().split("-").map(Number);
+  const py = cm === 1 ? cy - 1 : cy;
+  const pm = cm === 1 ? 12 : cm - 1;
+  const period = `${py}-${String(pm).padStart(2, "0")}`;
+  const periodEnd = new Date(Date.UTC(py, pm, 0)); // آخر يوم في الشهر السابق
+
+  let notified = 0;
+  for (const c of companies) {
+    try {
+      const policy = await resolveTaxSettlementPolicy(c.id);
+      // الربع سنوي: ذكّر فقط حين يكون الشهر المنتهي نهاية ربع.
+      if (policy.frequency === "quarterly" && ![3, 6, 9, 12].includes(pm)) continue;
+
+      // أصلًا مُرحَّلة؟ تخطَّ.
+      const [posted] = await rawQuery<{ id: number }>(
+        `SELECT id FROM journal_entries WHERE "companyId"=$1 AND ref=$2 AND "deletedAt" IS NULL LIMIT 1`,
+        [c.id, `VAT-SETTLE-${period}`]
+      ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [] as any; });
+      if (posted) continue;
+
+      // حركة ضريبية في الفترة؟ (مخرجات/مدخلات على الحسابات المُحلّة)
+      // الشركات بلا حساب ضريبة قابل للترحيل = لا ضريبة → تخطٍّ صامت (لا ضجيج سجل).
+      const { financialEngine } = await import("./engines/index.js");
+      let outputCode: string, inputCode: string;
+      try {
+        [outputCode, inputCode] = await Promise.all([
+          financialEngine.resolveAccountCode(c.id, "vat_output", "credit", "2131"),
+          financialEngine.resolveAccountCode(c.id, "vat_input", "debit", "1180"),
+        ]);
+      } catch { continue; }
+      const [agg] = await rawQuery<{ output: string | null; input: string | null }>(
+        `SELECT
+           COALESCE(SUM(CASE WHEN jl."accountCode"=$2 THEN jl.credit - jl.debit ELSE 0 END),0) AS output,
+           COALESCE(SUM(CASE WHEN jl."accountCode"=$3 THEN jl.debit - jl.credit ELSE 0 END),0) AS input
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id = jl."journalId"
+        WHERE je."companyId"=$1
+          AND je."deletedAt" IS NULL AND je."balancesApplied"=true AND je."reversedById" IS NULL
+          AND jl."deletedAt" IS NULL
+          AND to_char(je.date,'YYYY-MM')=$4
+          AND jl."accountCode" IN ($2,$3)`,
+        [c.id, outputCode, inputCode, period]
+      ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [{ output: 0, input: 0 }] as any; });
+      const netVat = Number(agg?.output ?? 0) - Number(agg?.input ?? 0);
+      if (Number(agg?.output ?? 0) === 0 && Number(agg?.input ?? 0) === 0) continue;
+
+      // موعد الاستحقاق = نهاية الفترة + مهلة الاستحقاق.
+      const due = new Date(periodEnd);
+      due.setUTCDate(due.getUTCDate() + policy.filingDueDays);
+      const dueISO = due.toISOString().slice(0, 10);
+
+      const [cfoRow] = await rawQuery<{ id: number }>(
+        `SELECT ea.id FROM employee_assignments ea
+         JOIN users u ON u."employeeId" = ea."employeeId"
+         JOIN rbac_user_roles ur ON ur."userId" = u.id AND ur."companyId" = ea."companyId"
+         JOIN rbac_roles r ON r.id = ur.role_id
+         WHERE ea."companyId"=$1 AND ea.status='active' AND r.role_key='finance_manager'
+           AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
+         LIMIT 1`,
+        [c.id]
+      ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [] as any; });
+      const cfoId = cfoRow?.id;
+      if (!cfoId) continue;
+
+      const dir = netVat >= 0 ? "مستحقة للهيئة" : "قابلة للاسترداد";
+      await createNotification({
+        companyId: c.id,
+        assignmentId: cfoId,
+        type: "vat_settlement_reminder",
+        title: "تذكير: تسوية إقرار ضريبة القيمة المضافة",
+        body: `إقرار الفترة ${period} لم يُرحَّل بعد — صافي ${Math.abs(netVat).toFixed(2)} (${dir})، الاستحقاق بحلول ${dueISO}. راجع وارحّل عبر /finance/vat-reconciliation`,
+        priority: "medium",
+      });
+      notified++;
+    } catch (err) {
+      logger.error(err, `VAT settlement reminder error for company ${c.id}:`);
+    }
+  }
+  return `VAT settlement reminders sent: ${notified}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // DAILY BUDGET VARIANCE ALERT (Track C.3)
 // ─────────────────────────────────────────────────────────────────────────────
 async function dailyBudgetVarianceAlert(): Promise<string> {
@@ -6223,6 +6317,7 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "monthly_bad_debt_reminder", description: "تذكير CFO باحتساب مخصص الديون المشكوك فيها", schedule: "0 9 1 * *", handler: monthlyBadDebtReminder },
   { name: "monthly_fx_revaluation_compute", description: "حساب إعادة تقييم العملات تلقائيًّا وإدراجها في طابور الترحيل (لا ترحيل GL تلقائي — idempotent) قبل تذكير CFO", schedule: "0 8 28 * *", handler: monthlyFxRevaluationCompute },
   { name: "monthly_fx_revaluation_reminder", description: "تذكير CFO بترحيل إعادة تقييم العملات", schedule: "0 9 28 * *", handler: monthlyFxRevaluationReminder },
+  { name: "monthly_vat_settlement_reminder", description: "تذكير المدير المالي بتسوية إقرار ضريبة القيمة المضافة للفترة المنتهية (دورية + مهلة استحقاق من السياسة)", schedule: "30 9 2 * *", handler: monthlyVatSettlementReminder },
   { name: "daily_budget_variance_alert", description: "تنبيه تجاوز الميزانية اليومي", schedule: "0 10 * * *", handler: dailyBudgetVarianceAlert },
   { name: "rate_limit_fallback_alert", description: "تنبيه عند انتقال حدود الطلبات إلى الذاكرة المحلية (Redis fallback)", schedule: "*/2 * * * *", handler: rateLimitFallbackAlertCheck },
   { name: "rbac_v2_expired_grants_cleanup", description: "تنظيف منح RBAC v2 منتهية الصلاحية", schedule: "0 3 * * *", handler: rbacV2ExpiredGrantsCleanup },
