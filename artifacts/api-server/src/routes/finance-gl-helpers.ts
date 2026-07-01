@@ -34,7 +34,7 @@ import {
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
-import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 import { rawQuery } from "../lib/rawdb.js";
 
@@ -330,6 +330,55 @@ glHelpersRouter.post(
       res.json({ data: outcome });
     } catch (err) {
       handleRouteError(err, res, "[gl-helpers] fx-revaluation error:");
+    }
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────
+// 1b) تسوية ضريبة القيمة المضافة (#2280) — قيد إقفال الإقرار عند السداد
+//     لهيئة الزكاة والضريبة. يُصفّر ض.مخرجات (2131) وض.مدخلات (1180) للفترة
+//     ويُسجّل صافي المسدَّد/المستردّ نقدًا. idempotent عبر ref/sourceKey (بلا هجرة).
+// ─────────────────────────────────────────────────────────────────────
+const vatSettlementBody = z.object({
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "startDate must be YYYY-MM-DD"),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "endDate must be YYYY-MM-DD"),
+  paymentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "paymentDate must be YYYY-MM-DD").optional(),
+  cashAccountCode: z.string().max(20).optional(),
+  notes: z.string().max(500).optional(),
+});
+
+glHelpersRouter.post(
+  "/gl-helpers/vat-settlement",
+  authorize({ feature: "finance.journal", action: "create" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const body = zodParse(vatSettlementBody.safeParse(req.body ?? {}));
+      const { postVatSettlement } = await import("../lib/finance/vatSettlement.js");
+      const outcome = await postVatSettlement({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? 0,
+        startDate: body.startDate,
+        endDate: body.endDate,
+        paymentDate: body.paymentDate ?? todayISO(),
+        createdBy: scope.activeAssignmentId ?? scope.userId,
+        cashAccountCode: body.cashAccountCode ?? null,
+        notes: body.notes ?? null,
+      });
+
+      recordSideEffects({
+        scope,
+        action: "vat.settlement.posted",
+        entity: "journal_entries",
+        entityId: outcome.journalId ?? 0,
+        outcome: {
+          status: outcome.posted ? "posted" : (outcome.reason ?? "noop"),
+          journalEntryId: outcome.journalId ?? null,
+        },
+      });
+      res.json({ data: outcome });
+    } catch (err) {
+      handleRouteError(err, res, "[gl-helpers] vat-settlement error:");
     }
   },
 );
