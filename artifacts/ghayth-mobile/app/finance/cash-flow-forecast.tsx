@@ -1,58 +1,34 @@
 import React from 'react';
-import { FlatList, Pressable, Text, View } from 'react-native';
+import { FlatList, Text, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { GLoadingState, GEmptyState } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 
-interface CashFlowForecastItem {
-  period?: string;
-  inflows?: number;
-  outflows?: number;
-  net?: number;
-  cumulativeBalance?: number;
-  currency?: string;
-}
+interface ForecastItem { period?: string; inflow?: number; outflow?: number; netFlow?: number; }
 
 export default function CashFlowForecastScreen() {
   const c = useColors();
-  const { data, isLoading, isError, refetch } = useList<CashFlowForecastItem[]>('/api/cash-flow-forecast');
+  const { data, isLoading, isError, refetch } = useList<ForecastItem[]>('/api/finance/cash-flow-forecast');
   const list = Array.isArray(data) ? data : [];
-
-  if (isLoading) return <GLoadingState text="جارٍ تحميل توقعات التدفق النقدي…" />;
-  if (isError) return (
-    <GEmptyState icon="alert-circle-outline" title="تعذّر التحميل" description="تحقق من الاتصال"
-      actionLabel="إعادة المحاولة" onAction={refetch} />
-  );
-
+  if (isLoading) return <GLoadingState text="جارٍ تحميل…" />;
+  if (isError) return <GEmptyState icon="alert-circle-outline" title="تعذّر التحميل" description="تحقق من الاتصال" actionLabel="إعادة المحاولة" onAction={refetch} />;
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       <Stack.Screen options={{ title: 'توقعات التدفق النقدي' }} />
-      <FlatList
-        data={list}
-        keyExtractor={(item, i) => item.period ?? String(i)}
+      <FlatList data={list} keyExtractor={(item, i) => String(item.period ?? i)}
         contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
-        onRefresh={refetch}
-        refreshing={isLoading}
-        ListEmptyComponent={<GEmptyState icon="trending-up-outline" title="لا توجد توقعات" description="" />}
+        onRefresh={refetch} refreshing={isLoading}
+        ListEmptyComponent={<GEmptyState icon="water-outline" title="لا توجد توقعات" description="" />}
         renderItem={({ item }) => (
-          <Pressable style={{ backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, padding: 14 }}>
-            <Text style={{ fontSize: 13, fontWeight: '700', color: c.text, textAlign: 'right', marginBottom: 6 }}>{item.period ?? '—'}</Text>
-            <View style={{ flexDirection: 'row-reverse', gap: 12 }}>
-              {item.inflows != null ? <View style={{ alignItems: 'center' }}>
-                <Text style={{ fontSize: 10, color: '#22C55E' }}>تدفقات داخلة</Text>
-                <Text style={{ fontSize: 12, fontWeight: '700', color: '#22C55E' }}>{item.inflows.toLocaleString('ar-SA')}</Text>
-              </View> : null}
-              {item.outflows != null ? <View style={{ alignItems: 'center' }}>
-                <Text style={{ fontSize: 10, color: '#EF4444' }}>تدفقات خارجة</Text>
-                <Text style={{ fontSize: 12, fontWeight: '700', color: '#EF4444' }}>{item.outflows.toLocaleString('ar-SA')}</Text>
-              </View> : null}
-              {item.net != null ? <View style={{ alignItems: 'center' }}>
-                <Text style={{ fontSize: 10, color: c.textMuted }}>الصافي</Text>
-                <Text style={{ fontSize: 12, fontWeight: '700', color: (item.net ?? 0) < 0 ? '#EF4444' : c.brand }}>{item.net.toLocaleString('ar-SA')} {item.currency ?? 'ر.س'}</Text>
-              </View> : null}
+          <View style={{ backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, padding: 14 }}>
+            <Text style={{ color: c.text, fontSize: 14, fontWeight: '600' }}>{item.period ?? ''}</Text>
+            <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', marginTop: 6 }}>
+              {item.inflow != null ? <Text style={{ color: '#38a169', fontSize: 12 }}>داخل: {item.inflow.toLocaleString('ar-SA')}</Text> : null}
+              {item.outflow != null ? <Text style={{ color: '#e53e3e', fontSize: 12 }}>خارج: {item.outflow.toLocaleString('ar-SA')}</Text> : null}
+              {item.netFlow != null ? <Text style={{ color: c.brand, fontSize: 13 }}>صافي: {item.netFlow.toLocaleString('ar-SA')} ر.س</Text> : null}
             </View>
-          </Pressable>
+          </View>
         )}
       />
     </View>

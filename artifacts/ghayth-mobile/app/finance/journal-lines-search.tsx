@@ -1,45 +1,36 @@
-import React, { useState } from 'react';
-import { FlatList, Text, TextInput, View } from 'react-native';
+import React from 'react';
+import { FlatList, Text, View } from 'react-native';
 import { Stack } from 'expo-router';
-import { GButton, GEmptyState, GLoadingState } from '@workspace/ui-native';
+import { GLoadingState, GEmptyState } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 
-interface JournalLine { id?: number; accountCode?: string; description?: string; debit?: number; credit?: number; date?: string; }
+interface LineItem { id?: number; accountCode?: string; description?: string; debit?: number; credit?: number; }
 
-export default function JournalLinesSearch() {
+export default function JournalLinesSearchScreen() {
   const c = useColors();
-  const [query, setQuery] = useState('');
-  const [active, setActive] = useState('');
-  const { data, isLoading, isError, refetch } = useList<JournalLine[]>(`/api/finance/journal-lines/search?q=${active}`);
+  const { data, isLoading, isError, refetch } = useList<LineItem[]>('/api/finance/journal-lines/search');
   const list = Array.isArray(data) ? data : [];
+  if (isLoading) return <GLoadingState text="جارٍ تحميل…" />;
+  if (isError) return <GEmptyState icon="alert-circle-outline" title="تعذّر التحميل" description="تحقق من الاتصال" actionLabel="إعادة المحاولة" onAction={refetch} />;
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Stack.Screen options={{ title: 'بحث في سطور القيود' }} />
-      <View style={{ padding: 12, flexDirection: 'row-reverse', gap: 8 }}>
-        <TextInput
-          value={query} onChangeText={setQuery}
-          placeholder="ابحث عن حساب أو وصف…" placeholderTextColor={c.textFaint}
-          style={{ flex: 1, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border, borderRadius: 8, padding: 10, color: c.text, textAlign: 'right' }}
-        />
-        <GButton title="بحث" onPress={() => setActive(query)} variant="primary" />
-      </View>
-      {isLoading ? <GLoadingState text="جارٍ البحث…" /> :
-       isError ? <GEmptyState icon="alert-circle-outline" title="تعذّر البحث" description="" actionLabel="إعادة المحاولة" onAction={refetch} /> :
-       <FlatList
-         data={list} keyExtractor={(item, i) => String(item.id ?? i)}
-         contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
-         ListEmptyComponent={<GEmptyState icon="search-outline" title="لا توجد نتائج" description="" />}
-         renderItem={({ item }) => (
-           <View style={{ backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, padding: 14 }}>
-             <Text style={{ color: c.text, fontSize: 14 }}>{item.accountCode} — {item.description}</Text>
-             <View style={{ flexDirection: 'row-reverse', gap: 12, marginTop: 4 }}>
-               <Text style={{ color: c.textMuted, fontSize: 12 }}>مدين: {(item.debit ?? 0).toLocaleString('ar-SA')} ر.س</Text>
-               <Text style={{ color: c.textMuted, fontSize: 12 }}>دائن: {(item.credit ?? 0).toLocaleString('ar-SA')} ر.س</Text>
-             </View>
-           </View>
-         )}
-       />}
+      <Stack.Screen options={{ title: 'بحث سطور القيود' }} />
+      <FlatList data={list} keyExtractor={(item, i) => String(item.id ?? i)}
+        contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
+        onRefresh={refetch} refreshing={isLoading}
+        ListEmptyComponent={<GEmptyState icon="search-outline" title="لا توجد نتائج" description="" />}
+        renderItem={({ item }) => (
+          <View style={{ backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, padding: 14 }}>
+            <Text style={{ color: c.text, fontSize: 14 }}>{item.description ?? ''}</Text>
+            <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', marginTop: 4 }}>
+              <Text style={{ color: c.textMuted, fontSize: 12 }}>{item.accountCode ?? ''}</Text>
+              {item.debit ? <Text style={{ color: '#e53e3e', fontSize: 12 }}>{item.debit.toLocaleString('ar-SA')} ر.س</Text> : null}
+              {item.credit ? <Text style={{ color: '#38a169', fontSize: 12 }}>{item.credit.toLocaleString('ar-SA')} ر.س</Text> : null}
+            </View>
+          </View>
+        )}
+      />
     </View>
   );
 }

@@ -5,28 +5,29 @@ import { GLoadingState, GEmptyState } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 
-interface AllocResult { id?: number; ruleName?: string; period?: string; totalAllocated?: number; status?: string; }
+interface Account { id?: number; code?: string; name?: string; type?: string; balance?: number; }
 
-export default function AllocationResultsScreen() {
+export default function AccountsListScreen() {
   const c = useColors();
-  const { data, isLoading, isError, refetch } = useList<AllocResult[]>('/api/finance/allocation-results');
+  const { data, isLoading, isError, refetch } = useList<Account[]>('/api/finance/accounts');
   const list = Array.isArray(data) ? data : [];
   if (isLoading) return <GLoadingState text="جارٍ تحميل…" />;
   if (isError) return <GEmptyState icon="alert-circle-outline" title="تعذّر التحميل" description="تحقق من الاتصال" actionLabel="إعادة المحاولة" onAction={refetch} />;
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Stack.Screen options={{ title: 'نتائج التوزيع' }} />
+      <Stack.Screen options={{ title: 'الحسابات' }} />
       <FlatList data={list} keyExtractor={(item, i) => String(item.id ?? i)}
         contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
         onRefresh={refetch} refreshing={isLoading}
-        ListEmptyComponent={<GEmptyState icon="stats-chart-outline" title="لا توجد نتائج" description="" />}
+        ListEmptyComponent={<GEmptyState icon="wallet-outline" title="لا توجد حسابات" description="" />}
         renderItem={({ item }) => (
           <View style={{ backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, padding: 14 }}>
-            <Text style={{ color: c.text, fontSize: 14 }}>{item.ruleName ?? ''}</Text>
-            <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', marginTop: 4 }}>
-              <Text style={{ color: c.textMuted, fontSize: 12 }}>{item.period ?? ''}</Text>
-              {item.totalAllocated != null ? <Text style={{ color: c.brand, fontSize: 13 }}>{item.totalAllocated.toLocaleString('ar-SA')} ر.س</Text> : null}
+            <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between' }}>
+              <Text style={{ color: c.text, fontSize: 14, fontWeight: '600' }}>{item.code}</Text>
+              <Text style={{ color: c.textMuted, fontSize: 12 }}>{item.type ?? ''}</Text>
             </View>
+            <Text style={{ color: c.text, fontSize: 13, marginTop: 2 }}>{item.name ?? ''}</Text>
+            {item.balance != null ? <Text style={{ color: c.brand, fontSize: 12, marginTop: 4 }}>{item.balance.toLocaleString('ar-SA')} ر.س</Text> : null}
           </View>
         )}
       />
