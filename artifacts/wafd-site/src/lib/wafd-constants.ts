@@ -39,3 +39,14 @@ export const WAFD_WA_MESSAGES = {
 export function wafdWhatsAppLink(msgKey: keyof typeof WAFD_WA_MESSAGES = "general") {
   return `https://wa.me/${WAFD_PHONE}?text=${encodeURIComponent(WAFD_WA_MESSAGES[msgKey])}`;
 }
+
+/**
+ * دفاع أمامي: الروابط القادمة من لوحة تحكم المحتوى تُعرض في <a href>. نمنع مخططات
+ * التنفيذ (javascript:/data:/vbscript:) لتفادي XSS المخزَّن حتى لو تجاوز أحدهم تحقّق
+ * الخادم. مسموح فقط: http(s)://… أو مسار جذري نسبي (/…) أو مرساة (#…) أو mailto:/tel:.
+ */
+const SAFE_HREF_RE = /^(https?:\/\/|\/(?!\/)|#|mailto:|tel:)/i;
+export function toSafeHref(url: string | null | undefined): string {
+  const v = (url ?? "").trim();
+  return SAFE_HREF_RE.test(v) ? v : "#";
+}
