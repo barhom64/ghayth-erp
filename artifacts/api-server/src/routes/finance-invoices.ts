@@ -41,6 +41,7 @@ import { markIdempotencyReplay, requestIdempotencyToken } from "../lib/requestId
 import { resolveTransactionBranch, assertDocumentBranchAccess } from "../lib/branchResolution.js";
 import { resolveBadDebtPolicy, STANDARD_BAD_DEBT_RATES, BAD_DEBT_POLICY_SETTING_KEY } from "../lib/badDebtPolicy.js";
 import { postBadDebtProvision, readAllowanceBalance } from "../lib/finance/badDebtProvision.js";
+import { postBadDebtWriteOff } from "../lib/finance/badDebtWriteOff.js";
 import { resolveSettings, upsertSetting } from "../lib/settings.js";
 import { resolveVatLegAccount, buildVatLeg } from "../lib/vatLeg.js";
 import { z } from "zod";
@@ -4060,6 +4061,7 @@ invoicesRouter.get("/bad-debt/preview", authorize({ feature: "finance.collection
          FROM invoices
         WHERE "companyId" = $1 AND "deletedAt" IS NULL
           AND "createdAt" <= $2
+          AND status <> 'written_off'
           AND (total - COALESCE("paidAmount",0)) > 0.01`,
       [scope.companyId, asOf]
     );
@@ -4102,8 +4104,9 @@ invoicesRouter.get("/bad-debt/preview", authorize({ feature: "finance.collection
   }
 });
 
-// عتبة افتراضية للنظر في شطب الذمّة المعدومة: ١٨٠ يومًا تأخّر (قابلة للتجاوز بـ ?minDaysOverdue=).
-const WRITEOFF_DEFAULT_DAYS = 180;
+// عتبة افتراضية للنظر في الشطب: ١٢ شهرًا (٣٦٥ يومًا) — تطابق شرط تخفيف ضريبة الديون
+// المعدومة لدى ZATCA (المادة ٤٠: مرور ١٢ شهرًا على التوريد). قابلة للتجاوز بـ ?minDaysOverdue=.
+const WRITEOFF_DEFAULT_DAYS = 365;
 
 // مرشّحو الشطب: ذمم مدينة متأخّرة فوق العتبة وغير مشطوبة بعد — للعرض والترشيح فقط.
 // لا ترحيل دفتر هنا؛ الترحيل (مدين 1135 المخصّص / دائن 1111 الذمم) يتمّ في مسار
@@ -4147,6 +4150,68 @@ invoicesRouter.get("/bad-debt/write-off-candidates", authorize({ feature: "finan
     });
   } catch (err) {
     handleRouteError(err, res, "Write-off candidates error:");
+  }
+});
+
+// شطب دين معدوم على فاتورة (الدفعة ٢ — يمسّ الدفتر). القيد: مدين مخصص الديون (الصافي)
+// + مدين ضريبة المخرجات (عكس — تخفيف ZATCA مادة ٤٠) / دائن ذمم العميل (الإجمالي)، ثم
+// إطفاء الفاتورة written_off. اعتماد بشري + إشعار العميل كتابيًّا شرطان (مادة ٤٠).
+const badDebtWriteOffSchema = z.object({
+  invoiceId: z.coerce.number().int().positive(),
+  reason: z.string().trim().max(500).optional(),
+  customerNotified: z.boolean().optional().default(false),
+});
+
+invoicesRouter.post("/bad-debt/write-off", authorize({ feature: "finance.collection", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { invoiceId, reason, customerNotified } = zodParse(badDebtWriteOffSchema.safeParse(req.body ?? {}));
+
+    // تخفيف ضريبة الديون المعدومة (ZATCA مادة ٤٠) يشترط إشعار العميل كتابيًّا بالمشطوب.
+    if (!customerNotified) {
+      throw new ValidationError(
+        "يلزم تأكيد إشعار العميل كتابيًّا بالمبلغ المشطوب (شرط تخفيف الضريبة — المادة ٤٠)",
+        { field: "customerNotified" },
+      );
+    }
+
+    const result = await postBadDebtWriteOff({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      invoiceId,
+      createdBy: scope.activeAssignmentId,
+      reason,
+    }).catch((je) => {
+      logger.error(je, "Bad debt write-off JE error:");
+      throw new IntegrationError(
+        "فشل ترحيل قيد شطب الدين المعدوم",
+        { field: "journalEntry", fix: "راجع إعدادات الحسابات (1135/2131/1131) ثم أعد المحاولة" },
+      );
+    });
+
+    if (result.reason === "not_found") throw new NotFoundError("الفاتورة غير موجودة");
+    if (result.reason === "period_closed") throw new ConflictError("لا يمكن الشطب في فترة مُقفلة");
+    if (result.reason === "no_balance") throw new ConflictError("لا يوجد رصيد قائم على الفاتورة للشطب");
+
+    // مشطوبة مسبقًا → لا عملية (idempotent).
+    if (!result.posted) {
+      res.status(200).json({ ...result, posted: false, message: "الفاتورة مشطوبة مسبقًا" });
+      return;
+    }
+
+    markIdempotencyReplay(req, res, false);
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "bad_debt.written_off",
+      entity: "invoices",
+      entityId: invoiceId,
+      details: JSON.stringify({ journalId: result.journalId, outstanding: result.outstanding, net: result.net, vat: result.vat, reason, customerNotified }),
+    }).catch((e) => logger.error(e, "finance-invoices background task failed"));
+
+    res.status(201).json({ ...result, posted: true });
+  } catch (err) {
+    handleRouteError(err, res, "Bad debt write-off error:");
   }
 });
 
