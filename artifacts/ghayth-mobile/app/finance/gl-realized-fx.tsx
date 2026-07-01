@@ -1,63 +1,37 @@
 import React from 'react';
-import { FlatList, Pressable, Text, View } from 'react-native';
+import { FlatList, Text, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { GLoadingState, GEmptyState } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 
-interface RealizedFxItem {
-  id?: number;
-  invoiceId?: number;
-  paymentDate?: string;
-  settlementRate?: string;
-  journalEntryId?: number;
-  gainLoss?: string;
-  postedAt?: string;
-}
-
-function fmtDate(val?: string) {
-  if (!val) return '—';
-  try { return new Date(val).toLocaleDateString('ar-SA', { month: 'short', day: 'numeric', year: 'numeric' }); }
-  catch { return val; }
-}
+interface RealizedFx { id?: number; currency?: string; amount?: number; gainLoss?: number; period?: string; }
 
 export default function GlRealizedFxScreen() {
   const c = useColors();
-  const { data, isLoading, isError, refetch } = useList<RealizedFxItem[]>('/api/gl-helpers/realized-fx/history');
+  const { data, isLoading, isError, refetch } = useList<RealizedFx[]>('/api/finance/gl-helpers/realized-fx/history');
   const list = Array.isArray(data) ? data : [];
-
-  if (isLoading) return <GLoadingState text="جارٍ تحميل سجل FX المحقَّق…" />;
+  if (isLoading) return <GLoadingState text="جارٍ تحميل…" />;
   if (isError) return (
     <GEmptyState icon="alert-circle-outline" title="تعذّر التحميل" description="تحقق من الاتصال"
       actionLabel="إعادة المحاولة" onAction={refetch} />
   );
-
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Stack.Screen options={{ title: 'FX محقَّق — السجل' }} />
-      <FlatList
-        data={list}
-        keyExtractor={(item, i) => String(item.id ?? i)}
+      <Stack.Screen options={{ title: 'تاريخ فروق العملة المحقّقة' }} />
+      <FlatList data={list} keyExtractor={(item, i) => String(item.id ?? i)}
         contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
-        onRefresh={refetch}
-        refreshing={isLoading}
-        ListEmptyComponent={<GEmptyState icon="swap-horizontal-outline" title="لا توجد قيود FX محقَّقة" description="" />}
-        renderItem={({ item }) => {
-          const gl = parseFloat(item.gainLoss ?? '0');
-          const glColor = gl >= 0 ? '#22C55E' : '#EF4444';
-          return (
-            <Pressable style={{ backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, padding: 14 }}>
-              <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', marginBottom: 4 }}>
-                <Text style={{ fontSize: 13, fontWeight: '700', color: c.text }}>فاتورة #{item.invoiceId ?? '—'}</Text>
-                <Text style={{ fontSize: 12, fontWeight: '700', color: glColor }}>{gl >= 0 ? '+' : ''}{gl.toLocaleString('ar-SA')}</Text>
-              </View>
-              <View style={{ flexDirection: 'row-reverse', gap: 12 }}>
-                <Text style={{ fontSize: 11, color: c.textMuted }}>سعر التسوية: {item.settlementRate ?? '—'}</Text>
-                <Text style={{ fontSize: 11, color: c.textFaint }}>{fmtDate(item.paymentDate)}</Text>
-              </View>
-            </Pressable>
-          );
-        }}
+        onRefresh={refetch} refreshing={isLoading}
+        ListEmptyComponent={<GEmptyState icon="cash-outline" title="لا يوجد تاريخ" description="" />}
+        renderItem={({ item }) => (
+          <View style={{ backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, padding: 14, flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' }}>
+            <View>
+              <Text style={{ color: c.text, fontSize: 14 }}>{item.currency ?? ''}</Text>
+              {!!item.period && <Text style={{ color: c.textMuted, fontSize: 12, marginTop: 2 }}>{item.period}</Text>}
+            </View>
+            {item.gainLoss != null && <Text style={{ color: item.gainLoss >= 0 ? c.brand : '#ef4444', fontSize: 14, fontWeight: '600' }}>{item.gainLoss.toLocaleString('ar-SA')}</Text>}
+          </View>
+        )}
       />
     </View>
   );
