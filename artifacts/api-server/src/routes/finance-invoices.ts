@@ -33,6 +33,7 @@ import {
   currentYear,
   toDateISO,
   currentMonthPadded,
+  currentDateInTz,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
@@ -874,8 +875,12 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
 
     let finalDueDate = dueDate ?? null;
     if (!finalDueDate && parsedTerms != null) {
-      const due = new Date();
-      due.setDate(due.getDate() + parsedTerms);
+      // تاريخ الاستحقاق من تقويم الرياض لا من UTC: كان `new Date()`+`toDateISO`
+      // (يمرّ عبر toISOString UTC) يزيح يومًا للفواتير المُنشأة 00:00–02:59
+      // بتوقيت الرياض (لا يزال اليوم السابق في UTC) — «صافي N يومًا» يُحسب من
+      // أمسٍ. نبني اليوم من تقويم الرياض ونضيف المدة بأمان UTC.
+      const due = new Date(`${currentDateInTz("Asia/Riyadh")}T00:00:00Z`);
+      due.setUTCDate(due.getUTCDate() + parsedTerms);
       finalDueDate = toDateISO(due);
     }
 
