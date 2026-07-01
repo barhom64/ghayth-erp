@@ -1273,6 +1273,8 @@ function AuthGate() {
             <Stack.Screen name="finance/cost-center-detail" options={{ title: 'مركز التكلفة' }} />
             <Stack.Screen name="finance/routing-health" options={{ title: 'صحة توجيه الأبعاد' }} />
             <Stack.Screen name="finance/cost-center-yoy" options={{ title: 'مقارنة سنة بسنة' }} />
+            <Stack.Screen name="admin/ai-evaluation-results" options={{ title: 'نتائج التقييم' }} />
+            <Stack.Screen name="finance/assert-postable" options={{ title: 'قابلية الترحيل' }} />
             <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
