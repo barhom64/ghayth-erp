@@ -47,6 +47,7 @@ export const CREATED_BY_IDENTITY: Record<string, CreatedByIdentity> = {
   umrah_penalties: "user",
   umrah_transport: "user",
   vrp_optimization_runs: "user",
+  whatsapp_templates: "user",
   // FK → employee_assignments (must hold an assignment id)
   bank_guarantees: "assignment",
   intercompany_transactions: "assignment",
