@@ -1294,6 +1294,19 @@ function AuthGate() {
       <Stack.Screen name="intelligence/employee-daily-schedule" options={{ title: 'جدول الموظف اليومي' }} />
       <Stack.Screen name="m/my-permissions" options={{ title: 'صلاحياتي' }} />
       <Stack.Screen name="portal/onboarding-token" options={{ title: 'استقبال الموظف' }} />
+      <Stack.Screen name="admin/numbering-scheme-detail" options={{ title: 'نظام الترقيم' }} />
+      <Stack.Screen name="admin/numbering-scheme-detail" options={{ title: 'نظام الترقيم' }} />
+      <Stack.Screen name="portal/me" options={{ title: 'ملفي الشخصي' }} />
+      <Stack.Screen name="portal/project-detail" options={{ title: 'تفاصيل المشروع' }} />
+      <Stack.Screen name="portal/ticket-replies" options={{ title: 'ردود التذكرة' }} />
+      <Stack.Screen name="portal/umrah-invoices" options={{ title: 'فواتير العمرة' }} />
+      <Stack.Screen name="portal/umrah-groups" options={{ title: 'مجموعات العمرة' }} />
+      <Stack.Screen name="portal/umrah-payments" options={{ title: 'مدفوعات العمرة' }} />
+      <Stack.Screen name="portal/property-contracts" options={{ title: 'عقود العقارات' }} />
+      <Stack.Screen name="portal/property-rent-payments" options={{ title: 'مدفوعات الإيجار' }} />
+      <Stack.Screen name="portal/property-maintenance" options={{ title: 'طلبات الصيانة' }} />
+      <Stack.Screen name="portal/legal-cases" options={{ title: 'القضايا القانونية' }} />
+      <Stack.Screen name="portal/legal-sessions" options={{ title: 'الجلسات القادمة' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
