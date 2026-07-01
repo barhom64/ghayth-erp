@@ -54,8 +54,23 @@ export function normalizeCellValue(v: unknown): unknown {
 
 /** Parse the first worksheet of an .xlsx buffer into an array-of-arrays
  *  (header row first, then data rows), mirroring the old
- *  `XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" })` output. */
+ *  `XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" })` output.
+ *
+ *  Tries exceljs first; on failure falls back to the tolerant reader for
+ *  nonstandard OOXML (see `parseFirstSheetAOALenient`) so the server-side
+ *  import path (`/import/preview` with `fileBase64`, umrah + generic engines)
+ *  accepts the same voucher exports the browser wizard now does. */
 export async function parseFirstSheetAOA(buffer: Buffer): Promise<unknown[][]> {
+  try {
+    return await parseFirstSheetAOAExcelJs(buffer);
+  } catch (err) {
+    const recovered = await parseFirstSheetAOALenient(buffer).catch(() => [] as unknown[][]);
+    if (recovered.length > 0) return recovered;
+    throw err;
+  }
+}
+
+async function parseFirstSheetAOAExcelJs(buffer: Buffer): Promise<unknown[][]> {
   const wb = new ExcelJS.Workbook();
   // exceljs accepts ArrayBuffer / Buffer / Uint8Array; cast keeps TS happy.
   await wb.xlsx.load(buffer as unknown as ArrayBuffer);
@@ -72,6 +87,132 @@ export async function parseFirstSheetAOA(buffer: Buffer): Promise<unknown[][]> {
     aoa.push(arr);
   });
   return aoa;
+}
+
+// ── Lenient reader (Node) ─────────────────────────────────────────────
+// Some external systems (Nusk / voucher exporters on the .NET stack) emit
+// technically-nonstandard OOXML that exceljs cannot read: `x:`-prefixed tags,
+// cells WITHOUT an `r="A1"` coordinate, and a Default `.xml` content-type with
+// no workbook `<Override>`. Excel/Sheets open them and the import engines are
+// designed to ingest exactly these files, so we recover them with a small
+// string-based reader (no DOM — this runs in Node). Mirrors the browser-side
+// fallback in ghayth-erp `src/lib/excel-import.ts`.
+
+const PFX = "(?:[A-Za-z_][\\w.-]*:)?"; // optional namespace prefix, e.g. `x:`
+
+function decodeXmlEntities(s: string): string {
+  return s
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#x([0-9a-fA-F]+);/g, (_m, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_m, d) => String.fromCodePoint(parseInt(d, 10)))
+    .replace(/&amp;/g, "&"); // decode &amp; LAST so it can't re-trigger the others
+}
+
+/** "A" → 0, "AA" → 26. Reads only the leading letters of a cell ref; -1 if none. */
+function columnRefToIndex(ref: string): number {
+  let n = 0;
+  let seen = 0;
+  for (const ch of ref) {
+    const code = ch.charCodeAt(0);
+    if (code >= 65 && code <= 90) { n = n * 26 + (code - 64); seen++; }
+    else if (code >= 97 && code <= 122) { n = n * 26 + (code - 96); seen++; }
+    else break;
+  }
+  return seen === 0 ? -1 : n - 1;
+}
+
+/** Parse `xl/sharedStrings.xml` into a plain string array (namespace-agnostic,
+ *  concatenating rich-text runs per entry). */
+export function lenientSharedStrings(xml: string): string[] {
+  if (!xml) return [];
+  const out: string[] = [];
+  const siRe = new RegExp(`<${PFX}si\\b[^>]*>([\\s\\S]*?)</${PFX}si>`, "g");
+  const tRe = new RegExp(`<${PFX}t\\b[^>]*>([\\s\\S]*?)</${PFX}t>`, "g");
+  let m: RegExpExecArray | null;
+  while ((m = siRe.exec(xml))) {
+    let s = "";
+    let tm: RegExpExecArray | null;
+    tRe.lastIndex = 0;
+    while ((tm = tRe.exec(m[1]))) s += decodeXmlEntities(tm[1]);
+    out.push(s);
+  }
+  return out;
+}
+
+/** Parse a worksheet XML into an array-of-arrays. Tolerant of `x:` prefixes,
+ *  cells with OR without an `r` coordinate (positional fallback), and
+ *  shared / inline / typed-string / numeric cells. Empty cells → "". */
+export function lenientWorksheetAOA(xml: string, sharedStrings: string[] = []): unknown[][] {
+  const rowRe = new RegExp(`<${PFX}row\\b[^>]*>([\\s\\S]*?)</${PFX}row>`, "g");
+  const cellRe = new RegExp(`<${PFX}c\\b([^>]*?)(?:/>|>([\\s\\S]*?)</${PFX}c>)`, "g");
+  const vRe = new RegExp(`<${PFX}v\\b[^>]*>([\\s\\S]*?)</${PFX}v>`);
+  const tRe = new RegExp(`<${PFX}t\\b[^>]*>([\\s\\S]*?)</${PFX}t>`, "g");
+
+  const aoa: unknown[][] = [];
+  let rm: RegExpExecArray | null;
+  while ((rm = rowRe.exec(xml))) {
+    const rowXml = rm[1];
+    const arr: unknown[] = [];
+    let cursor = 0;
+    let cm: RegExpExecArray | null;
+    cellRe.lastIndex = 0;
+    while ((cm = cellRe.exec(rowXml))) {
+      const attrs = cm[1] || "";
+      const inner = cm[2] || "";
+      const tAttr = /(?:^|\s)t="([^"]*)"/.exec(attrs)?.[1] ?? "";
+      const rAttr = /(?:^|\s)r="([^"]*)"/.exec(attrs)?.[1] ?? "";
+      const idxFromRef = rAttr ? columnRefToIndex(rAttr) : -1;
+      const col = idxFromRef >= 0 ? idxFromRef : cursor;
+      cursor = col + 1;
+
+      let value: unknown = "";
+      if (tAttr === "inlineStr") {
+        let s = "";
+        let tm: RegExpExecArray | null;
+        tRe.lastIndex = 0;
+        while ((tm = tRe.exec(inner))) s += decodeXmlEntities(tm[1]);
+        value = s;
+      } else {
+        const vm = vRe.exec(inner);
+        const raw = vm ? decodeXmlEntities(vm[1]) : "";
+        if (tAttr === "s") {
+          const n = Number(raw);
+          value = Number.isInteger(n) && n >= 0 && n < sharedStrings.length ? sharedStrings[n] : "";
+        } else if (tAttr === "str") {
+          value = raw;
+        } else if (tAttr === "b") {
+          value = raw === "1" || raw.toLowerCase() === "true";
+        } else if (raw === "") {
+          value = "";
+        } else {
+          const n = Number(raw);
+          value = Number.isFinite(n) ? n : raw;
+        }
+      }
+      arr[col] = value;
+    }
+    for (let c = 0; c < arr.length; c++) if (arr[c] === undefined) arr[c] = "";
+    aoa.push(arr);
+  }
+  return aoa;
+}
+
+async function parseFirstSheetAOALenient(buffer: Buffer): Promise<unknown[][]> {
+  const JSZip = (await import("jszip")).default;
+  const zip = await JSZip.loadAsync(buffer);
+  const sheetFiles = zip
+    .file(/^xl\/worksheets\/sheet[^/]*\.xml$/i)
+    .sort((a, b) => a.name.localeCompare(b.name, "en"));
+  if (sheetFiles.length === 0) return [];
+
+  const sstFile = zip.file("xl/sharedStrings.xml");
+  const sharedStrings = sstFile ? lenientSharedStrings(await sstFile.async("string")) : [];
+
+  const sheetXml = await sheetFiles[0].async("string");
+  return lenientWorksheetAOA(sheetXml, sharedStrings);
 }
 
 /** Build an .xlsx Buffer from a list of sheets. Preserves the
