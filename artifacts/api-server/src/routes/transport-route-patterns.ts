@@ -104,6 +104,7 @@ transportRoutePatternsRouter.get(
                 "defaultVehicleClass", "defaultLicenseClass",
                 "defaultCustomerId", "defaultContractId",
                 "defaultCargoWeight", "defaultCargoUnit",
+                "operationalWaypoints",
                 status, notes, "createdAt", "updatedAt"
            FROM transport_route_patterns
           WHERE "companyId" = $1 AND "deletedAt" IS NULL
@@ -242,6 +243,11 @@ transportRoutePatternsRouter.post(
         return;
       }
 
+      // نقاط التشغيل القالبية تنتقل للحجز في cargoOperationalMetadata.waypoints
+      // (تظهر في تنفيذ الرحلة). null إن لا نقاط — لا بيانات فارغة.
+      const waypointsMeta = Array.isArray(pattern.operationalWaypoints) && pattern.operationalWaypoints.length
+        ? JSON.stringify({ waypoints: pattern.operationalWaypoints })
+        : null;
       const { insertId } = await rawExecute(
         `INSERT INTO transport_bookings
            ("companyId", "branchId", "bookingNumber", "bookingSource", "transportServiceType",
@@ -252,7 +258,7 @@ transportRoutePatternsRouter.post(
             "fromLocationKind", "toLocationKind",
             "fromLat", "fromLng", "toLat", "toLng",
             "requestedPickupDate",
-            "cargoWeight", "cargoUnit",
+            "cargoWeight", "cargoUnit", "cargoOperationalMetadata",
             status, "createdBy")
          VALUES ($1, $2, $3, 'recurring_schedule', 'cargo_load',
                  $4, 'cargo',
@@ -260,8 +266,8 @@ transportRoutePatternsRouter.post(
                  $7, $8, $9, $10,
                  $11, $12,
                  $13, $14, $15, $16,
-                 $17, $18, $19,
-                 'draft', $20)`,
+                 $17, $18, $19, $20,
+                 'draft', $21)`,
         [
           scope.companyId, scope.branchId ?? null, bookingNumber,
           id, pattern.defaultCustomerId ?? null, pattern.defaultContractId ?? null,
@@ -270,7 +276,7 @@ transportRoutePatternsRouter.post(
           pattern.fromLocationKind ?? null, pattern.toLocationKind ?? null,
           pattern.fromLat ?? null, pattern.fromLng ?? null,
           pattern.toLat ?? null, pattern.toLng ?? null,
-          target, pattern.defaultCargoWeight ?? null, pattern.defaultCargoUnit ?? null,
+          target, pattern.defaultCargoWeight ?? null, pattern.defaultCargoUnit ?? null, waypointsMeta,
           scope.userId,
         ],
       );
@@ -397,6 +403,7 @@ transportRoutePatternsRouter.post(
         fromLat: number | null; fromLng: number | null;
         toLat: number | null; toLng: number | null;
         defaultCargoWeight: number | null; defaultCargoUnit: string | null;
+        operationalWaypoints: unknown;
       }>(
         `SELECT id, "patternCode", "daysOfWeekMask",
                 "activeFrom", "activeUntil",
@@ -405,12 +412,17 @@ transportRoutePatternsRouter.post(
                 "fromLocationText", "toLocationText",
                 "fromLocationKind", "toLocationKind",
                 "fromLat", "fromLng", "toLat", "toLng",
-                "defaultCargoWeight", "defaultCargoUnit"
+                "defaultCargoWeight", "defaultCargoUnit", "operationalWaypoints"
            FROM transport_route_patterns
           WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND status = 'active'`,
         [id, scope.companyId],
       );
       if (!pattern) throw new NotFoundError("القالب غير موجود أو غير نشط");
+
+      // نقاط التشغيل القالبية (ثابتة للقالب) تُحقن في كل حجز مُولَّد.
+      const waypointsMeta = Array.isArray(pattern.operationalWaypoints) && pattern.operationalWaypoints.length
+        ? JSON.stringify({ waypoints: pattern.operationalWaypoints })
+        : null;
 
       const created: Array<{ date: string; bookingId: number; bookingNumber: string }> = [];
       const skipped: Array<{ date: string; reason: "exists" }> = [];
@@ -435,7 +447,7 @@ transportRoutePatternsRouter.post(
                 "fromLocationKind", "toLocationKind",
                 "fromLat", "fromLng", "toLat", "toLng",
                 "requestedPickupDate",
-                "cargoWeight", "cargoUnit",
+                "cargoWeight", "cargoUnit", "cargoOperationalMetadata",
                 status, "createdBy")
              VALUES ($1, $2, $3, 'recurring_schedule', 'cargo_load',
                      $4, 'cargo',
@@ -443,8 +455,8 @@ transportRoutePatternsRouter.post(
                      $7, $8, $9, $10,
                      $11, $12,
                      $13, $14, $15, $16,
-                     $17, $18, $19,
-                     'draft', $20)
+                     $17, $18, $19, $20,
+                     'draft', $21)
              ON CONFLICT ("companyId", "bookingNumber") DO NOTHING
              RETURNING id, FALSE AS existed
            )
@@ -464,7 +476,7 @@ transportRoutePatternsRouter.post(
             pattern.fromLocationKind, pattern.toLocationKind,
             pattern.fromLat, pattern.fromLng,
             pattern.toLat, pattern.toLng,
-            date, pattern.defaultCargoWeight, pattern.defaultCargoUnit,
+            date, pattern.defaultCargoWeight, pattern.defaultCargoUnit, waypointsMeta,
             scope.userId,
           ],
         );

@@ -121,10 +121,31 @@ interface RoutePatternRow {
   defaultContractId: number | null;
   defaultCargoWeight: number | string | null;
   defaultCargoUnit: string | null;
+  operationalWaypoints: Waypoint[] | null;
   status: string;
   notes: string | null;
   createdAt: string;
   updatedAt: string | null;
+}
+
+// أنواع نقاط التشغيل (checkpoints) على مسار الشحن — من قانون الخادم
+// (تحميل/ميزان/فحص/استراحة/وقود/تفريغ). تُعرض عربيًا وتُخزَّن بالكود.
+const WAYPOINT_KIND_OPTIONS = [
+  { value: "loading", label: "تحميل" },
+  { value: "scale", label: "ميزان" },
+  { value: "inspection", label: "فحص" },
+  { value: "rest", label: "استراحة" },
+  { value: "fuel", label: "وقود" },
+  { value: "unloading", label: "تفريغ" },
+] as const;
+
+function waypointKindLabel(kind: string): string {
+  return WAYPOINT_KIND_OPTIONS.find((o) => o.value === kind)?.label ?? kind;
+}
+
+interface Waypoint {
+  kind: string;
+  notes?: string;
 }
 
 /* ── form state (kept as strings so empty maps cleanly to null) ──── */
@@ -143,6 +164,7 @@ interface PatternFormState {
   defaultLicenseClass: string;
   defaultCargoWeight: string;
   defaultCargoUnit: string;
+  operationalWaypoints: Waypoint[];
   status: "active" | "paused" | "archived";
   notes: string;
 }
@@ -160,6 +182,7 @@ const EMPTY_FORM: PatternFormState = {
   defaultLicenseClass: "",
   defaultCargoWeight: "",
   defaultCargoUnit: "",
+  operationalWaypoints: [],
   status: "active",
   notes: "",
 };
@@ -172,6 +195,10 @@ const HEAVY_TRANSPORT_PRESET: Partial<PatternFormState> = {
   defaultVehicleClass: "truck",
   defaultLicenseClass: "heavy",
   defaultCargoUnit: "طن",
+  // نقاط تشغيل نموذجية للنقل الثقيل — قابلة للتعديل/الحذف/الإضافة.
+  operationalWaypoints: [
+    { kind: "loading" }, { kind: "scale" }, { kind: "inspection" }, { kind: "unloading" },
+  ],
   notes: "قالب جاهز للنقل الثقيل — شاحنة + رخصة نقل ثقيل. عدّل المسار والأيام والوزن حسب الرحلة.",
 };
 
@@ -271,6 +298,9 @@ export default function TransportRoutePatternsPage() {
       defaultLicenseClass: r.defaultLicenseClass ?? "",
       defaultCargoWeight: r.defaultCargoWeight == null ? "" : String(r.defaultCargoWeight),
       defaultCargoUnit: r.defaultCargoUnit ?? "",
+      operationalWaypoints: Array.isArray(r.operationalWaypoints)
+        ? r.operationalWaypoints.map((w) => ({ kind: w.kind, notes: w.notes ?? "" }))
+        : [],
       status: (["active", "paused", "archived"].includes(r.status)
         ? r.status
         : "active") as PatternFormState["status"],
@@ -313,6 +343,10 @@ export default function TransportRoutePatternsPage() {
         defaultLicenseClass: strOrNull(form.defaultLicenseClass),
         defaultCargoWeight: numOrNull(form.defaultCargoWeight),
         defaultCargoUnit: strOrNull(form.defaultCargoUnit),
+        // نقاط التشغيل: نُسقط الصفوف بلا نوع، ونحذف الملاحظة الفارغة.
+        operationalWaypoints: form.operationalWaypoints
+          .filter((w) => w.kind)
+          .map((w) => (w.notes?.trim() ? { kind: w.kind, notes: w.notes.trim() } : { kind: w.kind })),
         status: form.status,
         notes: strOrNull(form.notes),
       };
@@ -757,6 +791,63 @@ export default function TransportRoutePatternsPage() {
                 placeholder="kg / ton"
                 maxLength={32}
               />
+            </div>
+
+            <div className="md:col-span-2">
+              <div className="flex items-center justify-between mb-1.5">
+                <Label className="text-xs">نقاط التشغيل (تحميل/ميزان/فحص/تفريغ…)</Label>
+                <Button
+                  type="button" size="sm" variant="outline" className="h-7"
+                  onClick={() => setForm((s) => ({
+                    ...s, operationalWaypoints: [...s.operationalWaypoints, { kind: "loading", notes: "" }],
+                  }))}
+                >
+                  <Plus className="h-3.5 w-3.5 me-1" />إضافة نقطة
+                </Button>
+              </div>
+              {form.operationalWaypoints.length === 0 ? (
+                <p className="text-[10px] text-muted-foreground">
+                  لا نقاط. تُنقل هذه النقاط لكل حجز يُولَّد من القالب وتظهر في تنفيذ الرحلة.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {form.operationalWaypoints.map((w, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <Select
+                        value={w.kind}
+                        onValueChange={(v) => setForm((s) => ({
+                          ...s,
+                          operationalWaypoints: s.operationalWaypoints.map((x, j) => (j === i ? { ...x, kind: v } : x)),
+                        }))}
+                      >
+                        <SelectTrigger className="h-8 w-36"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {WAYPOINT_KIND_OPTIONS.map((o) => (
+                            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        className="h-8 flex-1" placeholder="ملاحظة (اختياري)" maxLength={255}
+                        value={w.notes ?? ""}
+                        onChange={(e) => setForm((s) => ({
+                          ...s,
+                          operationalWaypoints: s.operationalWaypoints.map((x, j) => (j === i ? { ...x, notes: e.target.value } : x)),
+                        }))}
+                      />
+                      <Button
+                        type="button" size="sm" variant="outline" className="h-8"
+                        onClick={() => setForm((s) => ({
+                          ...s, operationalWaypoints: s.operationalWaypoints.filter((_, j) => j !== i),
+                        }))}
+                        title="حذف النقطة"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="md:col-span-2">

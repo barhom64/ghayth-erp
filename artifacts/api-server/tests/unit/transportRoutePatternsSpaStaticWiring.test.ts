@@ -39,6 +39,10 @@ const SERVER_LIB = readFileSync(
   join(repoRoot, "artifacts/api-server/src/routes/transport-route-patterns.ts"),
   "utf8",
 );
+const BOOKING_DETAIL = readFileSync(
+  join(repoRoot, "artifacts/ghayth-erp/src/pages/fleet/transport-booking-detail.tsx"),
+  "utf8",
+);
 
 /* ── 1. Endpoint reuse — no new route, no new path ─────────────── */
 
@@ -218,5 +222,44 @@ describe("قالب «نقل ثقيل» الجاهز — قيم مُسبقة فو
     const verbs = SERVER_LIB.match(/transportRoutePatternsRouter\.(get|post|patch|delete)\(/g) ?? [];
     expect(verbs.length).toBe(7);
     expect(PAGE).not.toMatch(/fleet\.routePatterns|fleet\.heavy/);
+  });
+});
+
+/* ── 8. Operational waypoints editor + propagation + display (2026-07-01) ── */
+
+describe("محرّر نقاط التشغيل — تحرير في القالب + نقل للحجز + عرض في التنفيذ", () => {
+  it("المحرّر: أنواع نقاط عربية + حالة operationalWaypoints + زر إضافة/حذف", () => {
+    expect(PAGE).toMatch(/WAYPOINT_KIND_OPTIONS\s*=\s*\[/);
+    expect(PAGE).toMatch(/value:\s*"loading",\s*label:\s*"تحميل"/);
+    expect(PAGE).toMatch(/value:\s*"unloading",\s*label:\s*"تفريغ"/);
+    expect(PAGE).toContain("operationalWaypoints: Waypoint[]");
+    expect(PAGE).toContain("إضافة نقطة");
+    // يُرسل النقاط في الحمولة (POST/PATCH القائم يقبلها).
+    expect(PAGE).toMatch(/operationalWaypoints:\s*form\.operationalWaypoints\s*\n?\s*\.filter/);
+  });
+
+  it("قالب النقل الثقيل يبذر 4 نقاط تشغيل (قابلة للتعديل)", () => {
+    expect(PAGE).toMatch(/HEAVY_TRANSPORT_PRESET[\s\S]{0,320}operationalWaypoints:\s*\[[\s\S]{0,160}kind:\s*"loading"[\s\S]{0,120}kind:\s*"unloading"/);
+  });
+
+  it("الخادم يُرجع النقاط في القائمة ويحقنها في الحجز (materialise + range) — لا هجرة/route جديد", () => {
+    // القائمة + استعلام المدى يُرجعان operationalWaypoints (كي يملأ openEdit المحرّر
+    // وتُحقَن في الحجوزات). يظهر العمود في select القائمة وselect المدى.
+    expect(SERVER_LIB).toContain('"operationalWaypoints"');
+    expect(SERVER_LIB).toContain('"defaultCargoUnit", "operationalWaypoints"');
+    // كلا مسارَي التوليد يكتبان cargoOperationalMetadata من نقاط القالب.
+    expect(SERVER_LIB).toContain('"cargoOperationalMetadata"');
+    expect(SERVER_LIB).toMatch(/JSON\.stringify\(\{\s*waypoints:\s*pattern\.operationalWaypoints\s*\}\)/);
+    // لا route/هجرة جديدة (الحقول موجودة أصلًا — إحياء).
+    const verbs = SERVER_LIB.match(/transportRoutePatternsRouter\.(get|post|patch|delete)\(/g) ?? [];
+    expect(verbs.length).toBe(7);
+    expect(SERVER_LIB).not.toMatch(/CREATE TABLE|ALTER TABLE/i);
+  });
+
+  it("تفاصيل الحجز تعرض نقاط التشغيل قراءة فقط (عربي)", () => {
+    expect(BOOKING_DETAIL).toContain("cargoOperationalMetadata");
+    expect(BOOKING_DETAIL).toContain("نقاط التشغيل");
+    expect(BOOKING_DETAIL).toMatch(/WAYPOINT_KIND_LABEL_AR/);
+    expect(BOOKING_DETAIL).toMatch(/loading:\s*"تحميل"[\s\S]{0,120}unloading:\s*"تفريغ"/);
   });
 });
