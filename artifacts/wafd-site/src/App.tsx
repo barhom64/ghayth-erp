@@ -11,7 +11,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { HeaderHeightProvider } from "./contexts/HeaderHeightContext";
-import { SiteDataProvider } from "./contexts/SiteDataContext";
+import { SiteDataProvider, useSiteData } from "./contexts/SiteDataContext";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import WhatsAppFloat from "./components/WhatsAppFloat";
@@ -96,13 +96,31 @@ function Router() {
 
 function AppContent() {
   const [leadFormOpen, setLeadFormOpen] = useState(false);
+  const { banners } = useSiteData();
+  // البانر الأول النشط (بعد فلترة النافذة الزمنية في الخادم) يحل محل الرسالة الافتراضية.
+  const activeBanner = banners[0];
   return (
     <div className="min-h-screen flex flex-col">
       <TitleManager />
-      <AnnouncementBar
-        message="وفد ترافقك في رحلة العمرة — استشارة مجانية وخطة تناسبك"
-        link={{ text: "اطلب استشارتك الآن", onClick: () => setLeadFormOpen(true) }}
-      />
+      {activeBanner ? (
+        <AnnouncementBar
+          key={activeBanner.id}
+          storageKey={`wafd-banner-${activeBanner.id}`}
+          message={activeBanner.message || activeBanner.title}
+          link={
+            activeBanner.ctaLabel
+              ? activeBanner.ctaUrl
+                ? { text: activeBanner.ctaLabel, href: activeBanner.ctaUrl }
+                : { text: activeBanner.ctaLabel, onClick: () => setLeadFormOpen(true) }
+              : undefined
+          }
+        />
+      ) : (
+        <AnnouncementBar
+          message="وفد ترافقك في رحلة العمرة — استشارة مجانية وخطة تناسبك"
+          link={{ text: "اطلب استشارتك الآن", onClick: () => setLeadFormOpen(true) }}
+        />
+      )}
       <ScrollProgress />
       <Navbar onOpenLeadForm={() => setLeadFormOpen(true)} />
       <main className="flex-1">
