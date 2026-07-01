@@ -8,6 +8,8 @@ import { handleRouteError, ValidationError, NotFoundError,
 } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
+import { safeUrl } from "../lib/urlPolicy.js";
+import { zCoerceBoolean } from "../lib/zodCoerce.js";
 
 // Local row shapes for marketing tables (not in @workspace/db schema).
 
@@ -25,6 +27,12 @@ interface MarketingCampaignRow {
   startDate?: string | null;
   endDate?: string | null;
   targetAudience?: string | null;
+  isPublic?: boolean | null;
+  slug?: string | null;
+  publicHeadline?: string | null;
+  publicBody?: string | null;
+  publicImageUrl?: string | null;
+  publicCtaLabel?: string | null;
   createdAt: string;
   updatedAt?: string | null;
   deletedAt?: string | null;
@@ -56,6 +64,26 @@ interface FunnelStageRow { stage: string; count: number; value: number; conversi
 // the same pattern used by fleet/hr/crm/properties.
 
 // ── Zod validation schemas ──────────────────────────────────────────
+// معرّف عام (slug) للحملة عند نشرها على الموقع — حروف لاتينية/أرقام/شرطات فقط،
+// يُطبَّع (lowercase/trim). فريد داخل الشركة عبر uq_marketing_campaign_public_slug.
+const slugField = z
+  .string({ invalid_type_error: "المعرّف يجب أن يكون نصاً" })
+  .trim()
+  .max(120, "المعرّف طويل جداً")
+  .regex(/^[a-z0-9-]+$/i, "المعرّف يجب أن يحتوي على حروف لاتينية وأرقام وشرطات فقط")
+  .transform((v) => v.toLowerCase())
+  .optional()
+  .nullable();
+
+const publicFields = {
+  isPublic: zCoerceBoolean().optional().nullable(),
+  slug: slugField,
+  publicHeadline: z.string({ invalid_type_error: "العنوان يجب أن يكون نصاً" }).trim().max(200).optional().nullable(),
+  publicBody: z.string({ invalid_type_error: "النص يجب أن يكون نصاً" }).trim().max(2000).optional().nullable(),
+  publicImageUrl: safeUrl(1000).nullable().optional(),
+  publicCtaLabel: z.string({ invalid_type_error: "نص الزر يجب أن يكون نصاً" }).trim().max(80).optional().nullable(),
+};
+
 const createCampaignSchema = z.object({
   name: z.string({ required_error: "اسم الحملة مطلوب" }).min(1, "اسم الحملة مطلوب"),
   description: z.string({ invalid_type_error: "الوصف يجب أن يكون نصاً" }).optional().nullable(),
@@ -67,6 +95,7 @@ const createCampaignSchema = z.object({
   startDate: z.string({ invalid_type_error: "تاريخ البداية يجب أن يكون نصاً" }).optional().nullable(),
   endDate: z.string({ invalid_type_error: "تاريخ النهاية يجب أن يكون نصاً" }).optional().nullable(),
   targetAudience: z.string({ invalid_type_error: "الجمهور المستهدف يجب أن يكون نصاً" }).optional().nullable(),
+  ...publicFields,
 });
 
 const updateCampaignSchema = z.object({
@@ -80,6 +109,7 @@ const updateCampaignSchema = z.object({
   startDate: z.string({ invalid_type_error: "تاريخ البداية يجب أن يكون نصاً" }).optional().nullable(),
   endDate: z.string({ invalid_type_error: "تاريخ النهاية يجب أن يكون نصاً" }).optional().nullable(),
   targetAudience: z.string({ invalid_type_error: "الجمهور المستهدف يجب أن يكون نصاً" }).optional().nullable(),
+  ...publicFields,
 });
 
 const updateRevenueSchema = z.object({
@@ -100,7 +130,7 @@ router.post("/campaigns", authorize({ feature: "marketing", action: "create" }),
   try {
     const parsed = zodParse(createCampaignSchema.safeParse(req.body));
     const scope = req.scope!;
-    const { name, description, type, channel, status, budget, spent, startDate, endDate, targetAudience } = parsed;
+    const { name, description, type, channel, status, budget, spent, startDate, endDate, targetAudience, isPublic, slug, publicHeadline, publicBody, publicImageUrl, publicCtaLabel } = parsed;
     if (!name || !String(name).trim()) {
       throw new ValidationError("اسم الحملة مطلوب", {
         field: "name",
@@ -121,10 +151,23 @@ router.post("/campaigns", authorize({ feature: "marketing", action: "create" }),
         fix: "اختر تاريخ انتهاء بعد تاريخ البداية",
       });
     }
+    // النشر العام يتطلّب معرّفاً (slug) كي يظهر على الموقع ويُعزى إليه العملاء.
+    if (isPublic && !slug) {
+      throw new ValidationError("معرّف الحملة العام مطلوب عند النشر", {
+        field: "slug",
+        fix: "أدخل معرّفاً بحروف لاتينية/أرقام/شرطات (مثال: umrah-ramadan)",
+      });
+    }
     const r = await rawExecute(
-      `INSERT INTO marketing_campaigns (name, description, type, channel, status, budget, spent, "startDate", "endDate", "targetAudience", "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-      [String(name).trim(), description ?? null, type ?? null, channel ?? null, status || "draft", Number(budget ?? 0), Number(spent ?? 0), startDate ?? null, endDate ?? null, targetAudience ?? null, scope.companyId]
-    );
+      `INSERT INTO marketing_campaigns (name, description, type, channel, status, budget, spent, "startDate", "endDate", "targetAudience", "isPublic", slug, "publicHeadline", "publicBody", "publicImageUrl", "publicCtaLabel", "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
+      [String(name).trim(), description ?? null, type ?? null, channel ?? null, status || "draft", Number(budget ?? 0), Number(spent ?? 0), startDate ?? null, endDate ?? null, targetAudience ?? null, isPublic ?? false, slug ?? null, publicHeadline ?? null, publicBody ?? null, publicImageUrl ?? null, publicCtaLabel ?? null, scope.companyId]
+    ).catch((e: unknown) => {
+      // تعارض المعرّف العام داخل الشركة (uq_marketing_campaign_public_slug).
+      if ((e as { code?: string })?.code === "23505") {
+        throw new ValidationError("معرّف الحملة العام مستخدم بالفعل", { field: "slug", fix: "اختر معرّفاً فريداً" });
+      }
+      throw e;
+    });
     await createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "marketing_campaigns", entityId: r.insertId,
@@ -162,6 +205,13 @@ router.patch("/campaigns/:id", authorize({ feature: "marketing", action: "update
         throw new ValidationError("تاريخ النهاية قبل تاريخ البداية", { field: "endDate", fix: "اختر تاريخ انتهاء بعد تاريخ البداية" });
       }
     }
+    // النشر العام يتطلّب معرّفاً — نتحقّق من القيمة النهائية بعد الدمج الجزئي.
+    const [pub] = await rawQuery<{ isPublic: boolean | null; slug: string | null }>(`SELECT "isPublic", slug FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const willBePublic = b.isPublic !== undefined ? b.isPublic : pub?.isPublic;
+    const willHaveSlug = b.slug !== undefined ? b.slug : pub?.slug;
+    if (willBePublic && !willHaveSlug) {
+      throw new ValidationError("معرّف الحملة العام مطلوب عند النشر", { field: "slug", fix: "أدخل معرّفاً بحروف لاتينية/أرقام/شرطات" });
+    }
     const sets: string[] = [];
     const params: unknown[] = [];
     if (b.name !== undefined) { params.push(b.name); sets.push(`name=$${params.length}`); }
@@ -174,9 +224,20 @@ router.patch("/campaigns/:id", authorize({ feature: "marketing", action: "update
     if (b.startDate !== undefined) { params.push(b.startDate); sets.push(`"startDate"=$${params.length}`); }
     if (b.endDate !== undefined) { params.push(b.endDate); sets.push(`"endDate"=$${params.length}`); }
     if (b.targetAudience !== undefined) { params.push(b.targetAudience); sets.push(`"targetAudience"=$${params.length}`); }
+    if (b.isPublic !== undefined) { params.push(b.isPublic ?? false); sets.push(`"isPublic"=$${params.length}`); }
+    if (b.slug !== undefined) { params.push(b.slug); sets.push(`slug=$${params.length}`); }
+    if (b.publicHeadline !== undefined) { params.push(b.publicHeadline); sets.push(`"publicHeadline"=$${params.length}`); }
+    if (b.publicBody !== undefined) { params.push(b.publicBody); sets.push(`"publicBody"=$${params.length}`); }
+    if (b.publicImageUrl !== undefined) { params.push(b.publicImageUrl); sets.push(`"publicImageUrl"=$${params.length}`); }
+    if (b.publicCtaLabel !== undefined) { params.push(b.publicCtaLabel); sets.push(`"publicCtaLabel"=$${params.length}`); }
     if (sets.length === 0) { res.json(existing); return; }
     params.push(id); params.push(scope.companyId);
-    const { affectedRows } = await rawExecute(`UPDATE marketing_campaigns SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    const { affectedRows } = await rawExecute(`UPDATE marketing_campaigns SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params).catch((e: unknown) => {
+      if ((e as { code?: string })?.code === "23505") {
+        throw new ValidationError("معرّف الحملة العام مستخدم بالفعل", { field: "slug", fix: "اختر معرّفاً فريداً" });
+      }
+      throw e;
+    });
     if (!affectedRows) throw new NotFoundError("الحملة غير موجودة");
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "marketing.campaign.updated", entity: "marketing_campaigns", entityId: id, details: JSON.stringify(b) }).catch((e) => logger.error(e, "marketing background task failed"));
     createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "update", entity: "marketing_campaigns", entityId: id, after: b }).catch((e) => logger.error(e, "marketing background task failed"));
@@ -236,9 +297,11 @@ router.get("/campaigns/:id/roas", authorize({ feature: "marketing", action: "lis
     const spent = Number(campaign.spent || 0);
     const revenue = Number(campaign.revenue || 0);
     const roas = spent > 0 ? revenue / spent : null;
+    // العزو المتين: نحتسب العملاء المحتملين المرتبطين بالحملة عبر campaignId
+    // (العزو الدقيق الجديد) أو مطابقة الاسم في source (للسجلات القديمة قبل الربط).
     const leads = await rawQuery<CountRow>(
-      `SELECT COUNT(*) AS count FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND source=$2`,
-      [scope.companyId, campaign.name]
+      `SELECT COUNT(*) AS count FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND ("campaignId"=$2 OR source=$3)`,
+      [scope.companyId, id, campaign.name]
     ).catch((e) => { logger.error(e, "marketing query failed"); return [{ count: 0 }] as CountRow[]; });
     res.json(maskFields(req, {
       campaignId: id,

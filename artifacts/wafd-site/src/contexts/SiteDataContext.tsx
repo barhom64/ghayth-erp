@@ -137,6 +137,17 @@ export interface SiteNavItem {
   isActive: boolean;
 }
 
+// حملة تسويقية منشورة علناً — حقول العرض الآمنة فقط (لا ميزانية/إنفاق/إيراد).
+export interface PublicCampaign {
+  id: number;
+  slug: string;
+  name: string;
+  headline: string | null;
+  body: string | null;
+  imageUrl: string | null;
+  ctaLabel: string | null;
+}
+
 export interface SiteData {
   config: SiteConfig | null;
   packages: SitePackage[];
@@ -148,6 +159,7 @@ export interface SiteData {
   gallery: SiteGalleryItem[];
   banners: SiteBanner[];
   navItems: SiteNavItem[];
+  campaigns: PublicCampaign[];
   loading: boolean;
   error: boolean;
 }
@@ -165,6 +177,7 @@ const SiteDataContext = createContext<SiteData>({
   gallery: [],
   banners: [],
   navItems: [],
+  campaigns: [],
   loading: true,
   error: false,
 });
@@ -181,6 +194,7 @@ export function SiteDataProvider({ children }: { children: ReactNode }) {
     gallery: [],
     banners: [],
     navItems: [],
+    campaigns: [],
     loading: true,
     error: false,
   });
@@ -204,6 +218,7 @@ export function SiteDataProvider({ children }: { children: ReactNode }) {
           gallery: Array.isArray(json.gallery) ? json.gallery : [],
           banners: Array.isArray(json.banners) ? json.banners : [],
           navItems: Array.isArray(json.navItems) ? json.navItems : [],
+          campaigns: Array.isArray(json.campaigns) ? json.campaigns : [],
           loading: false,
           error: false,
         });

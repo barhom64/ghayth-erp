@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isSafeCmsUrl } from "../../src/routes/site.js";
+import { isSafeCmsUrl } from "../../src/lib/urlPolicy.js";
 
 // ─── Site CMS URL policy (stored-XSS guard) ─────────────────────────────────
 // Admin-editable nav-item `url` and banner `ctaUrl` are rendered into public
