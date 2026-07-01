@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { toSafeHref } from "@/lib/wafd-constants";
 
 interface AnnouncementBarProps {
   message: string;
@@ -58,7 +59,7 @@ export default function AnnouncementBar({
                   </button>
                 ) : (
                   <a
-                    href={link.href || '#'}
+                    href={toSafeHref(link.href)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="underline underline-offset-2 font-bold text-[oklch(0.90_0.06_75)] hover:text-white transition-colors"

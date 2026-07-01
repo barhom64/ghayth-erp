@@ -458,12 +458,25 @@ async function resolveSiteByHost(host: string): Promise<Record<string, unknown> 
 
 async function fetchSiteContent(cfg: Record<string, unknown>) {
   const companyId = cfg.companyId as number;
-  const [packages, services, hotels] = await Promise.all([
+  const [packages, services, hotels, faqs, testimonials, team, gallery, banners, navItems] = await Promise.all([
     rawQuery(`SELECT * FROM site_packages WHERE "companyId"=$1 AND "isActive"=true AND "deletedAt" IS NULL ORDER BY "sortOrder" ASC, id ASC`, [companyId]),
     rawQuery(`SELECT * FROM site_services WHERE "companyId"=$1 AND "isActive"=true AND "deletedAt" IS NULL ORDER BY "sortOrder" ASC, id ASC`, [companyId]),
     rawQuery(`SELECT * FROM site_hotels WHERE "companyId"=$1 AND "isActive"=true AND "deletedAt" IS NULL ORDER BY "sortOrder" ASC, id ASC`, [companyId]),
+    rawQuery(`SELECT * FROM site_faqs WHERE "companyId"=$1 AND "isActive"=true AND "deletedAt" IS NULL ORDER BY "sortOrder" ASC, id ASC`, [companyId]),
+    rawQuery(`SELECT * FROM site_testimonials WHERE "companyId"=$1 AND "isActive"=true AND "deletedAt" IS NULL ORDER BY "sortOrder" ASC, id ASC`, [companyId]),
+    rawQuery(`SELECT * FROM site_team WHERE "companyId"=$1 AND "isActive"=true AND "deletedAt" IS NULL ORDER BY "sortOrder" ASC, id ASC`, [companyId]),
+    rawQuery(`SELECT * FROM site_gallery WHERE "companyId"=$1 AND "isActive"=true AND "deletedAt" IS NULL ORDER BY "sortOrder" ASC, id ASC`, [companyId]),
+    // البانرات: تُعرض فقط ضمن نافذة التفعيل الزمنية (إن وُجدت).
+    rawQuery(
+      `SELECT * FROM site_banners WHERE "companyId"=$1 AND "isActive"=true AND "deletedAt" IS NULL
+         AND ("startsAt" IS NULL OR "startsAt" <= NOW())
+         AND ("endsAt" IS NULL OR "endsAt" >= NOW())
+       ORDER BY "sortOrder" ASC, id ASC`,
+      [companyId],
+    ),
+    rawQuery(`SELECT * FROM site_nav_items WHERE "companyId"=$1 AND "isActive"=true AND "deletedAt" IS NULL ORDER BY "sortOrder" ASC, id ASC`, [companyId]),
   ]);
-  return { config: cfg, packages, services, hotels };
+  return { config: cfg, packages, services, hotels, faqs, testimonials, team, gallery, banners, navItems };
 }
 
 // حلّ المستأجر من ترويسة Host (للقالب القياسي المنشور على نطاق مخصّص).
