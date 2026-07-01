@@ -169,7 +169,7 @@ export default function ViolationDetail() {
               <p className="text-muted-foreground">تاريخ التسجيل</p>
               <p className="font-medium">{item.createdAt ? formatDateAr(item.createdAt) : "—"}</p>
             </div>
-            {/* أدلة المخالفة — كانت تُدخَل وتُفقَد قبل هجرة 452 (بيانات إثبات
+            {/* أدلة المخالفة — كانت تُدخَل وتُفقَد قبل هجرة 453 (بيانات إثبات
                 يُحتَجّ بها عند الاعتراض على الجزاء). */}
             {item.location && (
               <div>

@@ -3817,7 +3817,7 @@ router.post("/violations", authorize({ feature: "hr.violations", action: "create
       assignmentId, type, description, severity, deduction,
       period: reqPeriod, incidentDate: reqIncidentDate, regulationId,
       // أدلة المخالفة: يُدخلها المشغّل ويرسلها النموذج والـschema يقبلها،
-      // وكانت تُسقَط قبل الحفظ (هجرة 452 أضافت أعمدتها).
+      // وكانت تُسقَط قبل الحفظ (هجرة 453 أضافت أعمدتها).
       witness, location, actionTaken,
     } = parsedAny;
 
