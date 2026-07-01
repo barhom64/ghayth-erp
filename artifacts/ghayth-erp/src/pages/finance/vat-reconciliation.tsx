@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { exportRowsToCsv } from "@/lib/unified-export";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { PrintButton } from "@/components/shared/print-button";
@@ -87,6 +89,271 @@ function exportCSV(rows: VatReconResponse["bySource"], filename: string) {
     rows: out.map((row: any) => Object.fromEntries(headers.map((h: string, i: number) => [h, Array.isArray(row) ? row[i] : (row?.[h] ?? "")]))),
     columns: headers.map((h: string) => ({ key: h, label: h })),
   }).catch((err) => console.error("[export] failed", err));
+}
+
+/**
+ * سياسة تسوية الضريبة (دورية التقديم + مهلة الاستحقاق) — قياسية افتراضيًا
+ * وقابلة للتعديل من الواجهة. تُحفظ في settings عبر PUT /finance/tax-settlement/policy.
+ * النسبة وحسابات المخرجات/المدخلات تُعرض للقراءة فقط (مصدرها الأصلي لا يُكرَّر هنا).
+ */
+interface SettlementPolicy {
+  frequency: "monthly" | "quarterly";
+  filingDueDays: number;
+  settlementAccountCode: string;
+}
+interface TaxSettlementPolicyResponse {
+  key: string;
+  policy: SettlementPolicy;
+  standard: SettlementPolicy;
+  refs: { vatRate: number; accounts: { output: string; input: string }; previewEndpoint: string };
+}
+
+function SettlementPolicyCard() {
+  const { data, isLoading, isError } = useApiQuery<TaxSettlementPolicyResponse>(
+    ["tax-settlement-policy"],
+    "/finance/tax-settlement/policy",
+  );
+  const [frequency, setFrequency] = useState<"monthly" | "quarterly">("monthly");
+  const [dueDays, setDueDays] = useState<string>("30");
+  const [acct, setAcct] = useState<string>("2131");
+
+  useEffect(() => {
+    if (data?.policy) {
+      setFrequency(data.policy.frequency);
+      setDueDays(String(data.policy.filingDueDays));
+      setAcct(data.policy.settlementAccountCode);
+    }
+  }, [data?.policy?.frequency, data?.policy?.filingDueDays, data?.policy?.settlementAccountCode]);
+
+  const saveMut = useApiMutation<TaxSettlementPolicyResponse, { frequency: string; filingDueDays: number; settlementAccountCode: string }>(
+    "/finance/tax-settlement/policy",
+    "PUT",
+    [["tax-settlement-policy"]],
+    { successMessage: "تم حفظ سياسة التسوية" },
+  );
+
+  if (isLoading) return null;
+  if (isError || !data) return null;
+
+  const isStandard =
+    data.policy.frequency === data.standard.frequency &&
+    data.policy.filingDueDays === data.standard.filingDueDays &&
+    data.policy.settlementAccountCode === data.standard.settlementAccountCode;
+  const days = Number(dueDays);
+  const acctTrim = acct.trim();
+  const dirty =
+    frequency !== data.policy.frequency ||
+    days !== data.policy.filingDueDays ||
+    acctTrim !== data.policy.settlementAccountCode;
+  const valid = Number.isInteger(days) && days >= 1 && days <= 120 && acctTrim.length > 0;
+
+  return (
+    <Card className="mt-4">
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <h3 className="text-base font-semibold">سياسة تسوية الضريبة</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              دورية تقديم الإقرار ومهلة الاستحقاق — افتراضي قياسي قابل للتعديل
+            </p>
+          </div>
+          {isStandard && <Badge variant="outline">قياسي</Badge>}
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-3 mt-4">
+          {/* الدورية */}
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">دورية التسوية</label>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={frequency === "monthly" ? "default" : "outline"}
+                onClick={() => setFrequency("monthly")}
+              >شهري</Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={frequency === "quarterly" ? "default" : "outline"}
+                onClick={() => setFrequency("quarterly")}
+              >ربع سنوي</Button>
+            </div>
+          </div>
+
+          {/* مهلة الاستحقاق */}
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">مهلة الاستحقاق (أيام بعد نهاية الفترة)</label>
+            <Input
+              type="number"
+              min={1}
+              max={120}
+              value={dueDays}
+              onChange={(e) => setDueDays(e.target.value)}
+              className="w-32 tabular-nums"
+            />
+            {(!Number.isInteger(days) || days < 1 || days > 120) &&
+              <p className="text-xs text-destructive mt-1">قيمة بين 1 و120 يومًا</p>}
+          </div>
+
+          {/* حساب التسوية — قابل للتخصيص */}
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">حساب التسوية (صافي المستحق)</label>
+            <Input
+              value={acct}
+              onChange={(e) => setAcct(e.target.value)}
+              className="w-32 font-mono"
+              placeholder="2131"
+            />
+            {acctTrim.length === 0 && <p className="text-xs text-destructive mt-1">كود حساب مطلوب</p>}
+          </div>
+        </div>
+
+        {/* مراجع للقراءة فقط */}
+        <div className="text-xs text-muted-foreground mt-3 flex flex-wrap gap-x-6 gap-y-1">
+          <span>نسبة الضريبة: <span className="font-semibold">{(data.refs.vatRate * 100).toFixed(0)}%</span></span>
+          <span>حساب المخرجات: <span className="font-mono">{data.refs.accounts.output}</span></span>
+          <span>حساب المدخلات: <span className="font-mono">{data.refs.accounts.input}</span></span>
+        </div>
+
+        <div className="flex justify-end mt-4">
+          <GuardedButton
+            perm="finance:update"
+            size="sm"
+            disabled={!dirty || !valid || saveMut.isPending}
+            onClick={() => saveMut.mutate({ frequency, filingDueDays: days, settlementAccountCode: acctTrim })}
+          >
+            {saveMut.isPending ? "جاري الحفظ" : "حفظ السياسة"}
+          </GuardedButton>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * ترحيل تسوية الضريبة لفترة — معاينة القيد المقترح (GET /tax-settlement/preview)
+ * ثم ترحيله للدفتر بإجراء بشري متعمّد (POST /tax-settlement/post). idempotent:
+ * إعادة الترحيل لا تنشئ قيدًا مكررًا. لا cron — التقديم قرار المستخدم.
+ */
+interface SettlementLine { accountCode: string; debit: number; credit: number }
+interface SettlementPreview {
+  period: string;
+  accounts: { output: string; input: string; settlement: string };
+  outputVat: number;
+  inputVat: number;
+  netVat: number;
+  direction: "payable" | "refundable";
+  lines: SettlementLine[];
+  ref: string;
+  alreadyPosted: boolean;
+  postedJournalId: number | null;
+}
+
+function currentMonth() {
+  return todayLocal().slice(0, 7); // YYYY-MM من توقيت الرياض
+}
+
+function SettlementPostPanel() {
+  const [period, setPeriod] = useState(currentMonth());
+  const valid = /^\d{4}-\d{2}$/.test(period);
+
+  const { data, isLoading, isError, refetch } = useApiQuery<SettlementPreview>(
+    ["tax-settlement-preview", period],
+    `/finance/tax-settlement/preview?period=${period}`,
+    { enabled: valid },
+  );
+
+  const postMut = useApiMutation<SettlementPreview, { period: string }>(
+    "/finance/tax-settlement/post",
+    "POST",
+    [["tax-settlement-preview", period]],
+    { successMessage: "تم ترحيل قيد التسوية" },
+  );
+
+  const hasMovement = !!data && data.lines.length >= 2;
+
+  return (
+    <Card className="mt-4">
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <h3 className="text-base font-semibold">ترحيل تسوية الفترة</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              معاينة قيد التسوية المقترح ثم ترحيله للدفتر — قابل للإعادة بأمان (لا تكرار)
+            </p>
+          </div>
+          <Input
+            type="month"
+            value={period}
+            onChange={(e) => setPeriod(e.target.value)}
+            className="w-40"
+          />
+        </div>
+
+        {!valid && <p className="text-xs text-destructive mt-3">صيغة الفترة YYYY-MM</p>}
+        {valid && isLoading && <p className="text-xs text-muted-foreground mt-3">جاري التحميل…</p>}
+        {valid && isError && <p className="text-xs text-destructive mt-3">تعذّر تحميل المعاينة</p>}
+
+        {data && (
+          <div className="mt-4">
+            {data.alreadyPosted ? (
+              <Badge className="bg-status-success-surface text-status-success-foreground">
+                مُرحَّل — قيد رقم {data.postedJournalId}
+              </Badge>
+            ) : hasMovement ? (
+              <>
+                <div className="grid gap-3 grid-cols-2 md:grid-cols-3 mb-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground">ضريبة المخرجات</p>
+                    <p className="text-base font-semibold">{formatCurrency(data.outputVat)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">ضريبة المدخلات</p>
+                    <p className="text-base font-semibold">{formatCurrency(data.inputVat)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">
+                      الصافي ({data.direction === "payable" ? "مستحق للهيئة" : "قابل للاسترداد"})
+                    </p>
+                    <p className={`text-base font-bold ${data.direction === "payable" ? "text-orange-600" : "text-emerald-700"}`}>
+                      {formatCurrency(Math.abs(data.netVat))}
+                    </p>
+                  </div>
+                </div>
+
+                {/* القيد المقترح */}
+                <div className="rounded-md border divide-y text-sm">
+                  <div className="grid grid-cols-3 px-3 py-1.5 text-xs text-muted-foreground bg-muted/40">
+                    <span>الحساب</span><span className="text-end">مدين</span><span className="text-end">دائن</span>
+                  </div>
+                  {data.lines.map((l, i) => (
+                    <div key={i} className="grid grid-cols-3 px-3 py-1.5 tabular-nums">
+                      <span className="font-mono">{l.accountCode}</span>
+                      <span className="text-end">{l.debit ? formatCurrency(l.debit) : "—"}</span>
+                      <span className="text-end">{l.credit ? formatCurrency(l.credit) : "—"}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex justify-end mt-4">
+                  <GuardedButton
+                    perm="finance:update"
+                    size="sm"
+                    disabled={postMut.isPending}
+                    onClick={() => postMut.mutate({ period }, { onSuccess: () => refetch() })}
+                  >
+                    {postMut.isPending ? "جاري الترحيل" : "ترحيل التسوية"}
+                  </GuardedButton>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">لا توجد حركة ضريبية في هذه الفترة للتسوية</p>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function VatReconciliationPage() {
@@ -283,6 +550,12 @@ export default function VatReconciliationPage() {
           noToolbar
         />
       </div>
+
+      {/* سياسة التسوية — قياسية قابلة للتعديل من الواجهة */}
+      <SettlementPolicyCard />
+
+      {/* ترحيل تسوية الفترة — معاينة + ترحيل بشري للدفتر */}
+      <SettlementPostPanel />
     </PageShell>
   );
 }
