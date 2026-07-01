@@ -37,6 +37,7 @@ import { CompaniesTab } from "./settings/companies-tab";
 import { LetterheadSettings } from "./settings/letterhead-tab";
 import { AccountingMappingsTab } from "./settings/accounting-mappings-tab";
 import { SystemControlsTab } from "./settings/system-controls-tab";
+import { TaskSlaReminderTab } from "./settings/task-sla-reminder-tab";
 import { ApprovalWorkflowsTab } from "./settings/approval-workflows-tab";
 import { WorkflowDefinitionsTab } from "./settings/workflow-definitions-tab";
 import { NumberingTab } from "./settings/numbering-tab";
@@ -323,6 +324,7 @@ const SETTINGS_PATH_TAB: Record<string, string> = {
   "/settings/companies": "companies",
   "/settings/channels": "channels",
   "/settings/controls": "controls",
+  "/settings/task-sla": "task-sla",
   "/settings/approvals": "approvals",
   "/settings/numbering": "numbering",
   "/settings/accounting": "accounting",
@@ -361,6 +363,7 @@ export default function SettingsPage() {
           <TabsTrigger value="gov">التكاملات الحكومية</TabsTrigger>
           {/* النظام والمراقبة */}
           <TabsTrigger value="channels">قنوات الاتصال</TabsTrigger>
+          <TabsTrigger value="task-sla">تذكير SLA للمهام</TabsTrigger>
           <TabsTrigger value="audit">التدقيق</TabsTrigger>
           <TabsTrigger value="resolved">الوراثة</TabsTrigger>
           <TabsTrigger value="custom-fields">الحقول المخصّصة</TabsTrigger>
@@ -378,6 +381,7 @@ export default function SettingsPage() {
         <TabsContent value="zatca"><ZatcaSettingsTab /></TabsContent>
         <TabsContent value="gov"><GovIntegrationsTab /></TabsContent>
         <TabsContent value="channels"><CommunicationChannelsTab /></TabsContent>
+        <TabsContent value="task-sla"><TaskSlaReminderTab /></TabsContent>
         <TabsContent value="audit"><AuditLogTab /></TabsContent>
         <TabsContent value="resolved"><ResolvedSettingsTab /></TabsContent>
         <TabsContent value="custom-fields"><CustomFieldsTab /></TabsContent>
