@@ -158,12 +158,14 @@ describe("HR-Wave-0 / 0.3 — endpoint count pin (snapshot moves only with inten
     // gated). 231→232.
     // البند ٣ (دفعة ١) أضاف 1 (POST /employees/:id/ocr-apply — عقد HR يطبّق مستخرَج OCR
     // على الموظف، gated بـhr.employees + ACL للصف + عزل companyId + تدقيق). 232→233.
-    expect(ALL_REGISTRATIONS.length).toBe(233);
+    // معاينة المستحقّات قبل الترحيل أضافت 1 (GET /payroll/pending-dues — قراءة فقط،
+    // gated بـhr.payroll.runs:view المُعاد، بلا دفتر). 233→234.
+    expect(ALL_REGISTRATIONS.length).toBe(234);
   });
 
   it("authorize()-gated endpoint count matches snapshot (currently 100%)", () => {
     const gated = ALL_REGISTRATIONS.filter((r) => r.hasAuthorize).length;
-    expect(gated).toBe(233);
+    expect(gated).toBe(234);
   });
 
   it("per-file count pin (catches a router losing or gaining endpoints)", () => {
@@ -182,7 +184,8 @@ describe("HR-Wave-0 / 0.3 — endpoint count pin (snapshot moves only with inten
       // main merged 4 endpoints (121→125); PR-9 (#2077) added the
       // field-ping eligibility mirror (125→126). HR-REV-9 (#2222) added
       // PATCH+DELETE /employee-documents/:id (126→128). All gated.
-      "hr.ts": 128,
+      // معاينة المستحقّات أضافت GET /payroll/pending-dues (قراءة فقط، gated). 128→129.
+      "hr.ts": 129,
       "hr-compliance.ts": 3,
       "hr-contracts.ts": 12,
       "hr-discipline.ts": 24,

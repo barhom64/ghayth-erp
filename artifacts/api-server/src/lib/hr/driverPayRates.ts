@@ -40,6 +40,10 @@ function n(v: unknown): number | null {
   return Number.isFinite(x) ? x : null;
 }
 
+function round2(v: number): number {
+  return Math.round(v * 100) / 100;
+}
+
 /** يُحلّ المعدّل الفعّال لتعيين: تجاوز التعيين ← افتراضي الشركة. عقد للدفعة 3. */
 export async function resolveDriverPayRate(
   companyId: number,
@@ -66,6 +70,25 @@ export interface ResolvedRate {
   payType: string;
   drivingHourlyRate: number | null;
   stopHourlyRate: number | null;
+}
+
+/**
+ * يحسب أجر السائق الساعي من ساعاته المعتمدة ومعدّله — **مصدر واحد** للصيغة
+ * يستهلكه معاينة المستحقّات (قراءة فقط) ويطابق حرفيًا حساب المسيّر في
+ * routes/hr.ts (drivingHours × drivingHourlyRate + stopHours × stopHourlyRate،
+ * للسائق الساعي فقط؛ صفر لغيره). HR قائد سياسة الأجر — الصيغة تعيش هنا.
+ */
+export function computeHourlyDriverPay(
+  rate: ResolvedRate | null,
+  drivingHours: number,
+  stopHours: number,
+): { drivingHoursAmount: number; stopHoursAmount: number; total: number } {
+  if (!rate || rate.payType !== "hourly") {
+    return { drivingHoursAmount: 0, stopHoursAmount: 0, total: 0 };
+  }
+  const drivingHoursAmount = round2(drivingHours * (rate.drivingHourlyRate ?? 0));
+  const stopHoursAmount = round2(stopHours * (rate.stopHourlyRate ?? 0));
+  return { drivingHoursAmount, stopHoursAmount, total: round2(drivingHoursAmount + stopHoursAmount) };
 }
 
 /**
