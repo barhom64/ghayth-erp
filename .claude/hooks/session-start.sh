@@ -15,7 +15,8 @@ fi
 cd "${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 
 # Ensure pnpm is on PATH even if the base image only ships npm. corepack is
-# bundled with Node; `packageManager` in package.json pins pnpm@11.8.0.
+# bundled with Node. (No `packageManager` pin in package.json — it conflicts
+# with the CI pnpm/action-setup version; corepack's default pnpm is fine here.)
 corepack enable pnpm 2>/dev/null || true
 
 # Idempotent: safe to re-run; reuses the cached store on warm containers.
