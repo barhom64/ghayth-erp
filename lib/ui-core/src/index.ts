@@ -75,6 +75,7 @@ export {
   FormEmailField,
   FormPhoneField,
   FormNumberField,
+  FormImageField,
   FormDateField,
   FormTextareaField,
   FormSelectField,
@@ -85,6 +86,7 @@ export {
 export type {
   FormShellProps,
   FormTextFieldProps,
+  FormImageFieldProps,
   FormTextareaFieldProps,
   FormSelectFieldProps,
   FormSelectOption,
