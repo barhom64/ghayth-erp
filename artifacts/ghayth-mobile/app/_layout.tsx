@@ -1290,6 +1290,8 @@ function AuthGate() {
       <Stack.Screen name="scheduled-reports/history" options={{ title: 'سجل التقارير' }} />
       <Stack.Screen name="comms/correspondence-detail" options={{ title: 'تفاصيل المراسلة' }} />
       <Stack.Screen name="admin/approval-entity" options={{ title: 'سجل الموافقات' }} />
+      <Stack.Screen name="intelligence/employee-kpis" options={{ title: 'مؤشرات الموظف' }} />
+      <Stack.Screen name="intelligence/employee-daily-schedule" options={{ title: 'جدول الموظف اليومي' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
