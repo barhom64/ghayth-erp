@@ -913,7 +913,6 @@ function AuthGate() {
       <Stack.Screen name="admin/infra-alerts" options={{ title: 'تنبيهات البنية التحتية' }} />
       <Stack.Screen name="admin/infra-alert-settings" options={{ title: 'إعدادات تنبيهات البنية التحتية' }} />
       <Stack.Screen name="admin/rules-logs" options={{ title: 'سجلات القواعد' }} />
-      <Stack.Screen name="admin/rbac-features" options={{ title: 'ميزات RBAC' }} />
       <Stack.Screen name="admin/rbac-levels" options={{ title: 'مستويات الصلاحيات' }} />
       <Stack.Screen name="admin/numbering-assignments" options={{ title: 'تعيينات الترقيم' }} />
       <Stack.Screen name="admin/numbering-audit" options={{ title: 'سجل تدقيق الترقيم' }} />
@@ -1263,12 +1262,14 @@ function AuthGate() {
             <Stack.Screen name="admin/workflow-definition-detail" options={{ title: 'تعريف سير العمل' }} />
             <Stack.Screen name="admin/smtp-settings" options={{ title: 'إعدادات SMTP' }} />
             <Stack.Screen name="inbox/templates" options={{ title: 'قوالب الصندوق' }} />
-            <Stack.Screen name="notifications/unread-count" options={{ title: 'عدد غير المقروء' }} />
-            <Stack.Screen name="admin/rbac-features" options={{ title: 'ميزات الصلاحيات' }} />
             <Stack.Screen name="admin/rbac-user-effective" options={{ title: 'الصلاحيات الفعلية' }} />
             <Stack.Screen name="admin/rbac-user-roles" options={{ title: 'أدوار المستخدم' }} />
             <Stack.Screen name="print/archive" options={{ title: 'أرشيف الطباعة' }} />
             <Stack.Screen name="print/queue-detail" options={{ title: 'تفاصيل الطباعة' }} />
+            <Stack.Screen name="fleet/telematics-breaker-state" options={{ title: 'حالة قاطع الدائرة' }} />
+            <Stack.Screen name="fleet/telematics-media-evidence" options={{ title: 'الأدلة المرئية' }} />
+            <Stack.Screen name="fleet/telematics-scorecard-leaderboard" options={{ title: 'لوحة الصدارة' }} />
+            <Stack.Screen name="fleet/telematics-driver-scorecard" options={{ title: 'بطاقة أداء السائق' }} />
             <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
