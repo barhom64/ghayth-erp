@@ -16,7 +16,7 @@ interface PbxTranscript {
 
 export default function PbxTranscriptsScreen() {
   const c = useColors();
-  const { data, isLoading, isError, refetch } = useList<PbxTranscript[]>('/api/admin/pbx/transcripts');
+  const { data, isLoading, isError, refetch } = useList<PbxTranscript[]>('/api/admin/pbx-control/transcripts');
   const list = Array.isArray(data) ? data : [];
 
   if (isLoading) return <GLoadingState text="جارٍ تحميل نصوص المكالمات…" />;
