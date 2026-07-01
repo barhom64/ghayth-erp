@@ -3816,6 +3816,9 @@ router.post("/violations", authorize({ feature: "hr.violations", action: "create
     const {
       assignmentId, type, description, severity, deduction,
       period: reqPeriod, incidentDate: reqIncidentDate, regulationId,
+      // أدلة المخالفة: يُدخلها المشغّل ويرسلها النموذج والـschema يقبلها،
+      // وكانت تُسقَط قبل الحفظ (هجرة 452 أضافت أعمدتها).
+      witness, location, actionTaken,
     } = parsedAny;
 
     // FK pre-check: assignment must exist inside the caller's company scope.
@@ -3842,9 +3845,10 @@ router.post("/violations", authorize({ feature: "hr.violations", action: "create
     const effectiveDeduction = Number(deduction ?? 0);
 
     const { insertId } = await rawExecute(
-      `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [scope.companyId, Number(assignmentId), type, description, effectiveSeverity, effectiveDeduction, period]
+      `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period,witness,location,"actionTaken")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [scope.companyId, Number(assignmentId), type, description, effectiveSeverity, effectiveDeduction, period,
+       witness ?? null, location ?? null, actionTaken ?? null]
     );
     assertInsert(insertId, "employee_violations");
 
