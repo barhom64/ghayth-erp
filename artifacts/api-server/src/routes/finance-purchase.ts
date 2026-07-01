@@ -1906,7 +1906,10 @@ purchaseRouter.post("/payment-run/execute", authorize({ feature: "finance.purcha
     const { financialEngine } = await import("../lib/engines/index.js");
     const [apAccount, cashAccount] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2111"),
-      financialEngine.resolveAccountCode(scope.companyId, "payroll_bank_payout", "credit", "1124"),
+      // سداد المورّد يُموَّل من النقد التشغيلي (1111) لا من بنك الرواتب. كان
+      // "payroll_bank_payout" (→1121 بنك الرواتب / احتياطي 1124 غير موجود أصلًا)
+      // يخلط دفعات الموردين بصرف الرواتب (تصحيح ٢٠٢٦-٠٧-٠١ باعتماد إبراهيم).
+      financialEngine.resolveAccountCode(scope.companyId, "vendor_payment_cash", "credit", "1111"),
     ]);
 
     // ── WHT computation ─────────────────────────────────────────────────
@@ -2683,7 +2686,8 @@ purchaseRouter.post("/purchase-orders/:id/schedule-payment", authorize({ feature
     // anchor kicks in on retry.
     const { financialEngine } = await import("../lib/engines/index.js");
     const schedApCode = await financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2111");
-    const schedCashCode = await financialEngine.resolveAccountCode(scope.companyId, "payroll_bank_payout", "credit", "1124");
+    // النقد التشغيلي (1111) لا بنك الرواتب — نفس تصحيح دفعة المورّد (٢٠٢٦-٠٧-٠١).
+    const schedCashCode = await financialEngine.resolveAccountCode(scope.companyId, "vendor_payment_cash", "credit", "1111");
 
     let schedAlreadyExists = false;
     await withTransaction(async (client: any) => {
