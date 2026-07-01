@@ -876,7 +876,10 @@ export const allNavSections: NavSection[] = [
         { label: "قاعدة المعرفة", path: "/support/kb", icon: BookOpen },
         { label: "الردود الجاهزة", path: "/support/replies", icon: MessageSquare },
       ]},
-      { label: "التسويق", path: "/marketing", icon: Megaphone, module: "marketing" },
+      { label: "التسويق", path: "/marketing", icon: Megaphone, module: "marketing", children: [
+        { label: "الحملات", path: "/marketing", icon: Megaphone },
+        { label: "قوالب واتساب", path: "/marketing/whatsapp-templates", icon: MessageSquare },
+      ]},
     ],
   },
   // ══════════════════════════════════════════════════════════════════════
