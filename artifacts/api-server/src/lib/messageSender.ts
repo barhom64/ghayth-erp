@@ -65,6 +65,18 @@ export interface SendMessageInput {
   relatedId?: number | null;
   /** Template that produced this body, if any. Persisted in the event payload for observability. */
   templateKey?: string | null;
+  /**
+   * Meta-registered WhatsApp template name. When set, the WhatsApp queue
+   * worker sends `type:"template"` instead of `type:"text"` (required by
+   * Meta to message a user outside the 24h session window — e.g. cold
+   * campaign blasts). Ignored for email/sms.
+   */
+  templateName?: string | null;
+  /**
+   * Structured params for `templateName`. Shape: `{ lang?: string, body?: string[] }`
+   * where `body` fills the template's {{1}}..{{n}} placeholders in order.
+   */
+  templateParams?: Record<string, unknown> | null;
   /** When set, override the default 'communications.{channel}.sent' event action name. */
   eventAction?: string;
   /** Future-dated send (email_queue.scheduledAt). If absent, the queue worker sends immediately. Email only — sms/whatsapp queues don't support it today. */
@@ -181,18 +193,22 @@ export async function sendMessage(input: SendMessageInput): Promise<SendMessageR
   // CC/BCC only meaningful for email — silently drop on other channels.
   const cc = input.channel === "email" ? (input.cc ?? null) : null;
   const bcc = input.channel === "email" ? (input.bcc ?? null) : null;
+  // Meta WhatsApp templates only make sense on the whatsapp channel.
+  const templateName = input.channel === "whatsapp" ? (input.templateName ?? null) : null;
+  const templateParams = templateName ? (input.templateParams ?? null) : null;
   await rawExecute(
     `INSERT INTO outbound_queue
        ("companyId", channel, recipient, "recipientName", cc, bcc, subject, body,
         status, "scheduledAt", "refType", "refId", "messageLogId",
-        "createdAt", "updatedAt")
+        "templateName", "templateParams", "createdAt", "updatedAt")
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', COALESCE($9, NOW()),
-             $10, $11, $12, NOW(), NOW())`,
+             $10, $11, $12, $13, $14, NOW(), NOW())`,
     [
       input.companyId, input.channel, input.recipient,
       input.recipientName ?? null, cc, bcc,
       input.subject ?? null, finalBody,
       scheduledAt, input.relatedType ?? null, input.relatedId ?? null, logId,
+      templateName, templateParams ? JSON.stringify(templateParams) : null,
     ],
   );
 
