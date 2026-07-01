@@ -23,7 +23,7 @@
 // writing) is enforced upstream at the approval endpoint; this engine posts the
 // approved entry.
 import { withTransaction } from "../rawdb.js";
-import { checkFinancialPeriodOpen } from "../businessHelpers.js";
+import { checkFinancialPeriodOpen, todayISO } from "../businessHelpers.js";
 import { resolveVatLegAccount, buildVatLeg } from "../vatLeg.js";
 
 const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
@@ -62,7 +62,7 @@ export async function postBadDebtWriteOff(opts: {
   asOf?: string | null;
 }): Promise<PostWriteOffResult> {
   const { companyId, invoiceId } = opts;
-  const targetDate = opts.asOf || new Date().toISOString().slice(0, 10);
+  const targetDate = opts.asOf || todayISO();
 
   const periodCheck = await checkFinancialPeriodOpen(companyId, targetDate);
   if (!periodCheck.open) {
