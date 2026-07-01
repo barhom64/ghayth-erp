@@ -1251,6 +1251,16 @@ function AuthGate() {
             <Stack.Screen name="m/my-performance" options={{ title: 'أدائي' }} />
             <Stack.Screen name="m/my-documents" options={{ title: 'مستنداتي' }} />
             <Stack.Screen name="m/my-requests" options={{ title: 'طلباتي' }} />
+            <Stack.Screen name="finance/analytic-accounts" options={{ title: 'الحسابات التحليلية' }} />
+            <Stack.Screen name="admin/ai-evaluations" options={{ title: 'تقييمات الذكاء الاصطناعي' }} />
+            <Stack.Screen name="admin/pbx-setup" options={{ title: 'إعداد PBX' }} />
+            <Stack.Screen name="admin/pbx-transcript-detail" options={{ title: 'نص المكالمة' }} />
+            <Stack.Screen name="careers/me" options={{ title: 'ملفي المهني' }} />
+            <Stack.Screen name="admin/party-360" options={{ title: 'ملف الطرف 360°' }} />
+            <Stack.Screen name="comms/inbox-conversation-detail" options={{ title: 'تفاصيل المحادثة' }} />
+            <Stack.Screen name="admin/workflow-detail" options={{ title: 'تفاصيل سير العمل' }} />
+            <Stack.Screen name="admin/workflow-timeline" options={{ title: 'الجدول الزمني' }} />
+            <Stack.Screen name="admin/workflow-definition-detail" options={{ title: 'تعريف سير العمل' }} />
             <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
