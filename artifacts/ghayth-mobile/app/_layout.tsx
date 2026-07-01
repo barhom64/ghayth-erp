@@ -1312,8 +1312,9 @@ function AuthGate() {
       <Stack.Screen name="finance/customer-statement" options={{ title: 'كشف حساب العميل' }} />
       <Stack.Screen name="hr/holiday-check" options={{ title: 'فحص العطلة الرسمية' }} />
       <Stack.Screen name="properties/tenants-list" options={{ title: 'قائمة المستأجرين' }} />
-      <Stack.Screen name="crm/opportunity-activities" options={{ title: 'أنشطة الفرصة' }} />
-      <Stack.Screen name="crm/opportunity-related" options={{ title: 'المرتبطات بالفرصة' }} />
+      <Stack.Screen name="finance/journal-import-presets" options={{ title: 'إعدادات الاستيراد' }} />
+      <Stack.Screen name="finance/journal-import-templates" options={{ title: 'قوالب الاستيراد' }} />
+      <Stack.Screen name="finance/maintenance-ticket-options" options={{ title: 'خيارات تذكرة الصيانة' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
