@@ -10,6 +10,8 @@ import { Link } from "wouter";
 import { ChevronDown, Star, Shield, Heart, Award, ArrowLeft, Phone, ShoppingBag } from "lucide-react";
 import { wafdWhatsAppLink, WAFD_PHONE, WAFD_PHONE_DISPLAY, WAFD_EMAIL, WAFD_WEBSITE } from "../lib/wafd-constants";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useSiteData } from "@/contexts/SiteDataContext";
+import DynamicSections from "@/components/DynamicSections";
 
 const HERO_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/310419663030823861/YHZMogv6aVcNXaRZ3427z7/wafd-hero-kaaba-HJyJeNN97h7PfMrmAAMs2W.webp";
 const MADINAH_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/310419663030823861/YHZMogv6aVcNXaRZ3427z7/wafd-madinah-mLYiJhvGYuvzquRMzJikST.webp";
@@ -215,6 +217,18 @@ export default function Home() {
   const heroOpacity = useTransform(scrollYProgress, [0, 0.8], [1, 0]);
   const { t, dir } = useLanguage();
   const h = t.home;
+  const { faqs: dynamicFaqs } = useSiteData();
+  const faqItems =
+    dynamicFaqs.length > 0
+      ? dynamicFaqs.map((f) => ({ q: f.question, a: f.answer }))
+      : [
+          { q: h.faqQ1, a: h.faqA1 },
+          { q: h.faqQ2, a: h.faqA2 },
+          { q: h.faqQ3, a: h.faqA3 },
+          { q: h.faqQ4, a: h.faqA4 },
+          { q: h.faqQ5, a: h.faqA5 },
+          { q: h.faqQ6, a: h.faqA6 },
+        ];
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -756,14 +770,7 @@ export default function Home() {
             <p className="text-[oklch(0.50_0.005_0)] mt-2" style={{ fontFamily: "'Tajawal', sans-serif" }}>{h.faqSubheading}</p>
           </motion.div>
           <div className="space-y-3">
-            {[
-              { q: h.faqQ1, a: h.faqA1 },
-              { q: h.faqQ2, a: h.faqA2 },
-              { q: h.faqQ3, a: h.faqA3 },
-              { q: h.faqQ4, a: h.faqA4 },
-              { q: h.faqQ5, a: h.faqA5 },
-              { q: h.faqQ6, a: h.faqA6 },
-            ].map((faq, i) => (
+            {faqItems.map((faq, i) => (
               <motion.details
                 key={i}
                 className="group rounded-2xl border border-[oklch(0.90_0.006_80)] bg-white overflow-hidden"
@@ -803,6 +810,9 @@ export default function Home() {
           </motion.div>
         </div>
       </section>
+
+      {/* ===== أقسام مُدارة من لوحة تحكم غيث: آراء العملاء + الفريق + المعرض ===== */}
+      <DynamicSections />
 
       {/* ===== CTA SECTION ===== */}
       <section className="py-20 wafd-gradient-dark relative overflow-hidden">

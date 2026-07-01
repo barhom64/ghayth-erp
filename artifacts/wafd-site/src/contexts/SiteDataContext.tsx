@@ -74,11 +74,80 @@ export interface SiteHotel {
   isActive: boolean;
 }
 
+export interface SiteFaq {
+  id: number;
+  question: string;
+  answer: string;
+  category: string | null;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface SiteTestimonial {
+  id: number;
+  authorName: string;
+  authorTitle: string | null;
+  body: string;
+  rating: number | null;
+  avatarUrl: string | null;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface SiteTeamMember {
+  id: number;
+  name: string;
+  role: string | null;
+  bio: string | null;
+  photoUrl: string | null;
+  socials: Record<string, string>;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface SiteGalleryItem {
+  id: number;
+  title: string | null;
+  imageUrl: string;
+  category: string | null;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface SiteBanner {
+  id: number;
+  title: string;
+  message: string | null;
+  ctaLabel: string | null;
+  ctaUrl: string | null;
+  imageUrl: string | null;
+  bgColor: string | null;
+  startsAt: string | null;
+  endsAt: string | null;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface SiteNavItem {
+  id: number;
+  label: string;
+  url: string;
+  openInNewTab: boolean;
+  sortOrder: number;
+  isActive: boolean;
+}
+
 export interface SiteData {
   config: SiteConfig | null;
   packages: SitePackage[];
   services: SiteService[];
   hotels: SiteHotel[];
+  faqs: SiteFaq[];
+  testimonials: SiteTestimonial[];
+  team: SiteTeamMember[];
+  gallery: SiteGalleryItem[];
+  banners: SiteBanner[];
+  navItems: SiteNavItem[];
   loading: boolean;
   error: boolean;
 }
@@ -90,6 +159,12 @@ const SiteDataContext = createContext<SiteData>({
   packages: [],
   services: [],
   hotels: [],
+  faqs: [],
+  testimonials: [],
+  team: [],
+  gallery: [],
+  banners: [],
+  navItems: [],
   loading: true,
   error: false,
 });
@@ -100,6 +175,12 @@ export function SiteDataProvider({ children }: { children: ReactNode }) {
     packages: [],
     services: [],
     hotels: [],
+    faqs: [],
+    testimonials: [],
+    team: [],
+    gallery: [],
+    banners: [],
+    navItems: [],
     loading: true,
     error: false,
   });
@@ -117,6 +198,12 @@ export function SiteDataProvider({ children }: { children: ReactNode }) {
           packages: Array.isArray(json.packages) ? json.packages : [],
           services: Array.isArray(json.services) ? json.services : [],
           hotels: Array.isArray(json.hotels) ? json.hotels : [],
+          faqs: Array.isArray(json.faqs) ? json.faqs : [],
+          testimonials: Array.isArray(json.testimonials) ? json.testimonials : [],
+          team: Array.isArray(json.team) ? json.team : [],
+          gallery: Array.isArray(json.gallery) ? json.gallery : [],
+          banners: Array.isArray(json.banners) ? json.banners : [],
+          navItems: Array.isArray(json.navItems) ? json.navItems : [],
           loading: false,
           error: false,
         });
