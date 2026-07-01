@@ -5,11 +5,11 @@ import { GLoadingState, GEmptyState } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 
-interface JobPosting { id?: number; title?: string; department?: string; status?: string; applicantCount?: number; }
+interface UmrahEvent { id?: number; title?: string; date?: string; type?: string; groupName?: string; }
 
-export default function RecruitmentPostingsScreen() {
+export default function UmrahUpcomingScreen() {
   const c = useColors();
-  const { data, isLoading, isError, refetch } = useList<JobPosting[]>('/api/hr/recruitment/postings');
+  const { data, isLoading, isError, refetch } = useList<UmrahEvent[]>('/api/umrah/upcoming');
   const list = Array.isArray(data) ? data : [];
   if (isLoading) return <GLoadingState text="جارٍ تحميل…" />;
   if (isError) return (
@@ -18,19 +18,16 @@ export default function RecruitmentPostingsScreen() {
   );
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Stack.Screen options={{ title: 'إعلانات التوظيف' }} />
+      <Stack.Screen options={{ title: 'الأحداث القادمة — العمرة' }} />
       <FlatList data={list} keyExtractor={(item, i) => String(item.id ?? i)}
         contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
         onRefresh={refetch} refreshing={isLoading}
-        ListEmptyComponent={<GEmptyState icon="briefcase-outline" title="لا توجد إعلانات" description="" />}
+        ListEmptyComponent={<GEmptyState icon="calendar-outline" title="لا توجد أحداث قادمة" description="" />}
         renderItem={({ item }) => (
           <View style={{ backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, padding: 14 }}>
-            <Text style={{ color: c.text, fontSize: 14, fontWeight: '600' }}>{item.title ?? ''}</Text>
-            {!!item.department && <Text style={{ color: c.textMuted, fontSize: 12, marginTop: 2 }}>{item.department}</Text>}
-            <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', marginTop: 6 }}>
-              {!!item.status && <Text style={{ color: c.textFaint, fontSize: 12 }}>{item.status}</Text>}
-              {item.applicantCount != null && <Text style={{ color: c.brand, fontSize: 12 }}>{item.applicantCount} متقدم</Text>}
-            </View>
+            <Text style={{ color: c.text, fontSize: 14 }}>{item.title ?? ''}</Text>
+            {!!item.groupName && <Text style={{ color: c.textMuted, fontSize: 12, marginTop: 2 }}>{item.groupName}</Text>}
+            {!!item.date && <Text style={{ color: c.textFaint, fontSize: 12, marginTop: 2 }}>{new Date(item.date).toLocaleDateString('ar-SA', { month: 'short', day: 'numeric', year: 'numeric' })}</Text>}
           </View>
         )}
       />
