@@ -5,11 +5,11 @@ import { GLoadingState, GEmptyState } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 
-interface VendorCredit { id?: number; vendorName?: string; amount?: number; date?: string; status?: string; }
+interface CostCenterRank { id?: number; name?: string; totalCost?: number; rank?: number; }
 
-export default function VendorCreditsScreen() {
+export default function CostCentersRankingScreen() {
   const c = useColors();
-  const { data, isLoading, isError, refetch } = useList<VendorCredit[]>('/api/finance/vendor-credits');
+  const { data, isLoading, isError, refetch } = useList<CostCenterRank[]>('/api/finance/cost-centers/ranking');
   const list = Array.isArray(data) ? data : [];
   if (isLoading) return <GLoadingState text="جارٍ تحميل…" />;
   if (isError) return (
@@ -18,15 +18,18 @@ export default function VendorCreditsScreen() {
   );
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Stack.Screen options={{ title: 'إشعارات دائن الموردين' }} />
+      <Stack.Screen options={{ title: 'ترتيب مراكز التكلفة' }} />
       <FlatList data={list} keyExtractor={(item, i) => String(item.id ?? i)}
         contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
         onRefresh={refetch} refreshing={isLoading}
-        ListEmptyComponent={<GEmptyState icon="arrow-undo-outline" title="لا توجد إشعارات دائن" description="" />}
+        ListEmptyComponent={<GEmptyState icon="trophy-outline" title="لا توجد بيانات ترتيب" description="" />}
         renderItem={({ item }) => (
           <View style={{ backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, padding: 14, flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={{ color: c.text, fontSize: 14 }}>{item.vendorName ?? String(item.id ?? '')}</Text>
-            {item.amount != null && <Text style={{ color: c.brand, fontSize: 14, fontWeight: '600' }}>{item.amount.toLocaleString('ar-SA')} ر.س</Text>}
+            <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 10 }}>
+              {item.rank != null && <Text style={{ color: c.brand, fontSize: 18, fontWeight: '700', minWidth: 30, textAlign: 'center' }}>{item.rank}</Text>}
+              <Text style={{ color: c.text, fontSize: 14 }}>{item.name ?? ''}</Text>
+            </View>
+            {item.totalCost != null && <Text style={{ color: c.textMuted, fontSize: 13 }}>{item.totalCost.toLocaleString('ar-SA')}</Text>}
           </View>
         )}
       />

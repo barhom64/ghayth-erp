@@ -5,11 +5,11 @@ import { GLoadingState, GEmptyState } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 
-interface VendorCredit { id?: number; vendorName?: string; amount?: number; date?: string; status?: string; }
+interface PaymentRun { id?: number; runDate?: string; totalAmount?: number; vendorCount?: number; status?: string; }
 
-export default function VendorCreditsScreen() {
+export default function PaymentRunScreen() {
   const c = useColors();
-  const { data, isLoading, isError, refetch } = useList<VendorCredit[]>('/api/finance/vendor-credits');
+  const { data, isLoading, isError, refetch } = useList<PaymentRun[]>('/api/finance/payment-run');
   const list = Array.isArray(data) ? data : [];
   if (isLoading) return <GLoadingState text="جارٍ تحميل…" />;
   if (isError) return (
@@ -18,15 +18,18 @@ export default function VendorCreditsScreen() {
   );
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Stack.Screen options={{ title: 'إشعارات دائن الموردين' }} />
+      <Stack.Screen options={{ title: 'دفعات الموردين' }} />
       <FlatList data={list} keyExtractor={(item, i) => String(item.id ?? i)}
         contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
         onRefresh={refetch} refreshing={isLoading}
-        ListEmptyComponent={<GEmptyState icon="arrow-undo-outline" title="لا توجد إشعارات دائن" description="" />}
+        ListEmptyComponent={<GEmptyState icon="card-outline" title="لا توجد دفعات" description="" />}
         renderItem={({ item }) => (
           <View style={{ backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, padding: 14, flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={{ color: c.text, fontSize: 14 }}>{item.vendorName ?? String(item.id ?? '')}</Text>
-            {item.amount != null && <Text style={{ color: c.brand, fontSize: 14, fontWeight: '600' }}>{item.amount.toLocaleString('ar-SA')} ر.س</Text>}
+            <View>
+              {!!item.runDate && <Text style={{ color: c.text, fontSize: 14 }}>{new Date(item.runDate).toLocaleDateString('ar-SA', { month: 'short', day: 'numeric', year: 'numeric' })}</Text>}
+              {item.vendorCount != null && <Text style={{ color: c.textMuted, fontSize: 12, marginTop: 2 }}>{item.vendorCount} مورد</Text>}
+            </View>
+            {item.totalAmount != null && <Text style={{ color: c.brand, fontSize: 14, fontWeight: '700' }}>{item.totalAmount.toLocaleString('ar-SA')} ر.س</Text>}
           </View>
         )}
       />
