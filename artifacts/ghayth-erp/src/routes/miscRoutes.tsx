@@ -41,6 +41,10 @@ const TicketDetail = lazy(() => import("@/pages/details/ticket-detail"));
 const OpportunityDetail = lazy(() => import("@/pages/details/opportunity-detail"));
 const Marketing = lazy(() => import("@/pages/marketing"));
 const MarketingCreate = lazy(() => import("@/pages/create/marketing-create"));
+const WhatsAppTemplates = lazy(() => import("@/pages/whatsapp-templates"));
+const WhatsAppTemplateCreate = lazy(() => import("@/pages/create/whatsapp-templates-create"));
+const WhatsAppTemplateEdit = lazy(() => import("@/pages/whatsapp-template-edit"));
+const CampaignBroadcast = lazy(() => import("@/pages/marketing/campaign-broadcast"));
 const Notifications = lazy(() => import("@/pages/notifications"));
 const Intelligence = lazy(() => import("@/pages/intelligence"));
 const AiWorkbench = lazy(() => import("@/pages/ai-workbench"));
@@ -148,8 +152,12 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/support/kb", component: KnowledgeBase, module: "support" },
   { path: "/support/:id", component: TicketDetail, module: "support" },
   { path: "/support", component: Support, module: "support" },
-  { path: "/marketing", component: Marketing, module: "marketing" },
   { path: "/marketing/create", component: MarketingCreate, module: "marketing" },
+  { path: "/marketing/whatsapp-templates/create", component: WhatsAppTemplateCreate, module: "marketing" },
+  { path: "/marketing/whatsapp-templates/:id/edit", component: WhatsAppTemplateEdit, module: "marketing" },
+  { path: "/marketing/whatsapp-templates", component: WhatsAppTemplates, module: "marketing" },
+  { path: "/marketing/campaigns/:id/broadcast", component: CampaignBroadcast, module: "marketing" },
+  { path: "/marketing", component: Marketing, module: "marketing" },
   { path: "/tasks/create", component: TasksCreate, module: "operations" },
   { path: "/tasks/:id", component: TaskDetail, module: "operations" },
   { path: "/tasks", component: Tasks, module: "operations" },
