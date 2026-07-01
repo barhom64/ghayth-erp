@@ -34,6 +34,9 @@ const publicLeadSchema = z.object({
   subject: z.string().trim().max(200).optional(),
   message: z.string().trim().max(4000).optional(),
   source: z.string().trim().max(60).optional(),
+  // معرّف الحملة العامة التي جاء منها العميل (اختياري) — يُحَل إلى campaignId
+  // على الخادم ضمن الشركة المُستأجِرة فقط، لا نثق بأي معرّف رقمي من العميل.
+  campaignSlug: z.string().trim().max(120).optional(),
   // حقل فخّ (honeypot) — يجب أن يبقى فارغاً؛ يملؤه البوت فقط.
   website: z.string().max(200).optional(),
 });
@@ -380,6 +383,25 @@ router.post("/leads", publicLimiter, async (req, res) => {
       return;
     }
 
+    // عزو العميل المحتمل للحملة: نحلّ slug الحملة إلى معرّفها داخل نفس الشركة
+    // فقط (حملة عامة + غير محذوفة). نتجاهل أي slug غير مطابق بصمت (لا يفشل الطلب).
+    // عند وجود حملة نجعل source = اسم الحملة كي يظهر العزو في عمود المصدر القائم.
+    let campaignId: number | null = null;
+    let leadSource = b.source?.trim() || "website";
+    if (b.campaignSlug) {
+      const [campaign] = await rawQuery<{ id: number; name: string }>(
+        `SELECT id, name FROM marketing_campaigns
+           WHERE "companyId"=$1 AND LOWER(slug)=LOWER($2)
+             AND "isPublic"=true AND "deletedAt" IS NULL
+           LIMIT 1`,
+        [companyId, b.campaignSlug],
+      );
+      if (campaign) {
+        campaignId = campaign.id;
+        leadSource = campaign.name;
+      }
+    }
+
     const title = b.subject?.trim()
       ? `${b.subject.trim()} — ${b.name}`
       : `استفسار من الموقع — ${b.name}`;
@@ -395,8 +417,9 @@ router.post("/leads", publicLimiter, async (req, res) => {
       contactName: b.name,
       contactPhone: b.phone,
       contactEmail: b.email ?? null,
-      source: b.source?.trim() || "website",
+      source: leadSource,
       notes,
+      campaignId,
     });
 
     // إشعار فريق المبيعات بالفرصة الجديدة (إرسال فقط — لا سياسة).
@@ -416,7 +439,7 @@ router.post("/leads", publicLimiter, async (req, res) => {
     void createAuditLog({
       companyId, userId: 0,
       action: "crm.public_lead_captured", entity: "crm_opportunities", entityId: insertId,
-      after: { name: b.name, source: b.source?.trim() || "website" },
+      after: { name: b.name, source: leadSource, campaignId },
     }).catch((e) => logger.error(e, "publicData background task failed"));
     void emitEvent({
       companyId, branchId: 0, userId: 0,
@@ -458,7 +481,7 @@ async function resolveSiteByHost(host: string): Promise<Record<string, unknown> 
 
 async function fetchSiteContent(cfg: Record<string, unknown>) {
   const companyId = cfg.companyId as number;
-  const [packages, services, hotels, faqs, testimonials, team, gallery, banners, navItems] = await Promise.all([
+  const [packages, services, hotels, faqs, testimonials, team, gallery, banners, navItems, rawCampaigns] = await Promise.all([
     rawQuery(`SELECT * FROM site_packages WHERE "companyId"=$1 AND "isActive"=true AND "deletedAt" IS NULL ORDER BY "sortOrder" ASC, id ASC`, [companyId]),
     rawQuery(`SELECT * FROM site_services WHERE "companyId"=$1 AND "isActive"=true AND "deletedAt" IS NULL ORDER BY "sortOrder" ASC, id ASC`, [companyId]),
     rawQuery(`SELECT * FROM site_hotels WHERE "companyId"=$1 AND "isActive"=true AND "deletedAt" IS NULL ORDER BY "sortOrder" ASC, id ASC`, [companyId]),
@@ -475,8 +498,30 @@ async function fetchSiteContent(cfg: Record<string, unknown>) {
       [companyId],
     ),
     rawQuery(`SELECT * FROM site_nav_items WHERE "companyId"=$1 AND "isActive"=true AND "deletedAt" IS NULL ORDER BY "sortOrder" ASC, id ASC`, [companyId]),
+    // الحملات العامة: نختار حقول العرض الآمنة فقط (لا نسرّب الميزانية/الإنفاق/
+    // الإيراد). تُعرض فقط الحملات المنشورة النشطة ضمن نافذتها الزمنية (إن وُجدت).
+    rawQuery(
+      `SELECT id, slug, name, "publicHeadline", "publicBody", "publicImageUrl", "publicCtaLabel"
+         FROM marketing_campaigns
+        WHERE "companyId"=$1 AND "isPublic"=true AND "deletedAt" IS NULL
+          AND slug IS NOT NULL
+          AND (status IS NULL OR status <> 'archived')
+          AND ("startDate" IS NULL OR "startDate" <= NOW())
+          AND ("endDate" IS NULL OR "endDate" >= NOW())
+        ORDER BY "startDate" DESC NULLS LAST, id DESC`,
+      [companyId],
+    ),
   ]);
-  return { config: cfg, packages, services, hotels, faqs, testimonials, team, gallery, banners, navItems };
+  const campaigns = (rawCampaigns as Array<Record<string, unknown>>).map((c) => ({
+    id: c.id,
+    slug: c.slug,
+    name: c.name,
+    headline: c.publicHeadline ?? null,
+    body: c.publicBody ?? null,
+    imageUrl: c.publicImageUrl ?? null,
+    ctaLabel: c.publicCtaLabel ?? null,
+  }));
+  return { config: cfg, packages, services, hotels, faqs, testimonials, team, gallery, banners, navItems, campaigns };
 }
 
 // حلّ المستأجر من ترويسة Host (للقالب القياسي المنشور على نطاق مخصّص).

@@ -19,6 +19,7 @@ import ScrollProgress from "./components/ScrollProgress";
 import AnnouncementBar from "./components/AnnouncementBar";
 import CookieConsent from "./components/CookieConsent";
 import LeadForm from "./components/LeadForm";
+import { LeadFormContext, type LeadCampaign } from "./contexts/LeadFormContext";
 import NotFound from "@/pages/NotFound";
 
 // تحميل الصفحات عند الطلب (Lazy) — يقلّل حجم الـ bundle الأولي
@@ -96,42 +97,55 @@ function Router() {
 
 function AppContent() {
   const [leadFormOpen, setLeadFormOpen] = useState(false);
+  // سياق الحملة المُختارة (إن فُتح النموذج من بطاقة حملة) — يُعزى العميل إليها.
+  const [leadCampaign, setLeadCampaign] = useState<LeadCampaign | null>(null);
   const { banners } = useSiteData();
+  // فتح النموذج مع تمرير سياق الحملة اختيارياً (الافتراضي: بلا حملة).
+  const openLeadForm = (campaign?: LeadCampaign | null) => {
+    setLeadCampaign(campaign ?? null);
+    setLeadFormOpen(true);
+  };
   // البانر الأول النشط (بعد فلترة النافذة الزمنية في الخادم) يحل محل الرسالة الافتراضية.
   const activeBanner = banners[0];
   return (
-    <div className="min-h-screen flex flex-col">
-      <TitleManager />
-      {activeBanner ? (
-        <AnnouncementBar
-          key={activeBanner.id}
-          storageKey={`wafd-banner-${activeBanner.id}`}
-          message={activeBanner.message || activeBanner.title}
-          link={
-            activeBanner.ctaLabel
-              ? activeBanner.ctaUrl
-                ? { text: activeBanner.ctaLabel, href: activeBanner.ctaUrl }
-                : { text: activeBanner.ctaLabel, onClick: () => setLeadFormOpen(true) }
-              : undefined
-          }
+    <LeadFormContext.Provider value={{ open: openLeadForm }}>
+      <div className="min-h-screen flex flex-col">
+        <TitleManager />
+        {activeBanner ? (
+          <AnnouncementBar
+            key={activeBanner.id}
+            storageKey={`wafd-banner-${activeBanner.id}`}
+            message={activeBanner.message || activeBanner.title}
+            link={
+              activeBanner.ctaLabel
+                ? activeBanner.ctaUrl
+                  ? { text: activeBanner.ctaLabel, href: activeBanner.ctaUrl }
+                  : { text: activeBanner.ctaLabel, onClick: () => openLeadForm() }
+                : undefined
+            }
+          />
+        ) : (
+          <AnnouncementBar
+            message="وفد ترافقك في رحلة العمرة — استشارة مجانية وخطة تناسبك"
+            link={{ text: "اطلب استشارتك الآن", onClick: () => openLeadForm() }}
+          />
+        )}
+        <ScrollProgress />
+        <Navbar onOpenLeadForm={() => openLeadForm()} />
+        <main className="flex-1">
+          <Router />
+        </main>
+        <Footer />
+        <WhatsAppFloat />
+        <CookieConsent />
+        <LeadForm
+          open={leadFormOpen}
+          onClose={() => setLeadFormOpen(false)}
+          campaign={leadCampaign}
         />
-      ) : (
-        <AnnouncementBar
-          message="وفد ترافقك في رحلة العمرة — استشارة مجانية وخطة تناسبك"
-          link={{ text: "اطلب استشارتك الآن", onClick: () => setLeadFormOpen(true) }}
-        />
-      )}
-      <ScrollProgress />
-      <Navbar onOpenLeadForm={() => setLeadFormOpen(true)} />
-      <main className="flex-1">
-        <Router />
-      </main>
-      <Footer />
-      <WhatsAppFloat />
-      <CookieConsent />
-      <LeadForm open={leadFormOpen} onClose={() => setLeadFormOpen(false)} />
-      <Toaster />
-    </div>
+        <Toaster />
+      </div>
+    </LeadFormContext.Provider>
   );
 }
 

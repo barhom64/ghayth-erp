@@ -12,6 +12,7 @@ import { wafdWhatsAppLink, WAFD_PHONE, WAFD_PHONE_DISPLAY, WAFD_EMAIL, WAFD_WEBS
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSiteData } from "@/contexts/SiteDataContext";
 import DynamicSections from "@/components/DynamicSections";
+import PublicCampaigns from "@/components/PublicCampaigns";
 
 const HERO_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/310419663030823861/YHZMogv6aVcNXaRZ3427z7/wafd-hero-kaaba-HJyJeNN97h7PfMrmAAMs2W.webp";
 const MADINAH_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/310419663030823861/YHZMogv6aVcNXaRZ3427z7/wafd-madinah-mLYiJhvGYuvzquRMzJikST.webp";
@@ -810,6 +811,9 @@ export default function Home() {
           </motion.div>
         </div>
       </section>
+
+      {/* ===== الحملات التسويقية المنشورة علناً من نواة غيث ===== */}
+      <PublicCampaigns />
 
       {/* ===== أقسام مُدارة من لوحة تحكم غيث: آراء العملاء + الفريق + المعرض ===== */}
       <DynamicSections />
