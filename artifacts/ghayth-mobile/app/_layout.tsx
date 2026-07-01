@@ -1288,6 +1288,8 @@ function AuthGate() {
       <Stack.Screen name="operations-center/daily-checklist" options={{ title: 'قائمة الإقفال اليومي' }} />
       <Stack.Screen name="scheduled-reports/index" options={{ title: 'التقارير المجدولة' }} />
       <Stack.Screen name="scheduled-reports/history" options={{ title: 'سجل التقارير' }} />
+      <Stack.Screen name="comms/correspondence-detail" options={{ title: 'تفاصيل المراسلة' }} />
+      <Stack.Screen name="admin/approval-entity" options={{ title: 'سجل الموافقات' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
