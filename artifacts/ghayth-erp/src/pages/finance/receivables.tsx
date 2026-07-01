@@ -110,7 +110,7 @@ export default function ReceivablesPage() {
             </Link></Button>
           <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/dunning">
               <AlertTriangle className="h-3.5 w-3.5 ml-1" />
-              متابعة Dunning
+              متابعة التحصيل
             </Link></Button>
           <PrintButton
             entityType="report_finance_receivables"

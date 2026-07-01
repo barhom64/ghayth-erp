@@ -207,7 +207,7 @@ export default function CollectionStagesPage() {
       actions={
         <>
           <Button asChild variant="outline" size="sm"><Link href="/finance/dunning">
-              <Mail className="h-4 w-4 me-1" /> Dunning (إيميلات جماعية)
+              <Mail className="h-4 w-4 me-1" /> متابعة التحصيل (إيميلات جماعية)
             </Link></Button>
           <PrintButton
             entityType="report_finance_collection_stages"

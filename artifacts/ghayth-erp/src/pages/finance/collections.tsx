@@ -134,7 +134,7 @@ export default function CollectionsPage() {
             </Link></Button>
           <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/dunning">
               <History className="h-3.5 w-3.5 ml-1" />
-              متابعة Dunning
+              متابعة التحصيل
             </Link></Button>
           <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/bad-debt-provision">
               <FileWarning className="h-3.5 w-3.5 ml-1" />

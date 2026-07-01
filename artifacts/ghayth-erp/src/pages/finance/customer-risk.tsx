@@ -388,11 +388,11 @@ export default function CustomerRiskPage() {
           </p>
           <ul className="text-xs text-muted-foreground list-disc list-inside space-y-0.5">
             <li><strong>التركّز</strong>: ما نسبة AR من أكبر 5 عملاء؟ تخطّي 50% = خطر تركّز عالي</li>
-            <li><strong>التأخّر المزمن</strong>: أي عملاء يدفعون متأخراً دائماً؟ هؤلاء يحتاجون hold أو دفع مقدّم</li>
+            <li><strong>التأخّر المزمن</strong>: أي عملاء يدفعون متأخراً دائماً؟ هؤلاء يحتاجون إيقاف أو دفع مقدّم</li>
             <li><strong>المتبقي + الأعمار</strong>: لكل عميل، كم المتأخر منه + أسوأ تأخر تاريخي</li>
           </ul>
           <p className="text-xs text-muted-foreground mt-2">
-            <strong>منهجية تصنيف المخاطر:</strong> Score = (overdue% × 0.4) + (max-days × 0.5) + (overdue count × 4)،
+            <strong>منهجية تصنيف المخاطر:</strong> النقاط = (نسبة التأخّر × 0.4) + (أقصى أيام التأخّر × 0.5) + (عدد المتأخرات × 4)،
             يحدد التصنيف: حرج ≥70 / مرتفع ≥40 / متوسط ≥20 / منخفض.
           </p>
         </CardContent>
@@ -416,7 +416,7 @@ export default function CustomerRiskPage() {
         <Card className={top5Share > 50 ? "border-amber-300" : ""}>
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
-              <TrendingUp className="h-3 w-3" /> Top 5 تركّز
+              <TrendingUp className="h-3 w-3" /> تركّز أعلى ٥
             </p>
             <p className={`text-lg font-bold font-mono ${top5Share > 70 ? "text-red-700" : top5Share > 50 ? "text-amber-700" : ""}`}>
               {top5Share.toFixed(1)}%
@@ -498,7 +498,7 @@ export default function CustomerRiskPage() {
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
           <p className="font-semibold text-foreground">إجراءات مقترحة:</p>
           <ul className="list-disc list-inside space-y-0.5">
-            <li><strong>للحرج (≥70):</strong> hold فاتورة جديدة + اجتماع تحصيل عاجل + اعتبار التحويل القانوني</li>
+            <li><strong>للحرج (≥70):</strong> إيقاف فاتورة جديدة + اجتماع تحصيل عاجل + اعتبار التحويل القانوني</li>
             <li><strong>للمرتفع (≥40):</strong> دفع مقدم على الفواتير الجديدة + متابعة أسبوعية</li>
             <li><strong>لتركّز ≥20%:</strong> تنويع قاعدة العملاء + ضمان بنكي أو فاتورة معتمدة</li>
             <li>راجع هذي الصفحة شهرياً وحدّث سياسة الائتمان وفقاً للنتائج</li>
