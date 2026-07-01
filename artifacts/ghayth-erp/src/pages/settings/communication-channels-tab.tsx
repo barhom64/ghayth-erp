@@ -93,6 +93,12 @@ export function CommunicationChannelsTab() {
         إعدادات قنوات الاتصال
       </h3>
 
+      <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground leading-relaxed">
+        هنا تُفعّل/تُوقف قنوات الاتصال لكل شركة وتُدخل بياناتها.
+        لمفاتيح المزوّدين الخلفية (بريد SMTP، السنترال، SIEM) استخدم «إعدادات المزوّدات الخارجية»،
+        وللربط التقني (استقبال واتساب، الويب هوك، GitHub) استخدم «مركز التكاملات».
+      </div>
+
       <FormShell
         key={`sms-${JSON.stringify(smsDefaults)}`}
         schema={smsSchema}
