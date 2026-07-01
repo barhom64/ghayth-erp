@@ -2393,6 +2393,11 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
               e."iqamaNumber", e."iqamaExpiry", e."passportNumber", e."passportExpiry",
               e."borderNumber", e."visaNumber", e."visaType", e."visaExpiry",
               e."sponsorNumber", e."workPermitNumber", e."workPermitExpiry", e."iqamaStatus",
+              -- بيانات مالية + جهة طوارئ: تُحفظ عند الإنشاء/التعديل لكن لم تكن
+              -- تُقرأ في GET التفاصيل (نقص بيانات) — الرواتب تحتاج الآيبان،
+              -- والموارد البشرية تحتاج جهة الطوارئ عند الأزمة.
+              e."bankName", e."bankAccount", e.iban,
+              e."emergencyContact", e."emergencyPhone",
               ea.id AS "assignmentId",
               COALESCE(jt.name, ea."jobTitle") AS "jobTitle", ea."jobTitleId",
               ea.role, ea.salary, ea."hireDate",
