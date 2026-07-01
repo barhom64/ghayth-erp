@@ -6,6 +6,7 @@ import {
   FormShell,
   FormTextField,
   FormNumberField,
+  FormImageField,
   FormTextareaField,
   FormSelectField,
   FormDateField,
@@ -107,7 +108,7 @@ export default function WebsitePostForm() {
             ]}
           />
           <FormDateField name="publishedAt" label="تاريخ النشر" />
-          <FormTextField name="coverImageUrl" label="رابط صورة الغلاف" />
+          <FormImageField name="coverImageUrl" label="صورة الغلاف" />
           <FormNumberField name="sortOrder" label="ترتيب العرض" />
         </FormGrid>
       </FormShell>
