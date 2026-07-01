@@ -163,6 +163,35 @@ export default function HrContractDetail() {
                 <span className="text-status-neutral-foreground">{contract.department}</span>
               </div>
             )}
+            {/* نواقص بيانات مُصلَحة: تقسيم البدلات + نهاية التجربة + سلسلة الاعتماد
+                (مُرجَعة أصلًا في ec.* لكن لم تكن معروضة). */}
+            {contract?.housingAllowance != null && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-0.5">بدل السكن</p>
+                <span className="text-status-neutral-foreground">{formatCurrency(contract.housingAllowance)}</span>
+              </div>
+            )}
+            {contract?.transportAllowance != null && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-0.5">بدل النقل</p>
+                <span className="text-status-neutral-foreground">{formatCurrency(contract.transportAllowance)}</span>
+              </div>
+            )}
+            {contract?.probationEndDate && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-0.5">نهاية فترة التجربة</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(contract.probationEndDate)}</span>
+              </div>
+            )}
+            {contract?.approvedByName && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-0.5">اعتمده</p>
+                <span className="text-status-neutral-foreground">
+                  {contract.approvedByName}
+                  {contract.approvedAt && <span className="text-xs text-muted-foreground"> — {formatDateAr(contract.approvedAt)}</span>}
+                </span>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

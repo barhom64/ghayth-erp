@@ -120,16 +120,21 @@ contractsRouter.get("/:id", authorize({ feature: "hr.contracts", action: "list" 
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [contract] = await rawQuery<Record<string, unknown>>(
+      // اسم مُعتمِد العقد: approvedBy هو users.id → employeeId → الموظف
+      // (نقص بيانات: سلسلة الاعتماد كانت غير مرئية رغم توفّر approvedBy/At).
       `SELECT ec.*, e.name AS "employeeName", e."empNumber",
               e."nationalId", e."passportNumber",
               ea."jobTitle", ea.salary AS "assignmentSalary",
               b.name AS "branchName",
-              dt.name AS "templateName", dt.content AS "templateContent"
+              dt.name AS "templateName", dt.content AS "templateContent",
+              COALESCE(e_appr.name, u_appr.email) AS "approvedByName"
        FROM employee_contracts ec
        JOIN employees e ON e.id = ec."employeeId"
        JOIN employee_assignments ea ON ea.id = ec."assignmentId"
        LEFT JOIN branches b ON b.id = ec."branchId"
        LEFT JOIN document_templates dt ON dt.id = ec."templateId"
+       LEFT JOIN users u_appr ON u_appr.id = ec."approvedBy"
+       LEFT JOIN employees e_appr ON e_appr.id = u_appr."employeeId" AND e_appr."deletedAt" IS NULL
        WHERE ec.id = $1 AND ec."companyId" = $2 AND ec."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
