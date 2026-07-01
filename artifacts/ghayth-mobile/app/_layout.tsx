@@ -1309,6 +1309,8 @@ function AuthGate() {
       <Stack.Screen name="portal/legal-sessions" options={{ title: 'الجلسات القادمة' }} />
       <Stack.Screen name="admin/event-catalog-detail" options={{ title: 'تفاصيل الحدث' }} />
       <Stack.Screen name="print/templates" options={{ title: 'قوالب الطباعة' }} />
+      <Stack.Screen name="finance/customer-statement" options={{ title: 'كشف حساب العميل' }} />
+      <Stack.Screen name="hr/holiday-check" options={{ title: 'فحص العطلة الرسمية' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
