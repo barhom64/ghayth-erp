@@ -1187,6 +1187,29 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
             </CardContent>
           </Card>
 
+          {/* نقص بيانات مُصلَح: الآيبان/الحساب البنكي وجهة الطوارئ كانت تُحفظ
+              عند الإنشاء لكن لا تظهر في التفاصيل — الرواتب تحتاج الآيبان،
+              والموارد البشرية تحتاج جهة الطوارئ عند الأزمة. */}
+          <Card className="md:col-span-2">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <CreditCard className="h-5 w-5 text-muted-foreground" />
+                المعلومات المالية وجهة الطوارئ
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-4">
+                <InfoRow label="البنك" value={employee.bankName || "—"} />
+                <InfoRow label="رقم الحساب" value={employee.bankAccount || "—"} mono dir="ltr" />
+                <InfoRow label="الآيبان (IBAN)" value={employee.iban || "—"} mono dir="ltr" last />
+              </div>
+              <div className="space-y-4">
+                <InfoRow label={<span className="flex items-center gap-2"><Phone className="h-4 w-4" /> جهة اتصال الطوارئ</span>} value={employee.emergencyContact || "—"} />
+                <InfoRow label={<span className="flex items-center gap-2"><Phone className="h-4 w-4" /> هاتف الطوارئ</span>} value={employee.emergencyPhone || "—"} dir="ltr" last />
+              </div>
+            </CardContent>
+          </Card>
+
           <Card className="md:col-span-2">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-lg flex items-center gap-2">

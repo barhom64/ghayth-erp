@@ -42,9 +42,12 @@ execDashboardRouter.get("/overview", authorize({ feature: "dashboard.executive",
     // ─── 1. CASH POSITION ─────────────────────────────────────────────────
     safe(async () => {
       const rows = await rawQuery<Record<string, unknown>>(
+        // «مركز النقد»: النقد 111x والبنوك 112x فقط — لا كامل شجرة الأصول
+        // المتداولة (كان LIKE '11%' يضمّ الذمم 113x والمخزون فيُبالِغ). مطابق
+        // لتصحيح تقرير التدفق النقدي. (اعتماد إبراهيم 2026-07-01.)
         `SELECT code, name, "currentBalance"
          FROM chart_of_accounts
-         WHERE "companyId"=$1 AND code LIKE '11%' AND type='asset' AND "deletedAt" IS NULL
+         WHERE "companyId"=$1 AND (code LIKE '111%' OR code LIKE '112%') AND type='asset' AND "deletedAt" IS NULL
          ORDER BY code`,
         [companyId]
       );

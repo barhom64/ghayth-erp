@@ -169,6 +169,26 @@ export default function ViolationDetail() {
               <p className="text-muted-foreground">تاريخ التسجيل</p>
               <p className="font-medium">{item.createdAt ? formatDateAr(item.createdAt) : "—"}</p>
             </div>
+            {/* أدلة المخالفة — كانت تُدخَل وتُفقَد قبل هجرة 453 (بيانات إثبات
+                يُحتَجّ بها عند الاعتراض على الجزاء). */}
+            {item.location && (
+              <div>
+                <p className="text-muted-foreground">مكان المخالفة</p>
+                <p className="font-medium">{item.location}</p>
+              </div>
+            )}
+            {item.witness && (
+              <div>
+                <p className="text-muted-foreground">الشاهد</p>
+                <p className="font-medium">{item.witness}</p>
+              </div>
+            )}
+            {item.actionTaken && (
+              <div className="col-span-full">
+                <p className="text-muted-foreground">الإجراء المتخذ</p>
+                <p className="font-medium">{item.actionTaken}</p>
+              </div>
+            )}
             {item.description && (
               <div className="col-span-full">
                 <p className="text-muted-foreground">الوصف</p>
