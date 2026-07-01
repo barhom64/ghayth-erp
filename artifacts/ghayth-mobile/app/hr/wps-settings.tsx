@@ -5,41 +5,41 @@ import { GLoadingState, GEmptyState } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 
-interface WpsSettings {
-  bankCode?: string;
-  companyId?: string;
-  fileFormat?: string;
-  autoSubmit?: boolean;
-  submissionDay?: number;
-  [key: string]: unknown;
-}
+interface WpsSettings { bankCode?: string | null; bankIban?: string | null; filenameTemplate?: string | null; isActive?: boolean; }
 
-export default function HrWpsSettingsScreen() {
+export default function WpsSettingsScreen() {
   const c = useColors();
-  const { data, isLoading, isError } = useList<WpsSettings>('/api/wps/settings');
-  const d = (data && !Array.isArray(data)) ? data as WpsSettings : null;
-
-  if (isLoading) return <GLoadingState text="جارٍ تحميل إعدادات WPS…" />;
-  if (isError) return <GEmptyState icon="alert-circle-outline" title="تعذّر التحميل" description="تحقق من الاتصال" />;
-
-  const rows = [
-    { label: 'كود البنك', value: d?.bankCode ?? '—' },
-    { label: 'معرّف الشركة', value: d?.companyId ?? '—' },
-    { label: 'صيغة الملف', value: d?.fileFormat ?? '—' },
-    { label: 'إرسال تلقائي', value: d?.autoSubmit ? 'نعم' : 'لا' },
-    { label: 'يوم الإرسال', value: d?.submissionDay != null ? String(d.submissionDay) : '—' },
-  ];
-
+  const { data, isLoading, isError, refetch } = useList<WpsSettings>('/api/hr/wps/settings');
+  const settings = (data && !Array.isArray(data)) ? data as WpsSettings : null;
+  if (isLoading) return <GLoadingState text="جارٍ تحميل…" />;
+  if (isError) return (
+    <GEmptyState icon="alert-circle-outline" title="تعذّر التحميل" description="تحقق من الاتصال"
+      actionLabel="إعادة المحاولة" onAction={refetch} />
+  );
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       <Stack.Screen options={{ title: 'إعدادات WPS' }} />
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40, gap: 10 }}>
-        {rows.map(r => (
-          <View key={r.label} style={{ backgroundColor: c.surface, borderRadius: 10, padding: 14, flexDirection: 'row-reverse', justifyContent: 'space-between' }}>
-            <Text style={{ fontSize: 14, color: c.textMuted }}>{r.label}</Text>
-            <Text style={{ fontSize: 14, fontWeight: '600', color: c.text }}>{r.value}</Text>
+      <ScrollView contentContainerStyle={{ padding: 16 }}>
+        {settings ? (
+          <View style={{ backgroundColor: c.surface, borderRadius: 8, padding: 16 }}>
+            <View style={{ marginBottom: 12 }}>
+              <Text style={{ color: c.textMuted, fontSize: 12 }}>رمز البنك</Text>
+              <Text style={{ color: c.text, fontSize: 14, marginTop: 4 }}>{settings.bankCode ?? '—'}</Text>
+            </View>
+            <View style={{ marginBottom: 12 }}>
+              <Text style={{ color: c.textMuted, fontSize: 12 }}>IBAN البنك</Text>
+              <Text style={{ color: c.text, fontSize: 14, marginTop: 4 }}>{settings.bankIban ?? '—'}</Text>
+            </View>
+            <View style={{ marginBottom: 12 }}>
+              <Text style={{ color: c.textMuted, fontSize: 12 }}>قالب اسم الملف</Text>
+              <Text style={{ color: c.text, fontSize: 14, marginTop: 4 }}>{settings.filenameTemplate ?? '—'}</Text>
+            </View>
+            <View>
+              <Text style={{ color: c.textMuted, fontSize: 12 }}>الحالة</Text>
+              <Text style={{ color: settings.isActive ? c.brand : c.textFaint, fontSize: 14, marginTop: 4 }}>{settings.isActive ? 'نشط' : 'غير نشط'}</Text>
+            </View>
           </View>
-        ))}
+        ) : <GEmptyState icon="settings-outline" title="لا توجد إعدادات" description="" />}
       </ScrollView>
     </View>
   );
