@@ -363,7 +363,7 @@ export default function SaudizationPage() {
           <DataTable
             data={historyData}
             columns={historyColumns}
-            emptyMessage="لا توجد لقطات شهرية مسجلة بعد — الـcron الشهري يعمل أول كل شهر، أو اضغط 'تحديث اللقطة الآن'"
+            emptyMessage="لا توجد لقطات شهرية مسجلة بعد — المهمة المجدولة الشهرية تعمل أول كل شهر، أو اضغط 'تحديث اللقطة الآن'"
           />
         </CardContent>
       </Card>
@@ -374,10 +374,10 @@ export default function SaudizationPage() {
           ملاحظات
         </div>
         <ul className="list-disc pr-4 space-y-0.5">
-          <li>الجنسية تُحدد من حقل nationality في ملف الموظف (يقبل: "Saudi" / "SA" / "سعودي").</li>
+          <li>الجنسية تُحدد من حقل الجنسية في ملف الموظف (يقبل: "Saudi" / "SA" / "سعودي").</li>
           <li>الشركات التي عدد موظفيها أقل من 5 معفاة تلقائيًا من نطاقات.</li>
           <li>عتبات النطاقات تختلف حسب القطاع — تأكد من اختيار القطاع الصحيح أعلى الصفحة.</li>
-          <li>اللقطات الرسمية تُحفظ تلقائيًا أول كل شهر عبر الـcron.</li>
+          <li>اللقطات الرسمية تُحفظ تلقائيًا أول كل شهر عبر المهمة المجدولة.</li>
         </ul>
       </div>
     </PageShell>

@@ -408,7 +408,7 @@ export default function VendorSpendPage() {
         <Card className={top5Share > 50 ? "border-amber-300" : ""}>
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
-              <TrendingUp className="h-3 w-3" /> Top 5 تركّز
+              <TrendingUp className="h-3 w-3" /> تركّز أعلى ٥
             </p>
             <p className={`text-lg font-bold font-mono ${top5Share > 70 ? "text-red-700" : top5Share > 50 ? "text-amber-700" : ""}`}>
               {top5Share.toFixed(1)}%
@@ -448,7 +448,7 @@ export default function VendorSpendPage() {
             <AlertTriangle className="h-5 w-5" />
             <span>
               <strong>تنبيه تركّز التوريد:</strong> أكبر 5 موردين يستحوذون على {top5Share.toFixed(1)}% من إجمالي الـ AP —
-              تأكد من توفر بدائل لكل واحد من Top 1 ({top1Share.toFixed(1)}%) لتفادي انقطاع التوريد.
+              تأكد من توفر بدائل لكل واحد من الأعلى ({top1Share.toFixed(1)}%) لتفادي انقطاع التوريد.
             </span>
           </CardContent>
         </Card>
@@ -492,9 +492,9 @@ export default function VendorSpendPage() {
           <p className="font-semibold text-foreground">إجراءات مقترحة:</p>
           <ul className="list-disc list-inside space-y-0.5">
             <li><strong>للحرج (≥60):</strong> اجتماع تجديد عقد فوري + بحث بديل + سداد فواتير قديمة لتخفيف ضغط</li>
-            <li><strong>لتركّز Top 1 ≥ 20%:</strong> ابدأ موردين بدلاء + سياسة dual sourcing</li>
+            <li><strong>لتركّز الأعلى ≥ 20%:</strong> ابدأ موردين بدلاء + سياسة التوريد المزدوج</li>
             <li><strong>لانتهاء عقد ≤30 يوم:</strong> ابدأ التفاوض الآن — لا تنتظر</li>
-            <li><strong>لفواتير ≥60 يوم:</strong> راجع شروط الدفع وادفع لتفادي fines + cut-off</li>
+            <li><strong>لفواتير ≥60 يوم:</strong> راجع شروط الدفع وادفع لتفادي غرامات وقطع الخدمة</li>
           </ul>
         </CardContent>
       </Card>
