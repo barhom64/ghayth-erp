@@ -6,6 +6,7 @@ import {
   FormShell,
   FormTextField,
   FormNumberField,
+  FormImageField,
   FormTextareaField,
   FormCheckboxField,
   FormGrid,
@@ -135,7 +136,7 @@ export default function WebsitePackageForm() {
           rows={3}
         />
         <FormGrid>
-          <FormTextField name="imageUrl" label="رابط الصورة" />
+          <FormImageField name="imageUrl" label="صورة الباقة" />
           <FormNumberField name="sortOrder" label="ترتيب العرض" />
         </FormGrid>
         <FormCheckboxField name="isActive" label="مفعّلة (تظهر على الموقع)" />
