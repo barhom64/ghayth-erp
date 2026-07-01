@@ -76,6 +76,7 @@ import { fxStalenessCheckCron } from "./fx/staleness-alert.js";
 import { lotExpiryScanCron } from "./inventory/lots.js";
 import { abcMonthlyClassificationCron } from "./inventory/abc-analysis.js";
 import { iqamaDailyAlertCron } from "./saudi-compliance/iqama-cron.js";
+import { selectApproachingRetirement } from "./saudi-compliance/retirement-alerts.js";
 import { saudizationMonthlySnapshotCron } from "./saudi-compliance/saudization-snapshot.js";
 import { recordJobRun } from "./observability.js";
 import { runWithCorrelationId } from "./requestContext.js";
@@ -4041,6 +4042,56 @@ async function runScheduledReports(): Promise<string> {
   return `Sent ${sent} scheduled reports, ${errors} errors`;
 }
 
+// تنبيه اقتراب سن التقاعد — يُفعّل حقل dateOfBirth الموجود على الموظف تلقائيًّا
+// (فجوة «بديهة يجب أن ينتبه لها النظام تلقائيًّا»). يمسح الموظفين النشطين ومَن
+// يعبُر منهم اليومَ إحدى عتبات التنبيه (180/90/30/7/0 يومًا قبل بلوغ السن النظامي
+// 60) يُخطَر به مديرُ الموارد البشرية — كنمط govExpiryAlerts. منطق التاريخ في دالة
+// نقية مُختبَرة (selectApproachingRetirement). لا يمسّ الدفتر.
+async function retirementAgeAlerts(): Promise<string> {
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
+  const today = todayISO();
+  let alerted = 0;
+
+  for (const company of companies) {
+    const [hrAsgn] = await rawQuery<Record<string, unknown>>(
+      `SELECT id FROM employee_assignments WHERE "companyId" = $1 AND role IN ('hr_manager','general_manager','owner') AND status = 'active' ORDER BY CASE role WHEN 'hr_manager' THEN 1 WHEN 'general_manager' THEN 2 ELSE 3 END LIMIT 1`,
+      [company.id]
+    );
+    if (!hrAsgn) continue;
+
+    const emps = await rawQuery<{ employeeId: number; name: string; dateOfBirth: string }>(
+      `SELECT e.id AS "employeeId", e.name, e."dateOfBirth"::text AS "dateOfBirth"
+         FROM employees e
+         JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1 AND ea.status = 'active'
+        WHERE e.status = 'active' AND e."dateOfBirth" IS NOT NULL AND e."deletedAt" IS NULL`,
+      [company.id]
+    );
+    if (emps.length === 0) continue;
+
+    const nameById = new Map(emps.map((e) => [e.employeeId, e.name]));
+    const watches = selectApproachingRetirement({
+      asOfDate: today,
+      employees: emps.map((e) => ({ employeeId: e.employeeId, dateOfBirth: e.dateOfBirth })),
+    });
+
+    for (const w of watches) {
+      const name = nameById.get(w.employeeId) ?? `#${w.employeeId}`;
+      await createNotification({
+        companyId: company.id, assignmentId: hrAsgn.id as number,
+        type: "retirement_age_alert",
+        title: w.daysLeft === 0 ? `بلوغ سن التقاعد: ${name}` : `اقتراب سن التقاعد: ${name}`,
+        body: w.daysLeft === 0
+          ? `الموظف ${name} يبلغ سن التقاعد النظامي (${w.retirementDate}) اليوم — يرجى بدء إجراءات نهاية الخدمة واحتساب مكافأتها.`
+          : `الموظف ${name} يبلغ سن التقاعد النظامي (${w.retirementDate}) خلال ${w.daysLeft} يومًا — يرجى التحضير لإجراءات نهاية الخدمة ومكافأتها.`,
+        priority: w.daysLeft <= 30 ? "high" : "normal",
+        refType: "employee", refId: w.employeeId,
+      });
+      alerted++;
+    }
+  }
+  return `retirement alerts sent=${alerted}`;
+}
+
 async function govExpiryAlerts(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let alerted = 0;
@@ -6199,6 +6250,7 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "fx_staleness_check", description: "تنبيه أسعار الصرف القديمة", schedule: "0 6 * * *", handler: fxStalenessCheckCron },
   { name: "lot_expiry_scan", description: "تحويل الدفعات المنتهية تلقائياً إلى expired", schedule: "0 4 * * *", handler: lotExpiryScanCron },
   { name: "iqama_daily_alert", description: "تنبيه انتهاء الإقامات (90/60/30/14/7/1 يوم)", schedule: "0 7 * * *", handler: iqamaDailyAlertCron },
+  { name: "retirement_age_alert", description: "تنبيه اقتراب سن التقاعد (180/90/30/7/0 يوم)", schedule: "0 7 * * *", handler: retirementAgeAlerts },
   { name: "saudization_monthly_snapshot", description: "لقطة شهرية للسعودة (نطاقات)", schedule: "0 2 1 * *", handler: saudizationMonthlySnapshotCron },
   { name: "abc_monthly_classification", description: "تصنيف ABC الشهري للمنتجات (Pareto)", schedule: "0 3 1 * *", handler: abcMonthlyClassificationCron },
   { name: "sms_queue_worker", description: "معالجة قائمة انتظار الرسائل النصية", schedule: "* * * * *", handler: processSmsQueue },
