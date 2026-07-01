@@ -1,52 +1,33 @@
 import React from 'react';
 import { FlatList, Text, View } from 'react-native';
 import { Stack } from 'expo-router';
-import { GLoadingState, GEmptyState, GStatusBadge } from '@workspace/ui-native';
+import { GLoadingState, GEmptyState } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 
-interface DisciplineMemo {
-  id?: number;
-  memoNumber?: string;
-  subject?: string;
-  employeeName?: string;
-  type?: string;
-  status?: string;
-  issuedAt?: string;
-}
+interface DisciplineMemo { id?: number; subject?: string; employeeName?: string; issuedAt?: string; status?: string; }
 
 export default function DisciplineMemosScreen() {
   const c = useColors();
-  const { data, isLoading, isError, refetch } = useList<DisciplineMemo[]>('/api/hr/memos');
+  const { data, isLoading, isError, refetch } = useList<DisciplineMemo[]>('/api/hr/discipline/memos');
   const list = Array.isArray(data) ? data : [];
-
-  if (isLoading) return <GLoadingState text="جارٍ تحميل المذكرات التأديبية…" />;
+  if (isLoading) return <GLoadingState text="جارٍ تحميل…" />;
   if (isError) return (
     <GEmptyState icon="alert-circle-outline" title="تعذّر التحميل" description="تحقق من الاتصال"
       actionLabel="إعادة المحاولة" onAction={refetch} />
   );
-
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Stack.Screen options={{ title: 'المذكرات التأديبية' }} />
-      <FlatList
-        data={list}
-        keyExtractor={(item, i) => String(item.id ?? i)}
+      <Stack.Screen options={{ title: 'مذكرات التأديب' }} />
+      <FlatList data={list} keyExtractor={(item, i) => String(item.id ?? i)}
         contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
-        onRefresh={refetch}
-        refreshing={isLoading}
-        ListEmptyComponent={<GEmptyState icon="document-outline" title="لا توجد مذكرات" description="" />}
+        onRefresh={refetch} refreshing={isLoading}
+        ListEmptyComponent={<GEmptyState icon="document-text-outline" title="لا توجد مذكرات" description="" />}
         renderItem={({ item }) => (
           <View style={{ backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, padding: 14 }}>
-            <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', marginBottom: 4 }}>
-              <Text style={{ fontSize: 14, fontWeight: '700', color: c.text }}>{item.employeeName ?? '—'}</Text>
-              <GStatusBadge status={item.status ?? 'pending'} />
-            </View>
-            <View style={{ flexDirection: 'row-reverse', gap: 12 }}>
-              {item.memoNumber ? <Text style={{ fontSize: 11, color: c.brand }}>{item.memoNumber}</Text> : null}
-              {item.type ? <Text style={{ fontSize: 11, color: c.textMuted }}>{item.type}</Text> : null}
-            </View>
-            {item.subject ? <Text style={{ fontSize: 12, color: c.textFaint, marginTop: 4 }}>{item.subject}</Text> : null}
+            <Text style={{ color: c.text, fontSize: 14 }}>{item.subject ?? String(item.id ?? '')}</Text>
+            {!!item.employeeName && <Text style={{ color: c.textMuted, fontSize: 12, marginTop: 2 }}>{item.employeeName}</Text>}
+            {!!item.issuedAt && <Text style={{ color: c.textFaint, fontSize: 12, marginTop: 2 }}>{new Date(item.issuedAt).toLocaleDateString('ar-SA', { month: 'short', day: 'numeric', year: 'numeric' })}</Text>}
           </View>
         )}
       />
