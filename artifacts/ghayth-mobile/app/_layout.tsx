@@ -1315,6 +1315,14 @@ function AuthGate() {
       <Stack.Screen name="finance/journal-import-presets" options={{ title: 'إعدادات الاستيراد' }} />
       <Stack.Screen name="finance/journal-import-templates" options={{ title: 'قوالب الاستيراد' }} />
       <Stack.Screen name="finance/maintenance-ticket-options" options={{ title: 'خيارات تذكرة الصيانة' }} />
+      <Stack.Screen name="finance/chart-of-accounts" options={{ title: 'دليل الحسابات' }} />
+      <Stack.Screen name="finance/ledger-account" options={{ title: 'كشف حساب' }} />
+      <Stack.Screen name="finance/finance-stats" options={{ title: 'إحصائيات المالية' }} />
+      <Stack.Screen name="finance/finance-summary" options={{ title: 'ملخص المالية' }} />
+      <Stack.Screen name="finance/tax-code-detail" options={{ title: 'تفاصيل رمز الضريبة' }} />
+      <Stack.Screen name="finance/wht-category-detail" options={{ title: 'تفاصيل فئة الاستقطاع' }} />
+      <Stack.Screen name="finance/allocation-rule-detail" options={{ title: 'تفاصيل قاعدة التوزيع' }} />
+      <Stack.Screen name="finance/allocation-settings" options={{ title: 'إعدادات التوزيع' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
