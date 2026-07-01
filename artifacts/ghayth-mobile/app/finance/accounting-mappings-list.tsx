@@ -5,11 +5,11 @@ import { GLoadingState, GEmptyState } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 
-interface ClassificationEntry { id?: number; name?: string; accountCode?: string; type?: string; }
+interface AccountingMapping { operationType?: string; debitAccount?: string; creditAccount?: string; description?: string; }
 
-export default function ClassificationCenterScreen() {
+export default function AccountingMappingsListScreen() {
   const c = useColors();
-  const { data, isLoading, isError, refetch } = useList<ClassificationEntry[]>('/api/finance/classification-center');
+  const { data, isLoading, isError, refetch } = useList<AccountingMapping[]>('/api/finance/accounting-mappings');
   const list = Array.isArray(data) ? data : [];
   if (isLoading) return <GLoadingState text="جارٍ تحميل…" />;
   if (isError) return (
@@ -18,16 +18,16 @@ export default function ClassificationCenterScreen() {
   );
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Stack.Screen options={{ title: 'مركز التصنيف المحاسبي' }} />
-      <FlatList data={list} keyExtractor={(item, i) => String(item.id ?? i)}
+      <Stack.Screen options={{ title: 'خرائط الترحيل المحاسبي' }} />
+      <FlatList data={list} keyExtractor={(item, i) => String(item.operationType ?? i)}
         contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
         onRefresh={refetch} refreshing={isLoading}
-        ListEmptyComponent={<GEmptyState icon="albums-outline" title="لا توجد بيانات تصنيف" description="" />}
+        ListEmptyComponent={<GEmptyState icon="git-merge-outline" title="لا توجد خرائط" description="" />}
         renderItem={({ item }) => (
           <View style={{ backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, padding: 14 }}>
-            <Text style={{ color: c.text, fontSize: 14 }}>{item.name ?? String(item.id ?? '')}</Text>
-            {!!item.accountCode && <Text style={{ color: c.textMuted, fontSize: 12, marginTop: 2 }}>{item.accountCode}</Text>}
-            {!!item.type && <Text style={{ color: c.textFaint, fontSize: 12, marginTop: 2 }}>{item.type}</Text>}
+            <Text style={{ color: c.text, fontSize: 14, fontWeight: '600' }}>{item.operationType ?? ''}</Text>
+            {!!item.debitAccount && <Text style={{ color: c.textMuted, fontSize: 12, marginTop: 2 }}>مدين: {item.debitAccount}</Text>}
+            {!!item.creditAccount && <Text style={{ color: c.textFaint, fontSize: 12, marginTop: 2 }}>دائن: {item.creditAccount}</Text>}
           </View>
         )}
       />

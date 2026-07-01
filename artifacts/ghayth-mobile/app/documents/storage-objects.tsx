@@ -5,11 +5,11 @@ import { GLoadingState, GEmptyState } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 
-interface RbacLevel { level?: number; name?: string; description?: string; }
+interface StorageObject { key?: string; name?: string; size?: number; contentType?: string; }
 
-export default function RbacLevelsScreen() {
+export default function StorageObjectsScreen() {
   const c = useColors();
-  const { data, isLoading, isError, refetch } = useList<RbacLevel[]>('/api/rbac/v2/levels');
+  const { data, isLoading, isError, refetch } = useList<StorageObject[]>('/api/storage/objects/');
   const list = Array.isArray(data) ? data : [];
   if (isLoading) return <GLoadingState text="جارٍ تحميل…" />;
   if (isError) return (
@@ -18,15 +18,15 @@ export default function RbacLevelsScreen() {
   );
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Stack.Screen options={{ title: 'مستويات الصلاحيات' }} />
-      <FlatList data={list} keyExtractor={(item, i) => String(item.level ?? i)}
+      <Stack.Screen options={{ title: 'ملفات التخزين' }} />
+      <FlatList data={list} keyExtractor={(item, i) => String(item.key ?? i)}
         contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
         onRefresh={refetch} refreshing={isLoading}
-        ListEmptyComponent={<GEmptyState icon="shield-outline" title="لا توجد مستويات" description="" />}
+        ListEmptyComponent={<GEmptyState icon="folder-outline" title="لا توجد ملفات" description="" />}
         renderItem={({ item }) => (
           <View style={{ backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, padding: 14, flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={{ color: c.text, fontSize: 14 }}>{item.name ?? `مستوى ${item.level}`}</Text>
-            {item.level != null && <Text style={{ color: c.brand, fontSize: 18, fontWeight: '700' }}>{item.level}</Text>}
+            <Text style={{ color: c.text, fontSize: 14, flex: 1 }}>{item.name ?? item.key ?? ''}</Text>
+            {item.size != null && <Text style={{ color: c.textMuted, fontSize: 12 }}>{(item.size / 1024).toFixed(1)} ك</Text>}
           </View>
         )}
       />

@@ -5,11 +5,11 @@ import { GLoadingState, GEmptyState } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 
-interface RbacLevel { level?: number; name?: string; description?: string; }
+interface AnalyticAccount { id?: number; code?: string; name?: string; balance?: number; }
 
-export default function RbacLevelsScreen() {
+export default function ClassificationAnalyticScreen() {
   const c = useColors();
-  const { data, isLoading, isError, refetch } = useList<RbacLevel[]>('/api/rbac/v2/levels');
+  const { data, isLoading, isError, refetch } = useList<AnalyticAccount[]>('/api/finance/classification-center/analytic-accounts');
   const list = Array.isArray(data) ? data : [];
   if (isLoading) return <GLoadingState text="جارٍ تحميل…" />;
   if (isError) return (
@@ -18,15 +18,18 @@ export default function RbacLevelsScreen() {
   );
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Stack.Screen options={{ title: 'مستويات الصلاحيات' }} />
-      <FlatList data={list} keyExtractor={(item, i) => String(item.level ?? i)}
+      <Stack.Screen options={{ title: 'الحسابات التحليلية' }} />
+      <FlatList data={list} keyExtractor={(item, i) => String(item.id ?? i)}
         contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
         onRefresh={refetch} refreshing={isLoading}
-        ListEmptyComponent={<GEmptyState icon="shield-outline" title="لا توجد مستويات" description="" />}
+        ListEmptyComponent={<GEmptyState icon="pie-chart-outline" title="لا توجد حسابات تحليلية" description="" />}
         renderItem={({ item }) => (
           <View style={{ backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, padding: 14, flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={{ color: c.text, fontSize: 14 }}>{item.name ?? `مستوى ${item.level}`}</Text>
-            {item.level != null && <Text style={{ color: c.brand, fontSize: 18, fontWeight: '700' }}>{item.level}</Text>}
+            <View>
+              <Text style={{ color: c.text, fontSize: 14 }}>{item.name ?? ''}</Text>
+              {!!item.code && <Text style={{ color: c.textMuted, fontSize: 12, marginTop: 2 }}>{item.code}</Text>}
+            </View>
+            {item.balance != null && <Text style={{ color: item.balance >= 0 ? c.brand : '#ef4444', fontSize: 14, fontWeight: '600' }}>{item.balance.toLocaleString('ar-SA')}</Text>}
           </View>
         )}
       />
