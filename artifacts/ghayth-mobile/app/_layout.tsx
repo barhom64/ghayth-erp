@@ -1346,6 +1346,10 @@ function AuthGate() {
       <Stack.Screen name="finance/subsidiary-account-entity" options={{ title: 'الحساب الفرعي للكيان' }} />
       <Stack.Screen name="inbox/thread-detail" options={{ title: 'تفاصيل المحادثة' }} />
       <Stack.Screen name="inbox/recipients-search" options={{ title: 'بحث عن مستلم' }} />
+      <Stack.Screen name="hr/shifts" options={{ title: 'الوردات' }} />
+      <Stack.Screen name="hr/monthly-attendance" options={{ title: 'تقرير الحضور الشهري' }} />
+      <Stack.Screen name="hr/accruals-preview" options={{ title: 'معاينة الاستحقاقات' }} />
+      <Stack.Screen name="hr/turnover-report" options={{ title: 'تقرير دوران الموظفين' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>

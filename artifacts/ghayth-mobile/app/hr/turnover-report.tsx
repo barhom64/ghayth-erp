@@ -1,53 +1,29 @@
 import React from 'react';
-import { FlatList, Pressable, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { GLoadingState, GEmptyState } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 
-interface TurnoverItem {
-  period?: string;
-  department?: string;
-  hired?: number;
-  terminated?: number;
-  turnoverRate?: number;
-}
+interface TurnoverReport { period?: string; total?: number; resigned?: number; terminated?: number; rate?: number; [key: string]: unknown; }
 
-export default function TurnoverReportScreen() {
+export default function TurnoverReport() {
   const c = useColors();
-  const { data, isLoading, isError, refetch } = useList<TurnoverItem[]>('/api/turnover-report');
-  const list = Array.isArray(data) ? data : [];
-
-  if (isLoading) return <GLoadingState text="جارٍ تحميل تقرير الدوران الوظيفي…" />;
-  if (isError) return (
-    <GEmptyState icon="alert-circle-outline" title="تعذّر التحميل" description="تحقق من الاتصال"
-      actionLabel="إعادة المحاولة" onAction={refetch} />
-  );
-
+  const { data, isLoading, isError, refetch } = useList<TurnoverReport>('/api/hr/turnover-report');
+  const report = (data && !Array.isArray(data)) ? data as TurnoverReport : null;
+  if (isLoading) return <GLoadingState text="جارٍ تحميل تقرير الدوران…" />;
+  if (isError) return <GEmptyState icon="alert-circle-outline" title="تعذّر التحميل" description="" actionLabel="إعادة المحاولة" onAction={refetch} />;
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Stack.Screen options={{ title: 'تقرير الدوران الوظيفي' }} />
-      <FlatList
-        data={list}
-        keyExtractor={(item, i) => `${item.period}-${item.department}-${i}`}
-        contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
-        onRefresh={refetch}
-        refreshing={isLoading}
-        ListEmptyComponent={<GEmptyState icon="people-outline" title="لا توجد بيانات دوران وظيفي" description="" />}
-        renderItem={({ item }) => (
-          <Pressable style={{ backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, padding: 14 }}>
-            <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', marginBottom: 4 }}>
-              <Text style={{ fontSize: 13, fontWeight: '700', color: c.text }}>{item.department ?? '—'}</Text>
-              {item.period ? <Text style={{ fontSize: 11, color: c.textFaint }}>{item.period}</Text> : null}
-            </View>
-            <View style={{ flexDirection: 'row-reverse', gap: 12 }}>
-              {item.hired != null ? <Text style={{ fontSize: 11, color: '#22C55E' }}>مُعيَّن: {item.hired}</Text> : null}
-              {item.terminated != null ? <Text style={{ fontSize: 11, color: '#EF4444' }}>مُنهى: {item.terminated}</Text> : null}
-              {item.turnoverRate != null ? <Text style={{ fontSize: 12, fontWeight: '700', color: c.brand }}>دوران: {(item.turnoverRate * 100).toFixed(1)}%</Text> : null}
-            </View>
-          </Pressable>
-        )}
-      />
+      <Stack.Screen options={{ title: 'تقرير دوران الموظفين' }} />
+      <ScrollView contentContainerStyle={{ padding: 16 }}>
+        {report ? Object.entries(report).map(([k, v]) => (
+          <View key={k} style={{ backgroundColor: c.surface, borderRadius: 8, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: c.border }}>
+            <Text style={{ color: c.textMuted, fontSize: 12 }}>{k}</Text>
+            <Text style={{ color: c.text, fontSize: 15, marginTop: 4 }}>{typeof v === 'number' ? v.toLocaleString('ar-SA') : String(v ?? '—')}</Text>
+          </View>
+        )) : <GEmptyState icon="trending-down-outline" title="لا توجد بيانات" description="" />}
+      </ScrollView>
     </View>
   );
 }
