@@ -1,16 +1,15 @@
 import React from 'react';
 import { FlatList, Text, View } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack } from 'expo-router';
 import { GLoadingState, GEmptyState } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 
-interface StatementLine { id?: number; date?: string; description?: string; debit?: number; credit?: number; balance?: number; }
+interface StatementItem { id?: number; date?: string; description?: string; debit?: number; credit?: number; balance?: number; }
 
-export default function CustomerStatement() {
+export default function CustomerStatementScreen() {
   const c = useColors();
-  const { clientId } = useLocalSearchParams<{ clientId: string }>();
-  const { data, isLoading, isError, refetch } = useList<StatementLine[]>(`/api/finance/reports/customer-statement/${clientId}`);
+  const { data, isLoading, isError, refetch } = useList<StatementItem[]>('/api/finance/reports/customer-statement/1');
   const list = Array.isArray(data) ? data : [];
   if (isLoading) return <GLoadingState text="جارٍ تحميل…" />;
   if (isError) return <GEmptyState icon="alert-circle-outline" title="تعذّر التحميل" description="تحقق من الاتصال" actionLabel="إعادة المحاولة" onAction={refetch} />;
@@ -23,10 +22,11 @@ export default function CustomerStatement() {
         ListEmptyComponent={<GEmptyState icon="document-text-outline" title="لا توجد حركات" description="" />}
         renderItem={({ item }) => (
           <View style={{ backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, padding: 14 }}>
-            <Text style={{ color: c.text, fontSize: 13 }}>{item.description ?? ''}</Text>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
-              {item.date && <Text style={{ color: c.textMuted, fontSize: 11 }}>{new Date(item.date).toLocaleDateString('ar-SA', { month: 'short', day: 'numeric', year: 'numeric' })}</Text>}
-              <Text style={{ color: c.text, fontSize: 13, fontWeight: '600' }}>{(item.balance ?? 0).toLocaleString('ar-SA')} ر.س</Text>
+            <Text style={{ color: c.text, fontSize: 14 }}>{item.description ?? ''}</Text>
+            <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', marginTop: 4 }}>
+              {item.debit ? <Text style={{ color: '#e53e3e', fontSize: 12 }}>مدين: {item.debit.toLocaleString('ar-SA')} ر.س</Text> : null}
+              {item.credit ? <Text style={{ color: '#38a169', fontSize: 12 }}>دائن: {item.credit.toLocaleString('ar-SA')} ر.س</Text> : null}
+              {item.balance != null ? <Text style={{ color: c.textMuted, fontSize: 12 }}>الرصيد: {item.balance.toLocaleString('ar-SA')} ر.س</Text> : null}
             </View>
           </View>
         )}
