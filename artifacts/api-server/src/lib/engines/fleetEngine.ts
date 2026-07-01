@@ -81,7 +81,9 @@ class FleetEngineImpl implements DomainEngine {
    *       - company/driver : مدين حساب صيانة المركبة، دائن النقد. (استرداد السائق يتم
    *         بخصم الراتب عبر الحدث، لا في هذا القيد.)
    *       - insurance/customer/tenant/third_party : الكلفة مستردّة من طرف خارجي →
-   *         مدين ذمة مدينة (1131)، دائن حساب صيانة المركبة (التعويض يقاصّ الكلفة).
+   *         مدين ذمة مدينة (1131)، دائن النقد (1111). الشركة تدفع الورشة ثم تسترد من
+   *         الطرف؛ لا مصروف على الشركة (تصحيح ٢٠٢٦-٠٧-٠١ باعتماد إبراهيم: كان القيد
+   *         يُدائن حساب المصروف بلا مدينٍ سابق له، فيصير رصيده سالبًا ويُضخّم الربح).
    * متوازن دائمًا · موسوم ببُعد vehicleId · idempotent عبر sourceKey/guardId. غياب
    * costBearer ⇒ "company" (السلوك السابق محفوظ).
    */
@@ -105,7 +107,7 @@ class FleetEngineImpl implements DomainEngine {
       const arCode = await financialEngine.resolveAccountCode(ctx.companyId, "accounts_receivable", "debit", "1131");
       lines = [
         { accountCode: arCode, debit: maintenance.totalCost, credit: 0, description: `ذمة صيانة — ${costBearer}`, vehicleId: maintenance.vehicleId, costCenterId: costCenterId ?? undefined },
-        { accountCode: maintCode, debit: 0, credit: maintenance.totalCost, description: "تعويض صيانة المركبة", vehicleId: maintenance.vehicleId, costCenterId: costCenterId ?? undefined },
+        { accountCode: cashCode, debit: 0, credit: maintenance.totalCost, description: "سداد صيانة مستردّة من الطرف", vehicleId: maintenance.vehicleId, costCenterId: costCenterId ?? undefined },
       ];
     } else {
       // company / driver: الكلفة على حساب صيانة المركبة، دائن النقد.
@@ -137,8 +139,9 @@ class FleetEngineImpl implements DomainEngine {
    * تطبيقًا لمبدأ «حساب مخصّص لكل أصل». السياسة المعتمدة:
    *   • company  : مدين حساب المركبة، دائن النقد.
    *   • driver   : مدين حساب المركبة، دائن النقد + (طلب خصم راتب منفصل عبر الحدث).
-   *   • insurance/customer/tenant/third_party: مدين ذمة مدينة (1131)، دائن حساب
-   *     المركبة (تعويض). موسوم بالكيان عبر سطور القيد.
+   *   • insurance/customer/tenant/third_party: مدين ذمة مدينة (1131)، دائن النقد
+   *     (1111) — الشركة تدفع الإصلاح ثم تسترد من الطرف؛ لا مصروف عليها (تصحيح
+   *     ٢٠٢٦-٠٧-٠١). موسوم بالكيان عبر سطور القيد.
    * متوازن دائمًا (إجمالي المدين = إجمالي الدائن = الكلفة). idempotent عبر
    * sourceKey/guardId.
    */
@@ -173,11 +176,12 @@ class FleetEngineImpl implements DomainEngine {
     const recoverable = ["insurance", "warranty", "customer", "tenant", "third_party"].includes(accident.costBearer);
     let lines: JournalEntryLine[];
     if (recoverable) {
-      // الكلفة مستردّة من طرف خارجي: مدين ذمة مدينة، دائن حساب المركبة.
+      // الكلفة مستردّة من طرف خارجي: مدين ذمة مدينة، دائن النقد (الشركة تدفع الإصلاح
+      // ثم تسترد من الطرف؛ لا مصروف عليها).
       const arCode = await financialEngine.resolveAccountCode(ctx.companyId, "accounts_receivable", "debit", "1131");
       lines = [
         { accountCode: arCode, debit: cost, credit: 0, description: `ذمة حادث — ${accident.costBearer}`, vehicleId: accident.vehicleId, costCenterId: costCenterId ?? undefined },
-        { accountCode: vehicleCode, debit: 0, credit: cost, description: "تعويض حادث المركبة", vehicleId: accident.vehicleId, costCenterId: costCenterId ?? undefined },
+        { accountCode: cashCode, debit: 0, credit: cost, description: "سداد إصلاح حادث مستردّ من الطرف", vehicleId: accident.vehicleId, costCenterId: costCenterId ?? undefined },
       ];
     } else {
       // company / driver: الكلفة تقع على المركبة، دائن النقد. (استرداد السائق

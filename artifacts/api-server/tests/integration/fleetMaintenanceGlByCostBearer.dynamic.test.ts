@@ -5,8 +5,8 @@
 // costBearer، أن القيد **متوازن** ويوجَّه للجهة الصحيحة (مبدأ إبراهيم: التوجيه يقرّر
 // الحساب):
 //   • company  → مدين حساب صيانة المركبة، دائن النقد.
-//   • insurance → مدين ذمة مدينة، دائن **نفس** حساب صيانة المركبة (التعويض يقاصّ
-//     الكلفة) — إثبات أن الفرع قلب الجهة (مبدأ ١).
+//   • insurance → مدين ذمة مدينة، دائن **النقد** (الشركة تدفع الورشة وتسترد من
+//     الطرف؛ لا مصروف عليها) — يُقلَب المدين فقط (تصحيح ٢٠٢٦-٠٧-٠١ باعتماد إبراهيم).
 // والترحيل idempotent عبر sourceKey (إعادة الترحيل لا تُكرّر القيد).
 //
 // التفعيل: مقيّد بقاعدة الاختبار القابلة للإسقاط (منفذ 54329 / علامة *_test)، مثل
@@ -100,8 +100,10 @@ d("Fleet maintenance materialise posts a balanced GL routed by costBearer", () =
     expect(lines.find((l) => Number(l.debit) > 0)!.accountCode).toBe(companyDebit);
   });
 
-  it("insurance-borne maintenance: balanced, DEBIT receivable / CREDIT the maintenance account (recovery flip)", async () => {
-    const companyDebit = (await linesFor(800001)).find((l) => Number(l.debit) > 0)!.accountCode;
+  it("insurance-borne maintenance: balanced, DEBIT receivable / CREDIT cash (لا مصروف على الشركة)", async () => {
+    const companyLines = await linesFor(800001);
+    const companyDebit = companyLines.find((l) => Number(l.debit) > 0)!.accountCode;   // مصروف الصيانة
+    const companyCredit = companyLines.find((l) => Number(l.credit) > 0)!.accountCode; // النقد
 
     const insMaintId = 800003;
     await fleetEngine.postMaintenanceGL(
@@ -116,10 +118,13 @@ d("Fleet maintenance materialise posts a balanced GL routed by costBearer", () =
 
     const insDebitLeg = insLines.find((l) => Number(l.debit) > 0)!;
     const insCreditLeg = insLines.find((l) => Number(l.credit) > 0)!;
-    // الفرع قُلِب: حساب الصيانة الذي كان مدينًا في حالة الشركة صار دائنًا (تعويض)،
-    // ومدينٌ جديد هو الذمة المدينة (مستردّة من التأمين).
-    expect(insCreditLeg.accountCode).toBe(companyDebit);
-    expect(insDebitLeg.accountCode).not.toBe(companyDebit);
+    // التصحيح (٢٠٢٦-٠٧-٠١): يُقلَب المدين فقط — المصروف الذي كان مدينًا في حالة
+    // الشركة يصير ذمةً مدينة (تُستردّ من التأمين)، ويبقى **الدائن هو النقد نفسه**
+    // (الشركة تدفع الورشة). لا يُدائَن حساب المصروف إطلاقًا، فلا يصير رصيده سالبًا.
+    expect(insCreditLeg.accountCode).toBe(companyCredit);     // دائن = النقد (لا المصروف)
+    expect(insCreditLeg.accountCode).not.toBe(companyDebit);  // ليس حساب المصروف
+    expect(insDebitLeg.accountCode).not.toBe(companyDebit);   // المدين ذمة، لا مصروف
+    expect(insDebitLeg.accountCode).not.toBe(companyCredit);  // وليس النقد
   });
 
   it("is idempotent on sourceKey — re-posting the same maintenance returns the same JE", async () => {

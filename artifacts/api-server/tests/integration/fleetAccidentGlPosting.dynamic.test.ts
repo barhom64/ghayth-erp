@@ -5,8 +5,9 @@
 // fleetEngine.postAccidentGL against a real Postgres and asserts, per
 // costBearer, that the entry is BALANCED and routes to the right side:
 //   • company  → DEBIT vehicle/expense account, CREDIT cash.
-//   • insurance → DEBIT receivable, CREDIT the SAME vehicle/expense account
-//     (recovery offsets the asset), proving the branch flipped sides.
+//   • insurance → DEBIT receivable, CREDIT cash (company funds the repair and
+//     recovers from the third party — no expense on the company). Only the
+//     DEBIT flips (fix 2026-07-01, Ibrahim-approved).
 //
 // Activation: gated on the disposable test DB (port 54329 / *_test marker),
 // same as the other *.dynamic suites. Skips (not fails) without it.
@@ -82,12 +83,14 @@ d("Fleet accident assessment posts a balanced GL routed by costBearer", () => {
     expect(debitLeg.accountCode).not.toBe(creditLeg.accountCode);
   });
 
-  it("insurance-borne accident: balanced, DEBIT receivable / CREDIT the expense account (recovery)", async () => {
+  it("insurance-borne accident: balanced, DEBIT receivable / CREDIT cash (no expense on the company)", async () => {
     const companyAccidentId = 700002;
     await fleetEngine.postAccidentGL(
       { companyId, branchId, createdBy: 0 },
       { id: companyAccidentId, vehicleId, cost: 800, costBearer: "company" });
-    const companyDebit = (await linesFor(companyAccidentId)).find((l) => Number(l.debit) > 0)!.accountCode;
+    const companyLines = await linesFor(companyAccidentId);
+    const companyDebit = companyLines.find((l) => Number(l.debit) > 0)!.accountCode;   // expense
+    const companyCredit = companyLines.find((l) => Number(l.credit) > 0)!.accountCode; // cash
 
     const insAccidentId = 700003;
     await fleetEngine.postAccidentGL(
@@ -102,10 +105,14 @@ d("Fleet accident assessment posts a balanced GL routed by costBearer", () => {
 
     const insDebitLeg = insLines.find((l) => Number(l.debit) > 0)!;
     const insCreditLeg = insLines.find((l) => Number(l.credit) > 0)!;
-    // The branch flipped: the expense account that was DEBITED for the
-    // company case is now CREDITED (recovery), and a receivable is DEBITED.
-    expect(insCreditLeg.accountCode).toBe(companyDebit);
-    expect(insDebitLeg.accountCode).not.toBe(companyDebit);
+    // Fix (2026-07-01): only the DEBIT flips — the expense that was DEBITED for
+    // the company case becomes a receivable (recovered from insurance), while
+    // the CREDIT stays cash (the company funds the repair). The expense account
+    // is never CREDITED, so it can't go negative and overstate profit.
+    expect(insCreditLeg.accountCode).toBe(companyCredit);    // credit = cash (not the expense)
+    expect(insCreditLeg.accountCode).not.toBe(companyDebit); // not the expense account
+    expect(insDebitLeg.accountCode).not.toBe(companyDebit);  // debit is a receivable, not expense
+    expect(insDebitLeg.accountCode).not.toBe(companyCredit); // and not cash
   });
 
   it("re-assessment REVERSES the prior entry and re-posts the corrected one (no ledger freeze)", async () => {
