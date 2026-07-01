@@ -1261,6 +1261,14 @@ function AuthGate() {
             <Stack.Screen name="admin/workflow-detail" options={{ title: 'تفاصيل سير العمل' }} />
             <Stack.Screen name="admin/workflow-timeline" options={{ title: 'الجدول الزمني' }} />
             <Stack.Screen name="admin/workflow-definition-detail" options={{ title: 'تعريف سير العمل' }} />
+            <Stack.Screen name="admin/smtp-settings" options={{ title: 'إعدادات SMTP' }} />
+            <Stack.Screen name="inbox/templates" options={{ title: 'قوالب الصندوق' }} />
+            <Stack.Screen name="notifications/unread-count" options={{ title: 'عدد غير المقروء' }} />
+            <Stack.Screen name="admin/rbac-features" options={{ title: 'ميزات الصلاحيات' }} />
+            <Stack.Screen name="admin/rbac-user-effective" options={{ title: 'الصلاحيات الفعلية' }} />
+            <Stack.Screen name="admin/rbac-user-roles" options={{ title: 'أدوار المستخدم' }} />
+            <Stack.Screen name="print/archive" options={{ title: 'أرشيف الطباعة' }} />
+            <Stack.Screen name="print/queue-detail" options={{ title: 'تفاصيل الطباعة' }} />
             <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
