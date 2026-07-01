@@ -141,6 +141,46 @@ export function calcGratuity(
   };
 }
 
+// ─── GOSI حسب الجنسية (نظام التأمينات الاجتماعية السعودي) ──────────────────────
+// السعودي + مواطنو دول الخليج (مدّ الحماية التأمينية الخليجية) → اشتراك كامل
+// (المعاشات + الأخطار المهنية + ساند). الوافد (غير خليجي) → فرع الأخطار المهنية
+// فقط: الموظف 0٪ · الشركة ~2٪. قيمة nationality هي الاسم العربي من قائمة الجنسيات
+// (lib/nationalities.ts، صيغة المذكّر)، لكن بيانات قديمة/بذور قد تحمل صيغة المؤنث
+// (سعودية) فنُسقِط تاء التأنيث قبل المطابقة. جنسية فارغة → تُعامَل كاشتراك كامل
+// تحفّظًا (لا نُنقِص اشتراك سعوديٍّ بياناته ناقصة — يطابق السلوك السابق للفارغ).
+const GCC_GOSI_NATIONALITIES = new Set([
+  "سعودي", "إماراتي", "كويتي", "بحريني", "قطري", "عماني",
+]);
+
+/** هل يخضع الموظف لاشتراك GOSI الكامل (مواطن سعودي/خليجي)؟ دالة نقية — مُصدَّرة للاختبار. */
+export function isGccGosiNationality(nationality: string | null | undefined): boolean {
+  const n = (nationality ?? "").trim();
+  if (!n) return true; // جنسية فارغة → اشتراك كامل تحفّظًا (بلا تغيير عن السابق)
+  const masculine = n.replace(/ة$/, ""); // أسقط تاء التأنيث: سعودية → سعودي
+  return GCC_GOSI_NATIONALITIES.has(masculine);
+}
+
+/**
+ * حصّتا GOSI (الموظف/الشركة) على وعاء الاشتراك، متفرّعتان على الجنسية:
+ *   • خاضع للاشتراك الكامل (سعودي/خليجي): موظف = base×employeeRate · شركة = base×employerRate.
+ *   • وافد: موظف = 0 · شركة = base×hazardsRate (فرع الأخطار المهنية فقط).
+ * دالة نقية — الوعاء (base) محسوب ومحدّد بالسقف قبل الاستدعاء. مُصدَّرة للاختبار
+ * (اختبار assertion على المبالغ التي تصير سطورَ قيد الرواتب — الدستور م٣).
+ */
+export function computeGosiContribution(params: {
+  base: number;
+  fullContribution: boolean;
+  employeeRate: number;
+  employerRate: number;
+  hazardsRate: number;
+}): { employee: number; employer: number } {
+  const { base, fullContribution, employeeRate, employerRate, hazardsRate } = params;
+  if (fullContribution) {
+    return { employee: roundTo2(base * employeeRate), employer: roundTo2(base * employerRate) };
+  }
+  return { employee: 0, employer: roundTo2(base * hazardsRate) };
+}
+
 // ─── ترقية رصيد الإجازة وفق المادة 109 ────────────────────────────────────
 // المادة 109: 21 يومًا للسنة الأولى وحتى 5 سنوات خدمة، 30 يومًا بعد ذلك.
 // تُستخدم عند توليد الرصيد السنوي أو على طلبات الإجازة قبل قبول رصيد

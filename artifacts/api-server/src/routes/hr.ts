@@ -50,6 +50,8 @@ import {
   annualLeaveEntitlement,
   countLeaveDaysExcludingRest,
   yearsOfService as calcYearsOfService,
+  isGccGosiNationality,
+  computeGosiContribution,
 } from "../lib/hrHelpers.js";
 import {
   HR_TEXT_LIMITS,
@@ -3097,7 +3099,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
     }
 
     const gosiSettings = await rawQuery<{ key: string; value: string }>(
-      `SELECT key, value FROM system_settings WHERE "companyId" = $1 AND key IN ('gosiEmployeeRate','gosiEmployerRate','gosiCeiling','gosiIncludeHousing')`,
+      `SELECT key, value FROM system_settings WHERE "companyId" = $1 AND key IN ('gosiEmployeeRate','gosiEmployerRate','gosiCeiling','gosiIncludeHousing','gosiHazardsRate')`,
       [scope.companyId]
     );
     const gosiSettingsMap = new Map(gosiSettings.map((r) => [r.key, r.value]));
@@ -3110,6 +3112,10 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
       ? Number(gosiComponent.value) / 100
       : Number(gosiSettingsMap.get("gosiEmployeeRate") ?? "10") / 100;
     const GOSI_EMPLOYER_RATE = Number(gosiSettingsMap.get("gosiEmployerRate") ?? "12") / 100;
+    // فرع الأخطار المهنية (نظام GOSI): يُطبَّق على الوافد (غير الخليجي) — على الشركة
+    // فقط والموظف صفر. الافتراض 2٪ (النظام السعودي)؛ قابل للضبط لكل شركة عبر
+    // system_settings.gosiHazardsRate.
+    const GOSI_HAZARDS_RATE = Number(gosiSettingsMap.get("gosiHazardsRate") ?? "2") / 100;
     // Saudi GOSI caps the contribution wage at SAR 45,000/month. A
     // company can override via system_settings.gosiCeiling (e.g. set
     // to a huge number to effectively disable, or to a different
@@ -3133,7 +3139,8 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
       `SELECT ea.id AS "assignmentId", ea."employeeId", ea.salary, ea."branchId",
               ea."departmentId",
               COALESCE(e."isNonResident", false) AS "isNonResident",
-              e."whtRate"
+              e."whtRate",
+              e.nationality
        FROM employee_assignments ea
        LEFT JOIN employees e ON e.id = ea."employeeId" AND e."deletedAt" IS NULL
        WHERE ea."companyId" = $1 AND ea.status = 'active' AND ea."isAccessGrant" = FALSE`,
@@ -3374,8 +3381,18 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
       const gosiContributionWage =
         (GOSI_INCLUDE_HOUSING ? basic + housingAllowance : basic) + driverHoursAmount;
       const gosiBase = Math.min(gosiContributionWage, GOSI_CEILING);
-      const gosiEmployee = roundTo2(gosiBase * GOSI_EMPLOYEE_RATE);
-      const gosiEmployer = roundTo2(gosiBase * GOSI_EMPLOYER_RATE);
+      // GOSI متفرّع على الجنسية (تفعيل حقل nationality الموجود على الموظف): سعودي/
+      // خليجي → اشتراك كامل؛ وافد → فرع الأخطار المهنية فقط (موظف 0٪ + شركة
+      // GOSI_HAZARDS_RATE). كان القيد يطبّق النسبة الكاملة على الجميع فيُخصم من
+      // الوافد GOSI موظف ويُحمَّل على الشركة نسبة كاملة خطأً (تصحيح ٢٠٢٦-٠٧-٠١).
+      const gosiFullContribution = isGccGosiNationality(asn.nationality as string | null);
+      const { employee: gosiEmployee, employer: gosiEmployer } = computeGosiContribution({
+        base: gosiBase,
+        fullContribution: gosiFullContribution,
+        employeeRate: GOSI_EMPLOYEE_RATE,
+        employerRate: GOSI_EMPLOYER_RATE,
+        hazardsRate: GOSI_HAZARDS_RATE,
+      });
       totalGosiEmployer += gosiEmployer;
       const overtimeMinutes = overtimeMap.get(aId) ?? 0;
       const overtimeHours = roundTo2(overtimeMinutes / 60);
