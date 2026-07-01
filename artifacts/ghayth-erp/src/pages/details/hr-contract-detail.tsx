@@ -142,13 +142,13 @@ export default function HrContractDetail() {
             {contract?.salary != null && (
               <div>
                 <p className="text-xs text-muted-foreground mb-0.5">الراتب</p>
-                <span className="text-status-neutral-foreground font-bold">{formatCurrency(contract.salary)}</span>
+                <span className="text-status-neutral-foreground font-bold">{formatCurrency(Number(contract.salary))}</span>
               </div>
             )}
             {contract?.allowances != null && (
               <div>
                 <p className="text-xs text-muted-foreground mb-0.5">البدلات</p>
-                <span className="text-status-neutral-foreground">{formatCurrency(contract.allowances)}</span>
+                <span className="text-status-neutral-foreground">{formatCurrency(Number(contract.allowances))}</span>
               </div>
             )}
             {contract?.jobTitle && (
@@ -168,13 +168,15 @@ export default function HrContractDetail() {
             {contract?.housingAllowance != null && (
               <div>
                 <p className="text-xs text-muted-foreground mb-0.5">بدل السكن</p>
-                <span className="text-status-neutral-foreground">{formatCurrency(contract.housingAllowance)}</span>
+                {/* أعمدة NUMERIC تصل كسلاسل من pg (لا مُحلِّل نوع عام)، و
+                    formatCurrency يرفض السلاسل عبر Number.isFinite — نُحوِّلها. */}
+                <span className="text-status-neutral-foreground">{formatCurrency(Number(contract.housingAllowance))}</span>
               </div>
             )}
             {contract?.transportAllowance != null && (
               <div>
                 <p className="text-xs text-muted-foreground mb-0.5">بدل النقل</p>
-                <span className="text-status-neutral-foreground">{formatCurrency(contract.transportAllowance)}</span>
+                <span className="text-status-neutral-foreground">{formatCurrency(Number(contract.transportAllowance))}</span>
               </div>
             )}
             {contract?.probationEndDate && (
