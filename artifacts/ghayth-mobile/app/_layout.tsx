@@ -1335,6 +1335,11 @@ function AuthGate() {
       <Stack.Screen name="comms/provisioning-email-domains" options={{ title: 'نطاقات البريد' }} />
       <Stack.Screen name="comms/provisioning-extensions" options={{ title: 'امتدادات PBX' }} />
       <Stack.Screen name="comms/push-vapid-key" options={{ title: 'مفتاح VAPID' }} />
+      <Stack.Screen name="dashboards/role-data" options={{ title: 'بيانات الدور' }} />
+      <Stack.Screen name="dashboards/charts-revenue" options={{ title: 'مخطط الإيرادات' }} />
+      <Stack.Screen name="dashboards/charts-attendance" options={{ title: 'مخطط الحضور' }} />
+      <Stack.Screen name="dashboards/charts-departments" options={{ title: 'مخطط الأقسام' }} />
+      <Stack.Screen name="dashboards/recent-events" options={{ title: 'الأحداث الأخيرة' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
