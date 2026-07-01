@@ -710,8 +710,10 @@ router.post("/campaigns/:id/send", authorize({ feature: "marketing", action: "up
       if (t.status !== "approved") throw new ValidationError("القالب غير معتمد من Meta بعد", { field: "templateId", fix: "لا يمكن الإرسال إلا بقالب حالته معتمد (approved)" });
       const need = countPlaceholders(t.bodyText);
       const provided = (parsed.paramMapping ?? []).length;
-      if (provided < need) {
-        throw new ValidationError(`القالب يتطلب ${need} متغيّراً وتم تزويد ${provided} فقط`, { field: "paramMapping", fix: `أدخل قيم جميع المتغيرات (${need})` });
+      // Meta يرفض الإرسال إن لم يطابق عدد المتغيّرات المُرسلة عدد المتغيّرات في
+      // القالب تماماً (لا أقل ولا أكثر)؛ لذا نفرض التطابق الدقيق قبل الجدولة.
+      if (provided !== need) {
+        throw new ValidationError(`القالب يتطلب ${need} متغيّراً وتم تزويد ${provided}`, { field: "paramMapping", fix: `أدخل قيم المتغيرات المطلوبة تماماً (${need})` });
       }
       template = t;
     } else if (!parsed.body || !parsed.body.trim()) {
