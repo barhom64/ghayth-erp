@@ -169,6 +169,14 @@ function IntegrationsList() {
 
   return (
     <div className="space-y-4">
+      <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground leading-relaxed">
+        <span className="font-medium text-foreground">ما وظيفة هذه الصفحة؟</span>{" "}
+        الربط التقني الخارجي: استقبال رسائل <span className="font-medium">واتساب</span> الواردة (ربط رقم المعرّف بالشركة)،
+        و<span className="font-medium">الويب هوك</span> و<span className="font-medium">GitHub</span>، بالإضافة إلى بدائل تقنية للبريد والرسائل النصية.
+        <br />
+        لتشغيل/إيقاف القنوات لكل شركة استخدم «<span className="font-medium">قنوات الاتصال</span>» في الإعدادات،
+        ولمفاتيح المزوّدين (SMTP، تويليو، السنترال، SIEM) استخدم «<span className="font-medium">إعدادات المزوّدات الخارجية</span>».
+      </div>
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">التكاملات المُعدّة</h3>
         <GuardedButton perm="admin:create" size="sm" onClick={() => setShowForm(!showForm)}>
@@ -364,7 +372,7 @@ export default function AdminIntegrations() {
         { href: "/dashboard", label: "لوحة التحكم" },
         { label: "مركز التكاملات" },
       ]}
-      subtitle="إدارة قنوات الإرسال والتكاملات الخارجية"
+      subtitle="الربط التقني الخارجي: استقبال واتساب، الويب هوك، GitHub، وبدائل البريد/الرسائل"
     >
       <Tabs defaultValue="integrations" dir="rtl">
         <TabsList className="grid w-full grid-cols-2">
