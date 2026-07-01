@@ -1270,6 +1270,9 @@ function AuthGate() {
             <Stack.Screen name="fleet/telematics-media-evidence" options={{ title: 'الأدلة المرئية' }} />
             <Stack.Screen name="fleet/telematics-scorecard-leaderboard" options={{ title: 'لوحة الصدارة' }} />
             <Stack.Screen name="fleet/telematics-driver-scorecard" options={{ title: 'بطاقة أداء السائق' }} />
+            <Stack.Screen name="finance/cost-center-detail" options={{ title: 'مركز التكلفة' }} />
+            <Stack.Screen name="finance/routing-health" options={{ title: 'صحة توجيه الأبعاد' }} />
+            <Stack.Screen name="finance/cost-center-yoy" options={{ title: 'مقارنة سنة بسنة' }} />
             <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
