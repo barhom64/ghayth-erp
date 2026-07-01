@@ -4,6 +4,7 @@ import {
   PageShell,
   FormShell,
   FormTextField,
+  FormImageField,
   FormTextareaField,
   FormSelectField,
   FormCheckboxField,
@@ -120,7 +121,7 @@ export default function WebsiteSettings() {
           <FormGrid>
             <FormTextField name="brandName" label="اسم العلامة" />
             <FormTextField name="tagline" label="الشعار النصّي" />
-            <FormTextField name="logoUrl" label="رابط الشعار" />
+            <FormImageField name="logoUrl" label="شعار الموقع" />
             <FormTextField name="primaryColor" label="اللون الأساسي" placeholder="#0a7d3c" />
           </FormGrid>
         </FormSection>
@@ -146,7 +147,7 @@ export default function WebsiteSettings() {
         <FormSection title="القسم الرئيسي (Hero)">
           <FormTextField name="heroTitle" label="العنوان الرئيسي" />
           <FormTextField name="heroSubtitle" label="العنوان الفرعي" />
-          <FormTextField name="heroImageUrl" label="رابط صورة الخلفية" />
+          <FormImageField name="heroImageUrl" label="صورة خلفية القسم الرئيسي" />
         </FormSection>
 
         <FormSection title="من نحن">
