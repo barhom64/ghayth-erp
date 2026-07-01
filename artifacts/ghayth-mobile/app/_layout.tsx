@@ -1340,6 +1340,8 @@ function AuthGate() {
       <Stack.Screen name="dashboards/charts-attendance" options={{ title: 'مخطط الحضور' }} />
       <Stack.Screen name="dashboards/charts-departments" options={{ title: 'مخطط الأقسام' }} />
       <Stack.Screen name="dashboards/recent-events" options={{ title: 'الأحداث الأخيرة' }} />
+      <Stack.Screen name="admin/import-batch-detail" options={{ title: 'تفاصيل دفعة الاستيراد' }} />
+      <Stack.Screen name="admin/comm-outbound-queue" options={{ title: 'طابور الإرسال الصادر' }} />
       <Stack.Screen name="+not-found" options={{ title: 'غير موجود' }} />
     </Stack>
     </>
