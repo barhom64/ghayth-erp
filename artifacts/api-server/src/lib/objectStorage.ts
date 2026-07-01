@@ -114,6 +114,34 @@ export class ObjectStorageService {
     return `/objects/uploads/${objectId}`;
   }
 
+  /**
+   * رفع صورة عامة للموقع الإلكتروني كملف ثابت يُخدَم عبر
+   * `/api/storage/public-objects/<key>`. يعكس منطق القراءة في
+   * `openPublicStream` لكل محوّل (replit ↔ محلي) حتى يعمل على البيئتين،
+   * ويحتفظ بامتداد الملف كي يستنتج المحوّل المحلي نوع المحتوى عند العرض.
+   * يعيد المفتاح النسبي (`site/<uuid>.<ext>`) لبناء الرابط.
+   */
+  async uploadPublicBytes(
+    buffer: Buffer,
+    contentType: string,
+    ext: string,
+  ): Promise<string> {
+    const searchPath = this.getPublicObjectSearchPaths()[0];
+    const filePath = `site/${randomUUID()}${ext ? `.${ext}` : ""}`;
+    const adapter = getStorageAdapter();
+    let writeKey: string;
+    if (adapter.id === "replit") {
+      const { bucketName, objectName } = parseObjectPath(
+        `${searchPath}/${filePath}`,
+      );
+      writeKey = `${bucketName}/${objectName}`;
+    } else {
+      writeKey = `${searchPath.replace(/^\/+/, "")}/${filePath}`;
+    }
+    await adapter.write(writeKey, buffer, { contentType });
+    return filePath;
+  }
+
   async getObjectEntityUploadURL(): Promise<string> {
     const privateObjectDir = this.getPrivateObjectDir();
     if (!privateObjectDir) {
