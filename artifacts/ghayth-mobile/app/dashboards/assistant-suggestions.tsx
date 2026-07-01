@@ -5,11 +5,11 @@ import { GLoadingState, GEmptyState } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 
-interface TrackingPolicy { id?: number; name?: string; trackingType?: string; radius?: number; }
+interface Suggestion { id?: number; title?: string; description?: string; type?: string; }
 
-export default function TrackingPoliciesScreen() {
+export default function AssistantSuggestionsScreen() {
   const c = useColors();
-  const { data, isLoading, isError, refetch } = useList<TrackingPolicy[]>('/api/hr/attendance/tracking-policies');
+  const { data, isLoading, isError, refetch } = useList<Suggestion[]>('/api/assistant/suggestions');
   const list = Array.isArray(data) ? data : [];
   if (isLoading) return <GLoadingState text="جارٍ تحميل…" />;
   if (isError) return (
@@ -18,16 +18,16 @@ export default function TrackingPoliciesScreen() {
   );
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Stack.Screen options={{ title: 'سياسات تتبع الحضور' }} />
+      <Stack.Screen options={{ title: 'اقتراحات المساعد الذكي' }} />
       <FlatList data={list} keyExtractor={(item, i) => String(item.id ?? i)}
         contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
         onRefresh={refetch} refreshing={isLoading}
-        ListEmptyComponent={<GEmptyState icon="location-outline" title="لا توجد سياسات" description="" />}
+        ListEmptyComponent={<GEmptyState icon="bulb-outline" title="لا توجد اقتراحات" description="" />}
         renderItem={({ item }) => (
           <View style={{ backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, padding: 14 }}>
-            <Text style={{ color: c.text, fontSize: 14 }}>{item.name ?? String(item.id ?? '')}</Text>
-            {!!item.trackingType && <Text style={{ color: c.textMuted, fontSize: 12, marginTop: 2 }}>{item.trackingType}</Text>}
-            {item.radius != null && <Text style={{ color: c.textFaint, fontSize: 12, marginTop: 2 }}>نطاق: {item.radius} م</Text>}
+            <Text style={{ color: c.text, fontSize: 14, fontWeight: '600' }}>{item.title ?? ''}</Text>
+            {!!item.type && <Text style={{ color: c.textMuted, fontSize: 12, marginTop: 2 }}>{item.type}</Text>}
+            {!!item.description && <Text style={{ color: c.textFaint, fontSize: 12, marginTop: 4 }}>{item.description}</Text>}
           </View>
         )}
       />

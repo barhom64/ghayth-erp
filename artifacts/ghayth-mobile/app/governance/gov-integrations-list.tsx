@@ -5,11 +5,11 @@ import { GLoadingState, GEmptyState } from '@workspace/ui-native';
 import { useColors } from '@/hooks/useColors';
 import { useList } from '@/hooks/useApi';
 
-interface TrackingPolicy { id?: number; name?: string; trackingType?: string; radius?: number; }
+interface GovIntegration { id?: number; name?: string; status?: string; type?: string; }
 
-export default function TrackingPoliciesScreen() {
+export default function GovIntegrationsListScreen() {
   const c = useColors();
-  const { data, isLoading, isError, refetch } = useList<TrackingPolicy[]>('/api/hr/attendance/tracking-policies');
+  const { data, isLoading, isError, refetch } = useList<GovIntegration[]>('/api/gov-integrations');
   const list = Array.isArray(data) ? data : [];
   if (isLoading) return <GLoadingState text="جارٍ تحميل…" />;
   if (isError) return (
@@ -18,16 +18,16 @@ export default function TrackingPoliciesScreen() {
   );
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Stack.Screen options={{ title: 'سياسات تتبع الحضور' }} />
+      <Stack.Screen options={{ title: 'التكاملات الحكومية' }} />
       <FlatList data={list} keyExtractor={(item, i) => String(item.id ?? i)}
         contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
         onRefresh={refetch} refreshing={isLoading}
-        ListEmptyComponent={<GEmptyState icon="location-outline" title="لا توجد سياسات" description="" />}
+        ListEmptyComponent={<GEmptyState icon="business-outline" title="لا توجد تكاملات" description="" />}
         renderItem={({ item }) => (
           <View style={{ backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, padding: 14 }}>
             <Text style={{ color: c.text, fontSize: 14 }}>{item.name ?? String(item.id ?? '')}</Text>
-            {!!item.trackingType && <Text style={{ color: c.textMuted, fontSize: 12, marginTop: 2 }}>{item.trackingType}</Text>}
-            {item.radius != null && <Text style={{ color: c.textFaint, fontSize: 12, marginTop: 2 }}>نطاق: {item.radius} م</Text>}
+            {!!item.type && <Text style={{ color: c.textMuted, fontSize: 12, marginTop: 2 }}>{item.type}</Text>}
+            {!!item.status && <Text style={{ color: c.textFaint, fontSize: 12, marginTop: 2 }}>{item.status}</Text>}
           </View>
         )}
       />
