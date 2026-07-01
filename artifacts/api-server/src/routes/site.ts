@@ -17,6 +17,7 @@ import { zodParse, handleRouteError, ValidationError } from "../lib/errorHandler
 import { auditFromRequest } from "../lib/businessHelpers.js";
 import { ObjectStorageService } from "../lib/objectStorage.js";
 import { logger } from "../lib/logger.js";
+import { isSafeCmsUrl, safeUrl } from "../lib/urlPolicy.js";
 
 const router = Router();
 
@@ -28,19 +29,8 @@ const slugField = z
   .regex(/^[a-z0-9-]+$/i, "المعرّف يجب أن يحتوي على حروف لاتينية وأرقام وشرطات فقط");
 const nstr = (max = 500) => z.string().trim().max(max).nullable().optional();
 
-// روابط يُحرّرها المسؤول وتُعرض في وسوم <a href> عامة → نمنع مخططات التنفيذ
-// (javascript:/data:/vbscript:) لتفادي XSS المخزَّن. مسموح: http(s)://… أو مسار
-// جذري نسبي (/…) أو مرساة (#…) أو mailto:/tel:.
-const SAFE_URL_RE = /^(https?:\/\/|\/(?!\/)|#|mailto:|tel:)/i;
-export const isSafeCmsUrl = (v: string): boolean => v === "" || SAFE_URL_RE.test(v.trim());
-const safeUrl = (max = 1000, opts?: { required?: boolean }) => {
-  const base = opts?.required
-    ? z.string().trim().min(1).max(max)
-    : z.string().trim().max(max);
-  return base.refine((v) => isSafeCmsUrl(v), {
-    message: "الرابط غير صالح — استخدم https:// أو مساراً يبدأ بـ /",
-  });
-};
+// سياسة روابط CMS (isSafeCmsUrl/safeUrl) انتقلت إلى lib/urlPolicy.ts كي
+// يتشاركها site.ts و marketing.ts (حملات عامة) — مصدر واحد، لا تكرار.
 
 // ─────────────────────────────────────────────────────────────────────────
 // Site config (one row per company, keyed by companyId — upsert).
