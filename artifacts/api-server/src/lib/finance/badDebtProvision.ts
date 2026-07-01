@@ -132,7 +132,7 @@ export async function readAllowanceBalance(
 const OUTSTANDING_INVOICES_SQL = `SELECT "createdAt", "dueDate", (total - COALESCE("paidAmount",0)) AS outstanding
      FROM invoices
     WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "createdAt" <= $2
-      AND status NOT IN ('draft','cancelled','paid','rejected','returned')
+      AND status NOT IN ('draft','cancelled','paid','rejected','returned','written_off')
       AND (total - COALESCE("paidAmount",0)) > 0.01`;
 
 export interface PostBadDebtResult {

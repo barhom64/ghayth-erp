@@ -13,8 +13,9 @@ import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
 import { authorize } from "../lib/rbac/authorize.js";
-import { zodParse, handleRouteError } from "../lib/errorHandler.js";
+import { zodParse, handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { auditFromRequest } from "../lib/businessHelpers.js";
+import { ObjectStorageService } from "../lib/objectStorage.js";
 import { logger } from "../lib/logger.js";
 
 const router = Router();
@@ -92,6 +93,45 @@ router.put("/config", authorize({ feature: "website", action: "update" }), async
     auditFromRequest(req, "update", "site_config", scope.companyId, { after: b }).catch((e) => logger.error(e, "site audit failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "site config put"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// رفع صورة للموقع (شعار/خلفية/باقة/فندق/غلاف مقال) كملف حقيقي بدل لصق رابط.
+// يُستقبل المحتوى بترميز base64، يُتحقّق من النوع والحجم، ثم يُحفظ كملف عام
+// يُخدَم عبر /api/storage/public-objects. الرفع خادمي (POST JSON) فيتجاوز قيد
+// nginx على طلبات PUT المنتهية بامتداد صورة في الإنتاج.
+// ─────────────────────────────────────────────────────────────────────────
+// ملاحظة أمنية: SVG مستبعد عمدًا — يمكن أن يحمل سكربتًا ويُخدَم من نفس
+// النطاق العام (خطر XSS مخزّن). صور الموقع تكتفي بالصيغ النقطية الآمنة.
+const IMAGE_EXT_BY_TYPE: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+  "image/gif": "gif",
+};
+const uploadImageSchema = z.object({
+  dataUrl: z.string().min(1),
+  fileName: z.string().trim().max(255).optional(),
+});
+router.post("/upload-image", authorize({ feature: "website", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(uploadImageSchema.safeParse(req.body));
+    const m = /^data:([^;]+);base64,(.*)$/s.exec(b.dataUrl);
+    if (!m) throw new ValidationError("صيغة الصورة غير صالحة");
+    const contentType = m[1].trim().toLowerCase();
+    const ext = IMAGE_EXT_BY_TYPE[contentType];
+    if (!ext) throw new ValidationError("نوع الصورة غير مسموح — الرجاء رفع PNG أو JPG أو WEBP أو GIF");
+    const buffer = Buffer.from(m[2], "base64");
+    if (buffer.length === 0) throw new ValidationError("الملف فارغ");
+    if (buffer.length > 5 * 1024 * 1024) throw new ValidationError("حجم الصورة يتجاوز 5 ميغابايت");
+    const key = await new ObjectStorageService().uploadPublicBytes(buffer, contentType, ext);
+    const url = `/api/storage/public-objects/${key}`;
+    auditFromRequest(req, "create", "site_media", scope.companyId, {
+      after: { url, fileName: b.fileName, size: buffer.length },
+    }).catch((e) => logger.error(e, "site upload audit failed"));
+    res.status(201).json({ url });
+  } catch (err) { handleRouteError(err, res, "site upload image"); }
 });
 
 // ─────────────────────────────────────────────────────────────────────────
