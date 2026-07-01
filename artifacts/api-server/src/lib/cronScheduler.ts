@@ -3441,6 +3441,7 @@ async function processWhatsAppQueue(): Promise<string> {
   const pending = await rawQuery<Record<string, unknown>>(
     `SELECT oq.id, oq."companyId", oq.recipient AS phone,
             oq.body AS message, oq.attempts AS "attemptCount",
+            oq."templateName", oq."templateParams",
             oq."legacyId", oq."legacySource",
             ss_token.value AS "accessToken", ss_phone.value AS "phoneNumberId",
             COALESCE(ss_enabled.value, 'true') AS "channelEnabled"
@@ -3489,6 +3490,36 @@ async function processWhatsAppQueue(): Promise<string> {
       continue;
     }
 
+    // Meta requires an APPROVED template to message a user outside the 24h
+    // session window (cold campaign blasts). When the queue row carries a
+    // templateName we send type:"template"; otherwise the plain text path.
+    const templateName = (msg.templateName as string | null) || null;
+    let sendPayload: Record<string, unknown>;
+    if (templateName) {
+      let tp: Record<string, unknown> = {};
+      const rawTp = msg.templateParams;
+      if (rawTp && typeof rawTp === "object") tp = rawTp as Record<string, unknown>;
+      else if (typeof rawTp === "string") { try { tp = JSON.parse(rawTp); } catch { tp = {}; } }
+      const lang = (tp.lang as string) || (tp.language as string) || "ar";
+      const bodyParams = Array.isArray(tp.body) ? tp.body : Array.isArray(tp.params) ? tp.params : [];
+      const components = bodyParams.length
+        ? [{ type: "body", parameters: bodyParams.map((t) => ({ type: "text", text: String(t) })) }]
+        : [];
+      sendPayload = {
+        messaging_product: "whatsapp",
+        to: msg.phone,
+        type: "template",
+        template: { name: templateName, language: { code: lang }, components },
+      };
+    } else {
+      sendPayload = {
+        messaging_product: "whatsapp",
+        to: msg.phone,
+        type: "text",
+        text: { body: msg.message },
+      };
+    }
+
     try {
       const resp = await fetch(
         `https://graph.facebook.com/v18.0/${msg.phoneNumberId}/messages`,
@@ -3498,12 +3529,7 @@ async function processWhatsAppQueue(): Promise<string> {
             "Authorization": `Bearer ${msg.accessToken}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            messaging_product: "whatsapp",
-            to: msg.phone,
-            type: "text",
-            text: { body: msg.message },
-          }),
+          body: JSON.stringify(sendPayload),
         }
       );
 
